@@ -1,0 +1,28 @@
+{% set h = page.header %}
+<section class="bv-section">
+    <div class="bv-container">
+        <h2 class="bv-headline" style="font-size: 2rem; margin-bottom: var(--space-10);">{{ h.section_title|default('Hvad laver vi lige nu?') }}</h2>
+
+        {{ content|raw }}
+
+        {% if h.projects %}
+        <div class="bv-status-grid">
+            {% for project in h.projects %}
+            <div class="bv-card{% if project.accent %} bv-card--accent-{{ project.accent }}{% endif %}" style="padding: var(--space-8);">
+                {% if project.number %}
+                <span class="bv-label u-text-muted">Projekt {{ project.number }}</span>
+                {% endif %}
+                <h3 class="bv-title" style="font-size: 1.25rem; margin-top: var(--space-2);">{{ project.title }}</h3>
+                <p class="u-text-muted" style="margin-top: var(--space-4);">{{ project.description }}</p>
+                {% if project.status %}
+                <div style="margin-top: var(--space-6); display: flex; align-items: center; gap: var(--space-2);">
+                    <span class="material-symbols-outlined" style="font-size: 1rem; color: var(--primary);">engineering</span>
+                    <span class="bv-label" style="color: var(--primary);">{{ project.status }}</span>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</section>

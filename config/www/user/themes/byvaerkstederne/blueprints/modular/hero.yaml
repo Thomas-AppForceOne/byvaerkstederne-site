@@ -1,0 +1,91 @@
+title: Hero
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Hero
+          fields:
+            header.hero_heading:
+              type: text
+              label: Overskrift
+              help: Stor overskrift i hero-sektionen
+            header.badge:
+              type: text
+              label: Badge tekst
+              help: Lille badge over overskriften (f.eks. "Hundested Havn")
+            header.badge_style:
+              type: select
+              label: Badge farve
+              default: primary
+              options:
+                primary: Grøn (primary)
+                secondary: Blå (secondary)
+                tertiary: Terracotta (tertiary)
+                kulturhus: Mørk (kulturhus)
+            header.title_before:
+              type: text
+              label: Tekst før accent
+              help: Del af overskriften før den farvede del
+            header.title_accent:
+              type: text
+              label: Accent tekst
+              help: Den farvede del af overskriften
+            header.title_after:
+              type: text
+              label: Tekst efter accent
+            header.subtitle:
+              type: textarea
+              label: Undertekst
+              rows: 3
+            header.background_image:
+              type: toggle
+              label: Vis baggrundsbillede
+              highlight: 1
+              default: 0
+              options:
+                1: Ja
+                0: Nej
+            header.bg_image_url:
+              type: text
+              label: Baggrundsbillede URL
+              help: Eksternt billede URL (valgfrit - ellers bruges uploadet billede)
+            header.full_height:
+              type: toggle
+              label: Fuld skærmhøjde
+              highlight: 1
+              default: 1
+              options:
+                1: Ja
+                0: Nej
+            header.heading_color:
+              type: text
+              label: Overskrift farve (CSS variabel)
+              help: F.eks. "primary" eller "secondary"
+            header.buttons:
+              type: list
+              label: Knapper
+              fields:
+                .text:
+                  type: text
+                  label: Knap tekst
+                .url:
+                  type: text
+                  label: Link URL
+                .style:
+                  type: select
+                  label: Stil
+                  default: primary
+                  options:
+                    primary: Primær (grøn)
+                    outlined: Outlined (ramme)
+                    dark: Mørk
+                    secondary: Sekundær (blå)
+                    tertiary: Terracotta

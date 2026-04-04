@@ -1,0 +1,45 @@
+title: Fremhævet Begivenhed
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Fremhævet Begivenhed
+          fields:
+            header.day_name:
+              type: text
+              label: Ugedag
+              help: F.eks. "Torsdag"
+            header.day_number:
+              type: text
+              label: Dag (tal)
+              help: F.eks. "25"
+            header.month:
+              type: text
+              label: Måned
+              help: F.eks. "April"
+            header.tag:
+              type: text
+              label: Tag/badge
+              help: F.eks. "All Hands"
+            header.event_title:
+              type: text
+              label: Titel
+            header.event_description:
+              type: textarea
+              label: Beskrivelse
+              rows: 3
+            header.time:
+              type: text
+              label: Tidspunkt
+              help: F.eks. "09:00 — 17:00"
+            header.location:
+              type: text
+              label: Lokation

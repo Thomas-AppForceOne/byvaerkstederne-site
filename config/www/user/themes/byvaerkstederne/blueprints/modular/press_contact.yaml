@@ -1,0 +1,31 @@
+title: Pressekontakt
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Pressekontakt
+          fields:
+            header.contact_title:
+              type: text
+              label: Overskrift
+              default: Pressekontakt
+            header.contact_name:
+              type: text
+              label: Navn
+            header.contact_role:
+              type: text
+              label: Rolle
+            header.contact_phone:
+              type: text
+              label: Telefon
+            header.contact_email:
+              type: text
+              label: E-mail

@@ -1,0 +1,32 @@
+{% set h = page.header %}
+<section class="bv-section">
+    <div class="bv-container">
+        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: var(--space-16); gap: var(--space-8);">
+            <div>
+                <h2 class="bv-headline" style="font-size: 3rem;">{{ h.section_title|default('Hvad laver vi lige nu?') }}</h2>
+                <p style="color: var(--secondary); font-weight: 700; margin-top: 0.5rem;">{{ h.status_label|default('') }}</p>
+            </div>
+            {% if h.progress_title %}
+            <div style="width: 33%;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-weight: 700; font-size: 0.625rem; text-transform: uppercase; letter-spacing: 0.2em;">
+                    <span>{{ h.progress_title }}</span>
+                    <span>{{ h.progress_percent }}%</span>
+                </div>
+                <div style="width: 100%; height: 1rem; background: var(--surface-container-highest);">
+                    <div style="height: 100%; background: var(--secondary); width: {{ h.progress_percent }}%;"></div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0;">
+            {% for card in h.cards %}
+            <div style="background: {{ card.bg|default('var(--surface-container-low)') }}; padding: var(--space-10); border-left: 4px solid var(--secondary);">
+                <span class="material-symbols-outlined" style="font-size: 2.5rem; color: var(--secondary); margin-bottom: var(--space-6); display: block;">{{ card.icon }}</span>
+                <h3 class="bv-headline" style="font-size: 1.5rem; margin-bottom: var(--space-4);">{{ card.title }}</h3>
+                <p style="color: var(--on-surface-variant);">{{ card.description }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>

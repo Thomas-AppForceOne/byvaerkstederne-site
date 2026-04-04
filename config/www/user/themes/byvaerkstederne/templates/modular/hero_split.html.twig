@@ -1,0 +1,27 @@
+{% set h = page.header %}
+<section class="bv-hero-split">
+    <div class="bv-hero-split__text" style="background: {{ h.bg_color|default('var(--surface-container-low)') }};">
+        {% if h.badge %}
+        <span class="bv-badge bv-badge--{{ h.badge_style|default('primary') }}" style="margin-bottom: var(--space-4);">{{ h.badge }}</span>
+        {% endif %}
+
+        <h1 class="bv-display" style="font-size: clamp(2rem, 5vw, 4rem); max-width: 30rem;">{{ h.hero_heading|default(page.title) }}</h1>
+
+        {% if h.subtitle %}
+        <p class="bv-body-lg" style="margin-top: var(--space-6); max-width: 28rem;">{{ h.subtitle }}</p>
+        {% endif %}
+
+        {% if h.buttons %}
+        <div class="bv-hero__actions" style="margin-top: var(--space-8);">
+            {% for button in h.buttons %}
+            <a href="{{ button.url }}" class="bv-btn bv-btn--{{ button.style|default('primary') }}">{{ button.text }}</a>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    <div class="bv-hero-split__image">
+        {% if page.media.images|first %}
+        <img src="{{ page.media.images|first.url }}" alt="{{ h.hero_heading|default(page.title) }}"/>
+        {% endif %}
+    </div>
+</section>

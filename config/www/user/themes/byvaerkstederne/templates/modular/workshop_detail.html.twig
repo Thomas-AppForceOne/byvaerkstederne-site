@@ -1,0 +1,68 @@
+{% set h = page.header %}
+<section class="bv-section">
+    <div class="bv-container">
+        <div style="display: grid; grid-template-columns: 7fr 5fr; gap: var(--space-12);">
+            {# Left: Status card with thick accent border #}
+            <div class="bv-card--elevated" style="padding: var(--space-8); border-left: 12px solid var(--{{ h.accent|default('tertiary') }}); display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <h2 class="bv-headline" style="font-size: 2rem; margin-bottom: var(--space-8);">{{ h.section_title|default('Hvad laver vi lige nu?') }}</h2>
+                    <div style="display: flex; flex-direction: column; gap: var(--space-6);">
+                        {% for project in h.projects %}
+                        <div>
+                            <span style="color: var(--{{ h.accent|default('tertiary') }}); font-weight: 700; font-size: 0.875rem; display: block; margin-bottom: 0.25rem;">{{ project.number }}</span>
+                            <h3 class="bv-title" style="font-size: 1.25rem; margin-bottom: 0.5rem;">{{ project.title }}</h3>
+                            <p class="u-text-muted">{{ project.description }}</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% if h.cta_text %}
+                <div style="margin-top: var(--space-12); padding-top: var(--space-8); border-top: 1px solid var(--outline-variant);">
+                    <a href="{{ h.cta_url|default('#') }}" class="bv-btn bv-btn--{{ h.accent|default('tertiary') }}">{{ h.cta_text }}</a>
+                </div>
+                {% endif %}
+            </div>
+
+            {# Right: Progress + Wishlist stacked #}
+            <div style="display: flex; flex-direction: column; gap: var(--space-8);">
+                {# Progress card #}
+                {% if h.progress_title %}
+                <div style="background: var(--surface-container-highest); padding: var(--space-8);">
+                    <h2 class="bv-headline" style="font-size: 1.5rem; margin-bottom: var(--space-6); display: flex; align-items: center; gap: var(--space-2);">
+                        <span class="material-symbols-outlined" style="color: var(--{{ h.accent|default('tertiary') }});">precision_manufacturing</span>
+                        {{ h.progress_title }}
+                    </h2>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: var(--space-4);">
+                        <span style="font-family: var(--font-headline); font-weight: 900; font-size: 2.5rem;">{{ h.progress_percent|default(0) }}%</span>
+                        <span class="bv-label u-text-muted">{{ h.progress_stage|default('Etablering i gang') }}</span>
+                    </div>
+                    <div class="bv-progress" style="height: 1.5rem;">
+                        <div class="bv-progress__fill bv-progress__fill--{{ h.accent|default('tertiary') }}" style="width: {{ h.progress_percent|default(0) }}%;"></div>
+                    </div>
+                    {% if h.progress_note %}
+                    <p style="margin-top: var(--space-6); font-size: 0.875rem; font-style: italic; color: var(--on-surface-variant);">{{ h.progress_note }}</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {# Wishlist card #}
+                {% if h.wishlist %}
+                <div style="background: var(--tertiary-fixed); padding: var(--space-8);">
+                    <h2 class="bv-headline" style="font-size: 1.5rem; margin-bottom: var(--space-6);">{{ h.wishlist_title|default('Ønskeliste') }}</h2>
+                    <ul style="display: flex; flex-direction: column; gap: var(--space-4); list-style: none;">
+                        {% for item in h.wishlist %}
+                        <li style="display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4); background: rgba(255,255,255,0.5);{% if item.done %} opacity: 0.5;{% endif %}">
+                            <span class="material-symbols-outlined" style="color: var(--tertiary);{% if item.done %} font-variation-settings: 'FILL' 1;{% endif %}">{% if item.done %}check_box{% else %}check_box_outline_blank{% endif %}</span>
+                            <div>
+                                <span style="font-weight: 700; display: block;{% if item.done %} text-decoration: line-through;{% endif %}">{{ item.name }}</span>
+                                {% if item.note %}<span style="font-size: 0.75rem; text-transform: uppercase;">{{ item.note }}</span>{% endif %}
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>

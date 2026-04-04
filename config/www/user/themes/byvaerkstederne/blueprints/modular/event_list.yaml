@@ -1,0 +1,70 @@
+title: Begivenhedsliste
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Begivenhedsliste
+          fields:
+            header.section_title:
+              type: text
+              label: Sektions overskrift
+              default: Kommende Aktiviteter
+            header.events:
+              type: list
+              label: Begivenheder
+              fields:
+                .month:
+                  type: text
+                  label: Måned
+                .day:
+                  type: text
+                  label: Dag
+                .badge:
+                  type: text
+                  label: Kategori badge
+                .group:
+                  type: select
+                  label: Farvegruppe
+                  options:
+                    primary: Grøn
+                    secondary: Blå
+                    tertiary: Terracotta
+                    kulturhus: Mørk
+                .filter:
+                  type: text
+                  label: Filter ID
+                .title:
+                  type: text
+                  label: Titel
+                .description:
+                  type: text
+                  label: Beskrivelse
+                .capacity:
+                  type: text
+                  label: Kapacitet
+                .price:
+                  type: text
+                  label: Pris
+                .url:
+                  type: text
+                  label: Link URL
+                .button_text:
+                  type: text
+                  label: Knap tekst
+                  default: Tilmeld
+                .button_style:
+                  type: select
+                  label: Knap stil
+                  default: primary
+                  options:
+                    primary: Primær
+                    secondary: Sekundær
+                    tertiary: Terracotta

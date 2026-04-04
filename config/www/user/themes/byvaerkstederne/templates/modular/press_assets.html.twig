@@ -1,0 +1,52 @@
+{% set h = page.header %}
+<section class="bv-section">
+    <div class="bv-container">
+        <div class="bv-press-grid">
+            {# Visual Identity #}
+            <div>
+                <h2 class="bv-headline" style="font-size: 1.5rem; margin-bottom: var(--space-8);">{{ h.identity_title|default('Visuel Identitet') }}</h2>
+
+                <div class="bv-card--elevated" style="padding: var(--space-8); text-align: center; margin-bottom: var(--space-6);">
+                    {% if h.logo_preview_src %}
+                    <img src="{{ h.logo_preview_src }}" alt="Byv&aelig;rkstederne Logo" style="max-width: 100%; height: auto; margin: 0 auto;"/>
+                    {% else %}
+                    <div style="font-family: var(--font-headline); font-weight: 900; font-size: 2rem; text-transform: uppercase; letter-spacing: -0.04em;">Byv&aelig;rkstederne</div>
+                    {% endif %}
+                    <p class="u-text-muted" style="margin-top: var(--space-2); font-size: 0.875rem;">Prim&aelig;r Logo</p>
+                </div>
+
+                <div style="display: flex; gap: var(--space-4);">
+                    {% for dl in h.logo_downloads|default([
+                        {label: 'SVG Primær', url: '#'},
+                        {label: 'PNG Transparent', url: '#'}
+                    ]) %}
+                    <a href="{{ dl.url }}" class="bv-btn bv-btn--dark bv-btn--sm">{{ dl.label }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# Press Photos #}
+            <div>
+                <h2 class="bv-headline" style="font-size: 1.5rem; margin-bottom: var(--space-8);">{{ h.photos_title|default('Pressebilleder') }}</h2>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4);">
+                    {% for photo in h.photos %}
+                    <div class="bv-press-photo">
+                        {% if photo.src %}
+                        <img src="{{ photo.src }}" alt="{{ photo.alt|default('Pressebillede') }}"/>
+                        {% else %}
+                        <div style="width: 100%; height: 100%; background: var(--surface-container-high);"></div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {% if h.press_pack_url %}
+        <div style="margin-top: var(--space-8); text-align: center;">
+            <a href="{{ h.press_pack_url }}" class="bv-btn bv-btn--outlined">{{ h.press_pack_label|default('Hent hele pressepakken (ZIP)') }}</a>
+        </div>
+        {% endif %}
+    </div>
+</section>

@@ -1,0 +1,76 @@
+title: Event Highlight
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Event Highlight
+          fields:
+            header.section_title:
+              type: text
+              label: Sektions overskrift
+              default: Det sker lige nu
+            header.section_subtitle:
+              type: textarea
+              label: Sektions undertekst
+              rows: 2
+            event_header:
+              type: section
+              title: Fremhævet begivenhed
+              underline: true
+            header.event_date:
+              type: text
+              label: Dato (visning)
+              help: F.eks. "25. APR"
+            header.event_time:
+              type: text
+              label: Tid og dag
+              help: F.eks. "Torsdag / 10:00 - 15:00"
+            header.event_title:
+              type: text
+              label: Begivenhed titel
+            header.event_description:
+              type: textarea
+              label: Beskrivelse
+              rows: 3
+            header.event_cta:
+              type: text
+              label: Knap tekst
+              default: Jeg kommer
+            header.event_url:
+              type: text
+              label: Knap link
+              default: '#'
+            todo_header:
+              type: section
+              title: To-Do Liste
+              underline: true
+            header.todo_title:
+              type: text
+              label: To-do overskrift
+              default: Dagens To-Do Liste
+            header.todo_items:
+              type: list
+              label: To-do opgaver
+              fields:
+                .title:
+                  type: text
+                  label: Opgave titel
+                .description:
+                  type: text
+                  label: Beskrivelse
+                .color:
+                  type: select
+                  label: Farve
+                  default: primary
+                  options:
+                    primary: Grøn
+                    secondary: Blå
+                    tertiary: Terracotta

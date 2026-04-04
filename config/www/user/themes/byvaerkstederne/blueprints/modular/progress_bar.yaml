@@ -1,0 +1,35 @@
+title: Fremskridtslinje
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Fremskridtslinje
+          fields:
+            header.title:
+              type: text
+              label: Titel
+            header.percentage:
+              type: number
+              label: Procent
+              validate:
+                min: 0
+                max: 100
+            header.color:
+              type: select
+              label: Farve
+              default: primary
+              options:
+                primary: Grøn
+                secondary: Blå
+                tertiary: Terracotta
+            header.stage_label:
+              type: text
+              label: Fase tekst

@@ -1,0 +1,37 @@
+{% set h = page.header %}
+<section class="bv-section">
+    <div class="bv-container">
+        {# Search + Year filters #}
+        <div class="bv-search-bar">
+            <input class="bv-search-input" type="text" placeholder="{{ h.search_placeholder|default('Søg i referater...') }}"/>
+            <div class="bv-filters">
+                <button class="bv-filter-btn bv-year-btn is-active" data-year="all">Alle år</button>
+                {% for year in h.years|default(['2026', '2025', '2024']) %}
+                <button class="bv-filter-btn bv-year-btn" data-year="{{ year }}">{{ year }}</button>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# Archive sections by year #}
+        {% for section in h.sections %}
+        <div class="bv-archive-section" data-year="{{ section.year }}" style="margin-top: var(--space-12);">
+            <div class="bv-archive-year">{{ section.year }}</div>
+
+            {% for doc in section.documents %}
+            <div class="bv-doc-card">
+                <div>
+                    <div class="bv-doc-card__title">{{ doc.title }}</div>
+                    <div class="bv-doc-card__date">{{ doc.date }}</div>
+                </div>
+                <div style="display: flex; gap: var(--space-4); align-items: center;">
+                    <a href="{{ doc.url|default('#') }}" class="bv-btn bv-btn--primary bv-btn--sm">L&aelig;s Referat</a>
+                    {% if doc.download_url %}
+                    <a href="{{ doc.download_url }}" aria-label="Download"><span class="material-symbols-outlined">download</span></a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+</section>

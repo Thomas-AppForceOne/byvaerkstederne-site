@@ -1,0 +1,14 @@
+[
+    {
+        "id": "default-site-backup",
+        "executed_at": "2026-04-01T03:00:48+02:00",
+        "success": true,
+        "output": "\/app\/www\/public\/backup\/default_site_backup--20260401030045.zip"
+    },
+    {
+        "id": "cache-clear",
+        "executed_at": "2026-04-01T03:00:48+02:00",
+        "success": true,
+        "output": "Cleared:  \/app\/www\/public\/cache\/twig\/*\nCleared:  \/app\/www\/public\/cache\/doctrine\/*\nCleared:  \/app\/www\/public\/cache\/compiled\/*\nCleared:  \/app\/www\/public\/assets\/*\n\nTouched: \/app\/www\/public\/user\/config\/system.yaml\n"
+    }
+]

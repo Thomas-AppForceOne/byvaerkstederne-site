@@ -1,0 +1,34 @@
+title: Teamkort
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Team
+          fields:
+            header.section_title:
+              type: text
+              label: Sektions overskrift
+            header.members:
+              type: list
+              label: Medlemmer
+              fields:
+                .name:
+                  type: text
+                  label: Navn
+                .role:
+                  type: text
+                  label: Rolle/titel
+                .email:
+                  type: text
+                  label: E-mail
+                .photo:
+                  type: text
+                  label: Foto URL

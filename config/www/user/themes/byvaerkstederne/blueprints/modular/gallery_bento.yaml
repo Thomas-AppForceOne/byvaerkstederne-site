@@ -1,0 +1,39 @@
+title: Bento Galleri
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Galleri
+          fields:
+            header.section_title:
+              type: text
+              label: Overskrift
+            header.images:
+              type: list
+              label: Billeder
+              fields:
+                .src:
+                  type: text
+                  label: Billede URL
+                .alt:
+                  type: text
+                  label: Alt tekst
+                .label:
+                  type: text
+                  label: Overlay tekst
+                .wide:
+                  type: toggle
+                  label: Bred (spænder to kolonner)
+                  highlight: 1
+                  default: 0
+                  options:
+                    1: Ja
+                    0: Nej

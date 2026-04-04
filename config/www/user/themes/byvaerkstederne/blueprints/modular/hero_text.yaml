@@ -1,0 +1,34 @@
+title: Hero Tekst
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Hero Tekst
+          fields:
+            header.hero_heading:
+              type: text
+              label: Overskrift
+            header.badge:
+              type: text
+              label: Badge tekst
+            header.badge_style:
+              type: select
+              label: Badge farve
+              default: primary
+              options:
+                primary: Grøn
+                secondary: Blå
+                tertiary: Terracotta
+                kulturhus: Mørk
+            header.subtitle:
+              type: textarea
+              label: Undertekst
+              rows: 3

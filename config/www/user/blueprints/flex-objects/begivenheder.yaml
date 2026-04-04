@@ -1,0 +1,154 @@
+title: Begivenheder
+description: Kommende aktiviteter, kurser og arbejdsdage
+type: flex-objects
+
+config:
+  admin:
+    list:
+      title: title
+      fields:
+        published:
+          field:
+            type: toggle
+            label: Aktiv
+          width: 8
+        title:
+          link: edit
+        group:
+          field:
+            type: text
+          width: 16
+        event_date:
+          label: Dato
+          width: 12
+        capacity:
+          field:
+            type: text
+          width: 10
+    edit:
+      title:
+        template: '{{ object.title ?? ''Ny begivenhed'' }}'
+    configure:
+      authorize: admin.super
+
+  data:
+    object: 'Grav\Common\Flex\Types\Generic\GenericObject'
+    collection: 'Grav\Common\Flex\Types\Generic\GenericCollection'
+    index: 'Grav\Common\Flex\Types\Generic\GenericIndex'
+    storage:
+      class: 'Grav\Framework\Flex\Storage\SimpleStorage'
+      options:
+        formatter:
+          class: 'Grav\Framework\File\Formatter\YamlFormatter'
+        folder: user-data://flex-objects/begivenheder.yaml
+    search:
+      options:
+        contains: 1
+      fields:
+        - title
+        - description
+
+form:
+  validation: loose
+  fields:
+    published:
+      type: toggle
+      label: Synlig
+      highlight: 1
+      default: 1
+      options:
+        1: Ja
+        0: Nej
+      validate:
+        type: bool
+
+    title:
+      type: text
+      label: Titel
+      validate:
+        required: true
+
+    description:
+      type: textarea
+      label: Beskrivelse
+      rows: 3
+
+    group:
+      type: select
+      label: Værkstedsgruppe
+      validate:
+        required: true
+      options:
+        alle: Alle grupper (fælles)
+        makerspace: Makerspace & Reparation
+        kreativ: Kreativ Fitness
+        groenne: Det Grønne Fællesskab
+        kulturhus: Kulturhus
+
+    badge:
+      type: text
+      label: Kategori badge
+      help: "Vises som farvet badge, f.eks. 'Kulturhus' eller 'Makerspace & Reparation'"
+
+    event_date:
+      type: text
+      label: Dato
+      help: "Format: 2026-05-02"
+      validate:
+        required: true
+
+    event_time:
+      type: text
+      label: Tidspunkt
+      help: "F.eks. '10:00 - 14:00'"
+
+    location:
+      type: text
+      label: Lokation
+      help: "F.eks. 'Hele området' eller 'Makerspace lokalet'"
+
+    capacity:
+      type: text
+      label: Kapacitet
+      help: "F.eks. '8 Pladser', 'Begrænset plads' eller tom for ubegrænset"
+
+    price:
+      type: text
+      label: Pris
+      help: "F.eks. '50 kr. voksne', 'Gratis entrè' eller tom"
+
+    button_text:
+      type: text
+      label: Knap tekst
+      default: Tilmeld
+
+    button_url:
+      type: text
+      label: Tilmelding URL
+      default: '#'
+
+    button_style:
+      type: select
+      label: Knap stil
+      default: primary
+      options:
+        primary: Primær (grøn)
+        secondary: Sekundær (blå)
+        tertiary: Terracotta
+
+    featured:
+      type: toggle
+      label: Fremhævet begivenhed
+      help: Vises stort øverst på kalendersiden
+      highlight: 1
+      default: 0
+      options:
+        1: Ja
+        0: Nej
+      validate:
+        type: bool
+
+    featured_tag:
+      type: text
+      label: Fremhævet tag
+      help: "F.eks. 'All Hands' — kun vist når fremhævet"

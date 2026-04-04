@@ -1,0 +1,9 @@
+{% extends 'partials/base.html.twig' %}
+
+{% block body %}
+    {% for module in page.collection() %}
+        <div id="{{ module.menu|hyphenize }}" class="bv-module">
+            {{ module.content|raw }}
+        </div>
+    {% endfor %}
+{% endblock %}

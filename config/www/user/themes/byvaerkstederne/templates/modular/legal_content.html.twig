@@ -1,0 +1,26 @@
+{% set h = page.header %}
+<section class="bv-section">
+    <div class="bv-container">
+        <div class="bv-legal">
+            {# Sidebar TOC #}
+            <div class="bv-legal__sidebar">
+                <nav class="bv-legal__toc">
+                    {% for item in h.toc %}
+                    <a href="#{{ item.id }}" class="bv-legal__toc-link">{{ item.label }}</a>
+                    {% endfor %}
+                </nav>
+                {% if h.download_url %}
+                <a href="{{ h.download_url }}" class="bv-btn bv-btn--dark bv-btn--sm bv-btn--full" style="margin-top: var(--space-8);">
+                    <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">download</span>
+                    {{ h.download_text|default('Hent som PDF') }}
+                </a>
+                {% endif %}
+            </div>
+
+            {# Main content #}
+            <div class="bv-legal__content">
+                {{ content|raw }}
+            </div>
+        </div>
+    </div>
+</section>

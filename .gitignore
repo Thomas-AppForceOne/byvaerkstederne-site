@@ -1,0 +1,57 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Design files
+Stitch-designs
+
+# Grav cache & compiled
+config/www/cache/
+config/www/logs/
+config/www/tmp/
+config/www/backup/
+config/www/assets/
+
+# Grav vendor (installed at container runtime)
+config/www/vendor/
+config/www/bin/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker volumes (runtime data)
+config/log/
+config/keys/
+config/crontabs/
+config/custom-cont-init.d/
+config/custom-services.d/
+
+# Local env overrides
+.env.local
+.env.deploy
+
+# Deploy staging and cached downloads
+deploy/staging/
+deploy/*.zip
+
+# User accounts (all excluded — use 'make create-admin' to bootstrap)
+config/www/user/accounts/*
+!config/www/user/accounts/.gitkeep
+
+# Flex Objects indexes (auto-generated)
+config/www/user/data/flex/indexes/
+
+# Scheduler data (runtime)
+config/www/user/data/scheduler/
+
+# Notifications (runtime)
+config/www/user/data/notifications/
+
+# Feed cache
+config/www/user/data/feed/
+
+# Claude Code
+.claude/

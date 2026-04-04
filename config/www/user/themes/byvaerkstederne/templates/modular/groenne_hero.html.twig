@@ -1,0 +1,22 @@
+{% set h = page.header %}
+<section style="margin-bottom: var(--space-20);">
+    <div class="bv-container">
+        <div style="display: grid; grid-template-columns: 8fr 4fr; gap: var(--space-12); align-items: flex-end;">
+            <div>
+                <div style="display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-6);">
+                    <span class="bv-badge" style="background: var(--primary-container); color: var(--on-primary-container);">{{ h.badge|default('Gruppe: Have & Natur') }}</span>
+                    <div style="height: 2px; flex: 1; background: var(--outline-variant); opacity: 0.2;"></div>
+                </div>
+                <h1 class="bv-display" style="font-size: clamp(3rem, 8vw, 6rem); margin-bottom: var(--space-8);">
+                    {{ h.title_before|default('Det Grønne') }} <span style="color: var(--primary);">{{ h.title_accent|default('Fællesskab') }}</span>
+                </h1>
+                <p class="bv-body-lg" style="max-width: 42rem;">{{ h.subtitle }}</p>
+            </div>
+            <div style="aspect-ratio: 1; overflow: hidden; background: var(--surface-container);">
+                {% if h.hero_image %}
+                <img src="{{ h.hero_image }}" alt="{{ h.title_before }} {{ h.title_accent }}" style="width: 100%; height: 100%; object-fit: cover;"/>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>

@@ -1,0 +1,53 @@
+title: Ønskeliste
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Ønskeliste
+          fields:
+            header.section_title:
+              type: text
+              label: Overskrift
+              default: Ønskelisten
+            header.donate_url:
+              type: text
+              label: Donér link URL
+            header.donate_text:
+              type: text
+              label: Donér knap tekst
+              default: Donér Grej
+            header.items:
+              type: list
+              label: Ønsker
+              fields:
+                .name:
+                  type: text
+                  label: Navn
+                .priority:
+                  type: select
+                  label: Prioritet
+                  options:
+                    critical: Kritisk
+                    high: Høj
+                    medium: Medium
+                    low: Lav
+                .priority_label:
+                  type: text
+                  label: Prioritet visning
+                  help: Valgfrit - overskriver prioritet teksten
+                .checked:
+                  type: toggle
+                  label: Opnået
+                  highlight: 1
+                  default: 0
+                  options:
+                    1: Ja
+                    0: Nej

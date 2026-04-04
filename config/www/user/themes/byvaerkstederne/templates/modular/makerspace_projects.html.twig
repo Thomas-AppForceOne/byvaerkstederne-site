@@ -1,0 +1,51 @@
+{% set h = page.header %}
+<section class="bv-section" style="position: relative;">
+    <div class="bv-container">
+        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: var(--space-16); gap: var(--space-8);">
+            <div>
+                <span class="bv-label" style="color: var(--secondary); letter-spacing: 0.2em; margin-bottom: var(--space-4); display: block;">{{ h.section_label|default('Status Rapport') }}</span>
+                <h2 class="bv-headline" style="font-size: 3rem;">{{ h.section_title|default('Hvad laver vi lige nu?') }}</h2>
+            </div>
+            <div style="background: var(--surface-dim); height: 2px; flex: 1; max-width: 33%; margin-bottom: var(--space-4);"></div>
+        </div>
+
+        <div class="bv-projects-grid" style="display: grid; grid-template-columns: 8fr 4fr; gap: var(--space-8);">
+            {# Project 1 - Large card #}
+            {% if h.projects[0] is defined %}
+            {% set p1 = h.projects[0] %}
+            <div style="background: var(--surface-container); padding: var(--space-10); position: relative; overflow: hidden;">
+                <div style="position: absolute; top: var(--space-4); right: var(--space-4); font-family: var(--font-headline); font-weight: 700; font-size: 4rem; color: var(--on-surface-variant); opacity: 0.1;">01</div>
+                <div style="position: relative; z-index: 1;">
+                    <span class="bv-badge bv-badge--secondary" style="margin-bottom: var(--space-6);">{{ p1.tag|default('Arbejdsuge') }}</span>
+                    <h3 class="bv-headline" style="font-size: 2.5rem; margin-bottom: var(--space-4);">{{ p1.title }}</h3>
+                    <p class="bv-body-lg" style="max-width: 36rem; margin-bottom: var(--space-8);">{{ p1.description }}</p>
+                    {% if p1.link_text %}
+                    <div style="display: flex; align-items: center; gap: var(--space-4);">
+                        <div style="width: 3rem; height: 3rem; background: var(--surface-dim);"></div>
+                        <a href="{{ p1.link_url|default('#') }}" class="bv-label" style="text-decoration: underline; text-underline-offset: 4px; color: var(--on-surface-variant);">{{ p1.link_text }}</a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {# Project 2 - Blue card #}
+            {% if h.projects[1] is defined %}
+            {% set p2 = h.projects[1] %}
+            <div style="background: var(--secondary); padding: var(--space-10); color: var(--on-secondary); display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div style="font-family: var(--font-headline); font-weight: 700; font-size: 4rem; color: rgba(255,255,255,0.2); margin-bottom: var(--space-4);">02</div>
+                    <h3 class="bv-headline" style="font-size: 2rem; margin-bottom: var(--space-4); line-height: 1;">{{ p2.title }}</h3>
+                    <p style="color: rgba(219,234,254,0.9); line-height: 1.5;">{{ p2.description }}</p>
+                </div>
+                {% if p2.team %}
+                <div style="margin-top: var(--space-8); padding-top: var(--space-8); border-top: 1px solid rgba(255,255,255,0.2);">
+                    <span style="font-size: 0.625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.2em; display: block; margin-bottom: 0.25rem;">Ansvarlig</span>
+                    <span style="font-family: var(--font-headline); font-weight: 700; font-size: 1.25rem;">{{ p2.team }}</span>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</section>

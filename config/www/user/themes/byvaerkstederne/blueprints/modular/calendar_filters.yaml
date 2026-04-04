@@ -1,0 +1,35 @@
+title: Kalender Filtre
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Kalender Filtre
+          fields:
+            header.filters:
+              type: list
+              label: Filtreringsknapper
+              help: Lad være tom for standardfiltre
+              fields:
+                .label:
+                  type: text
+                  label: Knap tekst
+                .group:
+                  type: select
+                  label: Farvegruppe
+                  options:
+                    primary: Grøn
+                    secondary: Blå
+                    tertiary: Terracotta
+                    kulturhus: Mørk
+                .filter:
+                  type: text
+                  label: Filter ID
+                  help: Matcher data-group på events

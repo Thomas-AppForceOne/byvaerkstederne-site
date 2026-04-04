@@ -1,0 +1,120 @@
+title: Teammedlemmer
+description: Tovholdere og kontaktpersoner
+type: flex-objects
+
+config:
+  admin:
+    list:
+      title: name
+      fields:
+        published:
+          field:
+            type: toggle
+            label: Aktiv
+          width: 8
+        name:
+          link: edit
+        role:
+          field:
+            type: text
+          width: 16
+        group:
+          field:
+            type: text
+          width: 14
+    edit:
+      title:
+        template: '{{ object.name ?? ''Nyt medlem'' }}'
+    configure:
+      authorize: admin.super
+
+  data:
+    object: 'Grav\Common\Flex\Types\Generic\GenericObject'
+    collection: 'Grav\Common\Flex\Types\Generic\GenericCollection'
+    index: 'Grav\Common\Flex\Types\Generic\GenericIndex'
+    storage:
+      class: 'Grav\Framework\Flex\Storage\SimpleStorage'
+      options:
+        formatter:
+          class: 'Grav\Framework\File\Formatter\YamlFormatter'
+        folder: user-data://flex-objects/teammedlemmer.yaml
+    search:
+      options:
+        contains: 1
+      fields:
+        - name
+        - role
+
+form:
+  validation: loose
+  fields:
+    published:
+      type: toggle
+      label: Synlig
+      highlight: 1
+      default: 1
+      options:
+        1: Ja
+        0: Nej
+      validate:
+        type: bool
+
+    name:
+      type: text
+      label: Fulde navn
+      validate:
+        required: true
+
+    role:
+      type: text
+      label: Rolle / titel
+      help: "F.eks. 'Hovedformand', 'Frivilligkoordinator', 'Værkstedsleder'"
+      validate:
+        required: true
+
+    group:
+      type: select
+      label: Værkstedsgruppe
+      options:
+        alle: Foreningen (bestyrelse/generel)
+        makerspace: Makerspace & Reparation
+        kreativ: Kreativ Fitness
+        groenne: Det Grønne Fællesskab
+        kulturhus: Kulturhus
+
+    email:
+      type: text
+      label: E-mail
+      validate:
+        type: email
+
+    phone:
+      type: text
+      label: Telefon
+
+    photo:
+      type: text
+      label: Foto URL
+      help: Sti til profilbillede
+
+    bio:
+      type: textarea
+      label: Kort bio
+      rows: 3
+
+    show_on_contact:
+      type: toggle
+      label: Vis på kontaktsiden
+      highlight: 1
+      default: 1
+      options:
+        1: Ja
+        0: Nej
+      validate:
+        type: bool
+
+    sort_order:
+      type: number
+      label: Sortering
+      default: 10
+      help: Lavere tal vises først

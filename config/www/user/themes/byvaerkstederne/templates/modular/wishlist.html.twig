@@ -1,0 +1,39 @@
+{% set h = page.header %}
+<section class="bv-section--sm">
+    <div class="bv-container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-8);">
+            <h2 class="bv-headline" style="font-size: 1.75rem;">{{ h.section_title|default('&Oslash;nskelisten') }}</h2>
+            {% if h.donate_url %}
+            <a href="{{ h.donate_url }}" class="bv-btn bv-btn--primary bv-btn--sm">{{ h.donate_text|default('Don&eacute;r Grej') }}</a>
+            {% endif %}
+        </div>
+
+        {# Pull from Flex Objects if available, fall back to page header #}
+        {% set flex = grav.get('flex_objects') %}{% set flex_dir = flex ? flex.directory('oenskeliste') : null %}{% set flex_wishes = flex_dir ? flex_dir.collection : null %}
+        {% set wish_group = h.flex_group|default('') %}
+
+        {% if flex_wishes is not null and wish_group %}
+            {% for item in flex_wishes %}
+                {% if item.published and item.group == wish_group %}
+                <div class="bv-wishlist-item">
+                    <div class="bv-wishlist-item__checkbox{% if item.fulfilled %} bv-checkbox--checked{% endif %}"></div>
+                    <span class="bv-wishlist-item__name{% if item.fulfilled %}" style="text-decoration: line-through; color: var(--on-surface-variant);{% endif %}">{{ item.name }}{% if item.description %} ({{ item.description }}){% endif %}</span>
+                    {% if item.priority %}
+                    <span class="bv-wishlist-item__priority bv-priority--{{ item.priority }}">{{ item.priority }}</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+            {% endfor %}
+        {% else %}
+            {% for item in h.items %}
+            <div class="bv-wishlist-item">
+                <div class="bv-wishlist-item__checkbox{% if item.checked %} bv-checkbox--checked{% endif %}"></div>
+                <span class="bv-wishlist-item__name{% if item.checked %}" style="text-decoration: line-through; color: var(--on-surface-variant);{% endif %}">{{ item.name }}</span>
+                {% if item.priority %}
+                <span class="bv-wishlist-item__priority bv-priority--{{ item.priority }}">{{ item.priority_label|default(item.priority) }}</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+</section>

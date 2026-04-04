@@ -1,0 +1,12 @@
+{% set h = page.header %}
+<section class="bv-section bv-newsletter">
+    <div class="bv-container" style="max-width: var(--container-md); text-align: center;">
+        <h2 class="bv-headline" style="font-size: 3rem;">{{ h.section_title|default('Bliv en del af v&aelig;rksteds&aring;nden') }}</h2>
+        <p class="bv-body-lg" style="margin-top: var(--space-4); max-width: var(--container-sm); margin-left: auto; margin-right: auto;">{{ h.subtitle|default('Modtag vores ugentlige blueprint med kalenderoversigt, nye projekter og opdateringer fra havnen.') }}</p>
+
+        <form class="bv-newsletter__form" style="margin-top: var(--space-12);">
+            <input class="bv-newsletter__input" type="email" placeholder="{{ h.placeholder|default('Din e-mail adresse') }}"/>
+            <button type="submit" class="bv-btn bv-btn--dark">{{ h.button_text|default('Tilmeld') }}</button>
+        </form>
+    </div>
+</section>

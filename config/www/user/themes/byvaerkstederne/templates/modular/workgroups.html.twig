@@ -1,0 +1,22 @@
+{% set h = page.header %}
+<section class="bv-section" style="background: var(--surface-container-highest); padding: var(--space-24) 0;">
+    <div class="bv-container">
+        <h2 class="bv-headline" style="font-size: 3rem; text-align: center; margin-bottom: var(--space-16);">{{ h.section_title|default('Vores V&aelig;rkstedsgrupper') }}</h2>
+    </div>
+    <div class="bv-container">
+        <div class="bv-workgroups">
+            {% for group in h.groups %}
+            <a href="{{ group.url|default('#') }}" class="bv-workgroup-card bv-workgroup-card--{{ group.color|default('primary') }}">
+                {% if group.image %}
+                <img class="bv-workgroup-card__bg" src="{{ group.image }}" alt="{{ group.title }}"/>
+                {% endif %}
+                <div class="bv-workgroup-card__content">
+                    <h3 class="bv-workgroup-card__title">{{ group.title }}</h3>
+                    <p class="bv-workgroup-card__desc">{{ group.description }}</p>
+                    <div class="bv-workgroup-card__line"></div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</section>

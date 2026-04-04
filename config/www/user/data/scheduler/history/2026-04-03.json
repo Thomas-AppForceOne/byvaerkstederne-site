@@ -1,0 +1,8 @@
+[
+    {
+        "id": "cache-purge",
+        "executed_at": "2026-04-03T04:00:00+02:00",
+        "success": true,
+        "output": "Purged 0 old cache items (files older than 30 days)"
+    }
+]

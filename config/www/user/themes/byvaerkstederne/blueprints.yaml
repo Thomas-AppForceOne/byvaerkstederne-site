@@ -1,0 +1,27 @@
+name: Byvaerkstederne
+slug: byvaerkstederne
+type: theme
+version: 1.0.0
+description: "Industrial Brutalism Refined - Custom theme for Byværkstederne i Hundested"
+icon: hammer
+author:
+  name: Byvaerkstederne
+homepage: https://byvaerkstederne.dk
+keywords: workshop, community, brutalism, industrial
+
+dependencies:
+  - { name: grav, version: '>=1.7.0' }
+
+form:
+  validation: loose
+  fields:
+    production_mode:
+      type: toggle
+      label: Production mode
+      highlight: 1
+      default: 1
+      options:
+        1: PLUGIN_ADMIN.YES
+        0: PLUGIN_ADMIN.NO
+      validate:
+        type: bool

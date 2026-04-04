@@ -1,0 +1,27 @@
+name: Flex Cache Bust
+slug: flex-cache-bust
+type: plugin
+version: 1.0.0
+description: Clears Grav page cache when Flex Objects data is saved
+icon: refresh
+author:
+  name: Byvaerkstederne
+homepage: https://byvaerkstederne.dk
+
+dependencies:
+  - { name: grav, version: '>=1.7.0' }
+  - { name: flex-objects, version: '>=1.0.0' }
+
+form:
+  validation: loose
+  fields:
+    enabled:
+      type: toggle
+      label: Plugin status
+      highlight: 1
+      default: 1
+      options:
+        1: Enabled
+        0: Disabled
+      validate:
+        type: bool

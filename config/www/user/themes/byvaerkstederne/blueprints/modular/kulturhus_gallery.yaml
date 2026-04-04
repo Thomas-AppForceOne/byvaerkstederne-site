@@ -1,0 +1,50 @@
+title: Kulturhus Galleri
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Kulturhus Galleri
+          fields:
+            header.section_title:
+              type: text
+              label: Sektion overskrift
+              default: Momenter & Kommende Events
+            header.featured:
+              type: section
+              title: Fremhævet billede
+              underline: true
+            header.featured.image:
+              type: text
+              label: Billede URL
+            header.featured.title:
+              type: text
+              label: Titel
+            header.featured.date:
+              type: text
+              label: Dato
+            header.featured.badge:
+              type: text
+              label: Badge tekst
+              default: Næste Event
+            header.images:
+              type: list
+              label: Galleri billeder
+              help: Op til 2 ekstra billeder
+              fields:
+                .src:
+                  type: text
+                  label: Billede URL
+                .title:
+                  type: text
+                  label: Titel
+                .subtitle:
+                  type: text
+                  label: Undertekst

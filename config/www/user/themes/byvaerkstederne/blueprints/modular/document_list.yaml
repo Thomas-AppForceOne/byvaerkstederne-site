@@ -1,0 +1,50 @@
+title: Dokumentarkiv
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Dokumentarkiv
+          fields:
+            header.search_placeholder:
+              type: text
+              label: Søgefelt placeholder
+              default: Søg i referater...
+            header.years:
+              type: list
+              label: År til filtrering
+              style: vertical
+              fields:
+                value:
+                  type: text
+                  label: År
+            header.sections:
+              type: list
+              label: Arkiv sektioner
+              fields:
+                .year:
+                  type: text
+                  label: År
+                .documents:
+                  type: list
+                  label: Dokumenter
+                  fields:
+                    .title:
+                      type: text
+                      label: Titel
+                    .date:
+                      type: text
+                      label: Dato
+                    .url:
+                      type: text
+                      label: Link URL
+                    .download_url:
+                      type: text
+                      label: Download URL

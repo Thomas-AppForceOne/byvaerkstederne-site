@@ -1,0 +1,77 @@
+title: Grønne Indhold
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Grønne Indhold
+          fields:
+            header.status_title:
+              type: text
+              label: Status overskrift
+              default: Hvad laver vi lige nu?
+            header.status_image:
+              type: text
+              label: Status billede URL
+              help: Billede vist under statusteksten
+            header.progress_heading:
+              type: text
+              label: Fremskridt overskrift
+              default: Workshop Progress
+            header.progress_title:
+              type: text
+              label: Fremskridt titel
+              help: Navn på det aktuelle projekt
+            header.progress_percent:
+              type: text
+              label: Fremskridt procent
+              help: Tal mellem 0 og 100
+            header.progress_note:
+              type: text
+              label: Fremskridt note
+              help: Kort bemærkning under progress bar
+            header.wishlist:
+              type: list
+              label: Ønskeliste
+              fields:
+                .name:
+                  type: text
+                  label: Navn
+                .spec:
+                  type: text
+                  label: Specifikation
+                .priority:
+                  type: select
+                  label: Prioritet
+                  options:
+                    kritisk: Kritisk
+                    høj: Høj
+                    medium: Medium
+                    lav: Lav
+            header.donate_heading:
+              type: text
+              label: Donation overskrift
+              default: Har du noget liggende?
+            header.donate_text:
+              type: textarea
+              label: Donation tekst
+              default: Vi tager imod både nyt og brugt grej, så længe det virker.
+              rows: 2
+            header.donate_cta:
+              type: text
+              label: Donation knap tekst
+              help: Lad være tom for at skjule donationsboksen
+            header.donate_url:
+              type: text
+              label: Donation link URL
+            header.gallery_image:
+              type: text
+              label: Galleri billede URL
+              help: Billede til galleri-CTA i højre side

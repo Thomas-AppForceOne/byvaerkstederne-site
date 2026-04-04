@@ -1,0 +1,35 @@
+title: Grønne Hero
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Grønne Hero
+          fields:
+            header.badge:
+              type: text
+              label: Badge tekst
+              default: 'Gruppe: Have & Natur'
+            header.title_before:
+              type: text
+              label: Overskrift (før accent)
+              help: Første del af overskriften
+            header.title_accent:
+              type: text
+              label: Accent tekst
+              help: Den farvede del af overskriften
+            header.subtitle:
+              type: textarea
+              label: Undertekst
+              rows: 3
+            header.hero_image:
+              type: text
+              label: Hero billede URL
+              help: Kvadratisk billede i højre side

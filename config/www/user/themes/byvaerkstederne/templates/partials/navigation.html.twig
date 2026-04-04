@@ -1,0 +1,64 @@
+{% set logout_path = (base_url_relative ~ uri.path)|trim('/', 'right') %}
+{% set logout_url = uri.addNonce(logout_path ~ '/task' ~ config.system.param_sep ~ 'login.logout', 'logout-form', 'logout-nonce') %}
+<header class="bv-nav">
+    <div class="bv-nav__logo">
+        <a href="{{ home_url }}">Byv&aelig;rkstederne</a>
+    </div>
+
+    <nav class="bv-nav__links">
+        {% set nav_type = page.header.nav_type|default('main') %}
+
+        {% if nav_type == 'info' %}
+            <a href="/vedtaegter" class="bv-nav__link {% if page.route == '/vedtaegter' %}is-active{% endif %}">Vedt&aelig;gter</a>
+            <a href="/privatlivspolitik" class="bv-nav__link {% if page.route == '/privatlivspolitik' %}is-active{% endif %}">Privatliv</a>
+            <a href="/referater" class="bv-nav__link {% if page.route == '/referater' %}is-active{% endif %}">Referater</a>
+            <a href="/presse" class="bv-nav__link {% if page.route == '/presse' %}is-active{% endif %}">Presse</a>
+        {% else %}
+            <a href="/" class="bv-nav__link {% if page.route == '/' or page.route == '/home' %}is-active{% endif %}">Forsiden</a>
+            <a href="/vaerkstedskalenderen" class="bv-nav__link {% if page.route == '/vaerkstedskalenderen' %}is-active{% endif %}">V&aelig;rkstedskalenderen</a>
+            <a href="/vaerksteder" class="bv-nav__link {% if page.route starts with '/vaerksteder' %}is-active{% endif %}">V&aelig;rksteder</a>
+            <a href="/kontakt" class="bv-nav__link {% if page.route == '/kontakt' %}is-active{% endif %}">Kontakt</a>
+        {% endif %}
+
+        {% if grav.user.authenticated and grav.user.authorized %}
+            <span class="bv-nav__user">
+                <span class="material-symbols-outlined" style="font-size: 1.25rem; vertical-align: middle;">person</span>
+                {{ grav.user.fullname|default(grav.user.username) }}
+            </span>
+            <a href="{{ logout_url|e }}" class="bv-nav__link">Log ud</a>
+        {% else %}
+            <a href="#" class="bv-nav__link" onclick="document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;">Log ind</a>
+            <a href="/opret-medlemskab?redirect={{ page.route|url_encode }}" class="bv-btn bv-btn--primary bv-btn--sm">Bliv medlem</a>
+        {% endif %}
+    </nav>
+
+    <button class="bv-nav__hamburger" aria-label="Menu">
+        <span class="material-symbols-outlined">menu</span>
+    </button>
+</header>
+
+{# Mobile menu overlay #}
+<div class="bv-mobile-menu">
+    <nav class="bv-mobile-menu__nav">
+        <a href="/" class="bv-mobile-menu__link">Forsiden</a>
+        <a href="/vaerkstedskalenderen" class="bv-mobile-menu__link">V&aelig;rkstedskalenderen</a>
+        <a href="/vaerksteder" class="bv-mobile-menu__link">V&aelig;rksteder</a>
+        <a href="/kontakt" class="bv-mobile-menu__link">Kontakt</a>
+        <hr class="bv-mobile-menu__divider"/>
+        <a href="/vedtaegter" class="bv-mobile-menu__link bv-mobile-menu__link--secondary">Vedt&aelig;gter</a>
+        <a href="/privatlivspolitik" class="bv-mobile-menu__link bv-mobile-menu__link--secondary">Privatliv</a>
+        <a href="/referater" class="bv-mobile-menu__link bv-mobile-menu__link--secondary">Referater</a>
+        <a href="/presse" class="bv-mobile-menu__link bv-mobile-menu__link--secondary">Presse</a>
+        <hr class="bv-mobile-menu__divider"/>
+        {% if grav.user.authenticated and grav.user.authorized %}
+            <span class="bv-mobile-menu__link" style="color: var(--primary);">
+                <span class="material-symbols-outlined" style="vertical-align: middle; margin-right: 0.5rem;">person</span>
+                {{ grav.user.fullname|default(grav.user.username) }}
+            </span>
+            <a href="{{ logout_url|e }}" class="bv-mobile-menu__link">Log ud</a>
+        {% else %}
+            <a href="#" class="bv-mobile-menu__link" onclick="document.body.classList.remove('menu-open'); document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;">Log ind</a>
+            <a href="/opret-medlemskab" class="bv-btn bv-btn--primary bv-mobile-menu__cta">Bliv medlem</a>
+        {% endif %}
+    </nav>
+</div>

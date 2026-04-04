@@ -1,0 +1,44 @@
+title: Værksted Status
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Værksted Status
+          fields:
+            header.section_title:
+              type: text
+              label: Overskrift
+              default: Hvad laver vi lige nu?
+            header.projects:
+              type: list
+              label: Projekter
+              fields:
+                .number:
+                  type: text
+                  label: Projekt nummer
+                .title:
+                  type: text
+                  label: Titel
+                .description:
+                  type: textarea
+                  label: Beskrivelse
+                  rows: 2
+                .accent:
+                  type: select
+                  label: Accent farve
+                  options:
+                    primary: Grøn
+                    secondary: Blå
+                    tertiary: Terracotta
+                .status:
+                  type: text
+                  label: Status tekst
+                  help: F.eks. "Arbejde pågår"

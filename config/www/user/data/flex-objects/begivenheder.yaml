@@ -1,0 +1,112 @@
+event001:
+  published: true
+  title: "Stor Arbejdsdag i Byværkstederne"
+  description: "Vi gør foråret klar i alle værksteder. Der skal males, fejes, organiseres og plantes. Vi slutter af med fællesspisning kl. 18:00 for alle frivillige."
+  group: alle
+  badge: "All Hands"
+  event_date: "2026-04-25"
+  event_time: "09:00 — 17:00"
+  location: "Hele området"
+  capacity: ""
+  price: ""
+  button_text: Tilmeld
+  button_url: "#"
+  button_style: primary
+  featured: true
+  featured_tag: "All Hands"
+event002:
+  published: true
+  title: "Foredrag: Hundested Havns Historie"
+  description: "Fortælling om havnens udvikling fra fiskerleje til moderne kulturknudepunkt."
+  group: kulturhus
+  badge: Kulturhus
+  event_date: "2026-04-30"
+  event_time: "19:00 — 21:00"
+  location: "Kulturhus lokalet"
+  capacity: "Begrænset plads"
+  price: ""
+  button_text: Tilmeld
+  button_url: "#"
+  button_style: primary
+  featured: false
+  featured_tag: ""
+event003:
+  published: true
+  title: "Introduktion til Laserskæring"
+  description: "Lær de grundlæggende teknikker og sikkerhedsprocedurer."
+  group: makerspace
+  badge: "Makerspace & Reparation"
+  event_date: "2026-05-02"
+  event_time: "18:00 — 21:00"
+  location: "Makerspace lokalet"
+  capacity: "8 Pladser"
+  price: ""
+  button_text: Tilmeld
+  button_url: "#"
+  button_style: primary
+  featured: false
+  featured_tag: ""
+event004:
+  published: true
+  title: "Plantemærked & Stiklingsbytte"
+  description: "Bytte og deling af planter, stiklinger og frø."
+  group: groenne
+  badge: "Det Grønne Fællesskab"
+  event_date: "2026-05-05"
+  event_time: "10:00 — 14:00"
+  location: "Byhaven"
+  capacity: ""
+  price: "Gratis entré"
+  button_text: Detaljer
+  button_url: "#"
+  button_style: primary
+  featured: false
+  featured_tag: ""
+event005:
+  published: true
+  title: "Fællesspisning: Lokale Råvarer"
+  description: "Vi laver aftensmad og spiser sammen. Alle velkommen."
+  group: kulturhus
+  badge: Kulturhus
+  event_date: "2026-05-07"
+  event_time: "17:00 — 21:00"
+  location: "Kulturhus lokalet"
+  capacity: ""
+  price: "50 kr. voksne"
+  button_text: "Køb Billet"
+  button_url: "#"
+  button_style: tertiary
+  featured: false
+  featured_tag: ""
+event006:
+  published: true
+  title: "Klargøring af det nye Keramikværksted"
+  description: "Vi bygger reoler, maler og rydder op i værkstedslokalet."
+  group: kreativ
+  badge: "Kreativ Fitness"
+  event_date: "2026-05-08"
+  event_time: "10:00 — 16:00"
+  location: "Keramiklokalet"
+  capacity: ""
+  price: ""
+  button_text: Deltag
+  button_url: "#"
+  button_style: tertiary
+  featured: false
+  featured_tag: ""
+event007:
+  published: true
+  title: "Open Night: 3D-print for Begyndere"
+  description: "Vi gennemgår software og praksis."
+  group: makerspace
+  badge: "Makerspace & Reparation"
+  event_date: "2026-05-15"
+  event_time: "18:00 — 21:00"
+  location: "Makerspace lokalet"
+  capacity: "Mange Velkomne"
+  price: ""
+  button_text: Tilmeld
+  button_url: "#"
+  button_style: secondary
+  featured: false
+  featured_tag: ""

@@ -1,0 +1,66 @@
+{% set h = page.header %}
+<section class="bv-section--sm">
+    <div class="bv-container">
+        <h2 class="bv-headline" style="font-size: 1.75rem; margin-bottom: var(--space-8);">{{ h.section_title|default('Kommende Aktiviteter') }}</h2>
+
+        {# Pull from Flex Objects if available, fall back to page header #}
+        {% set flex = grav.get('flex_objects') %}{% set flex_dir = flex ? flex.directory('begivenheder') : null %}{% set flex_events = flex_dir ? flex_dir.collection : null %}
+        {% if flex_events is not null %}
+            {% set group_map = {makerspace: 'secondary', kreativ: 'tertiary', groenne: 'primary', kulturhus: 'kulturhus', alle: 'primary'} %}
+            {% set filter_map = {makerspace: 'makerspace', kreativ: 'kreativ', groenne: 'groenne', kulturhus: 'kulturhus', alle: 'all'} %}
+            {% set events_list = [] %}
+            {% for ev in flex_events %}
+                {% if ev.published and not ev.featured %}
+                    {% set events_list = events_list|merge([{
+                        month: ev.event_date|date('F'),
+                        day: ev.event_date|date('d'),
+                        badge: ev.badge,
+                        group: group_map[ev.group]|default('primary'),
+                        filter: filter_map[ev.group]|default(ev.group),
+                        title: ev.title,
+                        description: ev.description,
+                        capacity: ev.capacity,
+                        price: ev.price,
+                        url: ev.button_url|default('#'),
+                        button_text: ev.button_text|default('Tilmeld'),
+                        button_style: ev.button_style|default('primary')
+                    }]) %}
+                {% endif %}
+            {% endfor %}
+        {% else %}
+            {% set events_list = h.events %}
+        {% endif %}
+
+        {% for event in events_list %}
+        <div class="bv-event-row bv-event-row--{{ event.group|default('primary') }}" data-group="{{ event.filter|default(event.group) }}">
+            <div class="bv-event-row__date" style="color: {{ event.date_color|default('var(--primary)') }};">
+                <div class="bv-event-row__date-month">{{ event.month }}</div>
+                <div class="bv-event-row__date-day">{{ event.day }}</div>
+            </div>
+
+            <div class="bv-event-row__body">
+                {% if event.badge %}
+                <span class="bv-badge bv-badge--{{ event.group|default('primary') }}" style="margin-bottom: 0.25rem;">{{ event.badge }}</span>
+                {% endif %}
+                <div class="bv-event-row__title">{{ event.title }}</div>
+                {% if event.description %}
+                <div class="bv-event-row__desc">{{ event.description }}</div>
+                {% endif %}
+            </div>
+
+            <div class="bv-event-row__meta">
+                {% if event.capacity %}
+                <span class="bv-event-row__capacity">
+                    <span class="material-symbols-outlined" style="font-size: 1rem;">person</span>
+                    {{ event.capacity }}
+                </span>
+                {% endif %}
+                {% if event.price %}
+                <span style="color: var(--on-surface-variant); font-size: 0.875rem;">{{ event.price }}</span>
+                {% endif %}
+                <a href="{{ event.url|default('#') }}" class="bv-btn bv-btn--{{ event.button_style|default('primary') }} bv-btn--sm">{{ event.button_text|default('Tilmeld') }}</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>

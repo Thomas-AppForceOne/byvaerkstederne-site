@@ -1,0 +1,42 @@
+title: Makerspace CTA
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Makerspace CTA
+          fields:
+            header.cta_heading:
+              type: text
+              label: Overskrift
+              default: Bliv en del af os
+            header.cta_text:
+              type: textarea
+              label: Brødtekst
+              rows: 3
+            header.leader_name:
+              type: text
+              label: Gruppeleder navn
+            header.leader_email:
+              type: text
+              label: Gruppeleder e-mail
+            header.leader_image:
+              type: text
+              label: Gruppeleder billede URL
+            header.meeting_title:
+              type: text
+              label: Møde titel
+              default: Næste møde
+            header.meeting_time:
+              type: text
+              label: Møde tidspunkt
+            header.meeting_url:
+              type: text
+              label: Møde link URL

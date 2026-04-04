@@ -1,0 +1,21 @@
+{% set h = page.header %}
+<section class="bv-section--sm">
+    <div class="bv-container">
+        {% if h.title %}
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--space-4);">
+            <h3 class="bv-title" style="font-size: 1.25rem;">{{ h.title }}</h3>
+            <span class="bv-label" style="font-size: 1rem;">{{ h.percentage|default(0) }}%</span>
+        </div>
+        {% endif %}
+
+        <div class="bv-progress">
+            <div class="bv-progress__fill bv-progress__fill--{{ h.color|default('primary') }}" style="width: {{ h.percentage|default(0) }}%;"></div>
+        </div>
+
+        {% if h.stage_label %}
+        <div style="margin-top: var(--space-2); display: flex; justify-content: space-between;">
+            <span class="bv-label u-text-muted">{{ h.stage_label }}</span>
+        </div>
+        {% endif %}
+    </div>
+</section>

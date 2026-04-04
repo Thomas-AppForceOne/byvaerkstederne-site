@@ -1,0 +1,31 @@
+title: Nyhedsbrev
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Nyhedsbrev
+          fields:
+            header.section_title:
+              type: text
+              label: Overskrift
+              default: Bliv en del af værkstedsånden
+            header.subtitle:
+              type: textarea
+              label: Undertekst
+              rows: 2
+            header.placeholder:
+              type: text
+              label: Placeholder tekst
+              default: Din e-mail adresse
+            header.button_text:
+              type: text
+              label: Knap tekst
+              default: Tilmeld

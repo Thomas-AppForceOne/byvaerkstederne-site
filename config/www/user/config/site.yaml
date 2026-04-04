@@ -1,0 +1,19 @@
+title: Byværkstederne
+default_lang: da
+author:
+  name: 'Byværkstederne i Hundested'
+  email: kontakt@byvaerkstederne.dk
+taxonomies:
+  - category
+  - tag
+metadata:
+  description: 'Et brugerdrevet værkstedsfællesskab i Hundested – Makerspace, Kreativ Fitness, Det Grønne Fællesskab og Kulturhus.'
+summary:
+  enabled: true
+  format: short
+  size: 300
+  delimiter: '==='
+redirects: null
+routes: null
+blog:
+  route: /blog

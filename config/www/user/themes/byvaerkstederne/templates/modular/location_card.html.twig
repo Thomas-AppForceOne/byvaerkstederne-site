@@ -1,0 +1,20 @@
+{% set h = page.header %}
+<section class="bv-section--sm">
+    <div class="bv-container">
+        <div class="bv-info-card">
+            <h3 class="bv-info-card__title">{{ h.card_title|default('Kom forbi og kig') }}</h3>
+            {% if h.address %}
+            <div class="bv-info-card__item">
+                <span class="material-symbols-outlined">location_on</span>
+                <p>{{ h.address|raw }}</p>
+            </div>
+            {% endif %}
+            {% if h.hours %}
+            <div class="bv-info-card__item">
+                <span class="material-symbols-outlined">schedule</span>
+                <p>{{ h.hours }}</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</section>

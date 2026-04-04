@@ -1,0 +1,75 @@
+{% set h = page.header %}
+<section style="background: #09090b; color: #fff; padding: var(--space-24) var(--space-8); overflow: hidden;">
+    <div style="max-width: var(--container); margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-20);">
+        {# Left: Wishlist #}
+        <div>
+            <h2 class="bv-headline" style="font-size: 3rem; color: var(--secondary-fixed); margin-bottom: var(--space-4);">{{ h.wishlist_title|default('Ønskelisten') }}</h2>
+            <p style="color: #a1a1aa; margin-bottom: var(--space-12);">{{ h.wishlist_subtitle|default('') }}</p>
+
+            <div style="display: flex; flex-direction: column; gap: var(--space-4);">
+                {# Pull from Flex Objects if available #}
+                {% set flex = grav.get('flex_objects') %}{% set flex_dir = flex ? flex.directory('oenskeliste') : null %}{% set flex_wishes = flex_dir ? flex_dir.collection : null %}
+                {% set wish_items = [] %}
+                {% if flex_wishes is not null %}
+                    {% for fitem in flex_wishes %}
+                        {% if fitem.published and fitem.group == 'makerspace' and not fitem.fulfilled %}
+                            {% set priority_colors = {critical: {bg: 'rgba(186,26,26,0.15)', color: '#ff6b6b'}, high: {bg: 'rgba(50,95,155,0.15)', color: 'var(--secondary-fixed-dim)'}, medium: {bg: 'rgba(50,95,155,0.1)', color: 'var(--secondary-fixed-dim)'}, low: {bg: 'rgba(113,40,0,0.1)', color: 'var(--tertiary-fixed-dim)'}} %}
+                            {% set pc = priority_colors[fitem.priority]|default(priority_colors.medium) %}
+                            {% set wish_items = wish_items|merge([{name: fitem.name, spec: fitem.description, border_color: 'var(--secondary)', priority_label: fitem.priority, priority_bg: pc.bg, priority_color: pc.color}]) %}
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+                {% set items_to_show = wish_items|length > 0 ? wish_items : h.items %}
+                {% for item in items_to_show %}
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: var(--space-6); background: #18181b; border-left: 4px solid {{ item.border_color|default('var(--secondary)') }}; transition: background 0.2s;" onmouseover="this.style.background='#27272a'" onmouseout="this.style.background='#18181b'">
+                    <div>
+                        <h4 style="font-family: var(--font-headline); font-weight: 700; text-transform: uppercase; letter-spacing: -0.02em; font-size: 1.25rem;">{{ item.name }}</h4>
+                        <span style="color: #71717a; font-size: 0.625rem; text-transform: uppercase; letter-spacing: 0.2em; font-weight: 700;">{{ item.spec|default('') }}</span>
+                    </div>
+                    <span style="padding: 0.25rem 1rem; font-size: 0.625rem; font-weight: 700; text-transform: uppercase; background: {{ item.priority_bg|default('rgba(50,95,155,0.1)') }}; color: {{ item.priority_color|default('var(--secondary-fixed-dim)') }};">{{ item.priority_label|default('') }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# Right: Progress #}
+        <div style="display: flex; flex-direction: column; justify-content: center;">
+            <div style="padding: var(--space-12); background: #18181b; border: 1px solid #27272a;">
+                <div style="margin-bottom: var(--space-12);">
+                    <span class="bv-label" style="color: var(--secondary); letter-spacing: 0.3em; margin-bottom: var(--space-4); display: block;">{{ h.milestone_label|default('Aktuel Milepæl') }}</span>
+                    <h3 class="bv-headline" style="font-size: 2.5rem; margin-bottom: var(--space-4); line-height: 1;">{{ h.milestone_title|default('') }}</h3>
+                    <p style="color: #a1a1aa;">{{ h.milestone_description|default('') }}</p>
+                </div>
+
+                <div style="margin-bottom: var(--space-4);">
+                    <div style="display: flex; justify-content: space-between; font-family: var(--font-headline); font-weight: 700; font-size: 0.875rem; text-transform: uppercase; margin-bottom: var(--space-4);">
+                        <span>Fremdrift</span>
+                        <span style="color: var(--secondary);">{{ h.progress_percent|default(0) }}%</span>
+                    </div>
+                    <div style="height: 4rem; background: #27272a; width: 100%; position: relative;">
+                        <div style="height: 100%; background: var(--secondary); width: {{ h.progress_percent|default(0) }}%; display: flex; align-items: center; justify-content: flex-end; padding-right: var(--space-4);">
+                            <span class="material-symbols-outlined" style="color: rgba(255,255,255,0.5); font-size: 2rem;">precision_manufacturing</span>
+                        </div>
+                    </div>
+                </div>
+
+                {% if h.latest_update or h.next_step %}
+                <div style="margin-top: var(--space-12); display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4);">
+                    {% if h.latest_update %}
+                    <div style="background: rgba(39,39,42,0.5); padding: var(--space-4);">
+                        <span style="font-size: 0.625rem; font-weight: 700; text-transform: uppercase; color: #71717a; display: block;">Seneste update</span>
+                        <span style="font-size: 0.875rem; font-weight: 700;">{{ h.latest_update }}</span>
+                    </div>
+                    {% endif %}
+                    {% if h.next_step %}
+                    <div style="background: rgba(39,39,42,0.5); padding: var(--space-4);">
+                        <span style="font-size: 0.625rem; font-weight: 700; text-transform: uppercase; color: #71717a; display: block;">Næste skridt</span>
+                        <span style="font-size: 0.875rem; font-weight: 700;">{{ h.next_step }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>

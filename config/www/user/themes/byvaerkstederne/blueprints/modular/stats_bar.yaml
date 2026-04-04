@@ -1,0 +1,27 @@
+title: Statistik
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Statistik
+          fields:
+            header.stats:
+              type: list
+              label: Statistikker
+              fields:
+                .value:
+                  type: text
+                  label: Værdi
+                  help: F.eks. "47" eller "4"
+                .label:
+                  type: text
+                  label: Tekst
+                  help: F.eks. "Aktive Medlemmer"

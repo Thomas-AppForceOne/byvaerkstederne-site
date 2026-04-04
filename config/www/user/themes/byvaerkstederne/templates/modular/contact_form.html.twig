@@ -1,0 +1,54 @@
+{% set h = page.header %}
+<section class="bv-section">
+    <div class="bv-container">
+        <div style="display: grid; grid-template-columns: 7fr 5fr; gap: var(--space-12);">
+            {# Form #}
+            <div class="bv-card--elevated" style="padding: var(--space-8); position: relative; overflow: hidden;">
+                <div style="position: absolute; top: 0; right: 0; width: 6rem; height: 6rem; background: var(--primary-fixed-dim); opacity: 0.2; transform: rotate(45deg) translate(50%, -50%);"></div>
+                <h2 class="bv-headline" style="font-size: 1.75rem; margin-bottom: var(--space-8);">{{ h.form_title|default('Send en hilsen') }}</h2>
+
+                <form style="display: flex; flex-direction: column; gap: var(--space-8);">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-8);">
+                        <div>
+                            <label class="bv-form-label">Dit Navn</label>
+                            <input class="bv-input" type="text" placeholder="Skriv dit fulde navn" style="margin-top: var(--space-2);"/>
+                        </div>
+                        <div>
+                            <label class="bv-form-label">Email Adresse</label>
+                            <input class="bv-input" type="email" placeholder="mail@eksempel.dk" style="margin-top: var(--space-2);"/>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="bv-form-label">Hvilke v&aelig;rksteder interesserer dig?</label>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-top: var(--space-4);">
+                            {% for option in h.workshop_options|default([
+                                {label: 'Det Grønne Fællesskab', color: 'primary'},
+                                {label: 'Makerspace', color: 'secondary'},
+                                {label: 'Kreativ Fitness', color: 'tertiary'},
+                                {label: 'Keramik', color: 'tertiary'}
+                            ]) %}
+                            <label class="bv-check-option bv-check-option--{{ option.color }}">
+                                <input type="checkbox" class="bv-checkbox bv-checkbox--{{ option.color }}"/>
+                                <span class="bv-check-option__label">{{ option.label }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="bv-form-label">Fort&aelig;l lidt om dig selv</label>
+                        <textarea class="bv-input bv-textarea" placeholder="Hvad har du lyst til at bidrage med?" style="margin-top: var(--space-2);"></textarea>
+                    </div>
+
+                    <button type="submit" class="bv-btn bv-btn--primary bv-btn--lg" style="align-self: flex-start;">{{ h.submit_text|default('Tilmeld mig') }}</button>
+                </form>
+            </div>
+
+            {# Sidebar content rendered from child content #}
+            <div style="display: flex; flex-direction: column; gap: var(--space-12);">
+                {{ content|raw }}
+            </div>
+        </div>
+    </div>
+</section>

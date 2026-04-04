@@ -1,0 +1,47 @@
+{% set h = page.header %}
+<section style="padding: var(--space-24) 0; background: var(--surface-container-low);">
+    <div class="bv-container">
+        <h2 class="bv-headline" style="font-size: 2.5rem; margin-bottom: var(--space-16);">{{ h.section_title|default('Momenter & Kommende Events') }}</h2>
+
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: 1fr 1fr; gap: var(--space-4); height: 50rem;">
+            {# Large featured image - spans 2 cols, 2 rows #}
+            {% if h.featured %}
+            <div style="grid-column: span 2; grid-row: span 2; position: relative; overflow: hidden; background: #000;">
+                <img src="{{ h.featured.image }}" alt="{{ h.featured.title }}" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.8; transition: transform 0.7s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"/>
+                <div style="position: absolute; bottom: 0; left: 0; width: 100%; padding: var(--space-8); background: linear-gradient(transparent, rgba(0,0,0,0.8)); color: #fff;">
+                    <span class="bv-badge bv-badge--secondary" style="margin-bottom: var(--space-4);">{{ h.featured.badge|default('Næste Event') }}</span>
+                    <h3 class="bv-headline" style="font-size: 2rem; color: #fff;">{{ h.featured.title }}</h3>
+                    <p style="margin-top: 0.5rem; color: #a8a29e;">{{ h.featured.date }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Top right image #}
+            {% if h.images[0] is defined %}
+            <div style="grid-column: span 2; position: relative; overflow: hidden; background: #000;">
+                <img src="{{ h.images[0].src }}" alt="{{ h.images[0].title }}" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.7; transition: transform 0.7s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"/>
+                <div style="position: absolute; bottom: 0; left: 0; width: 100%; padding: var(--space-8); background: linear-gradient(transparent, rgba(0,0,0,0.8)); color: #fff;">
+                    <h3 class="bv-headline" style="font-size: 1.5rem; color: #fff;">{{ h.images[0].title }}</h3>
+                    <p style="margin-top: 0.5rem; color: #a8a29e; font-size: 0.875rem;">{{ h.images[0].subtitle|default('') }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Bottom right: CTA card #}
+            <div style="background: var(--secondary); padding: var(--space-8); display: flex; flex-direction: column; justify-content: space-between; color: var(--on-secondary);">
+                <span class="material-symbols-outlined" style="font-size: 2.5rem;">gallery_thumbnail</span>
+                <div>
+                    <h3 style="font-family: var(--font-headline); font-weight: 700; text-transform: uppercase; font-size: 1.25rem; margin-top: var(--space-12);">Se Galleriet</h3>
+                    <p style="font-size: 0.875rem; opacity: 0.8;">Billeder fra sommerens koncerter.</p>
+                </div>
+            </div>
+
+            {# Bottom right: Concert image #}
+            {% if h.images[1] is defined %}
+            <div style="position: relative; overflow: hidden; background: var(--surface-container-highest);">
+                <img src="{{ h.images[1].src }}" alt="{{ h.images[1].title|default('') }}" style="width: 100%; height: 100%; object-fit: cover; filter: grayscale(1); transition: filter 0.5s;" onmouseover="this.style.filter='grayscale(0)'" onmouseout="this.style.filter='grayscale(1)'"/>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</section>

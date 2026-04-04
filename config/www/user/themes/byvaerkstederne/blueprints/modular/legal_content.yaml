@@ -1,0 +1,33 @@
+title: Juridisk Indhold
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Juridisk Indhold
+          fields:
+            header.toc:
+              type: list
+              label: Indholdsfortegnelse
+              fields:
+                .id:
+                  type: text
+                  label: Anker ID
+                  help: Bruges som link-mål (f.eks. "formaal")
+                .label:
+                  type: text
+                  label: Menupunkt tekst
+            header.download_url:
+              type: text
+              label: PDF download URL
+            header.download_text:
+              type: text
+              label: Download knap tekst
+              default: Hent som PDF

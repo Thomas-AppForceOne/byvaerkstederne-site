@@ -1,0 +1,63 @@
+opgave001:
+  published: true
+  title: 'Byg nye plantekasser'
+  description: 'Det Grønne Fællesskab har brug for 4 store kasser i lærketræ.'
+  group: groenne
+  color: primary
+  status: open
+  priority: high
+  due_date: '2026-04-01'
+opgave002:
+  published: true
+  title: 'Sortering af værktøj i Makerspace'
+  description: 'Gennemgang af bits, bor og klinger. Alt skal have sin plads.'
+  group: makerspace
+  color: secondary
+  status: open
+  priority: medium
+  assigned_to: ''
+  due_date: ''
+opgave003:
+  published: true
+  title: 'Klargøring af keramikovn'
+  description: 'Rengøring af plader og tjek af elementer.'
+  group: kreativ
+  color: tertiary
+  status: open
+  priority: medium
+  assigned_to: ''
+  due_date: ''
+6d32f817c0fa3fae513c836a1aaab33b:
+  published: true
+  title: 'Sorterer elektronik kasserne'
+  description: 'alle de analoge of digitale komponenter skal sorteres i kasser'
+  group: makerspace
+  color: secondary
+  status: open
+  priority: medium
+  assigned_to: Thomas
+fef9b2ed790e62aadc00ed5610e1424a:
+  published: true
+  title: 'Forberede smykke værksted'
+  description: 'Vi skal have ordnet og sorteret værktøj og materialer til smykkeværkstedet'
+  group: kreativ
+  color: tertiary
+  status: open
+  priority: high
+  assigned_to: Birgitte
+448508a039e1a5e9f2247aa9040bbe41:
+  published: true
+  title: 'Trykke løbesedler'
+  description: 'Trykke løbesedler til promovering af Anders Andersen foredrag'
+  group: kulturhus
+  color: kulturhus
+  status: open
+  priority: medium
+be56d434be552682ddf735624f53372e:
+  published: true
+  title: 'Rengøring af lokaler'
+  description: 'Lokalerne trænger til at blive rengjort inden stormødet den 9. april, all hands on deck kl.18'
+  group: alle
+  status: open
+  priority: medium
+  due_date: '2026-04-08'

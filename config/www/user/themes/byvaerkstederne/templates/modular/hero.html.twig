@@ -1,0 +1,34 @@
+{% set h = page.header %}
+<section class="bv-hero {% if h.full_height %}bv-hero--full{% endif %}">
+    {% if h.background_image %}
+    {% set bg_src = h.bg_image_url|default(page.media.images|first ? page.media.images|first.url : '') %}
+    <img class="bv-hero__bg" src="{{ bg_src }}" alt="{{ h.title }}"/>
+    <div class="bv-hero__overlay"></div>
+    {% endif %}
+
+    <div class="bv-hero__content">
+        {% if h.badge %}
+        <span class="bv-badge bv-badge--{{ h.badge_style|default('primary') }}">{{ h.badge }}</span>
+        {% endif %}
+
+        <h1 class="bv-hero__title" style="margin-top: var(--space-6);{% if h.heading_color %} color: var(--{{ h.heading_color }});{% endif %}">
+            {% if h.title_accent %}
+                {{ h.title_before }} <span class="bv-hero__title--accent">{{ h.title_accent }}</span> {{ h.title_after }}
+            {% else %}
+                {{ h.hero_heading|default(page.title) }}
+            {% endif %}
+        </h1>
+
+        {% if h.subtitle %}
+        <p class="bv-hero__subtitle">{{ h.subtitle }}</p>
+        {% endif %}
+
+        {% if h.buttons %}
+        <div class="bv-hero__actions">
+            {% for button in h.buttons %}
+            <a href="{{ button.url }}" class="bv-btn bv-btn--{{ button.style|default('primary') }} bv-btn--lg">{{ button.text }}</a>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</section>

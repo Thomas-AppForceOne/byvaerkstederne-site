@@ -1,0 +1,124 @@
+title: Ønskeliste
+description: Udstyr og materialer ønsket af værkstedsgrupperne
+type: flex-objects
+
+config:
+  admin:
+    list:
+      title: name
+      fields:
+        published:
+          field:
+            type: toggle
+            label: Aktiv
+          width: 8
+        name:
+          link: edit
+        group:
+          field:
+            type: text
+          width: 16
+        priority:
+          field:
+            type: text
+          width: 12
+        fulfilled:
+          field:
+            type: toggle
+            label: Opnået
+          width: 8
+    edit:
+      title:
+        template: '{{ object.name ?? ''Nyt ønske'' }}'
+    configure:
+      authorize: admin.super
+
+  data:
+    object: 'Grav\Common\Flex\Types\Generic\GenericObject'
+    collection: 'Grav\Common\Flex\Types\Generic\GenericCollection'
+    index: 'Grav\Common\Flex\Types\Generic\GenericIndex'
+    storage:
+      class: 'Grav\Framework\Flex\Storage\SimpleStorage'
+      options:
+        formatter:
+          class: 'Grav\Framework\File\Formatter\YamlFormatter'
+        folder: user-data://flex-objects/oenskeliste.yaml
+    search:
+      options:
+        contains: 1
+      fields:
+        - name
+        - description
+
+form:
+  validation: loose
+  fields:
+    published:
+      type: toggle
+      label: Synlig
+      highlight: 1
+      default: 1
+      options:
+        1: Ja
+        0: Nej
+      validate:
+        type: bool
+
+    name:
+      type: text
+      label: Genstand
+      validate:
+        required: true
+      help: "F.eks. 'Slibepapir K400 (10pk)'"
+
+    description:
+      type: text
+      label: Specifikation
+      help: "Valgfri detaljer om modellen, størrelsen osv."
+
+    group:
+      type: select
+      label: Værkstedsgruppe
+      validate:
+        required: true
+      options:
+        makerspace: Makerspace & Reparation
+        kreativ: Kreativ Fitness
+        groenne: Det Grønne Fællesskab
+        kulturhus: Kulturhus
+
+    priority:
+      type: select
+      label: Prioritet
+      default: medium
+      options:
+        critical: Kritisk
+        high: Høj
+        medium: Medium
+        low: Lav
+
+    estimated_cost:
+      type: text
+      label: Anslået pris
+      help: "F.eks. '500 kr' eller 'Donation'"
+
+    fulfilled:
+      type: toggle
+      label: Opnået / modtaget
+      highlight: 1
+      default: 0
+      options:
+        1: Ja
+        0: Nej
+      validate:
+        type: bool
+
+    fulfilled_date:
+      type: text
+      label: Dato opnået
+      help: "F.eks. 2026-04-15"
+
+    donor:
+      type: text
+      label: Doneret af
+      help: Valgfrit — hvem donerede genstanden

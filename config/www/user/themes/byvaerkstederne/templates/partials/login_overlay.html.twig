@@ -1,0 +1,60 @@
+{# Login Overlay — floating panel triggered from header #}
+<div id="bv-login-overlay" class="bv-login-overlay">
+    <div class="bv-login-overlay__panel">
+        {# Close button #}
+        <button class="bv-login-overlay__close" onclick="document.getElementById('bv-login-overlay').classList.remove('is-open'); document.body.style.overflow='';" aria-label="Luk">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+
+        {# Left: Image + branding #}
+        <div class="bv-login-overlay__image">
+            <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuDWT86Oh-mwD2qZPsPKoZLsIJP_nhOvx1qmXBat4v3kqG0FsNm6PenpAPoqLAmqNyZI_YISM-cU8T-KsVupYERiGXh9Pv-Dbdqv9lkfcIzSgSpT-AZgThXdLn3PvW5D0fRLWuTRnBbBAuN5Z40d2eG1hbZh9QtFsvQej7RY8Bp_0tlnNyFM0No-Ad4bY2A3kUJYJMyA3_AolkyLMxfweR71WflssZ8jmcZPnMi4-iIfD9h_dChfrJlKxYq1wosI30NfgpNgwZBWhv0" alt="V&aelig;rksted" />
+            <div class="bv-login-overlay__image-content">
+                <span class="bv-badge bv-badge--primary">Medlemsportal</span>
+                <h2 class="bv-headline" style="color: #fff; margin-top: var(--space-4);">F&aelig;llesskab gennem h&aring;ndv&aelig;rk.</h2>
+            </div>
+        </div>
+
+        {# Right: Login form #}
+        <div class="bv-login-overlay__form">
+            <div style="margin-bottom: var(--space-12);">
+                <h2 class="bv-display" style="color: var(--primary);">Medlemslogin</h2>
+                <div style="width: 6rem; height: 0.375rem; background: var(--tertiary); margin-top: var(--space-2);"></div>
+            </div>
+
+            <form action="{{ base_url_relative }}{{ uri.path }}" method="post" style="display: flex; flex-direction: column; gap: var(--space-8);">
+                {{ nonce_field('login-form', 'login-form-nonce')|raw }}
+                <input type="hidden" name="task" value="login.login"/>
+
+                <div>
+                    <label class="bv-form-label" style="color: var(--outline);">Brugernavn / E-mail</label>
+                    <input class="bv-input" type="text" name="username" placeholder="Indtast brugernavn" autocomplete="username" required style="margin-top: var(--space-2);"/>
+                </div>
+
+                <div>
+                    <label class="bv-form-label" style="color: var(--outline);">Adgangskode</label>
+                    <input class="bv-input" type="password" name="password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password" required style="margin-top: var(--space-2);"/>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label style="display: flex; align-items: center; gap: var(--space-3); cursor: pointer;">
+                        <input type="checkbox" name="rememberme" value="1" class="bv-checkbox" />
+                        <span class="bv-label" style="color: var(--on-surface-variant);">Husk mig</span>
+                    </label>
+                    <a href="/forgot_password" class="bv-label" style="color: var(--tertiary);">Glemt adgangskode</a>
+                </div>
+
+                <button type="submit" class="bv-btn bv-btn--primary bv-btn--lg bv-btn--full">Log ind</button>
+            </form>
+
+            <div style="margin-top: var(--space-12); padding-top: var(--space-8); border-top: 1px solid var(--surface-container-highest);">
+                <p class="bv-label" style="color: var(--outline); margin-bottom: var(--space-4);">Ikke medlem endnu?</p>
+                <a href="/opret-medlemskab" onclick="document.getElementById('bv-login-overlay').classList.remove('is-open'); document.body.style.overflow='';"
+                   style="display: inline-flex; align-items: center; gap: var(--space-4); font-family: var(--font-headline); font-weight: 700; text-transform: uppercase; color: var(--secondary);">
+                    <span>Bliv medlem af foreningen</span>
+                    <span class="material-symbols-outlined">arrow_forward</span>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>

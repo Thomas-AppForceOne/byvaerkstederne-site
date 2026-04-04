@@ -1,0 +1,181 @@
+{% set h = page.header %}
+<section class="bv-section">
+    <div class="bv-container">
+        <div class="bv-event-highlight">
+            {# Left sidebar: heading + featured event card #}
+            <div class="bv-event-highlight__sidebar">
+                <h2 class="bv-headline" style="font-size: 2.5rem; margin-bottom: var(--space-4);">{{ h.section_title|default('Det sker lige nu') }}</h2>
+                <p class="bv-body-lg u-mb-8">{{ h.section_subtitle|default('') }}</p>
+
+                {# Pull next upcoming event from Flex Objects #}
+                {% set flex = grav.get('flex_objects') %}
+                {% set ev_dir = flex ? flex.directory('begivenheder') : null %}
+                {% set ev_collection = ev_dir ? ev_dir.collection : null %}
+                {% set today = 'now'|date('Y-m-d') %}
+                {% set next_event = null %}
+
+                {% if ev_collection %}
+                    {% for ev in ev_collection %}
+                        {% if ev.published and ev.event_date >= today %}
+                            {% if next_event is null or ev.event_date < next_event.event_date %}
+                                {% set next_event = ev %}
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+
+                {% set ev_date = next_event ? next_event.event_date|date('d. M') : h.event_date|default('') %}
+                {% set ev_time = next_event ? next_event.event_time|default('') : h.event_time|default('') %}
+                {% set ev_title = next_event ? next_event.title : h.event_title|default('') %}
+                {% set ev_desc = next_event ? next_event.description : h.event_description|default('') %}
+                {% set ev_url = next_event ? next_event.button_url|default('#') : h.event_url|default('#') %}
+                {% set ev_group = next_event ? next_event.group|default('alle') : 'alle' %}
+                {% set accent_map = {makerspace: 'secondary', kreativ: 'tertiary', groenne: 'primary', kulturhus: 'kulturhus', alle: 'primary'} %}
+                {% set ev_accent = accent_map[ev_group]|default('primary') %}
+
+                <div class="bv-card bv-card--container bv-card--accent-{{ ev_accent }}" style="padding: var(--space-8);">
+                    <div class="bv-event-date">
+                        <div class="bv-event-date__day">{{ ev_date }}</div>
+                        <div class="bv-event-date__meta">{{ ev_time }}</div>
+                    </div>
+                    <h3 class="bv-title" style="font-size: 1.5rem; margin-top: var(--space-4);">{{ ev_title }}</h3>
+                    <p class="u-text-muted" style="margin-top: var(--space-4);">{{ ev_desc }}</p>
+                    <a href="{{ ev_url }}" class="bv-btn bv-btn--dark bv-btn--full" style="margin-top: var(--space-8);">{{ h.event_cta|default('Jeg kommer') }}</a>
+                </div>
+            </div>
+
+            {# Right: Todo list (clickable to expand) #}
+            <div class="bv-event-highlight__main">
+                <div class="bv-card bv-card--accent-top-secondary bv-todo-trigger" style="padding: var(--space-12); cursor: pointer;" onclick="document.getElementById('bv-todo-overlay').classList.add('is-open'); document.body.style.overflow='hidden';">
+                    <h3 class="bv-headline" style="font-size: 1.75rem; display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-10);">
+                        <span class="material-symbols-outlined u-text-secondary" style="font-variation-settings: 'FILL' 1;">assignment</span>
+                        {{ h.todo_title|default('To-Do Liste') }}
+                        <span class="material-symbols-outlined" style="margin-left: auto; font-size: 1.25rem; color: var(--outline);">open_in_full</span>
+                    </h3>
+
+                    <div style="display: flex; flex-direction: column; gap: var(--space-6);">
+                        {# Pull from Flex Objects: one top-priority item per group #}
+                        {% set flex = grav.get('flex_objects') %}
+                        {% set flex_dir = flex ? flex.directory('opgaver') : null %}
+                        {% set flex_opgaver = flex_dir ? flex_dir.collection : null %}
+                        {% set priority_rank = {high: 1, medium: 2, low: 3} %}
+                        {% set group_colors = {groenne: 'primary', makerspace: 'secondary', kreativ: 'tertiary', kulturhus: 'kulturhus', alle: 'neutral'} %}
+
+                        {% if flex_opgaver is not null and flex_opgaver|length > 0 %}
+                            {# Build best-per-group: iterate all items, keep the one with earliest due_date / highest priority per group #}
+                            {% set best = {} %}
+                            {% for item in flex_opgaver %}
+                                {% if item.published and item.status != 'done' %}
+                                    {% set g = item.group|default('alle') %}
+                                    {% set item_rank = priority_rank[item.priority]|default(2) %}
+                                    {% set item_date = item.due_date|default('9999-12-31') %}
+
+                                    {% if best[g] is not defined %}
+                                        {% set best = best|merge({(g): {title: item.title, description: item.description, color: group_colors[g]|default('primary'), status: item.status, date: item_date, rank: item_rank}}) %}
+                                    {% else %}
+                                        {% set cur = best[g] %}
+                                        {# Compare: due_date first (earlier wins), then priority (lower rank wins) #}
+                                        {% if item_date < cur.date or (item_date == cur.date and item_rank < cur.rank) %}
+                                            {% set best = best|merge({(g): {title: item.title, description: item.description, color: group_colors[g]|default('primary'), status: item.status, date: item_date, rank: item_rank}}) %}
+                                        {% endif %}
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+
+                            {% for group, item in best %}
+                            {% set is_overdue = item.date and item.date != '9999-12-31' and item.date < 'now'|date('Y-m-d') %}
+                            <div class="bv-todo-item bv-todo-item--{{ item.color }}">
+                                <span class="material-symbols-outlined" style="font-size: 1.75rem;">{% if item.status == 'in_progress' %}pending{% else %}check_box_outline_blank{% endif %}</span>
+                                <div style="flex: 1;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <h4 class="bv-title" style="font-size: 1.25rem;">{{ item.title }}</h4>
+                                        {% if item.date and item.date != '9999-12-31' %}
+                                        <span class="bv-title" style="flex-shrink: 0; font-size: 0.875rem;{% if is_overdue %} color: var(--error);{% else %} color: var(--on-surface-variant);{% endif %}">
+                                            {% if is_overdue %}<span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle; margin-right: 0.25rem;">warning</span>{% endif %}{{ item.date }}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    <p class="u-text-muted" style="margin-top: 0.25rem;">{{ item.description }}</p>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            {% for item in h.todo_items %}
+                            <div class="bv-todo-item bv-todo-item--{{ item.color|default('primary') }}">
+                                <span class="material-symbols-outlined" style="font-size: 1.75rem;">check_box_outline_blank</span>
+                                <div>
+                                    <h4 class="bv-title" style="font-size: 1.25rem;">{{ item.title }}</h4>
+                                    <p class="u-text-muted" style="margin-top: 0.25rem;">{{ item.description }}</p>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# Fullscreen To-Do Overlay #}
+{% set group_names = {groenne: 'Det Grønne Fællesskab', makerspace: 'Makerspace & Reparation', kreativ: 'Kreativ Fitness', kulturhus: 'Kulturhus', alle: 'Fælles Opgaver'} %}
+{% set group_order = ['alle', 'groenne', 'makerspace', 'kreativ', 'kulturhus'] %}
+
+<div id="bv-todo-overlay" class="bv-todo-overlay">
+    <div class="bv-todo-overlay__panel">
+        <div class="bv-todo-overlay__header">
+            <h2 class="bv-headline" style="font-size: 2rem; display: flex; align-items: center; gap: var(--space-4);">
+                <span class="material-symbols-outlined u-text-secondary" style="font-variation-settings: 'FILL' 1; font-size: 2rem;">assignment</span>
+                To-Do Liste
+            </h2>
+            <button class="bv-todo-overlay__close" onclick="document.getElementById('bv-todo-overlay').classList.remove('is-open'); document.body.style.overflow='';" aria-label="Luk">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+
+        <div class="bv-todo-overlay__body">
+            {% if flex_opgaver is not null and flex_opgaver|length > 0 %}
+                {% for gkey in group_order %}
+                    {% set group_items = [] %}
+                    {% for item in flex_opgaver %}
+                        {% if item.published and item.status != 'done' and item.group|default('alle') == gkey %}
+                            {% set group_items = group_items|merge([item]) %}
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if group_items|length > 0 %}
+                    <div class="bv-todo-overlay__group">
+                        <div class="bv-todo-overlay__group-header bv-todo-overlay__group-header--{{ group_colors[gkey]|default('neutral') }}">
+                            <h3 class="bv-title" style="font-size: 1rem;">{{ group_names[gkey]|default(gkey) }}</h3>
+                            <span class="bv-label u-text-muted">{{ group_items|length }} opgave{{ group_items|length > 1 ? 'r' : '' }}</span>
+                        </div>
+
+                        {% for item in group_items %}
+                            {% set is_overdue = item.due_date and item.due_date != '' and item.due_date < 'now'|date('Y-m-d') %}
+                            <div class="bv-todo-item bv-todo-item--{{ group_colors[gkey]|default('neutral') }}">
+                                <span class="material-symbols-outlined" style="font-size: 1.75rem;">{% if item.status == 'in_progress' %}pending{% else %}check_box_outline_blank{% endif %}</span>
+                                <div style="flex: 1;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <h4 class="bv-title" style="font-size: 1.125rem;">{{ item.title }}</h4>
+                                        {% if item.due_date and item.due_date != '' %}
+                                        <span class="bv-title" style="flex-shrink: 0; font-size: 0.875rem;{% if is_overdue %} color: var(--error);{% else %} color: var(--on-surface-variant);{% endif %}">
+                                            {% if is_overdue %}<span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle; margin-right: 0.25rem;">warning</span>{% endif %}{{ item.due_date }}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    <p class="u-text-muted" style="margin-top: 0.25rem;">{{ item.description }}</p>
+                                    {% if item.assigned_to %}
+                                    <span class="bv-label u-text-muted" style="margin-top: 0.5rem; display: inline-flex; align-items: center; gap: 0.25rem;">
+                                        <span class="material-symbols-outlined" style="font-size: 0.875rem;">person</span>{{ item.assigned_to }}
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+</div>

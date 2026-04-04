@@ -1,0 +1,38 @@
+title: Kontaktformular
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Kontaktformular
+          fields:
+            header.form_title:
+              type: text
+              label: Formular overskrift
+              default: Send en hilsen
+            header.submit_text:
+              type: text
+              label: Send-knap tekst
+              default: Tilmeld mig
+            header.workshop_options:
+              type: list
+              label: Værksted valgmuligheder
+              help: Lad være tom for standardmuligheder
+              fields:
+                .label:
+                  type: text
+                  label: Navn
+                .color:
+                  type: select
+                  label: Farve
+                  options:
+                    primary: Grøn
+                    secondary: Blå
+                    tertiary: Terracotta

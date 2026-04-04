@@ -1,0 +1,35 @@
+enabled: true
+built_in_css: false
+route: '/login'
+route_register: '/opret-medlemskab'
+route_after_login: '/'
+route_after_logout: '/'
+redirect_after_login: true
+redirect_after_logout: true
+dynamic_page_visibility: true
+
+user_registration:
+  enabled: true
+  fields:
+    - username
+    - password
+    - email
+    - fullname
+  default_values:
+    level: Newbie
+  access:
+    site:
+      login: true
+  redirect_after_registration: '/'
+  options:
+    validate_password1_and_password2: false
+    set_user_disabled: false
+    login_after_registration: true
+    send_activation_email: false
+    send_notification_email: false
+    send_welcome_email: false
+
+rememberme:
+  enabled: true
+  timeout: 604800
+  name: grav-rememberme

@@ -1,0 +1,107 @@
+{% extends 'partials/base.html.twig' %}
+
+{% block body %}
+<section style="min-height: 70vh; display: flex; align-items: center; justify-content: center; padding: var(--space-12) var(--space-4);">
+    <div style="max-width: 36rem; width: 100%;">
+        {# Header #}
+        <div style="margin-bottom: var(--space-12);">
+            <h1 class="bv-display" style="margin-bottom: var(--space-4);">Bliv en del af v&aelig;rkstedet</h1>
+            <div style="width: 6rem; height: 0.5rem; background: var(--primary); margin-bottom: var(--space-6);"></div>
+            <p class="bv-body-lg">Byg, skab og deltag i f&aelig;llesskabet. Opret dit medlemskab herunder for at f&aring; adgang til maskiner, kurser og netv&aelig;rk.</p>
+        </div>
+
+        {# Form Card — use Grav's form rendering for proper nonce/CSRF handling #}
+        <div class="bv-register-card" style="background: var(--surface-container-lowest); border-left: 8px solid var(--primary); padding: var(--space-8); position: relative; overflow: hidden;">
+            {% include "forms/form.html.twig" with {form: forms('registration')} %}
+        </div>
+
+        {# Redirect back to referring page after registration #}
+        {% set redirect_to = uri.query('redirect')|default('/') %}
+        <script>
+        (function() {
+            var redirect = '{{ redirect_to }}';
+            if (redirect && redirect !== '/') {
+                var form = document.querySelector('.bv-register-card form');
+                if (form) {
+                    form.action = form.action + (form.action.indexOf('?') > -1 ? '&' : '?') + 'redirect=' + encodeURIComponent(redirect);
+                }
+            }
+
+            // Convert tooltip attributes to visible help text
+            document.querySelectorAll('.bv-register-card .tooltip[data-tooltip]').forEach(function(el) {
+                var helpDiv = document.createElement('div');
+                helpDiv.className = 'bv-help-text';
+                helpDiv.textContent = el.getAttribute('data-tooltip');
+                var formLabel = el.closest('.form-label');
+                if (formLabel) {
+                    formLabel.parentNode.insertBefore(helpDiv, formLabel.nextSibling);
+                }
+                el.removeAttribute('data-tooltip');
+            });
+
+            // Client-side form validation
+            var form = document.querySelector('.bv-register-card form');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    // Remove previous errors
+                    document.querySelectorAll('.bv-field-error').forEach(function(el) { el.remove(); });
+                    var hasError = false;
+
+                    function showError(field, message) {
+                        hasError = true;
+                        var msg = document.createElement('div');
+                        msg.className = 'bv-field-error';
+                        msg.style.cssText = 'background: #ffdad6; color: #93000a; padding: 0.75rem 1rem; margin-top: 0.5rem; font-weight: 600; font-size: 0.8rem;';
+                        msg.textContent = message;
+                        field.parentNode.appendChild(msg);
+                    }
+
+                    // Username validation
+                    var username = form.querySelector('input[name="data[username]"]');
+                    if (username) {
+                        var uval = username.value;
+                        if (!/^[a-z0-9_-]{3,16}$/.test(uval)) {
+                            showError(username, 'Brugernavn skal være 3-16 tegn med kun små bogstaver, tal, bindestreg eller understregning.');
+                        }
+                    }
+
+                    // Password validation
+                    var pwd = form.querySelector('input[type="password"]');
+                    if (pwd) {
+                        var val = pwd.value;
+                        var errors = [];
+                        if (val.length < 8) errors.push('mindst 8 tegn');
+                        if (!/[a-z]/.test(val)) errors.push('mindst ét lille bogstav');
+                        if (!/[A-Z]/.test(val)) errors.push('mindst ét stort bogstav');
+                        if (!/[0-9]/.test(val)) errors.push('mindst ét tal');
+                        if (errors.length > 0) {
+                            showError(pwd, 'Adgangskoden mangler: ' + errors.join(', ') + '.');
+                        }
+                    }
+
+                    if (hasError) {
+                        e.preventDefault();
+                        var firstError = document.querySelector('.bv-field-error');
+                        if (firstError) firstError.scrollIntoView({behavior: 'smooth', block: 'center'});
+                    }
+                });
+            }
+        })();
+        </script>
+
+        {# Login link #}
+        <div style="text-align: center; padding-top: var(--space-8);">
+            <a href="#" onclick="document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;"
+               class="bv-label" style="color: var(--outline); text-decoration: underline; text-underline-offset: 4px;">
+                Har du allerede en profil? Log ind her
+            </a>
+        </div>
+
+        {# Bottom accent #}
+        <div style="margin-top: var(--space-8); display: flex; justify-content: flex-end; align-items: center; gap: var(--space-4);">
+            <span class="bv-label" style="color: var(--outline-variant);">Hundested / DK</span>
+            <div style="width: 8rem; height: 1px; background: var(--outline-variant);"></div>
+        </div>
+    </div>
+</section>
+{% endblock %}

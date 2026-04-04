@@ -1,0 +1,12 @@
+{% extends 'partials/base.html.twig' %}
+
+{% block body %}
+<section class="bv-section bv-section--centered" style="min-height: 60vh; display: flex; align-items: center;">
+    <div class="bv-container" style="text-align: center;">
+        <h1 class="bv-display" style="font-size: 8rem; margin-bottom: 1rem;">{{ page.header.http_response_code }}</h1>
+        <h2 class="bv-headline">{{ page.title }}</h2>
+        <p class="bv-body-lg" style="margin-top: 1rem;">{{ page.content|raw }}</p>
+        <a href="{{ home_url }}" class="bv-btn bv-btn--primary" style="margin-top: 2rem;">Tilbage til forsiden</a>
+    </div>
+</section>
+{% endblock %}

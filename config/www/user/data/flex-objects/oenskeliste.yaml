@@ -1,0 +1,80 @@
+wish001:
+  published: true
+  name: "Slibepapir K400 (10pk)"
+  description: ""
+  group: makerspace
+  priority: medium
+  estimated_cost: ""
+  fulfilled: false
+  fulfilled_date: ""
+  donor: ""
+wish002:
+  published: true
+  name: "Nye pensler til Kreativ Fitness"
+  description: "Sæt med flad- og rundpensler i forskellige størrelser"
+  group: kreativ
+  priority: high
+  estimated_cost: "300 kr"
+  fulfilled: false
+  fulfilled_date: ""
+  donor: ""
+wish003:
+  published: true
+  name: "Krydsfiner 4mm (birk)"
+  description: "Til laserskæring"
+  group: makerspace
+  priority: low
+  estimated_cost: "200 kr"
+  fulfilled: false
+  fulfilled_date: ""
+  donor: ""
+wish004:
+  published: true
+  name: Drejeskive til keramik
+  description: "Elektrisk drejeskive, begynderniveau"
+  group: kreativ
+  priority: high
+  estimated_cost: "2.500 kr"
+  fulfilled: false
+  fulfilled_date: ""
+  donor: ""
+wish005:
+  published: true
+  name: "Ovnhylder og -støtter"
+  description: "Til keramikovn"
+  group: kreativ
+  priority: high
+  estimated_cost: "800 kr"
+  fulfilled: false
+  fulfilled_date: ""
+  donor: ""
+wish006:
+  published: true
+  name: "Plantekasser i lærketræ"
+  description: "4 stk store kasser til byhaven"
+  group: groenne
+  priority: high
+  estimated_cost: "1.200 kr"
+  fulfilled: false
+  fulfilled_date: ""
+  donor: ""
+wish007:
+  published: true
+  name: "Kompostbeholder"
+  description: "Stor udendørs kompostbeholder"
+  group: groenne
+  priority: medium
+  estimated_cost: "600 kr"
+  fulfilled: false
+  fulfilled_date: ""
+  donor: ""
+wish008:
+  published: true
+  name: "PA-anlæg til arrangementer"
+  description: "Transportabelt PA-system til foredrag og koncerter"
+  group: kulturhus
+  priority: critical
+  estimated_cost: "5.000 kr"
+  fulfilled: false
+  fulfilled_date: ""
+  donor: ""

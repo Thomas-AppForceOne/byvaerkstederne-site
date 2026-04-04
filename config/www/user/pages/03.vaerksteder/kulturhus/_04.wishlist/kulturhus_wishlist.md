@@ -1,0 +1,22 @@
+---
+title: "Ønskeliste"
+section_title: "Vores Ønskeliste"
+section_subtitle: "Kulturhuset vokser gennem donationer og fælles indkøb. Har du noget af dette stående, eller vil du støtte et konkret køb?"
+donate_heading: "Støt os økonomisk"
+donate_text: "Alle bidrag går ubeskåret til inventar og udstyr til huset."
+donate_cta: "Donér via MobilePay"
+donate_url: "#"
+items:
+    - icon: "chair"
+      name: "Stabelstole (50 stk)"
+      description: "Vi mangler fleksible siddepladser til vores foredrag. Gerne i lyst træ eller metal."
+    - icon: "videocam"
+      name: "Projektor & Lærred"
+      description: "Til vores filmaftener og præsentationer søger vi en 4K projektor."
+    - icon: "coffee_maker"
+      name: "Industri-kaffemaskine"
+      description: "Fællesskab kræver kaffe. Masser af kaffe."
+    - icon: "potted_plant"
+      name: "Store Stueplanter"
+      description: "For at forbedre indeklimaet og skabe hygge i de store lokaler."
+---

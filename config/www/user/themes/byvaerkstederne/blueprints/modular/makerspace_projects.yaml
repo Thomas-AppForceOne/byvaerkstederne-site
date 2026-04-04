@@ -1,0 +1,50 @@
+title: Makerspace Projekter
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Makerspace Projekter
+          fields:
+            header.section_label:
+              type: text
+              label: Sektion label
+              default: Status Rapport
+            header.section_title:
+              type: text
+              label: Sektion overskrift
+              default: Hvad laver vi lige nu?
+            header.projects:
+              type: list
+              label: Projekter
+              help: Maks 2 projekter - det første vises stort, det andet som blåt kort
+              fields:
+                .tag:
+                  type: text
+                  label: Tag / badge
+                  help: F.eks. "Arbejdsuge"
+                .title:
+                  type: text
+                  label: Titel
+                .description:
+                  type: textarea
+                  label: Beskrivelse
+                  rows: 3
+                .team:
+                  type: text
+                  label: Ansvarlig
+                  help: Vises kun på det andet kort
+                .link_text:
+                  type: text
+                  label: Link tekst
+                  help: Vises kun på det første kort
+                .link_url:
+                  type: text
+                  label: Link URL

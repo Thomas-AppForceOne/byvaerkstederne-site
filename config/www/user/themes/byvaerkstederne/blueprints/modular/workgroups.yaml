@@ -1,0 +1,43 @@
+title: Værkstedsgrupper
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Værkstedsgrupper
+          fields:
+            header.section_title:
+              type: text
+              label: Sektions overskrift
+              default: Vores Værkstedsgrupper
+            header.groups:
+              type: list
+              label: Grupper
+              fields:
+                .title:
+                  type: text
+                  label: Gruppenavn
+                .description:
+                  type: text
+                  label: Kort beskrivelse
+                .color:
+                  type: select
+                  label: Farve
+                  options:
+                    primary: Grøn
+                    secondary: Blå
+                    tertiary: Terracotta
+                    dark: Mørk
+                .url:
+                  type: text
+                  label: Link URL
+                .image:
+                  type: text
+                  label: Billede URL

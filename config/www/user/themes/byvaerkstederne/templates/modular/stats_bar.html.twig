@@ -1,0 +1,13 @@
+{% set h = page.header %}
+<section class="bv-section--sm">
+    <div class="bv-container">
+        <div class="bv-stats">
+            {% for stat in h.stats %}
+            <div>
+                <div class="bv-stat__value">{{ stat.value }}</div>
+                <div class="bv-stat__label">{{ stat.label }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>

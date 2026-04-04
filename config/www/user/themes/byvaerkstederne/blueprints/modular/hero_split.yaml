@@ -1,0 +1,55 @@
+title: Hero Split
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Hero Split
+          fields:
+            header.hero_heading:
+              type: text
+              label: Overskrift
+            header.badge:
+              type: text
+              label: Badge tekst
+            header.badge_style:
+              type: select
+              label: Badge farve
+              default: primary
+              options:
+                primary: Grøn
+                secondary: Blå
+                tertiary: Terracotta
+            header.subtitle:
+              type: textarea
+              label: Undertekst
+              rows: 3
+            header.bg_color:
+              type: text
+              label: Baggrundsfarve (venstre side)
+              help: CSS farve, f.eks. "var(--surface-container-low)"
+            header.buttons:
+              type: list
+              label: Knapper
+              fields:
+                .text:
+                  type: text
+                  label: Knap tekst
+                .url:
+                  type: text
+                  label: Link URL
+                .style:
+                  type: select
+                  label: Stil
+                  default: primary
+                  options:
+                    primary: Primær
+                    outlined: Outlined
+                    dark: Mørk

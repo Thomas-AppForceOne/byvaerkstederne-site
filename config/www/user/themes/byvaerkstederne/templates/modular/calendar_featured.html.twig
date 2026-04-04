@@ -1,0 +1,34 @@
+{% set h = page.header %}
+<section class="bv-section--sm">
+    <div class="bv-container">
+        <div class="bv-featured-event">
+            <div class="bv-featured-event__date">
+                <div style="color: var(--error); font-family: var(--font-headline); font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em;">{{ h.day_name|default('Torsdag') }}</div>
+                <div style="font-family: var(--font-headline); font-weight: 800; font-size: 3.5rem; line-height: 1;">{{ h.day_number|default('25') }}</div>
+                <div style="font-family: var(--font-headline); font-weight: 700; text-transform: uppercase;">{{ h.month|default('April') }}</div>
+                {% if h.tag %}
+                <span class="bv-badge bv-badge--error" style="margin-top: var(--space-2); display: inline-block;">{{ h.tag }}</span>
+                {% endif %}
+            </div>
+
+            <div>
+                <h3 class="bv-headline" style="font-size: 2rem;">{{ h.event_title|default('Stor Arbejdsdag i Byv&aelig;rkstederne') }}</h3>
+                <p class="u-text-muted" style="margin-top: var(--space-4); max-width: 36rem;">{{ h.event_description|default('') }}</p>
+                <div style="display: flex; gap: var(--space-6); margin-top: var(--space-4); align-items: center;">
+                    {% if h.time %}
+                    <span style="display: flex; align-items: center; gap: 0.25rem; color: var(--on-surface-variant);"><span class="material-symbols-outlined" style="font-size: 1.25rem;">schedule</span> {{ h.time }}</span>
+                    {% endif %}
+                    {% if h.location %}
+                    <span style="display: flex; align-items: center; gap: 0.25rem; color: var(--on-surface-variant);"><span class="material-symbols-outlined" style="font-size: 1.25rem;">location_on</span> {{ h.location }}</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if page.media.images|first %}
+            <div class="bv-featured-event__image">
+                <img src="{{ page.media.images|first.url }}" alt="{{ h.event_title }}"/>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</section>

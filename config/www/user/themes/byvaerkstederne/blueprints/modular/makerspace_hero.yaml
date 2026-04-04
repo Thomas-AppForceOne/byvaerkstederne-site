@@ -1,0 +1,25 @@
+title: Makerspace Hero
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Makerspace Hero
+          fields:
+            header.hero_heading:
+              type: text
+              label: Overskrift
+            header.subtitle:
+              type: textarea
+              label: Undertekst
+              rows: 3
+            header.bg_image_url:
+              type: text
+              label: Baggrundsbillede URL

@@ -1,0 +1,22 @@
+member001:
+  published: true
+  name: Mads Nielsen
+  role: Hovedformand
+  group: alle
+  email: mads@byvaerkstederne.dk
+  phone: ""
+  photo: ""
+  bio: ""
+  show_on_contact: true
+  sort_order: 1
+member002:
+  published: true
+  name: Sofie Holm
+  role: Frivilligkoordinator
+  group: alle
+  email: sofie@byvaerkstederne.dk
+  phone: ""
+  photo: ""
+  bio: ""
+  show_on_contact: true
+  sort_order: 2

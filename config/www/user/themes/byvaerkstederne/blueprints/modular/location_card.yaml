@@ -1,0 +1,27 @@
+title: Lokationskort
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Lokation
+          fields:
+            header.card_title:
+              type: text
+              label: Overskrift
+              default: Kom forbi og kig
+            header.address:
+              type: textarea
+              label: Adresse
+              rows: 2
+              help: "HTML tilladt, f.eks. linjeskift med <br/>"
+            header.hours:
+              type: text
+              label: Åbningstider

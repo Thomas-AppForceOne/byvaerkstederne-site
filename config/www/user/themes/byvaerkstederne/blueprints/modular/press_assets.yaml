@@ -1,0 +1,64 @@
+title: Pressemateriale
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Pressemateriale
+          fields:
+            identity_section:
+              type: section
+              title: Visuel Identitet
+              underline: true
+            header.identity_title:
+              type: text
+              label: Overskrift
+              default: Visuel Identitet
+            header.logo_preview_src:
+              type: text
+              label: Logo billede URL
+            header.logo_downloads:
+              type: list
+              label: Logo downloads
+              fields:
+                .label:
+                  type: text
+                  label: Knap tekst
+                .url:
+                  type: text
+                  label: Download URL
+            photos_section:
+              type: section
+              title: Pressebilleder
+              underline: true
+            header.photos_title:
+              type: text
+              label: Overskrift
+              default: Pressebilleder
+            header.photos:
+              type: list
+              label: Billeder
+              fields:
+                .src:
+                  type: text
+                  label: Billede URL
+                .alt:
+                  type: text
+                  label: Alt tekst
+                .label:
+                  type: text
+                  label: Billedtekst
+            header.press_pack_url:
+              type: text
+              label: Pressepakke download URL
+            header.press_pack_label:
+              type: text
+              label: Pressepakke knap tekst
+              default: Hent hele pressepakken (ZIP)

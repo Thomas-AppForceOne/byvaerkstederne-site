@@ -1,0 +1,67 @@
+title: Makerspace Ønskeliste
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Makerspace Ønskeliste
+          fields:
+            header.wishlist_title:
+              type: text
+              label: Ønskeliste overskrift
+              default: Ønskelisten
+            header.wishlist_subtitle:
+              type: textarea
+              label: Ønskeliste undertekst
+              rows: 2
+            header.items:
+              type: list
+              label: Ønsker
+              fields:
+                .name:
+                  type: text
+                  label: Navn
+                .spec:
+                  type: text
+                  label: Specifikation
+                .priority_label:
+                  type: text
+                  label: Prioritet label
+                .border_color:
+                  type: text
+                  label: Kantfarve (CSS)
+                  help: F.eks. "var(--secondary)" eller en hex-farve
+                .priority_bg:
+                  type: text
+                  label: Prioritet baggrundsfarve (CSS)
+                .priority_color:
+                  type: text
+                  label: Prioritet tekstfarve (CSS)
+            header.milestone_label:
+              type: text
+              label: Milepæl label
+              default: Aktuel Milepæl
+            header.milestone_title:
+              type: text
+              label: Milepæl titel
+            header.milestone_description:
+              type: textarea
+              label: Milepæl beskrivelse
+              rows: 2
+            header.progress_percent:
+              type: text
+              label: Fremskridt procent
+              help: Tal mellem 0 og 100
+            header.latest_update:
+              type: text
+              label: Seneste update
+            header.next_step:
+              type: text
+              label: Næste skridt
