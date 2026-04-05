@@ -37,6 +37,9 @@ config/custom-services.d/
 deploy/staging/
 deploy/*.zip
 
+# Backups (stored locally, not in git)
+backups/
+
 # User accounts (all excluded — use 'make create-admin' to bootstrap)
 config/www/user/accounts/*
 !config/www/user/accounts/.gitkeep

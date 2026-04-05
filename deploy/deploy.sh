@@ -1,9 +1,11 @@
 #!/bin/bash
 set -euo pipefail
+export PATH="/opt/homebrew/bin:$PATH"
 
 # =============================================================================
 # Byværkstederne — Deploy to one.com shared hosting
-# Usage: make deploy
+# Usage: ./deploy/deploy.sh [environment]
+#   Environments: prod (default), test, dev, staging
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -13,6 +15,36 @@ GRAV_VERSION="1.7.49.5"
 GRAV_ZIP="$PROJECT_DIR/deploy/grav-admin-v${GRAV_VERSION}.zip"
 GRAV_URL="https://getgrav.org/download/core/grav-admin/${GRAV_VERSION}"
 
+# Environment selection
+ENV="${1:-prod}"
+case "$ENV" in
+    prod|production)
+        ENV_LABEL="Production"
+        ENV_SUBFOLDER=""
+        ENV_URL="https://hackersbychoice.dk"
+        ;;
+    test)
+        ENV_LABEL="Test"
+        ENV_SUBFOLDER="/test"
+        ENV_URL="https://hackersbychoice.dk/test"
+        ;;
+    dev)
+        ENV_LABEL="Development"
+        ENV_SUBFOLDER="/dev"
+        ENV_URL="https://hackersbychoice.dk/dev"
+        ;;
+    staging)
+        ENV_LABEL="Staging"
+        ENV_SUBFOLDER="/staging"
+        ENV_URL="https://hackersbychoice.dk/staging"
+        ;;
+    *)
+        echo "❌  Unknown environment: $ENV"
+        echo "    Usage: $0 [prod|test|dev|staging]"
+        exit 1
+        ;;
+esac
+
 # Load credentials
 ENV_FILE="$PROJECT_DIR/.env.deploy"
 if [ ! -f "$ENV_FILE" ]; then
@@ -21,10 +53,13 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 source "$ENV_FILE"
 
+DEPLOY_TARGET="${DEPLOY_PATH}${ENV_SUBFOLDER}"
+
 echo ""
 echo "  ╔══════════════════════════════════════╗"
 echo "  ║  Byværkstederne — Deploy             ║"
-echo "  ║  Target: ${DEPLOY_HOST}              ║"
+echo "  ║  Environment: ${ENV_LABEL}$(printf '%*s' $((20 - ${#ENV_LABEL})) '')║"
+echo "  ║  Target: ${DEPLOY_TARGET}            "
 echo "  ╚══════════════════════════════════════╝"
 echo ""
 
@@ -45,33 +80,37 @@ mkdir -p "$STAGING_DIR"
 
 # Extract Grav core
 unzip -q "$GRAV_ZIP" -d "$STAGING_DIR"
-# Grav extracts to grav-admin/ subfolder — move contents up
 cp -a "$STAGING_DIR"/grav-admin/. "$STAGING_DIR"/
 rm -rf "$STAGING_DIR/grav-admin"
 
-# Overlay our custom user directory (theme, pages, plugins config, data)
-# Remove default user content first
+# Overlay our custom user directory
 rm -rf "$STAGING_DIR/user/pages" "$STAGING_DIR/user/themes/quark" 2>/dev/null
 
-# Copy our user directory
 rsync -a --exclude='.DS_Store' \
     "$PROJECT_DIR/config/www/user/" \
     "$STAGING_DIR/user/"
 
-# Create .htaccess for one.com (Apache)
+# Set base URL for subfolder deployments
+if [ -n "$ENV_SUBFOLDER" ]; then
+    # Update system.yaml to set custom_base_url for subfolder
+    if grep -q "custom_base_url" "$STAGING_DIR/user/config/system.yaml" 2>/dev/null; then
+        sed -i '' "s|custom_base_url:.*|custom_base_url: '${ENV_URL}'|" "$STAGING_DIR/user/config/system.yaml"
+    else
+        echo "" >> "$STAGING_DIR/user/config/system.yaml"
+        echo "custom_base_url: '${ENV_URL}'" >> "$STAGING_DIR/user/config/system.yaml"
+    fi
+fi
+
+# Create .htaccess
 cat > "$STAGING_DIR/.htaccess" << 'HTACCESS'
-# Grav CMS .htaccess for one.com shared hosting
+# Grav CMS .htaccess
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Redirect to non-www
-    RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
-    RewriteRule ^(.*)$ https://%1/$1 [R=301,L]
-
     # Force HTTPS
     RewriteCond %{HTTPS} !=on
-    RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
 
     # Grav routing
     RewriteCond %{REQUEST_FILENAME} !-f
@@ -111,16 +150,16 @@ cat > "$STAGING_DIR/.htaccess" << 'HTACCESS'
 </IfModule>
 HTACCESS
 
-# Remove Docker-only plugin (flex-cache-bust works differently on shared hosting)
-# The plugin is still useful — it just needs no Docker workarounds
-
-# Remove the Docker port fix from the plugin (not needed on shared hosting)
-# The cache-busting part still works fine
-
 echo "  ✓ Package built ($(du -sh "$STAGING_DIR" | cut -f1))"
 
 # ── Step 3: Upload via rsync ────────────────────────────────
-echo "→ Step 3/4: Uploading to ${DEPLOY_HOST}..."
+echo "→ Step 3/4: Uploading to ${DEPLOY_HOST}:${DEPLOY_TARGET}..."
+
+# Ensure target directory exists
+sshpass -p "$DEPLOY_PASS" ssh -o StrictHostKeyChecking=no -p "$DEPLOY_PORT" \
+    "${DEPLOY_USER}@${DEPLOY_HOST}" \
+    "mkdir -p ${DEPLOY_TARGET}"
+
 sshpass -p "$DEPLOY_PASS" rsync -avz --delete \
     --exclude='cache/compiled/*' \
     --exclude='cache/twig/*' \
@@ -131,21 +170,20 @@ sshpass -p "$DEPLOY_PASS" rsync -avz --delete \
     --exclude='.DS_Store' \
     -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
     "$STAGING_DIR/" \
-    "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/"
+    "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_TARGET}/"
 
 echo "  ✓ Upload complete"
 
 # ── Step 4: Post-deploy ─────────────────────────────────────
 echo "→ Step 4/4: Post-deploy tasks..."
 
-# Clear Grav cache on server
 sshpass -p "$DEPLOY_PASS" ssh -o StrictHostKeyChecking=no -p "$DEPLOY_PORT" \
     "${DEPLOY_USER}@${DEPLOY_HOST}" \
-    "cd ${DEPLOY_PATH} && php bin/grav cache --all 2>/dev/null || true"
+    "cd ${DEPLOY_TARGET} && php bin/grav cache --all 2>/dev/null || true"
 
 echo "  ✓ Cache cleared"
 
 echo ""
 echo "  ✅  Deploy complete!"
-echo "  🌐  https://hackersbychoice.dk"
+echo "  🌐  ${ENV_URL}"
 echo ""

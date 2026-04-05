@@ -1,4 +1,4 @@
-.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-data reset-cache reset-all create-admin
+.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging backup-prod backup-test
 
 # Default target
 help: ## Show this help
@@ -79,8 +79,27 @@ status: ## Show container status
 
 # ── Deploy ─────────────────────────────────────────────
 
-deploy: ## Deploy to production (one.com)
-	@./deploy/deploy.sh
+deploy: deploy-prod ## Alias for deploy-prod
+
+deploy-prod: ## Deploy to production (hackersbychoice.dk)
+	@./deploy/deploy.sh prod
+
+deploy-test: ## Deploy to test (hackersbychoice.dk/test)
+	@./deploy/deploy.sh test
+
+deploy-dev: ## Deploy to dev (hackersbychoice.dk/dev)
+	@./deploy/deploy.sh dev
+
+deploy-staging: ## Deploy to staging (hackersbychoice.dk/staging)
+	@./deploy/deploy.sh staging
+
+# ── Backup ─────────────────────────────────────────────
+
+backup-prod: ## Backup production data (accounts, flex objects, media)
+	@./deploy/backup.sh prod
+
+backup-test: ## Backup test environment data
+	@./deploy/backup.sh test
 
 # ── Utilities ──────────────────────────────────────────
 
