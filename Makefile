@@ -1,4 +1,4 @@
-.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging backup-prod backup-test
+.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging backup-prod backup-test
 
 # Default target
 help: ## Show this help
@@ -19,7 +19,7 @@ setup: check-deps lfs-pull start create-admin ## Full first-time setup (check to
 	@echo ""
 
 create-admin: ## Create an admin account (interactive)
-	@if [ -z "$$(ls config/www/user/accounts/*.yaml 2>/dev/null)" ]; then \
+	@if [ ! -f config/www/user/accounts/thomasadmin.yaml ]; then \
 		echo ""; \
 		echo "  No admin account found. Let's create one."; \
 		echo ""; \
@@ -123,10 +123,15 @@ reset-users: ## Delete all user accounts (except admin)
 	@find config/www/user/accounts -name "*.yaml" ! -name "thomasadmin.yaml" -delete 2>/dev/null; true
 	@echo "  ✓ Users reset (only thomasadmin remains)"
 
-reset-data: ## Reset Flex Objects data to last committed state
-	@echo "Resetting Flex Objects data..."
-	@git checkout -- config/www/user/data/flex-objects/ 2>/dev/null || echo "  ⚠ No committed data to restore"
-	@echo "  ✓ Data reset to last commit"
+reset-admin: ## Reset admin account (delete and recreate interactively)
+	@echo "Removing admin account (thomasadmin)..."
+	@rm -f config/www/user/accounts/thomasadmin.yaml
+	@$(MAKE) create-admin
+
+reset-data: ## Delete all Flex Objects data
+	@echo "Deleting all Flex Objects data..."
+	@rm -f config/www/user/data/flex-objects/*.yaml 2>/dev/null; true
+	@echo "  ✓ All Flex Objects data deleted"
 
 reset-cache: cache-clear ## Alias for cache-clear
 

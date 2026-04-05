@@ -33,13 +33,20 @@ Run `make help` to see all available commands:
 | `make start` | Start the site |
 | `make stop` | Stop the site |
 | `make restart` | Restart the site |
-| `make deploy` | Deploy to production (one.com) |
 | `make logs` | Tail container logs |
 | `make open` | Open site in browser |
 | `make admin` | Open admin panel |
+| `make status` | Show container status |
+| `make deploy-prod` | Deploy to production |
+| `make deploy-test` | Deploy to test environment |
+| `make deploy-dev` | Deploy to dev environment |
+| `make deploy-staging` | Deploy to staging (prod data) |
+| `make backup-prod` | Backup production data |
+| `make backup-test` | Backup test environment data |
 | `make cache-clear` | Clear Grav cache |
 | `make reset-users` | Delete all user accounts (except admin) |
-| `make reset-data` | Reset Flex Objects data to last commit |
+| `make reset-admin` | Reset admin account (delete and recreate) |
+| `make reset-data` | Delete all Flex Objects data |
 | `make reset-cache` | Clear Grav cache |
 | `make reset-all` | Full reset: users + data + config + restart |
 
@@ -184,7 +191,8 @@ Backups are stored locally in `backups/` (git-ignored) as timestamped snapshots.
 | Command | What it does |
 |---------|-------------|
 | `make reset-users` | Delete all user accounts except admin |
-| `make reset-data` | Reset Flex Objects data to last git commit |
+| `make reset-admin` | Reset admin account (delete and recreate interactively) |
+| `make reset-data` | Delete all Flex Objects data |
 | `make reset-cache` | Clear Grav cache |
 | `make reset-all` | All of the above + reset config + restart |
 
