@@ -143,19 +143,52 @@ Data files live in `config/www/user/data/flex-objects/`. Templates pull from Fle
 - **Cache invalidation** — clears page cache when Flex Objects data changes via admin
 - **Docker port fix** — corrects redirect URLs when running behind Docker port mapping
 
-## Deployment
+## Branching Model
 
-### Production: one.com shared hosting
-
-```bash
-make deploy
+```
+main              ← production releases only
+develop           ← integration branch, deployed to /test
+feature/*         ← working branches
 ```
 
-This downloads Grav core, merges your custom theme/pages/plugins/data, uploads via rsync over SSH, and clears the server cache. Incremental — only changed files transfer.
+| Action | Commands |
+|--------|---------|
+| Start new feature | `git checkout -b feature/my-feature develop` |
+| Deploy feature to dev | `make deploy-dev` |
+| Merge to test | `git checkout develop && git merge feature/my-feature` then `make deploy-test` |
+| Release to production | `git checkout main && git merge develop` then `make deploy-prod` |
+
+## Environments
+
+| Environment | URL | Deploy command | Branch |
+|------------|-----|---------------|--------|
+| **Production** | hackersbychoice.dk | `make deploy-prod` | `main` |
+| **Test** | hackersbychoice.dk/test | `make deploy-test` | `develop` |
+| **Dev** | hackersbychoice.dk/dev | `make deploy-dev` | `feature/*` |
+| **Staging** | hackersbychoice.dk/staging | `make deploy-staging` | `main` + prod data |
+| **Local** | localhost:8080 | `make start` | any branch |
 
 Credentials are in `.env.deploy` (git-ignored). Copy `.env.deploy.example` to get started.
 
-### Git LFS
+## Backup
+
+```bash
+make backup-prod    # Backup production data (accounts, flex objects, pages, media)
+make backup-test    # Backup test environment data
+```
+
+Backups are stored locally in `backups/` (git-ignored) as timestamped snapshots. Last 30 backups are kept, older ones are pruned automatically. Ready to sync to NAS or cloud storage.
+
+## Reset (Development)
+
+| Command | What it does |
+|---------|-------------|
+| `make reset-users` | Delete all user accounts except admin |
+| `make reset-data` | Reset Flex Objects data to last git commit |
+| `make reset-cache` | Clear Grav cache |
+| `make reset-all` | All of the above + reset config + restart |
+
+## Git LFS
 
 All binary files (images, videos, audio, PDFs) are tracked by Git LFS. This keeps the repo fast to clone while preserving full version history.
 
