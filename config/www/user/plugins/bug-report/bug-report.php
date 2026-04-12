@@ -193,8 +193,25 @@ class BugReportPlugin extends Plugin
         });
 
         if ($roadmapResult === null) {
-            // Roadmap write failed — return 500, do NOT write bug report
-            $this->sendJson(['error' => 'Serverfejl: Kunne ikke oprette roadmap-element. Rapporten er ikke gemt.'], 500);
+            // Roadmap write failed — still persist the bug report with promoted: false
+            // so the user's data is not lost. Return 500 to inform the user.
+            $fallbackRecord = [
+                'username'           => $usernameSanitized,
+                'timestamp'          => $timestamp,
+                'page_url'           => $pageUrlSanitized,
+                'browser_os'         => $browserOsSanitized,
+                'description'        => $descSanitized,
+                'expected'           => $expectedSanitized,
+                'steps'              => $steps,
+                'image_path'         => $imagePath,
+                'promoted'           => false,
+                'promoted_item_id'   => null,
+                'roadmap_id'         => null,
+                'display_id'         => null,
+                'title'              => mb_substr($descSanitized, 0, 80),
+            ];
+            $this->saveReport($id, $fallbackRecord);
+            $this->sendJson(['error' => 'Serverfejl: Rapporten er gemt, men kunne ikke publiceres på roadmappet med det samme. En administrator vil behandle den.'], 500);
         }
 
         ['display_id' => $displayId] = $roadmapResult;

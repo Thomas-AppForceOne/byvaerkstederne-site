@@ -146,8 +146,20 @@ class FeatureSuggestionPlugin extends Plugin
         });
 
         if ($roadmapResult === null) {
-            // Roadmap write failed — return 500, do NOT write suggestion
-            $this->jsonResponse(500, ['error' => 'Forslaget kunne ikke publiceres på roadmap. Prøv igen om et øjeblik.']);
+            // Roadmap write failed — still persist the suggestion with status: pending
+            // so the user's data is not lost. Return 500 to inform the user.
+            $fallbackRecord = [
+                'username'        => $username,
+                'created_at'      => $timestamp,
+                'title'           => $title,
+                'description'     => $description,
+                'community_value' => $communityValue,
+                'status'          => 'pending',
+                'roadmap_id'      => null,
+                'display_id'      => null,
+            ];
+            $this->saveSuggestion($id, $fallbackRecord);
+            $this->jsonResponse(500, ['error' => 'Forslaget er gemt, men kunne ikke publiceres på roadmappet med det samme. En administrator vil behandle det.']);
             return;
         }
 
