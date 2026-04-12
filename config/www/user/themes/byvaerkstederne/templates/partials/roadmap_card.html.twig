@@ -193,17 +193,6 @@
             </button>
         {% endif %}
     </div>
-    {% elseif not is_auth %}
-    <div class="bv-rm-card__action-bar" hidden aria-label="Log ind for at stemme">
-        <p class="bv-rm-card__action-login">
-            <a
-                href="#"
-                onclick="document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;">
-                Log ind
-            </a>
-            for at stemme på dette emne.
-        </p>
-    </div>
     {% endif %}
 
 </article>
