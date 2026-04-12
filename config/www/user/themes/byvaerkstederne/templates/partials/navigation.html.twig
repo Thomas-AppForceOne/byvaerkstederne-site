@@ -25,6 +25,10 @@
                 <span class="material-symbols-outlined" style="font-size: 1.25rem; vertical-align: middle;">person</span>
                 {{ grav.user.fullname|default(grav.user.username) }}
             </span>
+            <button class="bv-nav__link bv-nav__rapporter" type="button" onclick="bvBugReport.open(); return false;" aria-label="Rapportér fejl på siden">
+                <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;" aria-hidden="true">bug_report</span>
+                Rapportér fejl
+            </button>
             <a href="{{ logout_url|e }}" class="bv-nav__link">Log ud</a>
         {% else %}
             <a href="#" class="bv-nav__link" onclick="document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;">Log ind</a>
@@ -55,6 +59,10 @@
                 <span class="material-symbols-outlined" style="vertical-align: middle; margin-right: 0.5rem;">person</span>
                 {{ grav.user.fullname|default(grav.user.username) }}
             </span>
+            <button class="bv-mobile-menu__link" style="background:none;border:none;cursor:pointer;text-align:left;padding:0;font:inherit;width:100%;" type="button" onclick="document.body.classList.remove('menu-open'); bvBugReport.open(); return false;">
+                <span class="material-symbols-outlined" style="vertical-align: middle; margin-right: 0.5rem;" aria-hidden="true">bug_report</span>
+                Rapportér fejl
+            </button>
             <a href="{{ logout_url|e }}" class="bv-mobile-menu__link">Log ud</a>
         {% else %}
             <a href="#" class="bv-mobile-menu__link" onclick="document.body.classList.remove('menu-open'); document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;">Log ind</a>

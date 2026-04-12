@@ -1,0 +1,202 @@
+{# Bug Report Overlay — floating panel for authenticated members only #}
+{% if grav.user.authenticated and grav.user.authorized %}
+{# Generate nonce for CSRF protection #}
+{% set br_nonce = nonce_field('bug-report-form', 'bug_report_nonce') %}
+
+{# Floating trigger button — fixed position in corner of viewport #}
+<button
+    id="bv-bug-report-trigger"
+    class="bv-bug-report-trigger"
+    aria-label="Rapportér fejl"
+    type="button"
+    onclick="bvBugReport.open(); return false;">
+    <span class="material-symbols-outlined" aria-hidden="true">bug_report</span>
+    <span class="bv-bug-report-trigger__label">Rapportér fejl</span>
+</button>
+
+{# Overlay backdrop + panel #}
+<div
+    id="bv-bug-report-overlay"
+    class="bv-bug-report-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="bv-bug-report-title"
+    aria-hidden="true">
+
+    <div class="bv-bug-report-overlay__panel">
+
+        {# Header #}
+        <div class="bv-bug-report-overlay__header">
+            <div class="bv-bug-report-overlay__header-inner">
+                <div class="bv-bug-report-overlay__header-meta">
+                    <span class="material-symbols-outlined" aria-hidden="true" style="color: var(--secondary-fixed-dim); font-size: 1.25rem;">bug_report</span>
+                    <span class="bv-bug-report-overlay__version">Fejlrapportering v1.0</span>
+                </div>
+                <h2 id="bv-bug-report-title" class="bv-bug-report-overlay__title">
+                    Rapportér <span style="color: var(--secondary-fixed-dim);">Fejl</span>
+                </h2>
+            </div>
+            <button
+                class="bv-bug-report-overlay__close"
+                id="bv-bug-report-close"
+                type="button"
+                aria-label="Luk fejlrapporterings-dialog">
+                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
+        </div>
+
+        {# Scrollable body #}
+        <div class="bv-bug-report-overlay__body" id="bv-bug-report-body">
+
+            {# Error/success messages #}
+            <div id="bv-bug-report-message" class="bv-bug-report-message" aria-live="polite" style="display:none;"></div>
+
+            <form
+                id="bv-bug-report-form"
+                class="bv-bug-report-form"
+                novalidate
+                enctype="multipart/form-data">
+
+                {{ br_nonce|raw }}
+                <input type="hidden" name="page_url" id="bv-bug-report-page-url" value="">
+                <input type="hidden" name="browser_os" id="bv-bug-report-browser-os" value="">
+
+                {# Field: Hvad skete der? #}
+                <div class="bv-bug-report-field">
+                    <label class="bv-bug-report-label" for="bv-br-description">
+                        <span class="bv-bug-report-label__dot" aria-hidden="true"></span>
+                        Hvad skete der? <span class="bv-bug-report-required" aria-label="påkrævet">*</span>
+                    </label>
+                    <textarea
+                        id="bv-br-description"
+                        name="description"
+                        class="bv-input bv-textarea bv-bug-report-textarea"
+                        placeholder="Beskriv fejlen..."
+                        rows="3"
+                        required
+                        aria-required="true"
+                        aria-describedby="bv-br-description-error"></textarea>
+                    <div id="bv-br-description-error" class="bv-bug-report-field-error" role="alert" aria-live="polite"></div>
+                </div>
+
+                {# Field: Hvad forventede du ville ske? #}
+                <div class="bv-bug-report-field">
+                    <label class="bv-bug-report-label" for="bv-br-expected">
+                        <span class="bv-bug-report-label__dot" aria-hidden="true"></span>
+                        Hvad forventede du ville ske? <span class="bv-bug-report-required" aria-label="påkrævet">*</span>
+                    </label>
+                    <textarea
+                        id="bv-br-expected"
+                        name="expected"
+                        class="bv-input bv-textarea bv-bug-report-textarea"
+                        placeholder="Ønsket resultat..."
+                        rows="3"
+                        required
+                        aria-required="true"
+                        aria-describedby="bv-br-expected-error"></textarea>
+                    <div id="bv-br-expected-error" class="bv-bug-report-field-error" role="alert" aria-live="polite"></div>
+                </div>
+
+                {# Field: Trin til at reproducere (dynamic list) #}
+                <div class="bv-bug-report-field">
+                    <label class="bv-bug-report-label" id="bv-br-steps-label">
+                        <span class="bv-bug-report-label__dot" aria-hidden="true"></span>
+                        Trin til at reproducere
+                        <span class="bv-bug-report-optional">(valgfrit)</span>
+                    </label>
+                    <div id="bv-br-steps-list" class="bv-bug-report-steps" aria-labelledby="bv-br-steps-label">
+                        {# Steps are added dynamically by JS #}
+                    </div>
+                    <button
+                        type="button"
+                        id="bv-br-add-step"
+                        class="bv-bug-report-add-step"
+                        aria-label="Tilføj reproduktionstrin">
+                        <span class="material-symbols-outlined" aria-hidden="true" style="font-size: 1rem;">add</span>
+                        Tilføj trin
+                    </button>
+                </div>
+
+                {# Field: Image attachment #}
+                <div class="bv-bug-report-field">
+                    <label class="bv-bug-report-label" for="bv-br-image">
+                        <span class="bv-bug-report-label__dot" aria-hidden="true"></span>
+                        Dokumentation
+                        <span class="bv-bug-report-optional">(valgfrit — JPEG, PNG, GIF, WebP, maks. 5 MB)</span>
+                    </label>
+                    <div class="bv-bug-report-upload-area">
+                        <label class="bv-bug-report-upload-btn" for="bv-br-image">
+                            <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
+                            <span id="bv-br-image-label">Vælg billede</span>
+                        </label>
+                        <input
+                            type="file"
+                            id="bv-br-image"
+                            name="image"
+                            accept="image/jpeg,image/png,image/gif,image/webp,.jpg,.jpeg,.png,.gif,.webp"
+                            class="bv-bug-report-file-input"
+                            aria-describedby="bv-br-image-error">
+                        <button
+                            type="button"
+                            id="bv-br-image-clear"
+                            class="bv-bug-report-image-clear"
+                            aria-label="Fjern valgt billede"
+                            style="display:none;">
+                            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                        </button>
+                    </div>
+                    <div id="bv-br-image-error" class="bv-bug-report-field-error" role="alert" aria-live="polite"></div>
+                </div>
+
+                {# Read-only context section #}
+                <div class="bv-bug-report-context" aria-label="Automatisk indsamlet systeminfo">
+                    <div class="bv-bug-report-context__header">
+                        <span class="material-symbols-outlined" aria-hidden="true" style="font-size: 1rem; color: var(--outline);">settings_ethernet</span>
+                        <span class="bv-bug-report-context__title">System Metadata (automatisk)</span>
+                    </div>
+                    <div class="bv-bug-report-context__grid">
+                        <div>
+                            <p class="bv-bug-report-context__label">Browser / OS</p>
+                            <p class="bv-bug-report-context__value" id="bv-br-display-browser">—</p>
+                        </div>
+                        <div>
+                            <p class="bv-bug-report-context__label">Aktuel URL</p>
+                            <p class="bv-bug-report-context__value bv-bug-report-context__value--url" id="bv-br-display-url">—</p>
+                        </div>
+                    </div>
+                </div>
+
+            </form>
+        </div>
+
+        {# Footer #}
+        <div class="bv-bug-report-overlay__footer">
+            <button
+                type="button"
+                class="bv-bug-report-cancel"
+                id="bv-bug-report-cancel-btn">
+                Afbryd
+            </button>
+            <button
+                type="button"
+                id="bv-bug-report-submit"
+                class="bv-btn bv-btn--primary"
+                style="display: flex; align-items: center; gap: var(--space-2);">
+                Send rapport
+                <span class="material-symbols-outlined" aria-hidden="true" style="font-size: 1.125rem;">send</span>
+            </button>
+        </div>
+
+        {# Colour accent strip #}
+        <div class="bv-bug-report-accent-strip" aria-hidden="true">
+            <div style="background: var(--primary);"></div>
+            <div style="background: var(--secondary);"></div>
+            <div style="background: var(--tertiary);"></div>
+        </div>
+
+    </div>{# /.panel #}
+</div>{# /.overlay #}
+
+{% else %}
+{# Unauthenticated: no trigger rendered; login prompt is already in nav #}
+{% endif %}

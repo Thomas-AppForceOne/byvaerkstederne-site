@@ -1,0 +1,35 @@
+name: Bug Report
+version: 1.0.0
+description: Fejlrapporteringssystem for Byværkstederne
+icon: bug
+author:
+  name: Byværkstederne
+  email: kontakt@byvaerkstederne.dk
+homepage: https://byvaerkstederne.dk
+keywords: bug, report, fejl
+bugs: https://byvaerkstederne.dk
+docs: https://byvaerkstederne.dk
+license: MIT
+
+dependencies:
+  - { name: grav, version: '>=1.7.0' }
+  - { name: flex-objects, version: '>=1.0.0' }
+
+form:
+  validation: strict
+  fields:
+    enabled:
+      type: toggle
+      label: Plugin aktiv
+      highlight: 1
+      default: 0
+      options:
+        1: PLUGIN_ADMIN.ENABLED
+        0: PLUGIN_ADMIN.DISABLED
+      validate:
+        type: bool
+
+    max_image_size:
+      type: text
+      label: Maks. billedstørrelse (bytes)
+      default: 5242880

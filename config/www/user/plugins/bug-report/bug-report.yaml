@@ -1,0 +1,3 @@
+enabled: true
+max_image_size: 5242880
+image_storage: 'user://data/bug-report-images'
