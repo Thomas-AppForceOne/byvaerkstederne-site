@@ -1,0 +1,34 @@
+br_promoted_login_mobile:
+  username: testmedlem
+  timestamp: '2026-04-01T09:30:00Z'
+  page_url: /log-ind
+  browser_os: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Safari/604.1'
+  description: "Login overlay lukker ikke når man trykker på baggrunden på iOS"
+  expected: "Overlayden lukker når man trykker uden for boksen, ligesom på desktop."
+  steps:
+    - "Åbn hjemmesiden på en iPhone i Safari"
+    - "Klik på 'Log ind' i navigationen"
+    - "Tryk på den mørke baggrund uden for login-boksen"
+    - "Login-overlayden lukker ikke — man er nødt til at bruge X-knappen"
+  image_path: null
+  promoted: true
+  promoted_item_id: rm_promoted_login_mobile
+  title: "Login overlay lukker ikke når man trykker på baggrunden på iOS"
+
+br_promoted_contact_form:
+  username: testmedlem
+  timestamp: '2026-04-02T11:45:00Z'
+  page_url: /kontakt
+  browser_os: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/123.0.0.0'
+  description: "Kontaktformular viser generisk fejlbesked ved lange beskeder over 500 tegn"
+  expected: "En klar og forklarende fejlbesked om maksimal tegngrænse vises direkte under tekstfeltet."
+  steps:
+    - "Gå til /kontakt siden"
+    - "Udfyld alle felter"
+    - "Skriv mere end 500 tegn i beskedfeltet"
+    - "Klik 'Send besked'"
+    - "En generisk 'Der opstod en fejl' vises i stedet for en specifik forklaring"
+  image_path: null
+  promoted: true
+  promoted_item_id: rm_promoted_contact_form
+  title: "Kontaktformular viser generisk fejlbesked ved lange beskeder over 500 tegn"
