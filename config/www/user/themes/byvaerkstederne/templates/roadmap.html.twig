@@ -314,7 +314,8 @@
                         is_auth: is_auth,
                         user_voted: item_id in roadmap_user_voted_items,
                         bug_budget: roadmap_bug_budget,
-                        feature_budget: roadmap_feature_budget
+                        feature_budget: roadmap_feature_budget,
+                        use_canonical_id: false
                     } only %}
                 {% endfor %}
             </div>
@@ -355,7 +356,8 @@
                         is_auth: is_auth,
                         user_voted: item_id in roadmap_user_voted_items,
                         bug_budget: roadmap_bug_budget,
-                        feature_budget: roadmap_feature_budget
+                        feature_budget: roadmap_feature_budget,
+                        use_canonical_id: true
                     } only %}
                 {% endfor %}
             </div>
@@ -397,7 +399,8 @@
                         is_auth: is_auth,
                         user_voted: item_id in roadmap_user_voted_items,
                         bug_budget: roadmap_bug_budget,
-                        feature_budget: roadmap_feature_budget
+                        feature_budget: roadmap_feature_budget,
+                        use_canonical_id: true
                     } only %}
                 {% endfor %}
             </div>
@@ -1090,15 +1093,19 @@
         if (!hash) return;
         // Normalise to lowercase so #B004 and #b004 both resolve to id="b004"
         var id = hash.slice(1).toLowerCase();
-        var target = document.getElementById(id);
-        // If the original fragment was uppercase, update the URL to canonical lowercase form
-        if (target && hash.slice(1) !== id) {
+
+        // Update URL to canonical lowercase form if needed
+        if (hash.slice(1) !== id) {
             history.replaceState(null, '', '/roadmap#' + id);
         }
-        if (!target) return;
 
-        // Make sure solved card is visible
-        if ((target.dataset.itemStatus || '') === 'loest') {
+        // Find any card with this anchor id (using data-anchor-id, available on all panels)
+        // This lets us read item metadata without relying on the id attribute
+        var anyCard = document.querySelector('[data-anchor-id="' + id + '"]');
+        if (!anyCard) return;
+
+        // Make sure solved card is visible before switching tabs
+        if ((anyCard.dataset.itemStatus || '') === 'loest') {
             showSolved = true;
             if (showSolvedBtn) {
                 showSolvedBtn.setAttribute('aria-pressed', 'true');
@@ -1107,15 +1114,23 @@
             updateTabCounts();
         }
 
-        // Switch to the correct tab
-        var itemType = target.dataset.itemType || '';
-        var targetTabId = itemType === 'bug' ? 'bv-rm-tab-fejl' : (itemType === 'feature' ? 'bv-rm-tab-feature-forslag' : null);
+        // Switch to the correct type-specific tab so the canonical-id element becomes visible.
+        // Cards in the type panels carry id="{{ anchor_id }}"; cards in the Alle panel do NOT,
+        // so after the tab switch document.getElementById(id) will find the now-visible card.
+        var itemType = anyCard.dataset.itemType || '';
+        var targetTabId = itemType === 'bug'
+            ? 'bv-rm-tab-fejl'
+            : (itemType === 'feature' ? 'bv-rm-tab-feature-forslag' : null);
+
         if (targetTabId) {
             var targetTab = document.getElementById(targetTabId);
             if (targetTab) targetTab.click();
         }
 
+        // After the tab switch (and the DOM is updated), locate the now-visible canonical element
         setTimeout(function () {
+            var target = document.getElementById(id);
+            if (!target) return;
             target.scrollIntoView({ behavior: 'smooth', block: 'center' });
             target.classList.add('bv-rm-card--highlighted');
             setTimeout(function () { target.classList.remove('bv-rm-card--highlighted'); }, 2000);

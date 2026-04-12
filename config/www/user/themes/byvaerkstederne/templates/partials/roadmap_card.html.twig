@@ -65,8 +65,9 @@
 {% endif %}
 
 <article
-    id="{{ anchor_id }}"
+    {% if use_canonical_id is defined and use_canonical_id %}id="{{ anchor_id }}"{% endif %}
     class="bv-rm-card{% if is_locked %} bv-rm-card--locked{% endif %}{% if is_solved %} bv-rm-card--solved{% endif %}"
+    data-anchor-id="{{ anchor_id }}"
     data-item-id="{{ item_id|e }}"
     data-item-type="{{ item_type|e }}"
     data-item-status="{{ status|e }}"
