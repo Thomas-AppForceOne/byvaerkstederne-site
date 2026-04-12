@@ -82,6 +82,7 @@ class BugReportPlugin extends Plugin
 
     /**
      * Handle AJAX bug report form submission.
+     * Auto-creates a roadmap item with published: true in the same request.
      */
     private function handleSubmission(): void
     {
@@ -133,36 +134,87 @@ class BugReportPlugin extends Plugin
             $imagePath = $result['path'];
         }
 
-        // Build record
+        // Build basic fields
         $username = $user->username;
         $timestamp = gmdate('Y-m-d\TH:i:s\Z');
         $id = 'br_' . bin2hex(random_bytes(8));
+        $roadmapId = 'rm_' . bin2hex(random_bytes(8));
 
+        $descSanitized    = htmlspecialchars($description, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $expectedSanitized = htmlspecialchars($expected, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $pageUrlSanitized  = htmlspecialchars($pageUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $browserOsSanitized = htmlspecialchars($browserOs, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $usernameSanitized = htmlspecialchars($username, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        // Attempt to write roadmap item first (with file lock to prevent duplicate display_ids)
+        $roadmapResult = $this->saveRoadmapItemAtomic($roadmapId, function (array $existing) use (
+            $id, $roadmapId, $descSanitized, $expectedSanitized, $pageUrlSanitized,
+            $usernameSanitized, $steps, $timestamp
+        ): array {
+            $displayId = $this->computeNextDisplayId($existing, 'bug');
+
+            $roadmapItem = [
+                'published'          => true,
+                'promoted'           => true,
+                'roadmap_id'         => $roadmapId,
+                'type'               => 'bug',
+                'priority'           => 'middel',
+                'status'             => 'rapporteret',
+                'display_id'         => $displayId,
+                'title'              => mb_substr($descSanitized, 0, 80),
+                'description'        => $descSanitized,
+                'expected'           => $expectedSanitized,
+                'steps'              => $steps,
+                'page_url'           => $pageUrlSanitized,
+                'submitter_username' => $usernameSanitized,
+                'source_report_id'   => $id,
+                'source_suggestion_id' => '',
+                'timestamp'          => $timestamp,
+                'vote_count'         => 0,
+                'votes'              => [],
+                'vote_history'       => [],
+                'votes_released'     => false,
+            ];
+
+            return ['item' => $roadmapItem, 'display_id' => $displayId];
+        });
+
+        if ($roadmapResult === null) {
+            // Roadmap write failed — return 500, do NOT write bug report
+            $this->sendJson(['error' => 'Serverfejl: Kunne ikke oprette roadmap-element. Rapporten er ikke gemt.'], 500);
+        }
+
+        ['display_id' => $displayId] = $roadmapResult;
+
+        // Now build and save the bug report record (with promoted: true and roadmap_id set at creation)
         $record = [
-            'username'    => htmlspecialchars($username, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-            'timestamp'   => $timestamp,
-            'page_url'    => htmlspecialchars($pageUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-            'browser_os'  => htmlspecialchars($browserOs, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-            'description' => htmlspecialchars($description, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-            'expected'    => htmlspecialchars($expected, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-            'steps'       => $steps,
-            'image_path'  => $imagePath,
-            'promoted'    => false,
-            'promoted_item_id' => null,
-            'title'       => mb_substr($description, 0, 80),
+            'username'           => $usernameSanitized,
+            'timestamp'          => $timestamp,
+            'page_url'           => $pageUrlSanitized,
+            'browser_os'         => $browserOsSanitized,
+            'description'        => $descSanitized,
+            'expected'           => $expectedSanitized,
+            'steps'              => $steps,
+            'image_path'         => $imagePath,
+            'promoted'           => true,
+            'promoted_item_id'   => $roadmapId,
+            'roadmap_id'         => $roadmapId,
+            'title'              => mb_substr($descSanitized, 0, 80),
         ];
 
-        // Persist record to Flex Object YAML store
         $saved = $this->saveReport($id, $record);
         if (!$saved) {
+            // Bug report save failed — rollback the roadmap item
+            $this->rollbackRoadmapItem($roadmapId);
             $this->sendJson(['error' => 'Serverfejl: Kunne ikke gemme rapporten. Prøv igen.'], 500);
         }
 
-        $this->sendJson(['success' => true, 'id' => $id]);
+        $this->sendJson(['success' => true, 'id' => $id, 'roadmap_id' => $roadmapId, 'display_id' => $displayId]);
     }
 
     /**
      * Handle admin promote-to-roadmap AJAX action.
+     * Now returns 409 if already promoted (item was auto-published on submission).
      */
     private function handlePromote(): void
     {
@@ -196,52 +248,210 @@ class BugReportPlugin extends Plugin
 
         $report = $reports[$reportId];
 
-        // Check if already promoted
+        // Check if already promoted — return 409 Conflict
         if (!empty($report['promoted'])) {
-            $existingId = $report['promoted_item_id'] ?? 'ukendt';
+            $existingId = $report['promoted_item_id'] ?? $report['roadmap_id'] ?? 'ukendt';
             $this->sendJson([
+                'error'            => "Rapporten er allerede publiceret på roadmap (ID: {$existingId}). Brug Flex Objects admin til at redigere elementet.",
                 'already_promoted' => true,
-                'message' => "Rapporten er allerede fremmet til roadmap (ID: {$existingId}).",
-                'item_id' => $existingId,
-            ]);
+                'roadmap_id'       => $existingId,
+            ], 409);
         }
 
-        // Create roadmap item
+        // Legacy path: item was submitted before auto-publish was implemented
+        // Create roadmap item with published: true
         $roadmapId = 'rm_' . bin2hex(random_bytes(8));
-        $roadmapItem = [
-            'published'          => false,
-            'type'               => 'bug',
-            'priority'           => 'middel',
-            'status'             => 'rapporteret',
-            'title'              => $report['description'] ?? '',
-            'description'        => $report['description'] ?? '',
-            'expected'           => $report['expected'] ?? '',
-            'steps'              => $report['steps'] ?? [],
-            'page_url'           => $report['page_url'] ?? '',
-            'submitter_username' => $report['username'] ?? '',
-            'source_report_id'   => $reportId,
-            'timestamp'          => gmdate('Y-m-d\TH:i:s\Z'),
-            'vote_count'         => 0,
-            'votes'              => [],
-        ];
+        $timestamp = gmdate('Y-m-d\TH:i:s\Z');
 
-        $roadmapSaved = $this->saveRoadmapItem($roadmapId, $roadmapItem);
-        if (!$roadmapSaved) {
+        $roadmapResult = $this->saveRoadmapItemAtomic($roadmapId, function (array $existing) use (
+            $report, $reportId, $roadmapId, $timestamp
+        ): array {
+            $displayId = $this->computeNextDisplayId($existing, 'bug');
+
+            $roadmapItem = [
+                'published'          => true,
+                'promoted'           => true,
+                'roadmap_id'         => $roadmapId,
+                'type'               => 'bug',
+                'priority'           => 'middel',
+                'status'             => 'rapporteret',
+                'display_id'         => $displayId,
+                'title'              => mb_substr($report['description'] ?? '', 0, 80),
+                'description'        => $report['description'] ?? '',
+                'expected'           => $report['expected'] ?? '',
+                'steps'              => $report['steps'] ?? [],
+                'page_url'           => $report['page_url'] ?? '',
+                'submitter_username' => $report['username'] ?? '',
+                'source_report_id'   => $reportId,
+                'source_suggestion_id' => '',
+                'timestamp'          => $timestamp,
+                'vote_count'         => 0,
+                'votes'              => [],
+                'vote_history'       => [],
+                'votes_released'     => false,
+            ];
+
+            return ['item' => $roadmapItem, 'display_id' => $displayId];
+        });
+
+        if ($roadmapResult === null) {
             $this->sendJson(['error' => 'Kunne ikke oprette roadmap-element. Promovering fejlede.'], 500);
         }
 
         // Update report as promoted
-        $reports[$reportId]['promoted'] = true;
-        $reports[$reportId]['promoted_item_id'] = $roadmapId;
+        $reports[$reportId]['promoted']          = true;
+        $reports[$reportId]['promoted_item_id']  = $roadmapId;
+        $reports[$reportId]['roadmap_id']        = $roadmapId;
 
         $yaml = \Symfony\Component\Yaml\Yaml::dump($reports, 6, 2);
         file_put_contents($dataFile, $yaml);
 
         $this->sendJson([
-            'success'  => true,
-            'item_id'  => $roadmapId,
-            'message'  => "Rapport fremmet til roadmap som element {$roadmapId}.",
+            'success'    => true,
+            'item_id'    => $roadmapId,
+            'display_id' => $roadmapResult['display_id'],
+            'message'    => "Rapport fremmet til roadmap som element {$roadmapId}.",
         ]);
+    }
+
+    /**
+     * Compute the next display_id for a given type ('bug' → #B001, 'feature' → #F001).
+     * Scans existing roadmap items, finds the max numeric suffix, and returns the next.
+     */
+    private function computeNextDisplayId(array $existingItems, string $type): string
+    {
+        $prefix = ($type === 'bug') ? 'B' : 'F';
+        $max = 0;
+
+        foreach ($existingItems as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            if (($item['type'] ?? '') !== $type) {
+                continue;
+            }
+            $displayId = $item['display_id'] ?? '';
+            if (preg_match('/^#' . $prefix . '(\d+)$/i', $displayId, $matches)) {
+                $num = (int)$matches[1];
+                if ($num > $max) {
+                    $max = $num;
+                }
+            }
+        }
+
+        return '#' . $prefix . str_pad((string)($max + 1), 3, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Save a roadmap item atomically using an exclusive file lock to prevent
+     * duplicate display_ids under concurrent submissions.
+     *
+     * The $builder callback receives the current array of roadmap items and
+     * must return ['item' => [...], 'display_id' => '...', ...extra].
+     * Returns the builder result array on success, or null on failure.
+     */
+    private function saveRoadmapItemAtomic(string $id, callable $builder): ?array
+    {
+        $dataDir = $this->grav['locator']->findResource('user-data://flex-objects', true, true);
+        if (!is_dir($dataDir)) {
+            mkdir($dataDir, 0750, true);
+        }
+
+        $dataFile = $dataDir . '/roadmap-items.yaml';
+
+        // Open (or create) the file for reading + writing
+        $fh = fopen($dataFile, 'c+');
+        if ($fh === false) {
+            return null;
+        }
+
+        // Acquire exclusive lock (blocks until available)
+        if (!flock($fh, LOCK_EX)) {
+            fclose($fh);
+            return null;
+        }
+
+        try {
+            // Read current content
+            $content = stream_get_contents($fh);
+            $existing = [];
+            if ($content !== false && trim($content) !== '') {
+                $parsed = \Symfony\Component\Yaml\Yaml::parse($content);
+                if (is_array($parsed)) {
+                    $existing = $parsed;
+                }
+            }
+
+            // Let caller compute the item and any metadata (e.g. display_id)
+            $result = $builder($existing);
+            $item = $result['item'];
+
+            // Add item to the store
+            $existing[$id] = $item;
+
+            // Write back
+            $yaml = \Symfony\Component\Yaml\Yaml::dump($existing, 6, 2);
+            ftruncate($fh, 0);
+            rewind($fh);
+            $written = fwrite($fh, $yaml);
+            fflush($fh);
+
+            if ($written === false) {
+                return null;
+            }
+
+            // Return the metadata from the builder (e.g. display_id)
+            unset($result['item']);
+            return $result;
+
+        } finally {
+            flock($fh, LOCK_UN);
+            fclose($fh);
+        }
+    }
+
+    /**
+     * Remove a roadmap item by ID (rollback on bug-report save failure).
+     */
+    private function rollbackRoadmapItem(string $id): void
+    {
+        $dataDir = $this->grav['locator']->findResource('user-data://flex-objects', true, true);
+        $dataFile = $dataDir . '/roadmap-items.yaml';
+
+        if (!file_exists($dataFile)) {
+            return;
+        }
+
+        $fh = fopen($dataFile, 'c+');
+        if ($fh === false) {
+            return;
+        }
+
+        if (!flock($fh, LOCK_EX)) {
+            fclose($fh);
+            return;
+        }
+
+        try {
+            $content = stream_get_contents($fh);
+            if ($content === false || trim($content) === '') {
+                return;
+            }
+            $existing = \Symfony\Component\Yaml\Yaml::parse($content);
+            if (!is_array($existing) || !isset($existing[$id])) {
+                return;
+            }
+
+            unset($existing[$id]);
+            $yaml = \Symfony\Component\Yaml\Yaml::dump($existing, 6, 2);
+            ftruncate($fh, 0);
+            rewind($fh);
+            fwrite($fh, $yaml);
+            fflush($fh);
+        } finally {
+            flock($fh, LOCK_UN);
+            fclose($fh);
+        }
     }
 
     /**
@@ -378,7 +588,7 @@ class BugReportPlugin extends Plugin
     }
 
     /**
-     * Save a roadmap item to the YAML store.
+     * Save a roadmap item to the YAML store (legacy non-atomic method, kept for compatibility).
      */
     private function saveRoadmapItem(string $id, array $record): bool
     {
