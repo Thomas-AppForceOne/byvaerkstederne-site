@@ -1,0 +1,39 @@
+title: Roadmap
+'@extends':
+    type: default
+    context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: Roadmap
+          fields:
+            header.hero_heading:
+              type: text
+              label: Sidetitel / Overskrift
+              default: Roadmap
+
+            header.badge:
+              type: text
+              label: Badge tekst
+              default: Digitalt Værksted
+
+            header.badge_style:
+              type: select
+              label: Badge farve
+              default: primary
+              options:
+                primary: Grøn
+                secondary: Blå
+                tertiary: Terracotta
+                kulturhus: Mørk
+
+            header.subtitle:
+              type: textarea
+              label: Undertekst / Lead paragraph
+              rows: 3

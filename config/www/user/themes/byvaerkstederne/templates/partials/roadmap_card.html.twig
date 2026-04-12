@@ -39,6 +39,12 @@
 {# Display ID: use display_id if set, otherwise derive from key #}
 {% set display_id = item.display_id ?? ('#' ~ item_id|slice(-4)|upper) %}
 
+{# Submitter username — may be stored as submitter_username or source_username #}
+{% set submitter = item.submitter_username ?? item.source_username ?? '' %}
+
+{# Submission date formatted as DD/MM/YYYY #}
+{% set submission_date = item.timestamp ? item.timestamp|date('d/m/Y') : '' %}
+
 {# Is this item locked for voting? #}
 {% set is_locked = status in ['under_implementation', 'klar_til_test', 'loest'] %}
 {% set is_solved = status == 'loest' %}
@@ -84,6 +90,31 @@
 
             {# Description (two lines) #}
             <p class="bv-rm-card__desc">{{ item.description|e|truncate(120, true, '…') }}</p>
+
+            {# Community value — only for feature type #}
+            {% if item_type == 'feature' and item.community_value is defined and item.community_value %}
+            <p class="bv-rm-card__community-value" aria-label="Fællesskabsværdi">
+                <span class="bv-rm-card__community-value-label" aria-hidden="true">Fællesskabsværdi:</span>
+                {{ item.community_value|e|truncate(100, true, '…') }}
+            </p>
+            {% endif %}
+
+            {# Footer: date + submitter #}
+            <div class="bv-rm-card__footer">
+                {% if submission_date %}
+                <span class="bv-rm-card__date" aria-label="Indsendt {{ submission_date }}">
+                    <span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>
+                    {{ submission_date }}
+                </span>
+                {% endif %}
+                {% if submitter %}
+                <span class="bv-rm-card__submitter" aria-label="Indsendt af {{ submitter }}">
+                    <span class="material-symbols-outlined" aria-hidden="true">person</span>
+                    {{ submitter|e }}
+                </span>
+                {% endif %}
+            </div>
+
         </div>
 
         {# Vote button / completion indicator (right side) #}
@@ -104,16 +135,17 @@
                     <span class="bv-rm-card__vote-count">{{ vote_count }}</span>
                 </div>
             {% elseif is_auth %}
-                {# Authenticated: interactive star/vote button #}
+                {# Authenticated: interactive star/vote button with Stem label #}
                 {% set no_budget = (budget <= 0) and not user_voted %}
                 <button
                     type="button"
                     class="bv-rm-card__vote-btn{% if user_voted %} is-voted{% endif %}"
                     data-action="{{ user_voted ? 'remove' : 'add' }}"
-                    aria-label="{{ user_voted ? 'Fjern din stemme (' ~ vote_count ~ ' stemmer)' : 'Tilføj stemme (' ~ vote_count ~ ' stemmer)' }}"
+                    aria-label="{{ user_voted ? 'Fjern din stemme (' ~ vote_count ~ ' stemmer)' : 'Stem (' ~ vote_count ~ ' stemmer)' }}"
                     {% if no_budget and not user_voted %}aria-disabled="true"{% endif %}>
                     <span class="material-symbols-outlined" aria-hidden="true">star</span>
                     <span class="bv-rm-card__vote-count">{{ vote_count }}</span>
+                    <span class="bv-rm-card__vote-label">Stem</span>
                 </button>
             {% else %}
                 {# Unauthenticated: show count, non-interactive #}

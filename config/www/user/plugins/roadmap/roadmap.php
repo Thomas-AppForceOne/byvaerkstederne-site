@@ -179,14 +179,18 @@ class RoadmapPlugin extends Plugin
             }
         }
 
-        // Sort by vote_count descending, then by timestamp
+        // Sort by timestamp descending (newest first)
         uasort($bugs, static function ($a, $b) {
-            $vc = ($b['vote_count'] ?? 0) <=> ($a['vote_count'] ?? 0);
-            return $vc !== 0 ? $vc : strcmp($b['timestamp'] ?? '', $a['timestamp'] ?? '');
+            return strcmp($b['timestamp'] ?? '', $a['timestamp'] ?? '');
         });
         uasort($features, static function ($a, $b) {
-            $vc = ($b['vote_count'] ?? 0) <=> ($a['vote_count'] ?? 0);
-            return $vc !== 0 ? $vc : strcmp($b['timestamp'] ?? '', $a['timestamp'] ?? '');
+            return strcmp($b['timestamp'] ?? '', $a['timestamp'] ?? '');
+        });
+
+        // Build combined all-items list sorted by timestamp descending
+        $allPublished = array_merge($bugs, $features);
+        uasort($allPublished, static function ($a, $b) {
+            return strcmp($b['timestamp'] ?? '', $a['timestamp'] ?? '');
         });
 
         // Per-user vote state
@@ -221,6 +225,7 @@ class RoadmapPlugin extends Plugin
         // Inject into Twig
         $twig->twig_vars['roadmap_bugs']              = $bugs;
         $twig->twig_vars['roadmap_features']          = $features;
+        $twig->twig_vars['roadmap_all_items']          = $allPublished;
         $twig->twig_vars['roadmap_bug_budget']         = max(0, $bugBudget);
         $twig->twig_vars['roadmap_feature_budget']     = max(0, $featureBudget);
         $twig->twig_vars['roadmap_user_voted_items']   = $userVotedItems;

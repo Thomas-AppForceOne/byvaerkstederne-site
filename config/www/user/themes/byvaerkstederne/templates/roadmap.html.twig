@@ -2,29 +2,35 @@
 
 {# ============================================================================
    Roadmap page
-   Displays two-column board: bugs (left) and features (right).
+   Displays tabbed views: Alle / Fejl (bugs) / Feature-forslag (features).
    Voting requires authentication. Public access for view only.
    ============================================================================ #}
 
 {% set is_auth = grav.user.authenticated and grav.user.authorized %}
 
+{# ── Hero section — matches bv-hero-text structural pattern ────────────────── #}
+{% block hero %}
+<section class="bv-hero-text">
+    <div class="bv-container">
+        {% if page.header.badge %}
+        <span class="bv-badge bv-badge--{{ page.header.badge_style|default('primary') }}">{{ page.header.badge }}</span>
+        {% endif %}
+        <h1 class="bv-display" style="font-size: clamp(2.5rem, 7vw, 5rem); margin-top: var(--space-4); max-width: 50rem;">
+            {{ page.header.hero_heading|default(page.title) }}
+        </h1>
+        {% if page.header.subtitle %}
+        <p class="bv-body-lg" style="margin-top: var(--space-6); max-width: 44rem;">{{ page.header.subtitle }}</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
+
 {% block body %}
 <section class="bv-rm-page" aria-label="Website Roadmap">
 <div class="bv-container">
 
-    {# ── Page header ─────────────────────────────────────────────────────── #}
-    <div class="bv-rm-header">
-        <div class="bv-rm-header__text">
-            <span class="bv-rm-header__eyebrow">Digitalt Værksted</span>
-            <h1 class="bv-headline bv-rm-header__title">Website Roadmap</h1>
-            <p class="bv-body-lg bv-rm-header__lead">
-                Hjælp os med at prioritere udviklingen af det digitale værksted.
-                Du har <strong>3 stemmer</strong> til tekniske fejl og <strong>3 stemmer</strong> til nye funktioner.
-                Dine stemmer hjælper os se hvad der er vigtigst for fællesskabet.
-            </p>
-        </div>
-
-        {# Platform status & version badges #}
+    {# ── Platform status & version badges ────────────────────────────────── #}
+    <div class="bv-rm-info-row">
         <div class="bv-rm-header__badges" role="status" aria-label="Platform status">
             <span class="bv-rm-badge bv-rm-badge--status">
                 <span class="bv-rm-badge__dot" aria-hidden="true"></span>
@@ -34,10 +40,8 @@
                 Version {{ platform_version|e }}
             </span>
         </div>
-    </div>
 
-    {# ── "Forstå processen" button ─────────────────────────────────────────── #}
-    <div class="bv-rm-process-row">
+        {# "Forstå processen" button #}
         <button
             type="button"
             id="bv-rm-process-btn"
@@ -173,80 +177,158 @@
     </div>
     {% endif %}
 
-    {# ── Two-column roadmap board ──────────────────────────────────────────── #}
-    <div class="bv-rm-board" role="main">
+    {# ── Tab navigation ───────────────────────────────────────────────────── #}
+    <div class="bv-rm-tabs" role="tablist" aria-label="Filtrer roadmap">
+        <button
+            class="bv-rm-tab is-active"
+            role="tab"
+            id="bv-rm-tab-alle"
+            aria-selected="true"
+            aria-controls="bv-rm-tabpanel-alle"
+            data-tab="alle">
+            Alle
+            <span class="bv-rm-tab__count">{{ roadmap_all_items|length }}</span>
+        </button>
+        <button
+            class="bv-rm-tab"
+            role="tab"
+            id="bv-rm-tab-fejl"
+            aria-selected="false"
+            aria-controls="bv-rm-tabpanel-fejl"
+            data-tab="fejl">
+            Fejl
+            <span class="bv-rm-tab__count">{{ roadmap_bugs|length }}</span>
+        </button>
+        <button
+            class="bv-rm-tab"
+            role="tab"
+            id="bv-rm-tab-feature-forslag"
+            aria-selected="false"
+            aria-controls="bv-rm-tabpanel-feature-forslag"
+            data-tab="feature-forslag">
+            Feature-forslag
+            <span class="bv-rm-tab__count">{{ roadmap_features|length }}</span>
+        </button>
+    </div>
 
-        {# ── Left column: Bugs ─────────────────────────────────────────────── #}
-        <section class="bv-rm-column bv-rm-column--bugs" aria-label="Registrerede Website-fejl">
-            <div class="bv-rm-column__header bv-rm-column__header--bugs">
-                <h2 class="bv-rm-column__title">Registrerede Website-fejl</h2>
-                <span class="bv-rm-column__subtitle">Tekniske fejl på platformen</span>
+    {# ── Tab panels ───────────────────────────────────────────────────────── #}
+
+    {# Alle — combined bugs + features sorted by timestamp #}
+    <div
+        id="bv-rm-tabpanel-alle"
+        class="bv-rm-tabpanel"
+        role="tabpanel"
+        aria-labelledby="bv-rm-tab-alle">
+
+        {% if roadmap_all_items is empty %}
+            <div class="bv-rm-empty-state">
+                <span class="material-symbols-outlined bv-rm-empty-state__icon" aria-hidden="true">inventory_2</span>
+                <h2 class="bv-rm-empty-state__title">Roadmap er tomt</h2>
+                <p class="bv-rm-empty-state__text">
+                    Ingen emner er tilgængelige endnu. Vær den første til at
+                    <a href="/roadmap#report" onclick="document.getElementById('bv-bug-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;" class="bv-rm-empty-state__link">rapportere en fejl</a>
+                    eller
+                    <a href="/foreslaa-feature" class="bv-rm-empty-state__link">foreslå en ny feature</a>.
+                </p>
             </div>
-
-            {# Vote budget counter (authenticated) #}
-            {% if is_auth %}
-            <div class="bv-rm-budget" id="bv-rm-bug-budget" aria-live="polite" aria-label="Tilbageværende fejlstemmer">
-                <span class="bv-rm-budget__label">Stemmer til rådighed</span>
-                <span class="bv-rm-budget__count" id="bv-rm-bug-budget-count">{{ roadmap_bug_budget }}</span>
-                <span class="bv-rm-budget__word">stemmer tilbage</span>
-            </div>
-            {% endif %}
-
-            {# Bug cards #}
+        {% else %}
             <div class="bv-rm-cards" role="list">
-                {% if roadmap_bugs is empty %}
-                    <p class="bv-rm-empty">Ingen registrerede fejl endnu.</p>
-                {% else %}
-                    {% for item_id, item in roadmap_bugs %}
-                        {% include 'partials/roadmap_card.html.twig' with {
-                            item: item,
-                            item_id: item_id,
-                            is_auth: is_auth,
-                            user_voted: item_id in roadmap_user_voted_items,
-                            bug_budget: roadmap_bug_budget,
-                            feature_budget: roadmap_feature_budget
-                        } only %}
-                    {% endfor %}
-                {% endif %}
+                {% for item_id, item in roadmap_all_items %}
+                    {% include 'partials/roadmap_card.html.twig' with {
+                        item: item,
+                        item_id: item_id,
+                        is_auth: is_auth,
+                        user_voted: item_id in roadmap_user_voted_items,
+                        bug_budget: roadmap_bug_budget,
+                        feature_budget: roadmap_feature_budget
+                    } only %}
+                {% endfor %}
             </div>
-        </section>
+        {% endif %}
+    </div>
 
-        {# ── Right column: Features ───────────────────────────────────────── #}
-        <section class="bv-rm-column bv-rm-column--features" aria-label="Forslag til Websitet">
-            <div class="bv-rm-column__header bv-rm-column__header--features">
-                <h2 class="bv-rm-column__title">Forslag til Websitet</h2>
-                <span class="bv-rm-column__subtitle">Nye digitale funktioner</span>
+    {# Fejl — bugs only #}
+    <div
+        id="bv-rm-tabpanel-fejl"
+        class="bv-rm-tabpanel"
+        role="tabpanel"
+        aria-labelledby="bv-rm-tab-fejl"
+        hidden>
+
+        {% if is_auth %}
+        <div class="bv-rm-budget" id="bv-rm-bug-budget" aria-live="polite" aria-label="Tilbageværende fejlstemmer">
+            <span class="bv-rm-budget__label">Stemmer til rådighed</span>
+            <span class="bv-rm-budget__count" id="bv-rm-bug-budget-count">{{ roadmap_bug_budget }}</span>
+            <span class="bv-rm-budget__word">stemmer tilbage</span>
+        </div>
+        {% endif %}
+
+        {% if roadmap_bugs is empty %}
+            <div class="bv-rm-empty-state">
+                <span class="material-symbols-outlined bv-rm-empty-state__icon" aria-hidden="true">bug_report</span>
+                <h2 class="bv-rm-empty-state__title">Ingen registrerede fejl</h2>
+                <p class="bv-rm-empty-state__text">
+                    Ingen fejl er rapporteret endnu — godt arbejde! Hvis du opdager en fejl,
+                    <a href="#" onclick="document.getElementById('bv-bug-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;" class="bv-rm-empty-state__link">klik her for at rapportere den</a>.
+                </p>
             </div>
-
-            {# Vote budget counter (authenticated) #}
-            {% if is_auth %}
-            <div class="bv-rm-budget" id="bv-rm-feature-budget" aria-live="polite" aria-label="Tilbageværende forslagsstemmer">
-                <span class="bv-rm-budget__label">Stemmer til rådighed</span>
-                <span class="bv-rm-budget__count" id="bv-rm-feature-budget-count">{{ roadmap_feature_budget }}</span>
-                <span class="bv-rm-budget__word">stemmer tilbage</span>
-            </div>
-            {% endif %}
-
-            {# Feature cards #}
+        {% else %}
             <div class="bv-rm-cards" role="list">
-                {% if roadmap_features is empty %}
-                    <p class="bv-rm-empty">Ingen godkendte forslag endnu.</p>
-                {% else %}
-                    {% for item_id, item in roadmap_features %}
-                        {% include 'partials/roadmap_card.html.twig' with {
-                            item: item,
-                            item_id: item_id,
-                            is_auth: is_auth,
-                            user_voted: item_id in roadmap_user_voted_items,
-                            bug_budget: roadmap_bug_budget,
-                            feature_budget: roadmap_feature_budget
-                        } only %}
-                    {% endfor %}
-                {% endif %}
+                {% for item_id, item in roadmap_bugs %}
+                    {% include 'partials/roadmap_card.html.twig' with {
+                        item: item,
+                        item_id: item_id,
+                        is_auth: is_auth,
+                        user_voted: item_id in roadmap_user_voted_items,
+                        bug_budget: roadmap_bug_budget,
+                        feature_budget: roadmap_feature_budget
+                    } only %}
+                {% endfor %}
             </div>
-        </section>
+        {% endif %}
+    </div>
 
-    </div>{# /.bv-rm-board #}
+    {# Feature-forslag — features only #}
+    <div
+        id="bv-rm-tabpanel-feature-forslag"
+        class="bv-rm-tabpanel"
+        role="tabpanel"
+        aria-labelledby="bv-rm-tab-feature-forslag"
+        hidden>
+
+        {% if is_auth %}
+        <div class="bv-rm-budget" id="bv-rm-feature-budget" aria-live="polite" aria-label="Tilbageværende forslagsstemmer">
+            <span class="bv-rm-budget__label">Stemmer til rådighed</span>
+            <span class="bv-rm-budget__count" id="bv-rm-feature-budget-count">{{ roadmap_feature_budget }}</span>
+            <span class="bv-rm-budget__word">stemmer tilbage</span>
+        </div>
+        {% endif %}
+
+        {% if roadmap_features is empty %}
+            <div class="bv-rm-empty-state">
+                <span class="material-symbols-outlined bv-rm-empty-state__icon" aria-hidden="true">lightbulb</span>
+                <h2 class="bv-rm-empty-state__title">Ingen feature-forslag endnu</h2>
+                <p class="bv-rm-empty-state__text">
+                    Har du en idé til en ny funktion?
+                    <a href="/foreslaa-feature" class="bv-rm-empty-state__link">Indsend dit forslag her</a>
+                    og vær med til at forme fremtiden for platformen.
+                </p>
+            </div>
+        {% else %}
+            <div class="bv-rm-cards" role="list">
+                {% for item_id, item in roadmap_features %}
+                    {% include 'partials/roadmap_card.html.twig' with {
+                        item: item,
+                        item_id: item_id,
+                        is_auth: is_auth,
+                        user_voted: item_id in roadmap_user_voted_items,
+                        bug_budget: roadmap_bug_budget,
+                        feature_budget: roadmap_feature_budget
+                    } only %}
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
 
     {# ── Unauthenticated vote prompt ───────────────────────────────────────── #}
     {% if not is_auth %}
@@ -287,6 +369,46 @@
         var el = document.querySelector('#bv-rm-vote-nonces [name="vote_nonce"]');
         return el ? el.value : '';
     }
+
+    /* ── Tab switching ────────────────────────────────────────────────────── */
+    var tabs = document.querySelectorAll('.bv-rm-tab[role="tab"]');
+    var panels = document.querySelectorAll('.bv-rm-tabpanel[role="tabpanel"]');
+
+    tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+            // Deactivate all tabs
+            tabs.forEach(function (t) {
+                t.classList.remove('is-active');
+                t.setAttribute('aria-selected', 'false');
+            });
+            // Hide all panels
+            panels.forEach(function (p) {
+                p.setAttribute('hidden', '');
+            });
+            // Activate clicked tab
+            tab.classList.add('is-active');
+            tab.setAttribute('aria-selected', 'true');
+            // Show corresponding panel
+            var panelId = tab.getAttribute('aria-controls');
+            var panel = document.getElementById(panelId);
+            if (panel) {
+                panel.removeAttribute('hidden');
+            }
+        });
+
+        // Keyboard: arrow keys for tab navigation
+        tab.addEventListener('keydown', function (e) {
+            var tabList = Array.from(tabs);
+            var currentIndex = tabList.indexOf(tab);
+            if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                tabList[(currentIndex + 1) % tabList.length].focus();
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                tabList[(currentIndex - 1 + tabList.length) % tabList.length].focus();
+            }
+        });
+    });
 
     /* ── "Forstå processen" panel ─────────────────────────────────────────── */
     var processBtn   = document.getElementById('bv-rm-process-btn');
@@ -475,10 +597,14 @@
                 btn.disabled = false;
 
                 if (result.status === 200 && result.data.success) {
-                    // Update vote count on card
-                    if (countEl) {
-                        countEl.textContent = result.data.vote_count;
-                    }
+                    // Update ALL vote count elements for this item (across all tab panels)
+                    var allCards = document.querySelectorAll('[data-item-id="' + itemId + '"]');
+                    allCards.forEach(function (c) {
+                        var countEls = c.querySelectorAll('.bv-rm-card__vote-count');
+                        countEls.forEach(function (el) {
+                            el.textContent = result.data.vote_count;
+                        });
+                    });
 
                     // Update budget counters
                     var bugBudEl  = document.getElementById('bv-rm-bug-budget-count');
@@ -489,8 +615,10 @@
                     BUG_BUD  = result.data.bug_budget;
                     FEAT_BUD = result.data.feature_budget;
 
-                    // Update voted tracking and toggle button state
-                    updateCardVoteState(card, itemId, action, itemType);
+                    // Update voted tracking and toggle button state for ALL matching cards
+                    allCards.forEach(function (c) {
+                        updateCardVoteState(c, itemId, action, itemType);
+                    });
 
                 } else {
                     // Revert UI on failure
@@ -564,7 +692,7 @@
             if (starBtn) {
                 starBtn.classList.remove('is-voted');
                 starBtn.setAttribute('data-action', 'add');
-                starBtn.setAttribute('aria-label', 'Tilføj stemme');
+                starBtn.setAttribute('aria-label', 'Stem');
                 if (currentBudget <= 0) {
                     starBtn.setAttribute('aria-disabled', 'true');
                 } else {
@@ -574,21 +702,17 @@
         }
 
         // Update all "add" buttons in the same column based on new budget
-        var colClass = (itemType === 'bug') ? '.bv-rm-column--bugs' : '.bv-rm-column--features';
-        var col = document.querySelector(colClass);
-        if (col) {
-            col.querySelectorAll('.bv-rm-vote-btn[data-action="add"]').forEach(function (b) {
-                var cardItemId = b.closest('[data-item-id]') ? b.closest('[data-item-id]').dataset.itemId : null;
-                var alreadyVoted = VOTED.indexOf(cardItemId) !== -1;
-                if (!alreadyVoted) {
-                    if (currentBudget <= 0) {
-                        b.setAttribute('aria-disabled', 'true');
-                    } else {
-                        b.removeAttribute('aria-disabled');
-                    }
+        document.querySelectorAll('[data-item-type="' + itemType + '"] .bv-rm-vote-btn[data-action="add"]').forEach(function (b) {
+            var cardItemId = b.closest('[data-item-id]') ? b.closest('[data-item-id]').dataset.itemId : null;
+            var alreadyVoted = VOTED.indexOf(cardItemId) !== -1;
+            if (!alreadyVoted) {
+                if (currentBudget <= 0) {
+                    b.setAttribute('aria-disabled', 'true');
+                } else {
+                    b.removeAttribute('aria-disabled');
                 }
-            });
-        }
+            }
+        });
     }
 
     /* ── Toast notifications ─────────────────────────────────────────────── */
