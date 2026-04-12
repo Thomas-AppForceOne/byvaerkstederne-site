@@ -55,12 +55,21 @@ A **reportable security incident** is any event that:
 
 ### Option A: Stop local Docker environment
 
+The Grav container is named `grav` (defined in `docker-compose.yml`). Stop it directly with:
+
 ```bash
-cd /path/to/byvaerkstederne
-make stop
+docker stop grav
 ```
 
-This runs `docker compose down` and stops all containers. The site is immediately inaccessible on the local environment.
+This immediately stops the container. The site becomes inaccessible on the local environment. No path lookup or credential file is required — only Docker must be installed and running.
+
+To also remove the container and its network (full shutdown):
+
+```bash
+docker compose -p byvaerkstederne down
+```
+
+*(Run from the project root directory, or use `docker stop grav` above if the path is unknown.)*
 
 ### Option B: Take production site offline (one.com control panel)
 
@@ -69,17 +78,24 @@ This runs `docker compose down` and stops all containers. The site is immediatel
 3. Create a `.maintenance` file in the web root, or rename `index.php` to `index.php.bak` to prevent Grav from serving pages.
 4. Alternatively, use the one.com **Redirect** feature to redirect all traffic to a maintenance page.
 
-**Fastest one.com offline method (copy-pasteable via SSH if available):**
+**Fastest one.com offline method via web file manager (no credentials file required):**
+
+1. Log in to **https://www.one.com/da/controlpanel** with the one.com hosting account credentials.
+2. Go to **Web Space** → **File Manager**.
+3. Navigate to the web root (`/www/` or the domain's public folder).
+4. Rename `index.php` to `index.php.bak` — Grav will no longer serve pages; Apache will return a 403.
+5. To restore: rename `index.php.bak` back to `index.php`.
+
+**Alternative via SSH** (requires `sshpass` and project credentials in `.env.deploy` at the project root):
 
 ```bash
-# Load deployment credentials first:
+# From the project root directory (wherever the repo is checked out):
 source .env.deploy
-
-ssh -p 22 "${DEPLOY_USER}@${DEPLOY_HOST}" \
+ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
   "echo '<?php http_response_code(503); die(\"Siden er midlertidigt nede for vedligeholdelse.\");' > ${DEPLOY_PATH}/index.php"
 ```
 
-*(Credentials are in `.env.deploy` in the project root: `DEPLOY_USER`, `DEPLOY_HOST`, and `DEPLOY_PATH`. If SSH access is not available on the account plan, use the one.com file manager.)*
+*The `.env.deploy` file is stored in the project root (not committed to git). It contains `DEPLOY_USER`, `DEPLOY_HOST`, `DEPLOY_PORT`, and `DEPLOY_PATH`. If this file is unavailable, use the one.com web file manager method above instead.*
 
 ### Option C: DNS-level offline (slowest — use only if other options fail)
 

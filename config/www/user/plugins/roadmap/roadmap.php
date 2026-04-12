@@ -450,7 +450,7 @@ class RoadmapPlugin extends Plugin
             2,
             \Symfony\Component\Yaml\Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK
         );
-        return file_put_contents($path, $yaml) !== false;
+        return file_put_contents($path, $yaml, LOCK_EX) !== false;
     }
 
     private function sendJson(array $data, int $status = 200): never

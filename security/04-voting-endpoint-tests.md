@@ -140,7 +140,7 @@ wait
 |---------|----------|----------|-------|
 | At most 1 of 2 requests succeeds | Exactly 1 vote added (budget was 1) | 1 success (200), 1 rejection (409) | ✅ |
 
-**Analysis:** The YAML data file is read and written atomically via PHP's `file_put_contents()` with exclusive file lock (`LOCK_EX`). The `getUserBudget()` function re-reads the live file on each request, so the second request observes the committed state of the first. The PHP file-locking mechanism on the server (Apache/PHP-FPM single worker in local Docker environment) serialises the two writes. Under high-concurrency shared-hosting environments (one.com), PHP execution is serialised per-process; file locking provides additional protection.
+**Analysis:** The YAML data file is written via `file_put_contents($path, $yaml, LOCK_EX)` in the `saveYaml()` private method of `roadmap.php` (line ~453). The `LOCK_EX` flag requests an exclusive advisory lock, blocking concurrent writes until the first write completes. The `getUserBudget()` function re-reads the live file on each request, so the second request observes the committed state of the first. Under the single-worker local Docker environment, PHP execution is serialised per-process; the `LOCK_EX` file lock provides additional protection for higher-concurrency environments such as the one.com shared hosting server.
 
 **Vote state after E-1:** Exactly one of `bug_003` or `bug_004` had `testmember01` as a voter. Total votes for `testmember01` in bugs category: 3 (confirmed by re-reading YAML).
 
@@ -162,7 +162,7 @@ wait
 | (b) No duplicate votes | ✅ `votes[$username]` uniqueness check | ✅ |
 | (c) Locked-status rejection | ✅ `in_array($status, LOCKED_STATUSES)` | ✅ |
 | Replay attack prevention | ✅ Duplicate-vote check + nonce expiry | ✅ |
-| Race-condition safety | ✅ File-level locking via `LOCK_EX` | ✅ |
+| Race-condition safety | ✅ `file_put_contents(..., LOCK_EX)` in `saveYaml()` | ✅ |
 | Unauthenticated rejection | ✅ Authentication check first | ✅ |
 
 **High/Critical findings:** 0  

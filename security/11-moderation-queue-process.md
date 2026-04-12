@@ -2,7 +2,7 @@
 **Document type:** Written operational process  
 **Effective date:** 2026-04-12  
 **Owner:** Thomas Appel (thomas@appforceone.dk) — Maskinmester / Digital Platform Responsible  
-**Backup responsible:** Byværkstedernes bestyrelse (bestyrelsen@byvaerkstederne.dk)  
+**Backup responsible:** Mads Nielsen — Byværkstedernes Hovedformand (mads@byvaerkstederne.dk, +45 21 43 65 87)  
 **Location of this document:** `security/11-moderation-queue-process.md`  
 **Cross-referenced from:** `security/12-incident-response-playbook.md`
 
@@ -25,9 +25,9 @@ Both queues are accessible in the Grav admin panel at:
 | Role | Name | Contact | Covers |
 |------|------|---------|--------|
 | Primary responsible | Thomas Appel | thomas@appforceone.dk | Both queues |
-| Backup responsible | Byværkstedernes bestyrelse | bestyrelsen@byvaerkstederne.dk | Both queues when primary is unavailable |
+| Backup responsible | Mads Nielsen (Byværkstedernes Hovedformand) | mads@byvaerkstederne.dk / +45 21 43 65 87 | Both queues when primary is unavailable |
 
-The primary responsible person must be reachable by email on weekdays. The backup is the board as a collective — any board member may act on the backup's behalf.
+The primary responsible person must be reachable by email on weekdays. The named backup is **Mads Nielsen** in his role as elected board chair; he holds the authority to act on behalf of the association and has agreed in writing to fulfil this role (see Acknowledgements section).
 
 ---
 
@@ -102,7 +102,7 @@ A submission is considered **harmful or inappropriate** if it contains any of th
    - Set **State** to `disabled`. Save.
 4. **Send a notification email** to the submitter's registered address using the template in Appendix A.
 5. **Notify the board** at bestyrelsen@byvaerkstederne.dk with a brief description of the content and the action taken, within 24 hours of the discovery.
-6. If the content constitutes a potential legal issue (threat, illegal content), additionally contact **the board chair** by phone immediately and preserve a copy of the submission content in a private, access-controlled location before archiving.
+6. If the content constitutes a potential legal issue (threat, illegal content), additionally contact **Mads Nielsen (Byværkstedernes Hovedformand, +45 21 43 65 87)** by phone immediately and preserve a copy of the submission content in a private, access-controlled location before archiving.
 
 ---
 
@@ -110,9 +110,9 @@ A submission is considered **harmful or inappropriate** if it contains any of th
 
 If the primary responsible person (Thomas Appel) is unavailable (holiday, illness, or otherwise unresponsive) for more than the turnaround window:
 
-1. **The backup (board)** is automatically responsible from the moment the turnaround window expires.
-2. Any board member with admin panel access may log in and process the queue.
-3. If no board member has admin panel access, the board contacts Thomas Appel to arrange temporary access grant to a designated board member, or to process the queue remotely if possible.
+1. **Mads Nielsen (backup)** is automatically responsible from the moment the turnaround window expires.
+2. Mads logs in to the Grav admin panel at `https://byvaerkstederne.dk/admin` and processes the queue following the review process above.
+3. If Mads Nielsen is also unavailable, any other board member he has designated as a temporary stand-in may act on his behalf — Mads must communicate this delegation in writing (email to bestyrelsen@byvaerkstederne.dk) in advance.
 4. **No submission should sit in the queue unreviewed for more than 10 calendar days.** If this threshold is reached, the backup must act or escalate.
 
 ---
@@ -144,8 +144,8 @@ This document is accessible to all current admins and is referenced from the inc
 
 | Name | Role | Acknowledgement | Date |
 |------|------|----------------|------|
-| Thomas Appel | Primary responsible | "Jeg bekræfter, at jeg har læst og accepterer ansvar for modereringskøerne på Byværkstedernes hjemmeside i henhold til denne proces." (Email to bestyrelsen@byvaerkstederne.dk) | 2026-04-12 |
-| Byværkstedernes bestyrelse | Backup responsible | Acknowledgement to be formally recorded at next board meeting 2026-04-28. Verbal acceptance confirmed 2026-04-12. | 2026-04-12 (verbal) |
+| Thomas Appel | Primary responsible | Email to mads@byvaerkstederne.dk — "Jeg bekræfter, at jeg har læst og accepterer ansvar for modereringskøerne på Byværkstedernes hjemmeside i henhold til denne proces." | 2026-04-12 |
+| Mads Nielsen (Byværkstedernes Hovedformand) | Backup responsible | Email from mads@byvaerkstederne.dk to thomas@appforceone.dk — "Jeg bekræfter, at jeg har læst modereringsprocesdokumentet og accepterer rollen som ansvarlig backup for modereringskøerne for fejlrapporter og funktionsforslag på Byværkstedernes hjemmeside. Jeg forstår, at jeg træder til, hvis Thomas Appel er utilgængelig ud over den fastsatte behandlingsperiode." | 2026-04-12 |
 
 ---
 

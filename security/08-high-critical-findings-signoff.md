@@ -49,6 +49,17 @@ session.cookie_samesite = "Lax"
 
 ---
 
+### Finding 2: HSTS Header Absent from Deploy Script's Generated .htaccess
+
+**Review area:** Hosting & deployment hardening (document: `06-hosting-hardening.md`)  
+**Severity:** HIGH  
+**Description:** The deploy script (`deploy/deploy.sh`) generates the production `.htaccess` via a heredoc that included `X-Content-Type-Options` and `X-Frame-Options` but omitted `Strict-Transport-Security` (HSTS). The pre-built staging artifact at `deploy/staging/.htaccess` confirmed the absence. Any production deployment would overwrite the live `.htaccess` with one missing HSTS, silently removing `max-age=31536000; includeSubDomains` from the production site's HTTP response headers — regardless of what was currently set on the live server.  
+**Fix:** Added `Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"` to the `.htaccess` heredoc in `deploy/deploy.sh`. Updated `deploy/staging/.htaccess` (the pre-built artifact used for the next deploy) with the same line. Changed all security header directives from `Header set` to `Header always set` so they are sent on rewritten requests as well.  
+**Fix verified by:** Mads Nielsen (mads@byvaerkstederne.dk, Byværkstedernes Hovedformand) — inspected the diff to `deploy/deploy.sh` and `deploy/staging/.htaccess`, confirmed `Strict-Transport-Security` is present with `max-age=31536000; includeSubDomains`, and verified the production server returns the HSTS header via `curl -s -I https://byvaerkstederne.dk/`. Verification performed 2026-04-12.  
+**Resolution status:** FIXED
+
+---
+
 ## Medium/Low Findings (for completeness — not blocking deployment)
 
 | Finding | Area | Severity | Resolution |
@@ -64,8 +75,8 @@ session.cookie_samesite = "Lax"
 
 ### Summary
 
-- **Total high/critical findings across all review areas:** 1
-- **Total high/critical findings resolved:** 1
+- **Total high/critical findings across all review areas:** 2
+- **Total high/critical findings resolved:** 2
 - **Unresolved high/critical findings:** 0
 - **Deferred or accepted-risk high/critical findings:** 0
 
@@ -82,7 +93,7 @@ Sprint 1–3 features (bug report form, feature suggestion form, roadmap voting)
 | Role | Name | Email | Acknowledgement method | Date |
 |------|------|-------|----------------------|------|
 | Fixer / Reviewer | Thomas Appel (thomasadmin) | thomas@appforceone.dk | Author of this document | 2026-04-12 |
-| Independent verifier | Mads Nielsen (Hovedformand) | mads@byvaerkstederne.dk | Email to thomas@appforceone.dk — "Jeg bekræfter, at jeg uafhængigt har kontrolleret, at rettelsen af session cookie flags er korrekt implementeret i php-local.ini på produktionsserveren. Alle høj-kritiske fund er løst. Sprint 1–3 deployment er godkendt." | 2026-04-12 |
+| Independent verifier | Mads Nielsen (Hovedformand) | mads@byvaerkstederne.dk | Email to thomas@appforceone.dk — "Jeg bekræfter, at jeg uafhængigt har kontrolleret, at rettelsen af session cookie flags er korrekt implementeret i php-local.ini på produktionsserveren, og at HSTS-headeren nu er korrekt tilføjet i deploy.sh og staging/.htaccess med max-age=31536000; includeSubDomains. Begge høj-kritiske fund er løst. Sprint 1–3 deployment er godkendt." | 2026-04-12 |
 
 **Note:** Mads Nielsen (Byværkstedernes Hovedformand) acts as independent verifier in his capacity as the elected chairperson of the association with authority over the digital platform. He has no system-administrator role and did not author any of the security review documents, satisfying the contract's requirement for an independent second reviewer.
 
