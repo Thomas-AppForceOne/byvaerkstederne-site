@@ -585,12 +585,21 @@
     /* ── Card click → inline action bar ──────────────────────────────────── */
     document.querySelectorAll('.bv-rm-card[data-item-id]').forEach(function (card) {
         card.addEventListener('click', function (e) {
-            // Allow the star vote-button on the card face to toggle the action bar
-            var starBtn = e.target.closest('.bv-rm-card__vote-btn');
-            if (starBtn && starBtn.tagName === 'BUTTON') {
-                // Star button click: toggle action bar (stop further propagation)
+            // If the face vote button was clicked, handle vote directly (not action bar)
+            var faceVoteBtn = e.target.closest('.bv-rm-card__vote-btn');
+            if (faceVoteBtn && faceVoteBtn.tagName === 'BUTTON') {
                 e.stopPropagation();
-                toggleCard(card);
+                // Only handle direct votes on active (non-locked/non-solved) items
+                if (!faceVoteBtn.disabled && faceVoteBtn.dataset.action) {
+                    submitVoteFromBtn(faceVoteBtn, card);
+                } else if (!AUTH) {
+                    // Unauthenticated: open login overlay
+                    var loginOverlay = document.getElementById('bv-login-overlay');
+                    if (loginOverlay) {
+                        loginOverlay.classList.add('is-open');
+                        document.body.style.overflow = 'hidden';
+                    }
+                }
                 return;
             }
 
@@ -617,99 +626,113 @@
                 e.preventDefault();
                 e.stopPropagation();
                 var card = btn.closest('.bv-rm-card');
-                if (card) toggleCard(card);
+                if (!btn.disabled && btn.dataset.action) {
+                    submitVoteFromBtn(btn, card);
+                } else if (card) {
+                    toggleCard(card);
+                }
             }
         });
     });
 
-    /* ── Vote button clicks ───────────────────────────────────────────────── */
+    /**
+     * Submit a vote AJAX call from either a face star button or an action bar button.
+     * This is the single shared vote submission function.
+     */
+    function submitVoteFromBtn(btn, card) {
+        if (!AUTH) return;
+        if (btn.getAttribute('aria-disabled') === 'true') return;
+        if (btn.disabled) return;
+
+        var itemId   = card.dataset.itemId;
+        var itemType = card.dataset.itemType;
+        var nonce    = getVoteNonce();
+
+        if (!nonce) {
+            showToast('Sikkerhedstoken mangler. Genindlæs siden.', 'error');
+            return;
+        }
+
+        // Capture pre-request state for rollback
+        var countEl    = card.querySelector('.bv-rm-card__vote-count');
+        var budgetEl   = document.getElementById(itemType === 'bug' ? 'bv-rm-bug-budget-count' : 'bv-rm-feature-budget-count');
+        var prevCount  = countEl  ? parseInt(countEl.textContent, 10)  : 0;
+        var prevBudget = budgetEl ? parseInt(budgetEl.textContent, 10) : 0;
+
+        // Disable all vote buttons for this card during request
+        card.querySelectorAll('button[data-action]').forEach(function (b) { b.disabled = true; });
+
+        var formData = new FormData();
+        formData.append('item_id',    itemId);
+        formData.append('vote_nonce', nonce);
+
+        fetch('/roadmap/vote', {
+            method:      'POST',
+            body:        formData,
+            headers:     { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+        })
+        .then(function (response) {
+            return response.json().then(function (data) {
+                return { status: response.status, data: data };
+            });
+        })
+        .then(function (result) {
+            // Re-enable vote buttons
+            card.querySelectorAll('button[data-action]').forEach(function (b) { b.disabled = false; });
+
+            if (result.status === 200 && result.data.success) {
+                // Update stored nonce with fresh one-time nonce from server
+                if (result.data.new_nonce) {
+                    var nonceInput = document.querySelector('#bv-rm-vote-nonces [name="vote_nonce"]');
+                    if (nonceInput) nonceInput.value = result.data.new_nonce;
+                }
+
+                var actualAction = result.data.action || (VOTED.indexOf(itemId) !== -1 ? 'remove' : 'add');
+
+                // Update ALL vote count elements for this item (across all tab panels)
+                document.querySelectorAll('[data-item-id="' + itemId + '"]').forEach(function (c) {
+                    c.querySelectorAll('.bv-rm-card__vote-count').forEach(function (el) {
+                        el.textContent = result.data.vote_count;
+                    });
+                });
+
+                // Update budget counters
+                var bugBudEl  = document.getElementById('bv-rm-bug-budget-count');
+                var featBudEl = document.getElementById('bv-rm-feature-budget-count');
+                if (bugBudEl)  bugBudEl.textContent  = result.data.bug_budget;
+                if (featBudEl) featBudEl.textContent = result.data.feature_budget;
+                BUG_BUD  = result.data.bug_budget;
+                FEAT_BUD = result.data.feature_budget;
+
+                // Update voted tracking and toggle button state for ALL matching cards
+                document.querySelectorAll('[data-item-id="' + itemId + '"]').forEach(function (c) {
+                    updateCardVoteState(c, itemId, actualAction, itemType);
+                });
+
+            } else {
+                if (countEl)  countEl.textContent  = prevCount;
+                if (budgetEl) budgetEl.textContent = prevBudget;
+                var errMsg = (result.data && result.data.error) || 'Stemme mislykkedes. Prøv igen.';
+                showToast(errMsg, 'error');
+            }
+        })
+        .catch(function () {
+            card.querySelectorAll('button[data-action]').forEach(function (b) { b.disabled = false; });
+            if (countEl)  countEl.textContent  = prevCount;
+            if (budgetEl) budgetEl.textContent = prevBudget;
+            showToast('Netværksfejl. Kontrollér din forbindelse og prøv igen.', 'error');
+        });
+    }
+
+    /* ── Action bar vote button clicks (delegates to shared submitVoteFromBtn) ── */
     document.querySelectorAll('.bv-rm-vote-btn[data-action]').forEach(function (btn) {
         btn.addEventListener('click', function (e) {
             e.stopPropagation();
-
-            if (!AUTH) return;
-            if (btn.getAttribute('aria-disabled') === 'true') return;
-            if (btn.disabled) return;
-
-            var itemId   = btn.closest('[data-item-id]').dataset.itemId;
-            var itemType = btn.closest('[data-item-type]').dataset.itemType;
-            var nonce    = getVoteNonce();
-
-            if (!nonce) {
-                showToast('Sikkerhedstoken mangler. Genindlæs siden.', 'error');
-                return;
+            var card = btn.closest('.bv-rm-card');
+            if (card) {
+                submitVoteFromBtn(btn, card);
             }
-
-            // Capture pre-request state for rollback
-            var card          = btn.closest('.bv-rm-card');
-            var countEl       = card ? card.querySelector('.bv-rm-card__vote-count') : null;
-            var budgetEl      = document.getElementById(itemType === 'bug' ? 'bv-rm-bug-budget-count' : 'bv-rm-feature-budget-count');
-            var prevCount     = countEl   ? parseInt(countEl.textContent, 10)   : 0;
-            var prevBudget    = budgetEl  ? parseInt(budgetEl.textContent, 10)  : 0;
-
-            // Disable button during request
-            btn.disabled = true;
-
-            var formData = new FormData();
-            formData.append('item_id',   itemId);
-            formData.append('vote_nonce', nonce);
-
-            fetch('/roadmap/vote', {
-                method:      'POST',
-                body:        formData,
-                headers:     { 'X-Requested-With': 'XMLHttpRequest' },
-                credentials: 'same-origin',
-            })
-            .then(function (response) {
-                return response.json().then(function (data) {
-                    return { status: response.status, data: data };
-                });
-            })
-            .then(function (result) {
-                btn.disabled = false;
-
-                if (result.status === 200 && result.data.success) {
-                    // Use server-returned action (auto-toggle) to determine UI update direction
-                    var actualAction = result.data.action || (VOTED.indexOf(itemId) !== -1 ? 'remove' : 'add');
-
-                    // Update ALL vote count elements for this item (across all tab panels)
-                    var allCards = document.querySelectorAll('[data-item-id="' + itemId + '"]');
-                    allCards.forEach(function (c) {
-                        var countEls = c.querySelectorAll('.bv-rm-card__vote-count');
-                        countEls.forEach(function (el) {
-                            el.textContent = result.data.vote_count;
-                        });
-                    });
-
-                    // Update budget counters
-                    var bugBudEl  = document.getElementById('bv-rm-bug-budget-count');
-                    var featBudEl = document.getElementById('bv-rm-feature-budget-count');
-                    if (bugBudEl)  bugBudEl.textContent  = result.data.bug_budget;
-                    if (featBudEl) featBudEl.textContent = result.data.feature_budget;
-
-                    BUG_BUD  = result.data.bug_budget;
-                    FEAT_BUD = result.data.feature_budget;
-
-                    // Update voted tracking and toggle button state for ALL matching cards
-                    allCards.forEach(function (c) {
-                        updateCardVoteState(c, itemId, actualAction, itemType);
-                    });
-
-                } else {
-                    // Revert UI on failure
-                    if (countEl)  countEl.textContent  = prevCount;
-                    if (budgetEl) budgetEl.textContent = prevBudget;
-
-                    var errMsg = (result.data && result.data.error) || 'Stemme mislykkedes. Prøv igen.';
-                    showToast(errMsg, 'error');
-                }
-            })
-            .catch(function () {
-                btn.disabled = false;
-                if (countEl)  countEl.textContent  = prevCount;
-                if (budgetEl) budgetEl.textContent = prevBudget;
-                showToast('Netværksfejl. Kontrollér din forbindelse og prøv igen.', 'error');
-            });
         });
     });
 

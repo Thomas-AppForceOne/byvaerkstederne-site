@@ -258,10 +258,29 @@ class RoadmapPlugin extends Plugin
             $this->sendJson(['error' => 'Ikke autoriseret. Log ind for at stemme.'], 401);
         }
 
-        // CSRF nonce
+        // CSRF nonce — two-layer check:
+        // 1) Grav standard time-based verification
+        // 2) One-time-use enforcement via session blacklist to prevent replay
         $nonce = $_POST['vote_nonce'] ?? '';
         if (!Utils::verifyNonce($nonce, 'roadmap-vote')) {
             $this->sendJson(['error' => 'Ugyldig sikkerhedstoken. Genindlæs siden og prøv igen.'], 403);
+        }
+
+        // Replay protection: reject nonces that have already been used
+        $session    = $this->grav['session'] ?? null;
+        $usedNonces = ($session ? ($session->get('bv_used_vote_nonces') ?? []) : []);
+
+        if (in_array($nonce, $usedNonces, true)) {
+            $this->sendJson(['error' => 'Sikkerhedstoken er allerede brugt. Genindlæs siden og prøv igen.'], 403);
+        }
+
+        // Mark nonce as used (cap to 100 entries to prevent session bloat)
+        $usedNonces[] = $nonce;
+        if (count($usedNonces) > 100) {
+            $usedNonces = array_slice($usedNonces, -100);
+        }
+        if ($session) {
+            $session->set('bv_used_vote_nonces', $usedNonces);
         }
 
         $itemId = trim($_POST['item_id'] ?? '');
@@ -341,12 +360,16 @@ class RoadmapPlugin extends Plugin
         $newFeatBudget  = $this->getUserBudget($saved, $username, 'feature');
         $newVoteCount   = $saved[$itemId]['vote_count'] ?? 0;
 
+        // Issue a fresh one-time nonce for the next request
+        $freshNonce = Utils::getNonce('roadmap-vote');
+
         $this->sendJson([
             'success'          => true,
             'action'           => $action,
             'vote_count'       => $newVoteCount,
             'bug_budget'       => $newBugBudget,
             'feature_budget'   => $newFeatBudget,
+            'new_nonce'        => $freshNonce,
         ]);
     }
 
