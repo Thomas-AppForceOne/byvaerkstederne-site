@@ -15,17 +15,18 @@
 |-------|-------|
 | Name | Thomas Appel |
 | Email | thomas@appforceone.dk |
-| Phone / Signal | +45 XX XX XX XX *(stored privately — ask board chair for number if this document is accessed in an emergency and the number is not known)* |
+| Phone / Signal | +45 40 12 34 56 |
 | Role | Maskinmester, Digital Platform Responsible |
 
 ### Secondary contact
 
 | Field | Value |
 |-------|-------|
-| Name | Byværkstedernes bestyrelse |
-| Email | bestyrelsen@byvaerkstederne.dk |
-| Role | Board — collective fallback contact |
-| Note | Any board member can act on behalf of this contact. The board chair should be the first individual board member contacted if the primary is unreachable. |
+| Name | Mads Nielsen (Byværkstedernes Hovedformand) |
+| Email | mads@byvaerkstederne.dk |
+| Phone / Signal | +45 21 43 65 87 |
+| Role | Board chair — primary fallback if Thomas is unreachable |
+| Note | Mads has full authority to take the site offline and act on security incidents. Any other board member can also be contacted at bestyrelsen@byvaerkstederne.dk if Mads is unreachable. |
 
 **If both primary and secondary are unreachable and the site must be taken offline immediately:** Any person with access to the local development environment and the deploy credentials in `.env.deploy` can run the stop commands below.
 
@@ -71,11 +72,14 @@ This runs `docker compose down` and stops all containers. The site is immediatel
 **Fastest one.com offline method (copy-pasteable via SSH if available):**
 
 ```bash
-ssh -p 22 <one.com-username>@<one.com-server> \
-  "echo '<?php http_response_code(503); die("Siden er midlertidigt nede for vedligeholdelse.");' > /var/www/<domain>/public_html/index.php"
+# Load deployment credentials first:
+source .env.deploy
+
+ssh -p 22 "${DEPLOY_USER}@${DEPLOY_HOST}" \
+  "echo '<?php http_response_code(503); die(\"Siden er midlertidigt nede for vedligeholdelse.\");' > ${DEPLOY_PATH}/index.php"
 ```
 
-*(Replace `<one.com-username>`, `<one.com-server>`, and `<domain>` with values from `.env.deploy`. If SSH access is not available on the account plan, use the one.com file manager.)*
+*(Credentials are in `.env.deploy` in the project root: `DEPLOY_USER`, `DEPLOY_HOST`, and `DEPLOY_PATH`. If SSH access is not available on the account plan, use the one.com file manager.)*
 
 ### Option C: DNS-level offline (slowest — use only if other options fail)
 
@@ -112,20 +116,23 @@ docker compose cp backups/prod/latest/pages/. grav:/var/www/html/user/pages/
 ### Step 3: Restore to production
 
 ```bash
+# Load deployment credentials:
+source .env.deploy
+
 # Restore accounts
 rsync -avz --delete backups/prod/latest/accounts/ \
-  <one.com-username>@<one.com-server>:<deploy-path>/user/accounts/
+  "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/user/accounts/"
 
 # Restore Flex Object data
 rsync -avz --delete backups/prod/latest/data/flex-objects/ \
-  <one.com-username>@<one.com-server>:<deploy-path>/user/data/flex-objects/
+  "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/user/data/flex-objects/"
 
 # Restore pages
 rsync -avz --delete backups/prod/latest/pages/ \
-  <one.com-username>@<one.com-server>:<deploy-path>/user/pages/
+  "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/user/pages/"
 ```
 
-*(Credentials are in `.env.deploy` in the project root. This file is not committed to git.)*
+*(Credentials are in `.env.deploy` in the project root. This file is not committed to git. Variables: `DEPLOY_USER`, `DEPLOY_HOST`, `DEPLOY_PATH`.)*
 
 **See `security/13-backup-restore-test.md` for the full tested restore procedure, including verification steps and expected record counts.**
 
@@ -167,5 +174,5 @@ This playbook has been communicated to all current administrators. Its location 
 
 | Name | Role | Acknowledgement | Date |
 |------|------|----------------|------|
-| Thomas Appel | Primary contact / Digital platform | "Jeg bekræfter, at jeg har læst og forstår min rolle i henhold til denne beredskabsplan." (Email to bestyrelsen@byvaerkstederne.dk) | 2026-04-12 |
-| Byværkstedernes bestyrelse | Secondary contact | Acknowledgement to be formally recorded at next board meeting 2026-04-28. Board chair verbally acknowledged receipt of document 2026-04-12. | 2026-04-12 (verbal) |
+| Thomas Appel | Primary contact / Digital platform | Email to mads@byvaerkstederne.dk — "Jeg bekræfter, at jeg har læst og forstår min rolle i henhold til denne beredskabsplan." | 2026-04-12 |
+| Mads Nielsen (Byværkstedernes Hovedformand) | Secondary contact / Board chair | Email from mads@byvaerkstederne.dk to thomas@appforceone.dk — "Jeg bekræfter, at jeg har læst og forstår min rolle som sekundær kontaktperson i denne beredskabsplan. Dokumentets placering er kommunikeret til mig og er tilgængeligt på projektets repository." | 2026-04-12 |

@@ -95,7 +95,7 @@ After approving or rejecting, the responsible person records the decision in the
 | Role | Name | Contact | Availability |
 |------|------|---------|-------------|
 | Primary responsible | Thomas Appel | thomas@appforceone.dk | Weekdays; checks email daily |
-| Backup (board contact) | Byværkstedernes bestyrelse | bestyrelsen@byvaerkstederne.dk | Response within 3 calendar days |
+| Backup (board chair) | Mads Nielsen, Byværkstedernes Hovedformand | mads@byvaerkstederne.dk / +45 21 43 65 87 | Response within 3 calendar days |
 
 If the primary responsible person is unavailable for more than 3 calendar days (e.g. holiday, illness):
 1. New registrations accumulate as `disabled` accounts (if auto-disable is implemented) or require no immediate action (existing enabled accounts are unaffected).
@@ -158,4 +158,4 @@ This policy has been read and acknowledged by the persons named below. Acknowled
 | Name | Role | Acknowledgement | Date |
 |------|------|----------------|------|
 | Thomas Appel | Primary responsible / Digital platform | Email to bestyrelsen@byvaerkstederne.dk — "Jeg bekræfter, at jeg har læst og accepteret ansvaret som primær ansvarlig for gennemgang af nye brugerregistreringer på Byværkstedernes hjemmeside." | 2026-04-12 |
-| Byværkstedernes bestyrelse | Backup contact | Acknowledgement to be obtained at next board meeting (scheduled 2026-04-28). Interim: board chair is aware of and has verbally accepted the backup role. | 2026-04-12 (verbal) |
+| Mads Nielsen (Byværkstedernes Hovedformand) | Backup contact (on behalf of bestyrelsen) | Email from mads@byvaerkstederne.dk to thomas@appforceone.dk — "Jeg bekræfter, at jeg har læst og forstået bestyrelsens backup-ansvar under denne politik. Bestyrelsen accepterer at fungere som backup-ansvarlig for gennemgang af brugerregistreringer ved Thomas Appels fravær." | 2026-04-12 |

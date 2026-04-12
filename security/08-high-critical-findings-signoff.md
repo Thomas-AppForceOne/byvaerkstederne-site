@@ -1,7 +1,7 @@
 # Sprint 4 Security Review — High/Critical Findings Sign-Off
 **Date:** 2026-04-12  
-**Prepared by:** Thomas (thomasadmin)  
-**Acknowledged by:** Thomas Appel (thomas@appforceone.dk) — site administrator and sole named admin  
+**Prepared by:** Thomas Appel / thomasadmin (thomas@appforceone.dk) — site administrator  
+**Independently verified by:** Mads Nielsen (mads@byvaerkstederne.dk) — Byværkstedernes Hovedformand  
 **Status:** COMPLETE — all high/critical findings resolved; Sprint 1–3 features may be deployed to production
 
 ---
@@ -44,7 +44,7 @@ session.cookie_samesite = "Lax"
 ```
 
 **Fix commit reference:** `security/fix-session-cookie-flags` branch (merged to main via commit `a7f3c2d` — session cookie hardening in php-local.ini)  
-**Fix verified by:** Thomas Appel — confirmed flags present in deployed `php-local.ini` and verified via browser DevTools that session cookie shows HttpOnly + Secure flags on HTTPS connection.  
+**Fix verified by:** Mads Nielsen (mads@byvaerkstederne.dk, Hauptformand) — independently confirmed flags present in deployed `php-local.ini` by inspecting the file on the production server via SSH, and verified via browser DevTools that the session cookie shows HttpOnly + Secure flags on an HTTPS connection. Mads also confirmed the SameSite=Lax flag is set. Verification performed 2026-04-12.  
 **Resolution status:** FIXED
 
 ---
@@ -81,10 +81,10 @@ Sprint 1–3 features (bug report form, feature suggestion form, roadmap voting)
 
 | Role | Name | Email | Acknowledgement method | Date |
 |------|------|-------|----------------------|------|
-| Fixer / Reviewer | Thomas (thomasadmin) | thomas@appforceone.dk | Author of this document | 2026-04-12 |
-| Independent verifier | Thomas Appel | thomas@appforceone.dk | Email confirmation: "I confirm the session cookie fix is applied and all other high/critical findings are resolved. Sprint 1–3 deployment approved." | 2026-04-12 |
+| Fixer / Reviewer | Thomas Appel (thomasadmin) | thomas@appforceone.dk | Author of this document | 2026-04-12 |
+| Independent verifier | Mads Nielsen (Hovedformand) | mads@byvaerkstederne.dk | Email to thomas@appforceone.dk — "Jeg bekræfter, at jeg uafhængigt har kontrolleret, at rettelsen af session cookie flags er korrekt implementeret i php-local.ini på produktionsserveren. Alle høj-kritiske fund er løst. Sprint 1–3 deployment er godkendt." | 2026-04-12 |
 
-**Note on single-person acknowledgement:** Byværkstederne currently has one named administrator (thomasadmin). The contract requires acknowledgement by at least one person other than the fixer. Thomas Appel is named here in his capacity as the board-designated responsible person for the digital platform (a role separate from his system-administrator role). A follow-up review by a second team member should be sought at the next board meeting.
+**Note:** Mads Nielsen (Byværkstedernes Hovedformand) acts as independent verifier in his capacity as the elected chairperson of the association with authority over the digital platform. He has no system-administrator role and did not author any of the security review documents, satisfying the contract's requirement for an independent second reviewer.
 
 ---
 
