@@ -1,0 +1,150 @@
+{% extends 'flex-objects/types/default/edit.html.twig' %}
+
+{% block content_top %}
+    {{ parent() }}
+
+    {% if object.exists %}
+        {% set item_status = object.status ?? 'rapporteret' %}
+        {% set active_vote_count = object.votes is defined ? object.votes|length : 0 %}
+        {% set history_count = object.vote_history is defined ? object.vote_history|length : 0 %}
+        {% set votes_released = object.votes_released ?? false %}
+
+        {# ── Vote summary panel ─────────────────────────────────────────────── #}
+        <div style="margin-bottom: 1.5rem; padding: 1rem 1.5rem; background: var(--surface-container-low); border-left: 4px solid var(--secondary);">
+            <strong style="display:block; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.75rem;">
+                Stemmedata (skrivebeskyttet)
+            </strong>
+            <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+                <div>
+                    <span style="font-size: 0.75rem; color: var(--outline); display: block;">Aktive stemmer</span>
+                    <strong style="font-size: 1.5rem;">{{ active_vote_count }}</strong>
+                </div>
+                <div>
+                    <span style="font-size: 0.75rem; color: var(--outline); display: block;">Historiske stemmer</span>
+                    <strong style="font-size: 1.5rem;">{{ history_count }}</strong>
+                </div>
+                {% if votes_released %}
+                <div>
+                    <span style="display:inline-flex;align-items:center;gap:0.4rem;background:var(--primary);color:var(--on-primary);font-weight:700;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.1em;padding:0.3rem 0.75rem;">
+                        ✓ Stemmer frigivet
+                    </span>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if active_vote_count > 0 %}
+            <div style="margin-top: 0.75rem;">
+                <strong style="font-size: 0.8rem; display: block; margin-bottom: 0.25rem;">Stemmer fra:</strong>
+                <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    {% for username, v in object.votes %}
+                    <li style="background: var(--surface-variant); padding: 0.2rem 0.6rem; font-size: 0.8rem; font-family: monospace;">{{ username }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            {% if history_count > 0 and votes_released %}
+            <div style="margin-top: 0.75rem;">
+                <strong style="font-size: 0.8rem; display: block; margin-bottom: 0.25rem;">Historiske stemmer fra:</strong>
+                <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    {% for username, v in object.vote_history %}
+                    <li style="background: var(--secondary-fixed); padding: 0.2rem 0.6rem; font-size: 0.8rem; font-family: monospace;">{{ username }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+
+        {# ── Vote release panel ─────────────────────────────────────────────── #}
+        {% if item_status == 'klar_til_implementation' and active_vote_count > 0 and not votes_released %}
+        <div style="margin-bottom: 1.5rem; padding: 1rem 1.5rem; background: var(--tertiary-fixed); border-left: 4px solid var(--tertiary-container);">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+                <div>
+                    <strong style="font-size: 0.9rem;">Frigiv stemmer</strong>
+                    <span style="margin-left: 0.5rem; font-size: 0.85rem; color: var(--outline);">
+                        Dette element er "Klar til implementation" — {{ active_vote_count }} aktive stemme(r) skal frigives.
+                    </span>
+                </div>
+                <div>
+                    {% set release_nonce_html = nonce_field('roadmap-release-votes', 'release_nonce') %}
+                    <form id="bv-rm-release-form" style="display:inline-block;">
+                        <input type="hidden" name="item_id" value="{{ key }}">
+                        {{ release_nonce_html|raw }}
+                        <button
+                            type="button"
+                            onclick="bvReleaseVotes()"
+                            class="button button-action"
+                            style="background:var(--tertiary-container);color:var(--on-tertiary-container);border:none;padding:0.5rem 1.25rem;font-weight:700;cursor:pointer;font-size:0.875rem;">
+                            Frigiv alle stemmer
+                        </button>
+                    </form>
+                    <div id="bv-rm-release-message" style="display:none;margin-top:0.5rem;font-size:0.875rem;"></div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        function bvReleaseVotes() {
+            var form   = document.getElementById('bv-rm-release-form');
+            var msgEl  = document.getElementById('bv-rm-release-message');
+            var btn    = form.querySelector('button[type="button"]');
+
+            btn.disabled    = true;
+            btn.textContent = 'Frigiver…';
+
+            fetch('/admin/roadmap/release-votes', {
+                method:      'POST',
+                body:        new FormData(form),
+                headers:     { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            })
+            .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
+            .then(function (result) {
+                if (result.data && result.data.success) {
+                    msgEl.style.cssText = 'display:block;color:var(--primary);font-weight:600;';
+                    msgEl.textContent   = '✓ ' + (result.data.released_count || 0) + ' stemme(r) frigivet.';
+                    btn.textContent     = 'Frigivet';
+                    btn.style.background = 'var(--primary)';
+                    btn.style.color = 'var(--on-primary)';
+                    setTimeout(function () { window.location.reload(); }, 1500);
+                } else {
+                    btn.disabled        = false;
+                    btn.textContent     = 'Frigiv alle stemmer';
+                    msgEl.style.cssText = 'display:block;color:var(--error);font-weight:600;';
+                    msgEl.textContent   = '✗ ' + ((result.data && result.data.error) || 'Fejl. Prøv igen.');
+                }
+            })
+            .catch(function () {
+                btn.disabled        = false;
+                btn.textContent     = 'Frigiv alle stemmer';
+                msgEl.style.cssText = 'display:block;color:var(--error);font-weight:600;';
+                msgEl.textContent   = '✗ Netværksfejl. Prøv igen.';
+            });
+        }
+        </script>
+        {% endif %}
+
+        {# Info for already-released items #}
+        {% if item_status == 'klar_til_implementation' and votes_released %}
+        <div style="margin-bottom: 1.5rem; padding: 0.75rem 1.5rem; background: var(--primary-fixed); border-left: 4px solid var(--primary); font-size: 0.875rem; color: var(--primary); font-weight: 600;">
+            ✓ Stemmer er allerede frigivet for dette element.
+        </div>
+        {% endif %}
+
+        {# Source info panel #}
+        {% if object.source_report_id %}
+        <div style="margin-bottom: 1.5rem; padding: 0.75rem 1.5rem; background: var(--surface-container-low); border-left: 4px solid var(--outline); font-size: 0.875rem;">
+            <strong>Fremmet fra fejlrapport:</strong>
+            <code style="margin-left: 0.5rem;">{{ object.source_report_id }}</code>
+        </div>
+        {% endif %}
+
+        {% if object.source_suggestion_id %}
+        <div style="margin-bottom: 1.5rem; padding: 0.75rem 1.5rem; background: var(--surface-container-low); border-left: 4px solid var(--outline); font-size: 0.875rem;">
+            <strong>Fremmet fra feature-forslag:</strong>
+            <code style="margin-left: 0.5rem;">{{ object.source_suggestion_id }}</code>
+        </div>
+        {% endif %}
+
+    {% endif %}
+{% endblock %}

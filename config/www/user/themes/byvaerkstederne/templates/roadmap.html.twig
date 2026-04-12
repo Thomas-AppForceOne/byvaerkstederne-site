@@ -21,6 +21,33 @@
         {% if page.header.subtitle %}
         <p class="bv-body-lg" style="margin-top: var(--space-6); max-width: 44rem;">{{ page.header.subtitle }}</p>
         {% endif %}
+
+        {# CTA row #}
+        <div class="bv-rm-hero-cta" style="margin-top: var(--space-8); display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center;">
+            <a href="/foreslaa-feature" class="bv-btn bv-btn--primary">
+                Foresl&aring; en feature
+                <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1rem;vertical-align:middle;margin-left:0.25rem;">arrow_forward</span>
+            </a>
+            {% if is_auth %}
+            <button
+                type="button"
+                class="bv-btn bv-btn--outline"
+                onclick="bvBugReport.open(); return false;"
+                aria-haspopup="dialog">
+                <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1rem;vertical-align:middle;margin-right:0.25rem;">bug_report</span>
+                Rapport&eacute;r fejl
+            </button>
+            {% else %}
+            <button
+                type="button"
+                class="bv-btn bv-btn--outline"
+                onclick="document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;"
+                aria-haspopup="dialog">
+                <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1rem;vertical-align:middle;margin-right:0.25rem;">bug_report</span>
+                Rapport&eacute;r fejl
+            </button>
+            {% endif %}
+        </div>
     </div>
 </section>
 {% endblock %}
@@ -206,9 +233,56 @@
             aria-selected="false"
             aria-controls="bv-rm-tabpanel-feature-forslag"
             data-tab="feature-forslag">
-            Feature-forslag
+            Features
             <span class="bv-rm-tab__count">{{ roadmap_features|length }}</span>
         </button>
+    </div>
+
+    {# ── Filter toolbar ──────────────────────────────────────────────────── #}
+    <div class="bv-rm-filter-bar" role="search" aria-label="Filtrer roadmap-emner">
+        <div class="bv-rm-filter-bar__group">
+            <label class="bv-rm-filter-bar__label" for="bv-rm-filter-status">Status</label>
+            <select id="bv-rm-filter-status" class="bv-rm-filter-select" aria-label="Filtrer efter status">
+                <option value="">Alle statusser</option>
+                <option value="rapporteret">Rapporteret</option>
+                <option value="under_afklaring">Under afklaring</option>
+                <option value="klar_til_implementation">Klar til implementation</option>
+                <option value="under_implementation">Under implementation</option>
+                <option value="klar_til_test">Klar til test</option>
+                <option value="loest">L&oslash;st</option>
+            </select>
+        </div>
+        <div class="bv-rm-filter-bar__group">
+            <label class="bv-rm-filter-bar__label" for="bv-rm-filter-priority">Prioritet</label>
+            <select id="bv-rm-filter-priority" class="bv-rm-filter-select" aria-label="Filtrer efter prioritet">
+                <option value="">Alle prioriteter</option>
+                <option value="kritisk">Kritisk</option>
+                <option value="hoej">H&oslash;j</option>
+                <option value="middel">Middel</option>
+                <option value="lav">Lav</option>
+                <option value="nyhed">Nyhed</option>
+                <option value="forbedring">Forbedring</option>
+            </select>
+        </div>
+        <button type="button" id="bv-rm-filter-clear" class="bv-rm-filter-clear" aria-label="Nulstil filtre" hidden>
+            <span class="material-symbols-outlined" aria-hidden="true">filter_alt_off</span>
+            Nulstil
+        </button>
+    </div>
+
+    {# ── "Vis løste" toggle ───────────────────────────────────────────────── #}
+    <div class="bv-rm-solved-toggle-row" style="margin-bottom: var(--space-4);">
+        <button
+            type="button"
+            id="bv-rm-show-solved"
+            class="bv-rm-solved-toggle"
+            aria-pressed="false"
+            aria-controls="bv-rm-solved-hint">
+            <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+            Vis l&oslash;ste
+            <span class="bv-rm-solved-toggle__count" id="bv-rm-solved-count"></span>
+        </button>
+        <span id="bv-rm-solved-hint" class="bv-rm-solved-toggle__hint"></span>
     </div>
 
     {# ── Tab panels ───────────────────────────────────────────────────────── #}
@@ -558,7 +632,6 @@
             if (btn.disabled) return;
 
             var itemId   = btn.closest('[data-item-id]').dataset.itemId;
-            var action   = btn.dataset.action;
             var itemType = btn.closest('[data-item-type]').dataset.itemType;
             var nonce    = getVoteNonce();
 
@@ -579,7 +652,6 @@
 
             var formData = new FormData();
             formData.append('item_id',   itemId);
-            formData.append('action',    action);
             formData.append('vote_nonce', nonce);
 
             fetch('/roadmap/vote', {
@@ -597,6 +669,9 @@
                 btn.disabled = false;
 
                 if (result.status === 200 && result.data.success) {
+                    // Use server-returned action (auto-toggle) to determine UI update direction
+                    var actualAction = result.data.action || (VOTED.indexOf(itemId) !== -1 ? 'remove' : 'add');
+
                     // Update ALL vote count elements for this item (across all tab panels)
                     var allCards = document.querySelectorAll('[data-item-id="' + itemId + '"]');
                     allCards.forEach(function (c) {
@@ -617,7 +692,7 @@
 
                     // Update voted tracking and toggle button state for ALL matching cards
                     allCards.forEach(function (c) {
-                        updateCardVoteState(c, itemId, action, itemType);
+                        updateCardVoteState(c, itemId, actualAction, itemType);
                     });
 
                 } else {
@@ -729,6 +804,245 @@
             toast.classList.remove('is-visible');
         }, 5000);
     }
+
+    /* ── Filter & "Vis løste" functionality ──────────────────────────────── */
+    var filterStatus   = document.getElementById('bv-rm-filter-status');
+    var filterPriority = document.getElementById('bv-rm-filter-priority');
+    var filterClear    = document.getElementById('bv-rm-filter-clear');
+    var showSolvedBtn  = document.getElementById('bv-rm-show-solved');
+    var solvedCountEl  = document.getElementById('bv-rm-solved-count');
+
+    var showSolved = false; // Løste items are hidden by default
+
+    // All roadmap card elements
+    function getAllCards() {
+        return Array.from(document.querySelectorAll('.bv-rm-card[data-item-id]'));
+    }
+
+    // Update tab count badges based on visible (non-hidden) cards in each section
+    function updateTabCounts() {
+        var activeStatusFilter   = filterStatus   ? filterStatus.value   : '';
+        var activePriorityFilter = filterPriority ? filterPriority.value : '';
+
+        // Deduplicate counts by item-id (items appear in both "Alle" and type panels)
+        var seenIds         = {};
+        var totalVisible    = 0;
+        var bugsVisible     = 0;
+        var featuresVisible = 0;
+
+        getAllCards().forEach(function (card) {
+            var itemId   = card.dataset.itemId   || '';
+            var type     = card.dataset.itemType || '';
+            var status   = card.dataset.itemStatus   || '';
+            var priority = card.dataset.itemPriority || '';
+            var isSolved = (status === 'loest');
+
+            var matchesStatus   = !activeStatusFilter   || status === activeStatusFilter;
+            var matchesPriority = !activePriorityFilter || priority === activePriorityFilter;
+            var matchesSolved   = showSolved || !isSolved;
+
+            var visible = matchesStatus && matchesPriority && matchesSolved;
+
+            // Show/hide this card element (applies to all copies across all panels)
+            card.style.display = visible ? '' : 'none';
+
+            // Count each unique item only once (deduplicate across Alle + type panels)
+            if (visible && itemId && !seenIds[itemId]) {
+                seenIds[itemId] = true;
+                totalVisible++;
+                if (type === 'bug') bugsVisible++;
+                else                featuresVisible++;
+            }
+        });
+
+        // Update tab count badges
+        var allCountEl  = document.querySelector('#bv-rm-tab-alle .bv-rm-tab__count');
+        var bugCountEl  = document.querySelector('#bv-rm-tab-fejl .bv-rm-tab__count');
+        var featCountEl = document.querySelector('#bv-rm-tab-feature-forslag .bv-rm-tab__count');
+        if (allCountEl)  allCountEl.textContent  = totalVisible;
+        if (bugCountEl)  bugCountEl.textContent  = bugsVisible;
+        if (featCountEl) featCountEl.textContent = featuresVisible;
+
+        // Show/hide empty states inside tab panels
+        updateEmptyStates(bugsVisible, featuresVisible, totalVisible);
+
+        // Show/hide clear button
+        var hasFilter = activeStatusFilter || activePriorityFilter;
+        if (filterClear) {
+            if (hasFilter) {
+                filterClear.removeAttribute('hidden');
+            } else {
+                filterClear.setAttribute('hidden', '');
+            }
+        }
+    }
+
+    function updateEmptyStates(bugsVisible, featuresVisible, totalVisible) {
+        // Alle panel
+        var allePanel = document.getElementById('bv-rm-tabpanel-alle');
+        if (allePanel) {
+            var emptyAlle  = allePanel.querySelector('.bv-rm-empty-state');
+            var cardsAlle  = allePanel.querySelector('.bv-rm-cards');
+            var filterMsgAlle = allePanel.querySelector('.bv-rm-filter-empty');
+            var hasAnyCards = cardsAlle && cardsAlle.querySelectorAll('.bv-rm-card[data-item-id]').length > 0;
+            if (hasAnyCards) {
+                if (totalVisible === 0) {
+                    if (cardsAlle) cardsAlle.style.display = 'none';
+                    if (!filterMsgAlle) {
+                        filterMsgAlle = createFilterEmptyMsg();
+                        allePanel.appendChild(filterMsgAlle);
+                    } else { filterMsgAlle.style.display = ''; }
+                } else {
+                    if (cardsAlle) cardsAlle.style.display = '';
+                    if (filterMsgAlle) filterMsgAlle.style.display = 'none';
+                }
+            }
+        }
+
+        // Fejl panel
+        var fejlPanel = document.getElementById('bv-rm-tabpanel-fejl');
+        if (fejlPanel) {
+            var emptyFejl  = fejlPanel.querySelector('.bv-rm-empty-state');
+            var cardsFejl  = fejlPanel.querySelector('.bv-rm-cards');
+            var filterMsgFejl = fejlPanel.querySelector('.bv-rm-filter-empty');
+            var hasAnyBugCards = cardsFejl && cardsFejl.querySelectorAll('.bv-rm-card[data-item-id]').length > 0;
+            if (hasAnyBugCards) {
+                if (bugsVisible === 0) {
+                    if (cardsFejl) cardsFejl.style.display = 'none';
+                    if (!filterMsgFejl) {
+                        filterMsgFejl = createFilterEmptyMsg();
+                        fejlPanel.appendChild(filterMsgFejl);
+                    } else { filterMsgFejl.style.display = ''; }
+                } else {
+                    if (cardsFejl) cardsFejl.style.display = '';
+                    if (filterMsgFejl) filterMsgFejl.style.display = 'none';
+                }
+            }
+        }
+
+        // Feature panel
+        var featPanel = document.getElementById('bv-rm-tabpanel-feature-forslag');
+        if (featPanel) {
+            var emptyFeat  = featPanel.querySelector('.bv-rm-empty-state');
+            var cardsFeat  = featPanel.querySelector('.bv-rm-cards');
+            var filterMsgFeat = featPanel.querySelector('.bv-rm-filter-empty');
+            var hasAnyFeatCards = cardsFeat && cardsFeat.querySelectorAll('.bv-rm-card[data-item-id]').length > 0;
+            if (hasAnyFeatCards) {
+                if (featuresVisible === 0) {
+                    if (cardsFeat) cardsFeat.style.display = 'none';
+                    if (!filterMsgFeat) {
+                        filterMsgFeat = createFilterEmptyMsg();
+                        featPanel.appendChild(filterMsgFeat);
+                    } else { filterMsgFeat.style.display = ''; }
+                } else {
+                    if (cardsFeat) cardsFeat.style.display = '';
+                    if (filterMsgFeat) filterMsgFeat.style.display = 'none';
+                }
+            }
+        }
+    }
+
+    function createFilterEmptyMsg() {
+        var el = document.createElement('div');
+        el.className = 'bv-rm-empty-state bv-rm-filter-empty';
+        el.innerHTML =
+            '<span class="material-symbols-outlined bv-rm-empty-state__icon" aria-hidden="true">filter_alt_off</span>' +
+            '<h2 class="bv-rm-empty-state__title">Ingen emner matcher filteret</h2>' +
+            '<p class="bv-rm-empty-state__text">Prøv at vælge et andet filter eller nulstil for at se alle emner.</p>';
+        return el;
+    }
+
+    // Apply initial state: hide solved cards
+    (function initSolvedState() {
+        var solvedCards = getAllCards().filter(function (c) {
+            return (c.dataset.itemStatus || '') === 'loest';
+        });
+
+        // Count unique solved items (deduplicate across Alle + type panels)
+        var seenSolvedIds = {};
+        var solvedCount = 0;
+        solvedCards.forEach(function (c) {
+            var id = c.dataset.itemId || '';
+            if (id && !seenSolvedIds[id]) {
+                seenSolvedIds[id] = true;
+                solvedCount++;
+            }
+        });
+
+        // Hide all solved card elements initially
+        solvedCards.forEach(function (c) { c.style.display = 'none'; });
+
+        // Update toggle button label
+        if (showSolvedBtn && solvedCount > 0) {
+            if (solvedCountEl) solvedCountEl.textContent = '(' + solvedCount + ')';
+        } else if (showSolvedBtn) {
+            // No solved items — hide toggle
+            showSolvedBtn.style.display = 'none';
+        }
+
+        // Update initial tab counts (without solved)
+        updateTabCounts();
+    }());
+
+    // "Vis løste" toggle click
+    if (showSolvedBtn) {
+        showSolvedBtn.addEventListener('click', function () {
+            showSolved = !showSolved;
+            showSolvedBtn.setAttribute('aria-pressed', showSolved ? 'true' : 'false');
+            showSolvedBtn.classList.toggle('is-active', showSolved);
+            updateTabCounts();
+        });
+    }
+
+    // Filter change handlers
+    if (filterStatus) {
+        filterStatus.addEventListener('change', function () { updateTabCounts(); });
+    }
+    if (filterPriority) {
+        filterPriority.addEventListener('change', function () { updateTabCounts(); });
+    }
+
+    // Clear filters
+    if (filterClear) {
+        filterClear.addEventListener('click', function () {
+            if (filterStatus)   filterStatus.value   = '';
+            if (filterPriority) filterPriority.value = '';
+            updateTabCounts();
+        });
+    }
+
+    /* ── Anchor deep-link: scroll to card on page load if URL has fragment ── */
+    (function () {
+        var hash = window.location.hash;
+        if (!hash) return;
+        var id = hash.slice(1);
+        var target = document.getElementById(id);
+        if (!target) return;
+
+        // Make sure solved card is visible
+        if ((target.dataset.itemStatus || '') === 'loest') {
+            showSolved = true;
+            if (showSolvedBtn) {
+                showSolvedBtn.setAttribute('aria-pressed', 'true');
+                showSolvedBtn.classList.add('is-active');
+            }
+            updateTabCounts();
+        }
+
+        // Switch to the correct tab
+        var itemType = target.dataset.itemType || '';
+        var targetTabId = itemType === 'bug' ? 'bv-rm-tab-fejl' : (itemType === 'feature' ? 'bv-rm-tab-feature-forslag' : null);
+        if (targetTabId) {
+            var targetTab = document.getElementById(targetTabId);
+            if (targetTab) targetTab.click();
+        }
+
+        setTimeout(function () {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            target.classList.add('bv-rm-card--highlighted');
+            setTimeout(function () { target.classList.remove('bv-rm-card--highlighted'); }, 2000);
+        }, 100);
+    }());
 
 }());
 </script>
