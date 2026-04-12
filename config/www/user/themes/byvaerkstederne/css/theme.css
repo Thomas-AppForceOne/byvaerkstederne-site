@@ -18,6 +18,7 @@
     --on-secondary: #ffffff;
     --on-secondary-container: #194b86;
     --secondary-fixed: #d5e3ff;
+    --secondary-fixed-dim: #adc6f4;
 
     /* Tertiary: Creative Fitness / Terracotta */
     --tertiary: #712800;
@@ -45,7 +46,7 @@
     --on-surface-variant: #42474a;
 
     /* Outline */
-    --outline: #73787b;
+    --outline: #6e7477;
     --outline-variant: #c2c7ca;
 
     /* Error */

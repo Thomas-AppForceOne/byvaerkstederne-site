@@ -57,6 +57,12 @@ class BugReportPlugin extends Plugin
             return;
         }
 
+        // Handle admin image serving endpoint
+        if (str_starts_with($path, '/admin/bug-report-image') && ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
+            $this->handleImageServe();
+            return;
+        }
+
         // Register Twig variables for frontend
         if (!$this->isAdmin()) {
             $this->enable([
@@ -391,6 +397,60 @@ class BugReportPlugin extends Plugin
 
         $yaml = \Symfony\Component\Yaml\Yaml::dump($existing, 6, 2);
         return file_put_contents($dataFile, $yaml) !== false;
+    }
+
+    /**
+     * Serve a bug-report image to authenticated admins only.
+     * Route: GET /admin/bug-report-image?file=<randomname.ext>
+     */
+    private function handleImageServe(): never
+    {
+        // Must be authenticated admin
+        $user = $this->grav['user'] ?? null;
+        if (!$user || !$user->authenticated || !$user->authorize('admin.super')) {
+            http_response_code(403);
+            echo 'Adgang nægtet.';
+            exit;
+        }
+
+        $file = $_GET['file'] ?? '';
+        // Sanitise: allow only basename with safe characters (hex + dot + extension)
+        $file = basename($file);
+        if (!preg_match('/^[0-9a-f]{32}\.(jpg|jpeg|png|gif|webp)$/i', $file)) {
+            http_response_code(400);
+            echo 'Ugyldig filnavn.';
+            exit;
+        }
+
+        $storageDir = $this->grav['locator']->findResource(
+            $this->config->get('plugins.bug-report.image_storage', 'user://data/bug-report-images'),
+            true,
+            true
+        );
+
+        $filePath = $storageDir . '/' . $file;
+        if (!file_exists($filePath)) {
+            http_response_code(404);
+            echo 'Billede ikke fundet.';
+            exit;
+        }
+
+        // Detect MIME type via magic bytes before serving
+        $mime = $this->detectMimeType($filePath);
+        if (!$mime || !isset(self::ALLOWED_MIME[$mime])) {
+            http_response_code(400);
+            echo 'Ugyldig filtype.';
+            exit;
+        }
+
+        $size = filesize($filePath);
+        header('Content-Type: ' . $mime);
+        header('Content-Length: ' . $size);
+        header('Content-Disposition: inline; filename="' . $file . '"');
+        header('Cache-Control: private, no-store');
+        header('X-Content-Type-Options: nosniff');
+        readfile($filePath);
+        exit;
     }
 
     /**
