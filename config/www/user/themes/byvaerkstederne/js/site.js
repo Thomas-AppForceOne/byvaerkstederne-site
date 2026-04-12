@@ -101,6 +101,14 @@ var bvBugReport = (function() {
         if (lbl) lbl.textContent = text;
     }
 
+    function generateToken() {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            return crypto.randomUUID();
+        }
+        // Fallback for older browsers
+        return 'tok_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
+
     function populateContext() {
         // Page URL
         var urlInput   = document.getElementById('bv-bug-report-page-url');
@@ -115,6 +123,10 @@ var bvBugReport = (function() {
         var ua = (navigator.userAgent && navigator.userAgent.trim() !== '') ? navigator.userAgent : 'Unknown';
         if (uaInput)   uaInput.value = ua;
         if (uaDisplay) uaDisplay.textContent = ua;
+
+        // Fresh one-time submission token (prevents double-submit / retry creating duplicates)
+        var tokenInput = document.getElementById('bv-bug-report-submission-token');
+        if (tokenInput) tokenInput.value = generateToken();
     }
 
     function open() {
@@ -301,7 +313,10 @@ var bvBugReport = (function() {
                 // Success: close overlay, reset form, show toast confirmation
                 close();
                 resetForm();
-                showConfirmation(result.data.message || 'Tak! Din fejlrapport er modtaget.');
+                var displayId   = result.data.display_id || '';
+                var roadmapUrl  = result.data.roadmap_url || '/roadmap';
+                var baseMessage = result.data.message || ('Tak! Din fejlrapport er nu live på roadmappet.');
+                showConfirmation(baseMessage, roadmapUrl, displayId);
             } else {
                 var errMsg = result.data.error || 'Indsendelsen mislykkedes. Prøv igen.';
                 showMessage(errMsg, 'error');
@@ -323,12 +338,17 @@ var bvBugReport = (function() {
         });
     }
 
-    function showConfirmation(message) {
+    function showConfirmation(message, roadmapUrl, displayId) {
         var toast = document.createElement('div');
         toast.className = 'bv-bug-report-toast';
         toast.setAttribute('role', 'status');
         toast.setAttribute('aria-live', 'polite');
-        toast.textContent = message;
+        // Build HTML: message text + optional roadmap link
+        var html = '<span>' + message.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>';
+        if (roadmapUrl) {
+            html += ' <a href="' + roadmapUrl + '" style="color:inherit;text-decoration:underline;margin-left:0.25em;">Se på roadmap</a>';
+        }
+        toast.innerHTML = html;
         toast.style.cssText = [
             'position:fixed',
             'bottom:5rem',

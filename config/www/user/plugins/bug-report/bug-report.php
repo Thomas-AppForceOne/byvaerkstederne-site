@@ -51,8 +51,8 @@ class BugReportPlugin extends Plugin
             return; // handleSubmission calls $this->grav->close()
         }
 
-        // Handle admin promote-to-roadmap action
-        if ($path === '/admin/bug-report-promote' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+        // Handle admin promote-to-roadmap action (both legacy path and canonical path)
+        if (($path === '/bug-report/promote' || $path === '/admin/bug-report-promote') && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $this->handlePromote();
             return;
         }
@@ -96,6 +96,19 @@ class BugReportPlugin extends Plugin
         $nonce = $_POST['bug_report_nonce'] ?? '';
         if (!Utils::verifyNonce($nonce, 'bug-report-form')) {
             $this->sendJson(['error' => 'Ugyldig formular-token. Genindlæs siden og prøv igen.'], 403);
+        }
+
+        // Duplicate-submission guard: each form render includes a unique one-time token.
+        // If the same token is received twice (double-click / network retry), return 409.
+        $submissionToken = trim($_POST['submission_token'] ?? '');
+        if ($submissionToken !== '') {
+            if ($this->isSubmissionTokenUsed($submissionToken)) {
+                $this->sendJson([
+                    'error'     => 'Duplikat indsendelse: denne rapport er allerede registreret.',
+                    'duplicate' => true,
+                ], 409);
+            }
+            $this->markSubmissionTokenUsed($submissionToken);
         }
 
         // Validate required fields
@@ -186,7 +199,9 @@ class BugReportPlugin extends Plugin
 
         ['display_id' => $displayId] = $roadmapResult;
 
-        // Now build and save the bug report record (with promoted: true and roadmap_id set at creation)
+        // Now build and save the bug report record.
+        // roadmap_id is set to the human-readable display_id (e.g. #B003).
+        // promoted_item_id retains the internal rm_xxx storage key for cross-reference.
         $record = [
             'username'           => $usernameSanitized,
             'timestamp'          => $timestamp,
@@ -198,7 +213,8 @@ class BugReportPlugin extends Plugin
             'image_path'         => $imagePath,
             'promoted'           => true,
             'promoted_item_id'   => $roadmapId,
-            'roadmap_id'         => $roadmapId,
+            'roadmap_id'         => $displayId,
+            'display_id'         => $displayId,
             'title'              => mb_substr($descSanitized, 0, 80),
         ];
 
@@ -209,7 +225,18 @@ class BugReportPlugin extends Plugin
             $this->sendJson(['error' => 'Serverfejl: Kunne ikke gemme rapporten. Prøv igen.'], 500);
         }
 
-        $this->sendJson(['success' => true, 'id' => $id, 'roadmap_id' => $roadmapId, 'display_id' => $displayId]);
+        // Build roadmap anchor URL (display_id lowercased, # stripped → fragment)
+        $fragment   = strtolower(ltrim($displayId, '#'));
+        $roadmapUrl = '/roadmap#' . $fragment;
+
+        $this->sendJson([
+            'success'     => true,
+            'id'          => $id,
+            'roadmap_id'  => $roadmapId,
+            'display_id'  => $displayId,
+            'roadmap_url' => $roadmapUrl,
+            'message'     => "Din fejlrapport ({$displayId}) er nu live på roadmappet.",
+        ]);
     }
 
     /**
@@ -661,6 +688,61 @@ class BugReportPlugin extends Plugin
         header('X-Content-Type-Options: nosniff');
         readfile($filePath);
         exit;
+    }
+
+    /**
+     * Check whether a submission token has already been used (duplicate-submission guard).
+     * Tokens are stored in a small YAML file with timestamps; entries older than 5 minutes
+     * are pruned on each check to prevent unbounded growth.
+     */
+    private function isSubmissionTokenUsed(string $token): bool
+    {
+        $file = $this->getTokenStorePath();
+        if (!file_exists($file)) {
+            return false;
+        }
+        $tokens = \Symfony\Component\Yaml\Yaml::parseFile($file) ?: [];
+        $now    = time();
+        foreach ($tokens as $t => $ts) {
+            if ($t === $token && ($now - (int)$ts) < 300) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Mark a submission token as used (write timestamp to the token store).
+     * Prunes tokens older than 5 minutes.
+     */
+    private function markSubmissionTokenUsed(string $token): void
+    {
+        $file   = $this->getTokenStorePath();
+        $tokens = file_exists($file) ? (\Symfony\Component\Yaml\Yaml::parseFile($file) ?: []) : [];
+        $now    = time();
+
+        // Prune expired tokens
+        foreach ($tokens as $t => $ts) {
+            if (($now - (int)$ts) >= 300) {
+                unset($tokens[$t]);
+            }
+        }
+
+        $tokens[$token] = $now;
+        $yaml = \Symfony\Component\Yaml\Yaml::dump($tokens, 2, 2);
+        file_put_contents($file, $yaml, LOCK_EX);
+    }
+
+    /**
+     * Returns the path to the shared submission-token store file.
+     */
+    private function getTokenStorePath(): string
+    {
+        $dataDir = $this->grav['locator']->findResource('user-data://flex-objects', true, true);
+        if (!is_dir($dataDir)) {
+            mkdir($dataDir, 0750, true);
+        }
+        return $dataDir . '/submission-tokens.yaml';
     }
 
     /**

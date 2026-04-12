@@ -74,6 +74,19 @@ class FeatureSuggestionPlugin extends Plugin
             return;
         }
 
+        // Duplicate-submission guard: one-time token prevents double-submit / network retry.
+        $submissionToken = trim($_POST['submission_token'] ?? '');
+        if ($submissionToken !== '') {
+            if ($this->isSubmissionTokenUsed($submissionToken)) {
+                $this->jsonResponse(409, [
+                    'error'     => 'Duplikat indsendelse: dette forslag er allerede registreret.',
+                    'duplicate' => true,
+                ]);
+                return;
+            }
+            $this->markSubmissionTokenUsed($submissionToken);
+        }
+
         // Validate required fields (server-side — independent of client validation)
         $title          = trim($_POST['fs_title'] ?? '');
         $description    = trim($_POST['fs_description'] ?? '');
@@ -140,7 +153,9 @@ class FeatureSuggestionPlugin extends Plugin
 
         $displayId = $roadmapResult['display_id'];
 
-        // Build feature suggestion record with status: approved and roadmap_id set at creation
+        // Build feature suggestion record with status: approved and roadmap_id set at creation.
+        // roadmap_id is the human-readable display_id (e.g. #F003); the internal rm_xxx key
+        // is available on the roadmap item itself via source_suggestion_id cross-reference.
         $record = [
             'username'        => $username,
             'created_at'      => $timestamp,
@@ -148,7 +163,8 @@ class FeatureSuggestionPlugin extends Plugin
             'description'     => $description,
             'community_value' => $communityValue,
             'status'          => 'approved',
-            'roadmap_id'      => $roadmapId,
+            'roadmap_id'      => $displayId,
+            'display_id'      => $displayId,
         ];
 
         // Persist suggestion to YAML data file
@@ -160,11 +176,16 @@ class FeatureSuggestionPlugin extends Plugin
             return;
         }
 
+        // Build roadmap anchor URL: display_id lowercased, # stripped → fragment
+        $fragment   = strtolower(ltrim($displayId, '#'));
+        $roadmapUrl = '/roadmap#' . $fragment;
+
         $this->jsonResponse(200, [
-            'success'    => true,
-            'message'    => 'Tak! Dit forslag er nu publiceret på roadmap.',
-            'roadmap_id' => $roadmapId,
-            'display_id' => $displayId,
+            'success'     => true,
+            'message'     => "Dit forslag ({$displayId}) er nu live på roadmappet.",
+            'roadmap_id'  => $roadmapId,
+            'display_id'  => $displayId,
+            'roadmap_url' => $roadmapUrl,
         ]);
     }
 
@@ -530,6 +551,57 @@ class FeatureSuggestionPlugin extends Plugin
     {
         $yaml = \Symfony\Component\Yaml\Yaml::dump($data, 6, 2, \Symfony\Component\Yaml\Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK);
         return file_put_contents($path, $yaml) !== false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Duplicate-Submission Token Helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Check whether a submission token has already been used.
+     * Tokens are stored in a shared YAML file; entries older than 5 minutes are ignored.
+     */
+    private function isSubmissionTokenUsed(string $token): bool
+    {
+        $file = $this->getTokenStorePath();
+        if (!file_exists($file)) {
+            return false;
+        }
+        $tokens = $this->loadYaml($file);
+        $now    = time();
+        return isset($tokens[$token]) && ($now - (int)$tokens[$token]) < 300;
+    }
+
+    /**
+     * Mark a submission token as used, pruning tokens older than 5 minutes.
+     */
+    private function markSubmissionTokenUsed(string $token): void
+    {
+        $file   = $this->getTokenStorePath();
+        $tokens = file_exists($file) ? $this->loadYaml($file) : [];
+        $now    = time();
+
+        // Prune expired tokens
+        foreach ($tokens as $t => $ts) {
+            if (($now - (int)$ts) >= 300) {
+                unset($tokens[$t]);
+            }
+        }
+
+        $tokens[$token] = $now;
+        $this->saveYaml($file, $tokens);
+    }
+
+    /**
+     * Returns the path to the shared submission-token store file.
+     */
+    private function getTokenStorePath(): string
+    {
+        $dir = GRAV_ROOT . '/user/data/flex-objects';
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+        return $dir . '/submission-tokens.yaml';
     }
 
     // -------------------------------------------------------------------------

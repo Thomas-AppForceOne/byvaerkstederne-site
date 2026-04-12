@@ -1,0 +1,334 @@
+{% extends 'partials/base.html.twig' %}
+
+{% block body %}
+<section class="bv-section bv-fs-page">
+    <div class="bv-container">
+
+        {# Page headline #}
+        <div class="bv-fs-hero">
+            <span class="bv-fs-hero__eyebrow">Byg fremtiden for foreningens digitale hjem</span>
+            <h1 class="bv-headline bv-fs-hero__title">
+                Forsl&aring; ny <span style="color: var(--secondary);">Feature</span>
+            </h1>
+            <div class="bv-fs-hero__divider" aria-hidden="true"></div>
+            <p class="bv-body-lg bv-fs-hero__lead">
+                Har du en id&eacute; til hvordan vi kan g&oslash;re vores digitale v&aelig;rksted bedre?
+                Udfyld formularen herunder. Vi bygger f&aelig;llesskabet sammen.
+            </p>
+        </div>
+
+        {# Two-column layout: sidebar + form #}
+        <div class="bv-fs-layout">
+
+            {# Guidelines sidebar — always visible #}
+            <aside class="bv-fs-sidebar" aria-label="Retningslinjer for forslag">
+                <h2 class="bv-fs-sidebar__heading">Retningslinjer</h2>
+
+                <ul class="bv-fs-sidebar__list" role="list">
+                    <li class="bv-fs-sidebar__item">
+                        <span class="bv-fs-sidebar__num" aria-hidden="true">01</span>
+                        <div>
+                            <strong class="bv-fs-sidebar__principle">V&aelig;r specifik.</strong>
+                            <p class="bv-fs-sidebar__text">
+                                Beskriv hvad du vil have til at ske, ikke bare et vagt ønske.
+                                Jo mere detaljeret din beskrivelse er, jo lettere er det at forstå visionen.
+                            </p>
+                        </div>
+                    </li>
+                    <li class="bv-fs-sidebar__item">
+                        <span class="bv-fs-sidebar__num" aria-hidden="true">02</span>
+                        <div>
+                            <strong class="bv-fs-sidebar__principle">F&aelig;llesskab f&oslash;rst.</strong>
+                            <p class="bv-fs-sidebar__text">
+                                Forslag der gavner mange medlemmer f&aring;r prioritet.
+                                T&aelig;nk over hvordan din id&eacute; gavner flest mulige.
+                            </p>
+                        </div>
+                    </li>
+                    <li class="bv-fs-sidebar__item">
+                        <span class="bv-fs-sidebar__num" aria-hidden="true">03</span>
+                        <div>
+                            <strong class="bv-fs-sidebar__principle">Stem p&aring; andre.</strong>
+                            <p class="bv-fs-sidebar__text">
+                                Tjek <a href="/roadmap" class="bv-fs-sidebar__link">roadmappet</a> — hvis en id&eacute; allerede eksisterer, st&eacute;m p&aring; den i stedet for at duplikere den.
+                            </p>
+                        </div>
+                    </li>
+                </ul>
+            </aside>
+
+            {# Form area — conditional on auth state #}
+            <div class="bv-fs-form-area">
+
+                {% if grav.user.authenticated and grav.user.authorized %}
+
+                    {# Generate CSRF nonce #}
+                    {% set fs_nonce = nonce_field('feature-suggestion-form', 'fs_nonce') %}
+
+                    {# Success / error message area #}
+                    <div id="bv-fs-message" class="bv-fs-message" aria-live="polite" style="display:none;"></div>
+
+                    {# The suggestion form #}
+                    <form
+                        id="bv-fs-form"
+                        class="bv-fs-form"
+                        novalidate>
+
+                        {{ fs_nonce|raw }}
+                        <input type="hidden" name="submission_token" id="bv-fs-submission-token" value="">
+
+                        {# Field: Title #}
+                        <div class="bv-fs-field">
+                            <label class="bv-fs-label" for="bv-fs-title">
+                                Hvad er din id&eacute;?
+                                <span class="bv-fs-required" aria-label="påkrævet">*</span>
+                            </label>
+                            <input
+                                type="text"
+                                id="bv-fs-title"
+                                name="fs_title"
+                                class="bv-input bv-fs-title-input"
+                                placeholder="Kort og præcis overskrift..."
+                                required
+                                aria-required="true"
+                                aria-describedby="bv-fs-title-error"/>
+                            <div id="bv-fs-title-error" class="bv-fs-field-error" role="alert" aria-live="polite"></div>
+                        </div>
+
+                        {# Field: Description #}
+                        <div class="bv-fs-field">
+                            <label class="bv-fs-label" for="bv-fs-description">
+                                Beskrivelse af id&eacute;en
+                                <span class="bv-fs-required" aria-label="påkrævet">*</span>
+                            </label>
+                            <textarea
+                                id="bv-fs-description"
+                                name="fs_description"
+                                class="bv-input bv-textarea bv-fs-textarea"
+                                placeholder="Giv os detaljerne om hvordan det skal fungere..."
+                                rows="5"
+                                required
+                                aria-required="true"
+                                aria-describedby="bv-fs-description-error"></textarea>
+                            <div id="bv-fs-description-error" class="bv-fs-field-error" role="alert" aria-live="polite"></div>
+                        </div>
+
+                        {# Field: Community Value #}
+                        <div class="bv-fs-field">
+                            <label class="bv-fs-label" for="bv-fs-community-value">
+                                V&aelig;rdi for f&aelig;llesskabet
+                                <span class="bv-fs-required" aria-label="påkrævet">*</span>
+                            </label>
+                            <textarea
+                                id="bv-fs-community-value"
+                                name="fs_community_value"
+                                class="bv-input bv-textarea bv-fs-textarea bv-fs-textarea--sm"
+                                placeholder="Hvorfor er dette vigtigt for Byværkstederne?"
+                                rows="3"
+                                required
+                                aria-required="true"
+                                aria-describedby="bv-fs-community-value-error"></textarea>
+                            <div id="bv-fs-community-value-error" class="bv-fs-field-error" role="alert" aria-live="polite"></div>
+                        </div>
+
+                        {# Submit row #}
+                        <div class="bv-fs-submit-row">
+                            <div class="bv-fs-submit-info">
+                                <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                                <span>Dit forslag publiceres øjeblikkeligt p&aring; <a href="/roadmap" class="bv-fs-sidebar__link">roadmappet</a></span>
+                            </div>
+                            <button
+                                type="button"
+                                id="bv-fs-submit-btn"
+                                class="bv-btn bv-btn--primary bv-fs-submit-btn">
+                                Indsend forslag
+                                <span class="material-symbols-outlined" aria-hidden="true" style="font-size: 1.125rem;">arrow_forward</span>
+                            </button>
+                        </div>
+                    </form>
+
+                {% else %}
+
+                    {# Unauthenticated: login prompt — NO form fields rendered #}
+                    <div class="bv-fs-login-prompt">
+                        <div class="bv-fs-login-prompt__icon">
+                            <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+                        </div>
+                        <h2 class="bv-fs-login-prompt__title">Log ind for at indsende forslag</h2>
+                        <p class="bv-fs-login-prompt__text">
+                            Kun medlemmer kan indsende feature-forslag.
+                            Log ind med din konto for at komme i gang.
+                        </p>
+                        <button
+                            type="button"
+                            class="bv-btn bv-btn--primary"
+                            onclick="document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;">
+                            Log ind
+                        </button>
+                        <p class="bv-fs-login-prompt__register">
+                            Ikke medlem endnu?
+                            <a href="/opret-medlemskab?redirect=/foreslaa-feature" class="bv-fs-login-prompt__link">Bliv medlem</a>
+                        </p>
+                    </div>
+
+                {% endif %}
+
+            </div>{# /.bv-fs-form-area #}
+        </div>{# /.bv-fs-layout #}
+
+    </div>{# /.bv-container #}
+</section>
+{% endblock %}
+
+{% block bottom %}
+{% if grav.user.authenticated and grav.user.authorized %}
+<script>
+(function() {
+    'use strict';
+
+    var form        = document.getElementById('bv-fs-form');
+    var submitBtn   = document.getElementById('bv-fs-submit-btn');
+    var messageEl   = document.getElementById('bv-fs-message');
+
+    if (!form || !submitBtn) return;
+
+    // Generate a fresh one-time submission token on page load
+    (function() {
+        var tokenInput = document.getElementById('bv-fs-submission-token');
+        if (!tokenInput) return;
+        var token = (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : 'tok_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        tokenInput.value = token;
+    }());
+
+    function getField(id) { return document.getElementById(id); }
+
+    function showFieldError(errorId, msg) {
+        var el = document.getElementById(errorId);
+        if (el) el.textContent = msg;
+    }
+
+    function clearFieldErrors() {
+        ['bv-fs-title-error', 'bv-fs-description-error', 'bv-fs-community-value-error'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.textContent = '';
+        });
+    }
+
+    function showMessage(text, type) {
+        if (!messageEl) return;
+        if (!text) { messageEl.style.display = 'none'; messageEl.textContent = ''; return; }
+        messageEl.className = 'bv-fs-message bv-fs-message--' + type;
+        messageEl.textContent = text;
+        messageEl.style.display = '';
+        messageEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function setSubmitting(busy) {
+        if (!submitBtn) return;
+        submitBtn.disabled = busy;
+        if (busy) {
+            submitBtn.textContent = 'Sender...';
+        } else {
+            submitBtn.innerHTML = 'Indsend forslag <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.125rem;">arrow_forward</span>';
+        }
+    }
+
+    function replaceFormWithConfirmation(msg, roadmapUrl, displayId) {
+        var formArea = form.parentNode;
+        form.style.display = 'none';
+        var conf = document.createElement('div');
+        conf.className = 'bv-fs-confirmation';
+        conf.setAttribute('role', 'status');
+        // Escape the plain message text before embedding in HTML
+        var safemsg = msg.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        var linkHtml = '';
+        if (roadmapUrl) {
+            linkHtml = '<p class="bv-fs-confirmation__text">' +
+                '<a href="' + roadmapUrl + '" class="bv-fs-sidebar__link">Se dit forslag p&aring; roadmappet &rarr;</a>' +
+                '</p>';
+        }
+        conf.innerHTML =
+            '<div class="bv-fs-confirmation__icon"><span class="material-symbols-outlined" aria-hidden="true">check_circle</span></div>' +
+            '<h2 class="bv-fs-confirmation__title">Forslag publiceret!</h2>' +
+            '<p class="bv-fs-confirmation__text">' + safemsg + '</p>' +
+            linkHtml;
+        if (messageEl) messageEl.style.display = 'none';
+        formArea.insertBefore(conf, form);
+    }
+
+    submitBtn.addEventListener('click', function() {
+        clearFieldErrors();
+        showMessage('', '');
+
+        var titleEl    = getField('bv-fs-title');
+        var descEl     = getField('bv-fs-description');
+        var valueEl    = getField('bv-fs-community-value');
+        var isValid    = true;
+
+        if (!titleEl || titleEl.value.trim() === '') {
+            showFieldError('bv-fs-title-error', 'Dette felt er påkrævet.');
+            if (titleEl && isValid) titleEl.focus();
+            isValid = false;
+        }
+        if (!descEl || descEl.value.trim() === '') {
+            showFieldError('bv-fs-description-error', 'Dette felt er påkrævet.');
+            if (descEl && isValid) descEl.focus();
+            isValid = false;
+        }
+        if (!valueEl || valueEl.value.trim() === '') {
+            showFieldError('bv-fs-community-value-error', 'Dette felt er påkrævet.');
+            if (valueEl && isValid) valueEl.focus();
+            isValid = false;
+        }
+
+        if (!isValid) return;
+
+        var formData = new FormData(form);
+
+        setSubmitting(true);
+
+        fetch('/feature-suggestion/submit', {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+        })
+        .then(function(response) {
+            return response.json().then(function(data) {
+                return { status: response.status, data: data };
+            });
+        })
+        .then(function(result) {
+            setSubmitting(false);
+            if (result.status === 200 && result.data.success) {
+                var displayId  = result.data.display_id || '';
+                var roadmapUrl = result.data.roadmap_url || '/roadmap';
+                var msg = result.data.message || ('Tak! Dit forslag er nu live p\u00e5 roadmappet.');
+                replaceFormWithConfirmation(msg, roadmapUrl, displayId);
+            } else {
+                var errMsg = result.data.error || 'Indsendelsen mislykkedes. Prøv igen.';
+                // Retain field values; show error in appropriate place
+                showMessage(errMsg, 'error');
+                if (result.data.field === 'title') {
+                    showFieldError('bv-fs-title-error', errMsg);
+                    var t = getField('bv-fs-title'); if (t) t.focus();
+                } else if (result.data.field === 'description') {
+                    showFieldError('bv-fs-description-error', errMsg);
+                    var d = getField('bv-fs-description'); if (d) d.focus();
+                } else if (result.data.field === 'community_value') {
+                    showFieldError('bv-fs-community-value-error', errMsg);
+                    var v = getField('bv-fs-community-value'); if (v) v.focus();
+                }
+            }
+        })
+        .catch(function() {
+            setSubmitting(false);
+            showMessage('Netværksfejl. Kontrollér din forbindelse og prøv igen.', 'error');
+        });
+    });
+}());
+</script>
+{% endif %}
+{% endblock %}
