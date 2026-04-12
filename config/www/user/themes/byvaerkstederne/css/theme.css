@@ -4,6 +4,9 @@
 
 /* ---------- Design Tokens ---------- */
 :root {
+    /* Status-specific tokens (roadmap badge colours not in base palette) */
+    --status-loest-bg: #1a3a2a;
+
     /* Primary: Green Community / Garden */
     --primary: #13483b;
     --primary-container: #2e6052;
@@ -2413,10 +2416,10 @@ a { color: inherit; text-decoration: none; }
 
 .bv-rm-status--rapporteret             { background: var(--surface-container-high); color: var(--on-surface); }
 .bv-rm-status--under-afklaring         { background: var(--secondary);           color: var(--on-secondary); }
-.bv-rm-status--klar-til-implementation { background: var(--tertiary-container);  color: var(--on-tertiary); }
+.bv-rm-status--klar-til-implementation { background: var(--tertiary-container);  color: var(--on-tertiary-container); }
 .bv-rm-status--under-implementation    { background: var(--primary);             color: var(--on-primary); }
 .bv-rm-status--klar-til-test           { background: var(--secondary-container); color: var(--on-secondary-container); }
-.bv-rm-status--loest                   { background: #1a3a2a;                    color: #ffffff; }
+.bv-rm-status--loest                   { background: var(--status-loest-bg);     color: var(--on-primary); }
 
 /* ── Priority badges ─────────────────────────────────────────────────────── */
 .bv-rm-priority-badge {

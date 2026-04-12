@@ -119,34 +119,44 @@
 
         {# Vote button / completion indicator (right side) #}
         <div class="bv-rm-card__vote-area">
-            {% if is_solved %}
-                {# Løst: completion indicator instead of vote count #}
-                <div class="bv-rm-card__vote-solved" aria-label="Løst: {{ vote_count }} stemmer">
-                    <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
-                    <span class="bv-rm-card__vote-count">{{ vote_count }}</span>
-                </div>
-            {% elseif is_locked %}
-                {# Locked: greyed-out, non-interactive vote display #}
-                <div
-                    class="bv-rm-card__vote-btn bv-rm-card__vote-btn--locked"
-                    aria-disabled="true"
-                    aria-label="Stemmeafgivelse er låst ({{ vote_count }} stemmer)">
-                    <span class="material-symbols-outlined" aria-hidden="true">star</span>
-                    <span class="bv-rm-card__vote-count">{{ vote_count }}</span>
-                </div>
-            {% elseif is_auth %}
-                {# Authenticated: interactive star/vote button with Stem label #}
-                {% set no_budget = (budget <= 0) and not user_voted %}
-                <button
-                    type="button"
-                    class="bv-rm-card__vote-btn{% if user_voted %} is-voted{% endif %}"
-                    data-action="{{ user_voted ? 'remove' : 'add' }}"
-                    aria-label="{{ user_voted ? 'Fjern din stemme (' ~ vote_count ~ ' stemmer)' : 'Stem (' ~ vote_count ~ ' stemmer)' }}"
-                    {% if no_budget and not user_voted %}aria-disabled="true"{% endif %}>
-                    <span class="material-symbols-outlined" aria-hidden="true">star</span>
-                    <span class="bv-rm-card__vote-count">{{ vote_count }}</span>
-                    <span class="bv-rm-card__vote-label">Stem</span>
-                </button>
+            {% if is_auth %}
+                {# Authenticated: always render a <button> element; disable if locked/solved #}
+                {% if is_solved %}
+                    {# Løst: disabled button with completion indicator #}
+                    <button
+                        type="button"
+                        class="bv-rm-card__vote-btn bv-rm-card__vote-btn--solved"
+                        disabled
+                        aria-label="Løst: {{ vote_count }} stemmer — stemmeafgivelse er afsluttet">
+                        <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
+                        <span class="bv-rm-card__vote-count">{{ vote_count }}</span>
+                        <span class="bv-rm-card__vote-label">Stem</span>
+                    </button>
+                {% elseif is_locked %}
+                    {# Locked: disabled Stem button showing count #}
+                    <button
+                        type="button"
+                        class="bv-rm-card__vote-btn bv-rm-card__vote-btn--locked"
+                        disabled
+                        aria-label="Stemmeafgivelse er låst ({{ vote_count }} stemmer)">
+                        <span class="material-symbols-outlined" aria-hidden="true">star</span>
+                        <span class="bv-rm-card__vote-count">{{ vote_count }}</span>
+                        <span class="bv-rm-card__vote-label">Stem</span>
+                    </button>
+                {% else %}
+                    {# Active: interactive Stem button #}
+                    {% set no_budget = (budget <= 0) and not user_voted %}
+                    <button
+                        type="button"
+                        class="bv-rm-card__vote-btn{% if user_voted %} is-voted{% endif %}"
+                        data-action="{{ user_voted ? 'remove' : 'add' }}"
+                        aria-label="{{ user_voted ? 'Fjern din stemme (' ~ vote_count ~ ' stemmer)' : 'Stem (' ~ vote_count ~ ' stemmer)' }}"
+                        {% if no_budget and not user_voted %}aria-disabled="true"{% endif %}>
+                        <span class="material-symbols-outlined" aria-hidden="true">star</span>
+                        <span class="bv-rm-card__vote-count">{{ vote_count }}</span>
+                        <span class="bv-rm-card__vote-label">Stem</span>
+                    </button>
+                {% endif %}
             {% else %}
                 {# Unauthenticated: show count, non-interactive #}
                 <div class="bv-rm-card__vote-btn bv-rm-card__vote-btn--unauth" aria-label="{{ vote_count }} stemmer">
