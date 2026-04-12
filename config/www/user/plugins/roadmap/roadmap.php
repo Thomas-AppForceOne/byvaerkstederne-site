@@ -179,19 +179,32 @@ class RoadmapPlugin extends Plugin
             }
         }
 
-        // Sort by timestamp descending (newest first)
-        uasort($bugs, static function ($a, $b) {
-            return strcmp($b['timestamp'] ?? '', $a['timestamp'] ?? '');
-        });
-        uasort($features, static function ($a, $b) {
-            return strcmp($b['timestamp'] ?? '', $a['timestamp'] ?? '');
-        });
+        // Status pipeline sort order: rapporteret first, loest last
+        $statusOrder = [
+            'rapporteret'             => 0,
+            'under_afklaring'         => 1,
+            'klar_til_implementation' => 2,
+            'under_implementation'    => 3,
+            'klar_til_test'           => 4,
+            'loest'                   => 5,
+        ];
 
-        // Build combined all-items list sorted by timestamp descending
-        $allPublished = array_merge($bugs, $features);
-        uasort($allPublished, static function ($a, $b) {
+        $pipelineSort = static function ($a, $b) use ($statusOrder) {
+            $orderA = $statusOrder[$a['status'] ?? ''] ?? 99;
+            $orderB = $statusOrder[$b['status'] ?? ''] ?? 99;
+            if ($orderA !== $orderB) {
+                return $orderA - $orderB;
+            }
+            // Secondary sort: newest first within same status
             return strcmp($b['timestamp'] ?? '', $a['timestamp'] ?? '');
-        });
+        };
+
+        uasort($bugs, $pipelineSort);
+        uasort($features, $pipelineSort);
+
+        // Build combined all-items list sorted by pipeline order
+        $allPublished = array_merge($bugs, $features);
+        uasort($allPublished, $pipelineSort);
 
         // Per-user vote state
         $user              = $this->grav['user'] ?? null;
@@ -252,9 +265,8 @@ class RoadmapPlugin extends Plugin
         }
 
         $itemId = trim($_POST['item_id'] ?? '');
-        $action = trim($_POST['action'] ?? ''); // 'add' | 'remove'
 
-        if ($itemId === '' || !in_array($action, ['add', 'remove'], true)) {
+        if ($itemId === '') {
             $this->sendJson(['error' => 'Ugyldige parametre.'], 400);
         }
 
@@ -278,6 +290,11 @@ class RoadmapPlugin extends Plugin
             $this->sendJson(['error' => 'Dette element er ikke tilgængeligt.'], 403);
         }
 
+        // Votes-released lock: if admin has released votes, voting is permanently closed for this item
+        if (!empty($item['votes_released'])) {
+            $this->sendJson(['error' => 'Stemmeafgivelse er frigivet og låst for dette element.'], 423);
+        }
+
         // Safety net: auto-release votes if status is klar_til_implementation and votes haven't been released
         if ($status === self::RELEASE_STATUS && !empty($item['votes']) && empty($item['votes_released'])) {
             $items[$itemId] = $this->releaseItemVotes($item);
@@ -286,16 +303,15 @@ class RoadmapPlugin extends Plugin
             $item  = $items[$itemId];
         }
 
+        // Auto-toggle: determine action from current vote state (ignores client-supplied action)
+        $votes    = $item['votes'] ?? [];
+        $hasVoted = isset($votes[$username]);
+        $action   = $hasVoted ? 'remove' : 'add';
+
         if ($action === 'add') {
             // Rule 3: locked status check
             if (in_array($status, self::LOCKED_STATUSES, true)) {
                 $this->sendJson(['error' => 'Stemmeafgivelse er låst for dette element.'], 409);
-            }
-
-            // Rule 2: uniqueness check
-            $votes = $item['votes'] ?? [];
-            if (isset($votes[$username])) {
-                $this->sendJson(['error' => 'Du har allerede stemt på dette element.'], 409);
             }
 
             // Rule 1: budget check
@@ -310,11 +326,6 @@ class RoadmapPlugin extends Plugin
             $items[$itemId]['vote_count']               = count($items[$itemId]['votes']);
 
         } else { // remove
-            $votes = $item['votes'] ?? [];
-            if (!isset($votes[$username])) {
-                $this->sendJson(['error' => 'Du har ikke stemt på dette element.'], 409);
-            }
-
             unset($items[$itemId]['votes'][$username]);
             $items[$itemId]['vote_count'] = count($items[$itemId]['votes']);
             // vote_history is NOT modified — history is preserved
@@ -332,6 +343,7 @@ class RoadmapPlugin extends Plugin
 
         $this->sendJson([
             'success'          => true,
+            'action'           => $action,
             'vote_count'       => $newVoteCount,
             'bug_budget'       => $newBugBudget,
             'feature_budget'   => $newFeatBudget,

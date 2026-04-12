@@ -743,6 +743,7 @@
             if (starBtn) {
                 starBtn.classList.add('is-voted');
                 starBtn.setAttribute('data-action', 'remove');
+                starBtn.setAttribute('aria-pressed', 'true');
                 starBtn.setAttribute('aria-label', 'Fjern din stemme');
             }
         } else { // remove
@@ -767,6 +768,7 @@
             if (starBtn) {
                 starBtn.classList.remove('is-voted');
                 starBtn.setAttribute('data-action', 'add');
+                starBtn.setAttribute('aria-pressed', 'false');
                 starBtn.setAttribute('aria-label', 'Stem');
                 if (currentBudget <= 0) {
                     starBtn.setAttribute('aria-disabled', 'true');
@@ -1011,12 +1013,65 @@
         });
     }
 
+    /* ── Copy-link button ────────────────────────────────────────────────── */
+    document.querySelectorAll('.bv-rm-card__copy-btn[data-anchor]').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var anchor    = btn.dataset.anchor;
+            var fullUrl   = window.location.origin + '/roadmap#' + anchor;
+            var labelEl   = btn.querySelector('.bv-rm-card__copy-btn-label');
+            var iconEl    = btn.querySelector('.material-symbols-outlined');
+            var origLabel = labelEl ? labelEl.textContent : 'Kopier link';
+            var origIcon  = iconEl  ? iconEl.textContent  : 'link';
+
+            function showConfirm() {
+                btn.classList.add('bv-rm-card__copy-btn--copied');
+                if (labelEl) labelEl.textContent = 'Kopieret!';
+                if (iconEl)  iconEl.textContent  = 'check';
+                setTimeout(function () {
+                    btn.classList.remove('bv-rm-card__copy-btn--copied');
+                    if (labelEl) labelEl.textContent = origLabel;
+                    if (iconEl)  iconEl.textContent  = origIcon;
+                }, 2000);
+            }
+
+            function showError() {
+                // Fallback: select a temporary input field with the URL
+                var inp = document.createElement('input');
+                inp.value = fullUrl;
+                inp.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+                document.body.appendChild(inp);
+                inp.select();
+                inp.setSelectionRange(0, 99999);
+                try {
+                    document.execCommand('copy');
+                    showConfirm();
+                } catch (ex) {
+                    if (labelEl) labelEl.textContent = 'Kopier fejlede';
+                    setTimeout(function () { if (labelEl) labelEl.textContent = origLabel; }, 3000);
+                }
+                document.body.removeChild(inp);
+            }
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(fullUrl).then(showConfirm, showError);
+            } else {
+                showError();
+            }
+        });
+    });
+
     /* ── Anchor deep-link: scroll to card on page load if URL has fragment ── */
     (function () {
         var hash = window.location.hash;
         if (!hash) return;
-        var id = hash.slice(1);
+        // Normalise to lowercase so #B004 and #b004 both resolve to id="b004"
+        var id = hash.slice(1).toLowerCase();
         var target = document.getElementById(id);
+        // If the original fragment was uppercase, update the URL to canonical lowercase form
+        if (target && hash.slice(1) !== id) {
+            history.replaceState(null, '', '/roadmap#' + id);
+        }
         if (!target) return;
 
         // Make sure solved card is visible

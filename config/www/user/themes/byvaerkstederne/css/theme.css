@@ -3225,3 +3225,89 @@ a { color: inherit; text-decoration: none; }
         width: 100%;
     }
 }
+
+/* ── Copy-link button (Feature 8) ─────────────────────────────────────────── */
+.bv-rm-card__copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    background: none;
+    border: none;
+    padding: 0 var(--space-1);
+    cursor: pointer;
+    font-family: var(--font-body);
+    font-size: 0.75rem;
+    color: var(--outline);
+    transition: color 0.15s;
+    margin-left: auto;
+}
+.bv-rm-card__copy-btn:hover {
+    color: var(--secondary);
+}
+.bv-rm-card__copy-btn:focus-visible {
+    outline: 2px solid var(--secondary);
+    outline-offset: 2px;
+}
+.bv-rm-card__copy-btn .material-symbols-outlined {
+    font-size: 0.9rem;
+    vertical-align: middle;
+}
+.bv-rm-card__copy-btn-label {
+    font-size: 0.75rem;
+}
+.bv-rm-card__copy-btn.bv-rm-card__copy-btn--copied {
+    color: var(--primary);
+}
+
+/* ── Status step-bar (Feature 10) ────────────────────────────────────────── */
+.bv-rm-step-bar {
+    margin-top: var(--space-4);
+}
+.bv-rm-step-bar__stages {
+    display: flex;
+    gap: var(--space-1);
+    height: 4px;
+}
+.bv-rm-step-bar__step {
+    flex: 1;
+    height: 4px;
+    background: var(--outline-variant);
+    border-radius: 2px;
+}
+.bv-rm-step-bar__step--active {
+    background: var(--primary);
+}
+.bv-rm-step-bar__labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: var(--space-1);
+}
+.bv-rm-step-bar__label-start,
+.bv-rm-step-bar__label-end {
+    font-size: 0.65rem;
+    color: var(--outline);
+    font-family: var(--font-body);
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Løst: single check indicator */
+.bv-rm-step-bar--solved {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+.bv-rm-step-bar__check {
+    font-size: 1.25rem;
+    color: var(--primary);
+    font-variation-settings: 'FILL' 1;
+}
+.bv-rm-step-bar__solved-label {
+    font-size: 0.75rem;
+    font-family: var(--font-body);
+    font-weight: 700;
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}

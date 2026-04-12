@@ -39,6 +39,12 @@
 {# Display ID: use display_id if set, otherwise derive from key #}
 {% set display_id = item.display_id ?? ('#' ~ item_id|slice(-4)|upper) %}
 
+{# Anchor fragment: display_id lowercased with # stripped, e.g. #B004 → b004 #}
+{% set anchor_id = display_id|lower|replace({'#': ''}) %}
+
+{# Type label and CSS modifier #}
+{% set type_label = (item_type == 'bug') ? 'Fejl' : 'Feature' %}
+
 {# Submitter username — may be stored as submitter_username or source_username #}
 {% set submitter = item.submitter_username ?? item.source_username ?? '' %}
 
@@ -48,6 +54,7 @@
 {# Is this item locked for voting? #}
 {% set is_locked = status in ['under_implementation', 'klar_til_test', 'loest'] %}
 {% set is_solved = status == 'loest' %}
+{% set votes_released = item.votes_released is defined and item.votes_released %}
 
 {# Vote count to display #}
 {% set vote_count = item.vote_count|default(0) %}
@@ -58,10 +65,12 @@
 {% endif %}
 
 <article
+    id="{{ anchor_id }}"
     class="bv-rm-card{% if is_locked %} bv-rm-card--locked{% endif %}{% if is_solved %} bv-rm-card--solved{% endif %}"
     data-item-id="{{ item_id|e }}"
     data-item-type="{{ item_type|e }}"
     data-item-status="{{ status|e }}"
+    data-item-priority="{{ item.priority|default('middel')|e }}"
     role="listitem"
     tabindex="0"
     aria-label="{{ item.title|e }}"
@@ -71,8 +80,11 @@
         {# Card content (left side) #}
         <div class="bv-rm-card__content">
 
-            {# Meta row: priority, ID, status #}
+            {# Meta row: type, priority, ID, status #}
             <div class="bv-rm-card__meta" aria-label="Metadata">
+                <span class="bv-rm-type-badge bv-rm-type-badge--{{ item_type }}" aria-label="Type: {{ type_label }}">
+                    {{ type_label }}
+                </span>
                 <span class="bv-rm-priority-badge bv-rm-priority--{{ priority_info.css }}" aria-label="Prioritet: {{ priority_info.label }}">
                     {{ priority_info.label }}
                 </span>
@@ -99,7 +111,7 @@
             </p>
             {% endif %}
 
-            {# Footer: date + submitter #}
+            {# Footer: date + submitter + copy-link button #}
             <div class="bv-rm-card__footer">
                 {% if submission_date %}
                 <span class="bv-rm-card__date" aria-label="Indsendt {{ submission_date }}">
@@ -113,24 +125,78 @@
                     {{ submitter|e }}
                 </span>
                 {% endif %}
+                {# Copy-link button — Feature 8 #}
+                <button
+                    type="button"
+                    class="bv-rm-card__copy-btn"
+                    data-anchor="{{ anchor_id }}"
+                    aria-label="Kopier link til {{ display_id }}"
+                    title="Kopier link">
+                    <span class="material-symbols-outlined" aria-hidden="true">link</span>
+                    <span class="bv-rm-card__copy-btn-label">Kopier link</span>
+                </button>
             </div>
+
+            {# Step-bar: 6-stage pipeline progress indicator — Feature 10 #}
+            {% set stage_map = {
+                'rapporteret':             1,
+                'under_afklaring':         2,
+                'klar_til_implementation': 3,
+                'under_implementation':    4,
+                'klar_til_test':           5,
+                'loest':                   6,
+            } %}
+            {% set current_stage = stage_map[status] ?? 0 %}
+
+            {% if is_solved %}
+                {# Løst: single check indicator replaces the step-bar #}
+                <div class="bv-rm-step-bar bv-rm-step-bar--solved" role="img" aria-label="Status: Løst — alle stadier gennemført">
+                    <span class="material-symbols-outlined bv-rm-step-bar__check" aria-hidden="true">check_circle</span>
+                    <span class="bv-rm-step-bar__solved-label">Løst</span>
+                </div>
+            {% else %}
+                <div class="bv-rm-step-bar" role="img" aria-label="Pipeline-fremgang: stadie {{ current_stage }} af 6">
+                    <div class="bv-rm-step-bar__stages" aria-hidden="true">
+                        {% for stage_num in 1..6 %}
+                            <div class="bv-rm-step-bar__step{% if stage_num <= current_stage %} bv-rm-step-bar__step--active{% endif %}"></div>
+                        {% endfor %}
+                    </div>
+                    <div class="bv-rm-step-bar__labels" aria-hidden="true">
+                        <span class="bv-rm-step-bar__label-start">Rapporteret</span>
+                        <span class="bv-rm-step-bar__label-end">Løst</span>
+                    </div>
+                </div>
+            {% endif %}
 
         </div>
 
         {# Vote button / completion indicator (right side) #}
         <div class="bv-rm-card__vote-area">
             {% if is_auth %}
-                {# Authenticated: always render a <button> element; disable if locked/solved #}
+                {# Authenticated: always render a <button> element; disable if locked/solved/votes_released #}
                 {% if is_solved %}
                     {# Løst: disabled button with completion indicator #}
                     <button
                         type="button"
                         class="bv-rm-card__vote-btn bv-rm-card__vote-btn--solved"
                         disabled
+                        aria-disabled="true"
                         aria-label="Løst: {{ vote_count }} stemmer — stemmeafgivelse er afsluttet">
                         <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
                         <span class="bv-rm-card__vote-count">{{ vote_count }}</span>
                         <span class="bv-rm-card__vote-label">Stem</span>
+                    </button>
+                {% elseif votes_released %}
+                    {# Votes released by admin: permanently disabled for all users #}
+                    <button
+                        type="button"
+                        class="bv-rm-card__vote-btn bv-rm-card__vote-btn--locked"
+                        disabled
+                        aria-disabled="true"
+                        aria-label="Stemmeafgivelse er frigivet og låst ({{ vote_count }} stemmer)">
+                        <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+                        <span class="bv-rm-card__vote-count">{{ vote_count }}</span>
+                        <span class="bv-rm-card__vote-label">Låst</span>
                     </button>
                 {% elseif is_locked %}
                     {# Locked: disabled Stem button showing count #}
@@ -138,6 +204,7 @@
                         type="button"
                         class="bv-rm-card__vote-btn bv-rm-card__vote-btn--locked"
                         disabled
+                        aria-disabled="true"
                         aria-label="Stemmeafgivelse er låst ({{ vote_count }} stemmer)">
                         <span class="material-symbols-outlined" aria-hidden="true">star</span>
                         <span class="bv-rm-card__vote-count">{{ vote_count }}</span>
@@ -150,6 +217,7 @@
                         type="button"
                         class="bv-rm-card__vote-btn{% if user_voted %} is-voted{% endif %}"
                         data-action="{{ user_voted ? 'remove' : 'add' }}"
+                        aria-pressed="{{ user_voted ? 'true' : 'false' }}"
                         aria-label="{{ user_voted ? 'Fjern din stemme (' ~ vote_count ~ ' stemmer)' : 'Stem (' ~ vote_count ~ ' stemmer)' }}"
                         {% if no_budget and not user_voted %}aria-disabled="true"{% endif %}>
                         <span class="material-symbols-outlined" aria-hidden="true">star</span>
@@ -158,11 +226,16 @@
                     </button>
                 {% endif %}
             {% else %}
-                {# Unauthenticated: show count, non-interactive #}
-                <div class="bv-rm-card__vote-btn bv-rm-card__vote-btn--unauth" aria-label="{{ vote_count }} stemmer">
+                {# Unauthenticated: show count with disabled button (disabled attribute prevents AJAX calls) #}
+                <button
+                    type="button"
+                    class="bv-rm-card__vote-btn bv-rm-card__vote-btn--unauth"
+                    disabled
+                    aria-disabled="true"
+                    aria-label="{{ vote_count }} stemmer — log ind for at stemme">
                     <span class="material-symbols-outlined" aria-hidden="true">star</span>
                     <span class="bv-rm-card__vote-count">{{ vote_count }}</span>
-                </div>
+                </button>
             {% endif %}
         </div>
     </div>
@@ -174,6 +247,11 @@
             <p class="bv-rm-card__action-locked">
                 <span class="material-symbols-outlined" aria-hidden="true">lock</span>
                 Stemmeafgivelse er låst — dette emne er under arbejde eller afsluttet.
+            </p>
+        {% elseif votes_released %}
+            <p class="bv-rm-card__action-locked">
+                <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+                Stemmeafgivelse er frigivet og låst af administrator.
             </p>
         {% else %}
             {# Tilføj stemme #}
