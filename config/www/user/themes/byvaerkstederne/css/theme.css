@@ -2531,17 +2531,21 @@ a { color: inherit; text-decoration: none; }
 }
 .bv-rm-card[data-item-type="bug"]     { border-left: 4px solid var(--error); }
 .bv-rm-card[data-item-type="feature"] { border-left: 4px solid var(--secondary); }
-.bv-rm-card:hover:not(.bv-rm-card--solved) { background: var(--surface-container-low); }
+.bv-rm-card:hover:not(.bv-rm-card--solved):not(.bv-rm-card--locked) { background: var(--surface-container-low); }
 .bv-rm-card:focus-visible { outline: 3px solid var(--secondary); outline-offset: 2px; }
 
 .bv-rm-card--locked {
     background: var(--secondary-fixed);
+    cursor: default;
 }
-.bv-rm-card--locked:hover { background: var(--surface-container-low); }
 
 .bv-rm-card--solved {
     background: var(--surface-container-low);
     cursor: default;
+}
+
+.bv-rm-card.is-expanded {
+    border: 3px solid var(--primary);
 }
 
 .bv-rm-card__inner {
@@ -2578,7 +2582,7 @@ a { color: inherit; text-decoration: none; }
     word-break: break-word;
 }
 
-.bv-rm-card:hover:not(.bv-rm-card--solved) .bv-rm-card__title {
+.bv-rm-card:hover:not(.bv-rm-card--solved):not(.bv-rm-card--locked) .bv-rm-card__title {
     text-decoration: underline;
     text-decoration-thickness: 2px;
     text-underline-offset: 2px;
@@ -2633,6 +2637,12 @@ a { color: inherit; text-decoration: none; }
 .bv-rm-card__vote-btn.is-voted {
     background: var(--tertiary-fixed);
     border-color: var(--tertiary);
+}
+
+.bv-rm-card__vote-btn[aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
 }
 
 .bv-rm-card__vote-btn--locked {
@@ -2729,6 +2739,7 @@ a { color: inherit; text-decoration: none; }
 .bv-rm-vote-btn--add[aria-disabled="true"] {
     opacity: 0.45;
     cursor: not-allowed;
+    pointer-events: none;
     background: var(--surface-container-low);
     border-color: var(--outline-variant);
 }
@@ -3321,12 +3332,15 @@ a { color: inherit; text-decoration: none; }
 /* ── v7: Star budget widget ──────────────────────────────────────────────── */
 .bv-rm-star-budget {
     display: inline-flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
     border: 2px solid var(--on-surface);
     margin-top: var(--space-3);
     background: var(--surface-container-lowest);
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .bv-rm-star-budget__label {

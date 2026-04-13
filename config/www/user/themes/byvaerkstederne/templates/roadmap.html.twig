@@ -457,6 +457,9 @@
             // Don't toggle if the click was on any other button or link
             if (e.target.closest('button, a')) return;
 
+            // Locked and solved cards are not expandable
+            if (card.classList.contains('bv-rm-card--locked') || card.classList.contains('bv-rm-card--solved')) return;
+
             toggleCard(card);
         });
 
@@ -464,6 +467,8 @@
         card.addEventListener('keydown', function (e) {
             if ((e.key === 'Enter' || e.key === ' ') && e.target === card) {
                 e.preventDefault();
+                // Locked and solved cards are not expandable
+                if (card.classList.contains('bv-rm-card--locked') || card.classList.contains('bv-rm-card--solved')) return;
                 toggleCard(card);
             }
         });
@@ -649,6 +654,45 @@
                 }
             }
         });
+
+        // Also update all face vote star buttons for zero-budget state
+        document.querySelectorAll('[data-item-type="' + itemType + '"] .bv-rm-card__vote-btn[data-action="add"]').forEach(function (b) {
+            var cardItemId = b.closest('[data-item-id]') ? b.closest('[data-item-id]').dataset.itemId : null;
+            var alreadyVoted = VOTED.indexOf(cardItemId) !== -1;
+            if (!alreadyVoted) {
+                if (currentBudget <= 0) {
+                    b.setAttribute('aria-disabled', 'true');
+                } else {
+                    b.removeAttribute('aria-disabled');
+                }
+            }
+        });
+
+        // Update star budget display widget
+        renderStarBudget(itemType, currentBudget);
+    }
+
+    /* ── Star budget display updater ─────────────────────────────────────── */
+    function renderStarBudget(itemType, budget) {
+        var widgetId = (itemType === 'bug') ? 'bv-rm-bug-star-budget' : 'bv-rm-feature-star-budget';
+        var widget = document.getElementById(widgetId);
+        if (!widget) return;
+
+        var filled = Math.max(0, Math.min(3, budget));
+        var stars = widget.querySelectorAll('.bv-rm-star-budget__star');
+        stars.forEach(function (star, idx) {
+            if (idx < filled) {
+                star.classList.add('bv-rm-star-budget__star--filled');
+                star.classList.remove('bv-rm-star-budget__star--empty');
+            } else {
+                star.classList.add('bv-rm-star-budget__star--empty');
+                star.classList.remove('bv-rm-star-budget__star--filled');
+            }
+        });
+
+        var total = stars.length || 3;
+        widget.setAttribute('aria-label',
+            (itemType === 'bug' ? 'Fejl' : 'Forslags') + '-stemmer til rådighed: ' + filled + ' af ' + total);
     }
 
     /* ── Toast notifications ─────────────────────────────────────────────── */
