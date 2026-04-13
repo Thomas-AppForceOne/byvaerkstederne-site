@@ -3081,13 +3081,13 @@ a { color: inherit; text-decoration: none; }
 .bv-rm-type-badge--bug     { background: var(--error);     color: var(--on-primary); }
 .bv-rm-type-badge--feature { background: var(--secondary);  color: var(--on-secondary); }
 
-/* ── Resolved card: de-emphasis (opacity ≤ 0.5) ─────────────────────────── */
+/* ── Resolved card: de-emphasis ─────────────────────────────────────────── */
 .bv-rm-card--solved {
-    opacity: 0.45;
+    opacity: 0.8;
     cursor: default;
 }
 .bv-rm-card--solved:hover {
-    opacity: 0.6;
+    opacity: 0.8;
 }
 
 /* ── Filter bar ──────────────────────────────────────────────────────────── */
