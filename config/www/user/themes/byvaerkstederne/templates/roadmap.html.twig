@@ -1,71 +1,39 @@
 {% extends 'partials/base.html.twig' %}
 
 {# ============================================================================
-   Roadmap page
-   Displays tabbed views: Alle / Fejl (bugs) / Feature-forslag (features).
+   Roadmap page — v7 Two-column board layout
+   Bugs (left) and Features (right) shown simultaneously.
    Voting requires authentication. Public access for view only.
    ============================================================================ #}
 
 {% set is_auth = grav.user.authenticated and grav.user.authorized %}
 
-{# ── Hero section — matches bv-hero-text structural pattern ────────────────── #}
-{% block hero %}
-<section class="bv-hero-text">
-    <div class="bv-container">
-        {% if page.header.badge %}
-        <span class="bv-badge bv-badge--{{ page.header.badge_style|default('primary') }}">{{ page.header.badge }}</span>
-        {% endif %}
-        <h1 class="bv-display" style="font-size: clamp(2.5rem, 7vw, 5rem); margin-top: var(--space-4); max-width: 50rem;">
-            {{ page.header.hero_heading|default(page.title) }}
-        </h1>
-        {% if page.header.subtitle %}
-        <p class="bv-body-lg" style="margin-top: var(--space-6); max-width: 44rem;">{{ page.header.subtitle }}</p>
-        {% endif %}
-
-        {# CTA row #}
-        <div class="bv-rm-hero-cta" style="margin-top: var(--space-8); display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center;">
-            <a href="/foreslaa-feature" class="bv-btn bv-btn--primary">
-                Foresl&aring; en feature
-                <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1rem;vertical-align:middle;margin-left:0.25rem;">arrow_forward</span>
-            </a>
-            {% if is_auth %}
-            <button
-                type="button"
-                class="bv-btn bv-btn--outline"
-                onclick="bvBugReport.open(); return false;"
-                aria-haspopup="dialog">
-                <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1rem;vertical-align:middle;margin-right:0.25rem;">bug_report</span>
-                Rapport&eacute;r fejl
-            </button>
-            {% else %}
-            <button
-                type="button"
-                class="bv-btn bv-btn--outline"
-                onclick="document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;"
-                aria-haspopup="dialog">
-                <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1rem;vertical-align:middle;margin-right:0.25rem;">bug_report</span>
-                Rapport&eacute;r fejl
-            </button>
-            {% endif %}
-        </div>
-    </div>
-</section>
-{% endblock %}
+{# ── Override hero block — hero is now inline in body ──────────────────────── #}
+{% block hero %}{% endblock %}
 
 {% block body %}
 <section class="bv-rm-page" aria-label="Website Roadmap">
 <div class="bv-container">
 
-    {# ── Platform status & version badges ────────────────────────────────── #}
-    <div class="bv-rm-info-row">
-        <div class="bv-rm-header__badges" role="status" aria-label="Platform status">
-            <span class="bv-rm-badge bv-rm-badge--status">
-                <span class="bv-rm-badge__dot" aria-hidden="true"></span>
-                System Status: {{ platform_status|e }}
-            </span>
-            <span class="bv-rm-badge bv-rm-badge--version">
-                Version {{ platform_version|e }}
-            </span>
+    {# ── Hero section ──────────────────────────────────────────────────────── #}
+    <div class="bv-rm-hero">
+        <h1 class="bv-rm-hero__heading">Website Roadmap</h1>
+        <div class="bv-rm-hero__row">
+            <p class="bv-rm-hero__intro">
+                Hjælp os med at prioritere udviklingen af det
+                <span class="bg-primary text-on-primary" style="padding: 0 0.25em;">Digitale Værksted</span>.
+                Du har 3 stjerner til at stemme på tekniske fejl og 3 til funktioner.
+                Dette er kun til feedback på websitet, ikke de fysiske værksteder.
+            </p>
+            <div class="bv-rm-hero__badges">
+                <span class="bv-rm-badge bv-rm-badge--status">
+                    <span class="bv-rm-badge__dot" aria-hidden="true"></span>
+                    System Status: {{ platform_status|e }}
+                </span>
+                <span class="bv-rm-badge bv-rm-badge--version">
+                    Version {{ platform_version|e }}
+                </span>
+            </div>
         </div>
 
         {# "Forstå processen" button #}
@@ -204,152 +172,36 @@
     </div>
     {% endif %}
 
-    {# ── Tab navigation ───────────────────────────────────────────────────── #}
-    <div class="bv-rm-tabs" role="tablist" aria-label="Filtrer roadmap">
-        <button
-            class="bv-rm-tab is-active"
-            role="tab"
-            id="bv-rm-tab-alle"
-            aria-selected="true"
-            aria-controls="bv-rm-tabpanel-alle"
-            data-tab="alle">
-            Alle
-            <span class="bv-rm-tab__count">{{ roadmap_all_items|length }}</span>
-        </button>
-        <button
-            class="bv-rm-tab"
-            role="tab"
-            id="bv-rm-tab-fejl"
-            aria-selected="false"
-            aria-controls="bv-rm-tabpanel-fejl"
-            data-tab="fejl">
-            Fejl
-            <span class="bv-rm-tab__count">{{ roadmap_bugs|length }}</span>
-        </button>
-        <button
-            class="bv-rm-tab"
-            role="tab"
-            id="bv-rm-tab-feature-forslag"
-            aria-selected="false"
-            aria-controls="bv-rm-tabpanel-feature-forslag"
-            data-tab="feature-forslag">
-            Features
-            <span class="bv-rm-tab__count">{{ roadmap_features|length }}</span>
-        </button>
-    </div>
+    {# ── Two-column board ──────────────────────────────────────────────────── #}
+    <div class="bv-rm-board">
 
-    {# ── Filter toolbar ──────────────────────────────────────────────────── #}
-    <div class="bv-rm-filter-bar" role="search" aria-label="Filtrer roadmap-emner">
-        <div class="bv-rm-filter-bar__group">
-            <label class="bv-rm-filter-bar__label" for="bv-rm-filter-status">Status</label>
-            <select id="bv-rm-filter-status" class="bv-rm-filter-select" aria-label="Filtrer efter status">
-                <option value="">Alle statusser</option>
-                <option value="rapporteret">Rapporteret</option>
-                <option value="under_afklaring">Under afklaring</option>
-                <option value="klar_til_implementation">Klar til implementation</option>
-                <option value="under_implementation">Under implementation</option>
-                <option value="klar_til_test">Klar til test</option>
-                <option value="loest">L&oslash;st</option>
-            </select>
-        </div>
-        <div class="bv-rm-filter-bar__group">
-            <label class="bv-rm-filter-bar__label" for="bv-rm-filter-priority">Prioritet</label>
-            <select id="bv-rm-filter-priority" class="bv-rm-filter-select" aria-label="Filtrer efter prioritet">
-                <option value="">Alle prioriteter</option>
-                <option value="kritisk">Kritisk</option>
-                <option value="hoej">H&oslash;j</option>
-                <option value="middel">Middel</option>
-                <option value="lav">Lav</option>
-                <option value="nyhed">Nyhed</option>
-                <option value="forbedring">Forbedring</option>
-            </select>
-        </div>
-        <button type="button" id="bv-rm-filter-clear" class="bv-rm-filter-clear" aria-label="Nulstil filtre" hidden>
-            <span class="material-symbols-outlined" aria-hidden="true">filter_alt_off</span>
-            Nulstil
-        </button>
-    </div>
+        {# ── Left column: Registrerede Website-fejl (bugs) ──────────────────── #}
+        <div class="bv-rm-column">
+            <div class="bv-rm-column__header bv-rm-column__header--bugs">
+                <h2 class="bv-rm-column__title">Registrerede Website-fejl</h2>
+                <span class="bv-rm-column__subtitle">Tekniske fejl på platformen</span>
 
-    {# ── "Vis løste" toggle ───────────────────────────────────────────────── #}
-    <div class="bv-rm-solved-toggle-row" style="margin-bottom: var(--space-4);">
-        <button
-            type="button"
-            id="bv-rm-show-solved"
-            class="bv-rm-solved-toggle"
-            aria-pressed="false"
-            aria-controls="bv-rm-solved-hint">
-            <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
-            Vis l&oslash;ste
-            <span class="bv-rm-solved-toggle__count" id="bv-rm-solved-count"></span>
-        </button>
-        <span id="bv-rm-solved-hint" class="bv-rm-solved-toggle__hint"></span>
-    </div>
-
-    {# ── Tab panels ───────────────────────────────────────────────────────── #}
-
-    {# Alle — combined bugs + features sorted by timestamp #}
-    <div
-        id="bv-rm-tabpanel-alle"
-        class="bv-rm-tabpanel"
-        role="tabpanel"
-        aria-labelledby="bv-rm-tab-alle">
-
-        {% if roadmap_all_items is empty %}
-            <div class="bv-rm-empty-state">
-                <span class="material-symbols-outlined bv-rm-empty-state__icon" aria-hidden="true">inventory_2</span>
-                <h2 class="bv-rm-empty-state__title">Roadmap er tomt</h2>
-                <p class="bv-rm-empty-state__text">
-                    Ingen emner er tilgængelige endnu. Vær den første til at
-                    <a href="/roadmap#report" onclick="document.getElementById('bv-bug-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;" class="bv-rm-empty-state__link">rapportere en fejl</a>
-                    eller
-                    <a href="/foreslaa-feature" class="bv-rm-empty-state__link">foreslå en ny feature</a>.
-                </p>
+                {# Star budget widget — authenticated only #}
+                {% if is_auth %}
+                    {% set bug_bud_raw = roadmap_bug_budget|default(0) %}
+                    {% set bug_bud_clamped = [bug_bud_raw, 3]|min %}
+                    {% set bug_bud_clamped = [bug_bud_clamped, 0]|max %}
+                    <div class="bv-rm-star-budget" id="bv-rm-bug-star-budget" aria-live="polite" aria-label="Fejl-stemmer til rådighed: {{ bug_bud_clamped }} af 3">
+                        <span class="bv-rm-star-budget__label">Stemmer til rådighed</span>
+                        {% for i in 1..3 %}
+                            {% if i <= bug_bud_clamped %}
+                                <span class="material-symbols-outlined bv-rm-star-budget__star bv-rm-star-budget__star--filled" aria-hidden="true">star</span>
+                            {% else %}
+                                <span class="material-symbols-outlined bv-rm-star-budget__star bv-rm-star-budget__star--empty" aria-hidden="true">star</span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
             </div>
-        {% else %}
+
             <div class="bv-rm-cards" role="list">
-                {% for item_id, item in roadmap_all_items %}
-                    {% include 'partials/roadmap_card.html.twig' with {
-                        item: item,
-                        item_id: item_id,
-                        is_auth: is_auth,
-                        user_voted: item_id in roadmap_user_voted_items,
-                        bug_budget: roadmap_bug_budget,
-                        feature_budget: roadmap_feature_budget,
-                        use_canonical_id: false
-                    } only %}
-                {% endfor %}
-            </div>
-        {% endif %}
-    </div>
-
-    {# Fejl — bugs only #}
-    <div
-        id="bv-rm-tabpanel-fejl"
-        class="bv-rm-tabpanel"
-        role="tabpanel"
-        aria-labelledby="bv-rm-tab-fejl"
-        hidden>
-
-        {% if is_auth %}
-        <div class="bv-rm-budget" id="bv-rm-bug-budget" aria-live="polite" aria-label="Tilbageværende fejlstemmer">
-            <span class="bv-rm-budget__label">Stemmer til rådighed</span>
-            <span class="bv-rm-budget__count" id="bv-rm-bug-budget-count">{{ roadmap_bug_budget }}</span>
-            <span class="bv-rm-budget__word">stemmer tilbage</span>
-        </div>
-        {% endif %}
-
-        {% if roadmap_bugs is empty %}
-            <div class="bv-rm-empty-state">
-                <span class="material-symbols-outlined bv-rm-empty-state__icon" aria-hidden="true">bug_report</span>
-                <h2 class="bv-rm-empty-state__title">Ingen registrerede fejl</h2>
-                <p class="bv-rm-empty-state__text">
-                    Ingen fejl er rapporteret endnu — godt arbejde! Hvis du opdager en fejl,
-                    <a href="#" onclick="document.getElementById('bv-bug-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;" class="bv-rm-empty-state__link">klik her for at rapportere den</a>.
-                </p>
-            </div>
-        {% else %}
-            <div class="bv-rm-cards" role="list">
-                {% for item_id, item in roadmap_bugs %}
+                {# Solved bugs first (80% opacity via CSS) #}
+                {% for item_id, item in roadmap_bugs if item.status|default('') == 'loest' %}
                     {% include 'partials/roadmap_card.html.twig' with {
                         item: item,
                         item_id: item_id,
@@ -360,39 +212,9 @@
                         use_canonical_id: true
                     } only %}
                 {% endfor %}
-            </div>
-        {% endif %}
-    </div>
 
-    {# Feature-forslag — features only #}
-    <div
-        id="bv-rm-tabpanel-feature-forslag"
-        class="bv-rm-tabpanel"
-        role="tabpanel"
-        aria-labelledby="bv-rm-tab-feature-forslag"
-        hidden>
-
-        {% if is_auth %}
-        <div class="bv-rm-budget" id="bv-rm-feature-budget" aria-live="polite" aria-label="Tilbageværende forslagsstemmer">
-            <span class="bv-rm-budget__label">Stemmer til rådighed</span>
-            <span class="bv-rm-budget__count" id="bv-rm-feature-budget-count">{{ roadmap_feature_budget }}</span>
-            <span class="bv-rm-budget__word">stemmer tilbage</span>
-        </div>
-        {% endif %}
-
-        {% if roadmap_features is empty %}
-            <div class="bv-rm-empty-state">
-                <span class="material-symbols-outlined bv-rm-empty-state__icon" aria-hidden="true">lightbulb</span>
-                <h2 class="bv-rm-empty-state__title">Ingen feature-forslag endnu</h2>
-                <p class="bv-rm-empty-state__text">
-                    Har du en idé til en ny funktion?
-                    <a href="/foreslaa-feature" class="bv-rm-empty-state__link">Indsend dit forslag her</a>
-                    og vær med til at forme fremtiden for platformen.
-                </p>
-            </div>
-        {% else %}
-            <div class="bv-rm-cards" role="list">
-                {% for item_id, item in roadmap_features %}
+                {# Non-solved bugs #}
+                {% for item_id, item in roadmap_bugs if item.status|default('') != 'loest' %}
                     {% include 'partials/roadmap_card.html.twig' with {
                         item: item,
                         item_id: item_id,
@@ -403,9 +225,77 @@
                         use_canonical_id: true
                     } only %}
                 {% endfor %}
+
+                {% if roadmap_bugs is empty %}
+                <div class="bv-rm-empty">
+                    <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.5rem;display:block;margin-bottom:0.5rem;">bug_report</span>
+                    Ingen fejl er rapporteret endnu.
+                </div>
+                {% endif %}
             </div>
-        {% endif %}
-    </div>
+        </div>
+
+        {# ── Right column: Forslag til Websitet (features) ───────────────────── #}
+        <div class="bv-rm-column">
+            <div class="bv-rm-column__header bv-rm-column__header--features">
+                <h2 class="bv-rm-column__title">Forslag til Websitet</h2>
+                <span class="bv-rm-column__subtitle">Feature-forslag fra fællesskabet</span>
+
+                {# Star budget widget — authenticated only #}
+                {% if is_auth %}
+                    {% set feat_bud_raw = roadmap_feature_budget|default(0) %}
+                    {% set feat_bud_clamped = [feat_bud_raw, 3]|min %}
+                    {% set feat_bud_clamped = [feat_bud_clamped, 0]|max %}
+                    <div class="bv-rm-star-budget" id="bv-rm-feature-star-budget" aria-live="polite" aria-label="Forslags-stemmer til rådighed: {{ feat_bud_clamped }} af 3">
+                        <span class="bv-rm-star-budget__label">Stemmer til rådighed</span>
+                        {% for i in 1..3 %}
+                            {% if i <= feat_bud_clamped %}
+                                <span class="material-symbols-outlined bv-rm-star-budget__star bv-rm-star-budget__star--filled" aria-hidden="true">star</span>
+                            {% else %}
+                                <span class="material-symbols-outlined bv-rm-star-budget__star bv-rm-star-budget__star--empty" aria-hidden="true">star</span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="bv-rm-cards" role="list">
+                {# Solved features first (80% opacity via CSS) #}
+                {% for item_id, item in roadmap_features if item.status|default('') == 'loest' %}
+                    {% include 'partials/roadmap_card.html.twig' with {
+                        item: item,
+                        item_id: item_id,
+                        is_auth: is_auth,
+                        user_voted: item_id in roadmap_user_voted_items,
+                        bug_budget: roadmap_bug_budget,
+                        feature_budget: roadmap_feature_budget,
+                        use_canonical_id: true
+                    } only %}
+                {% endfor %}
+
+                {# Non-solved features #}
+                {% for item_id, item in roadmap_features if item.status|default('') != 'loest' %}
+                    {% include 'partials/roadmap_card.html.twig' with {
+                        item: item,
+                        item_id: item_id,
+                        is_auth: is_auth,
+                        user_voted: item_id in roadmap_user_voted_items,
+                        bug_budget: roadmap_bug_budget,
+                        feature_budget: roadmap_feature_budget,
+                        use_canonical_id: true
+                    } only %}
+                {% endfor %}
+
+                {% if roadmap_features is empty %}
+                <div class="bv-rm-empty">
+                    <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.5rem;display:block;margin-bottom:0.5rem;">lightbulb</span>
+                    Ingen feature-forslag endnu.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>{# /.bv-rm-board #}
 
     {# ── Unauthenticated vote prompt ───────────────────────────────────────── #}
     {% if not is_auth %}
@@ -446,46 +336,6 @@
         var el = document.querySelector('#bv-rm-vote-nonces [name="vote_nonce"]');
         return el ? el.value : '';
     }
-
-    /* ── Tab switching ────────────────────────────────────────────────────── */
-    var tabs = document.querySelectorAll('.bv-rm-tab[role="tab"]');
-    var panels = document.querySelectorAll('.bv-rm-tabpanel[role="tabpanel"]');
-
-    tabs.forEach(function (tab) {
-        tab.addEventListener('click', function () {
-            // Deactivate all tabs
-            tabs.forEach(function (t) {
-                t.classList.remove('is-active');
-                t.setAttribute('aria-selected', 'false');
-            });
-            // Hide all panels
-            panels.forEach(function (p) {
-                p.setAttribute('hidden', '');
-            });
-            // Activate clicked tab
-            tab.classList.add('is-active');
-            tab.setAttribute('aria-selected', 'true');
-            // Show corresponding panel
-            var panelId = tab.getAttribute('aria-controls');
-            var panel = document.getElementById(panelId);
-            if (panel) {
-                panel.removeAttribute('hidden');
-            }
-        });
-
-        // Keyboard: arrow keys for tab navigation
-        tab.addEventListener('keydown', function (e) {
-            var tabList = Array.from(tabs);
-            var currentIndex = tabList.indexOf(tab);
-            if (e.key === 'ArrowRight') {
-                e.preventDefault();
-                tabList[(currentIndex + 1) % tabList.length].focus();
-            } else if (e.key === 'ArrowLeft') {
-                e.preventDefault();
-                tabList[(currentIndex - 1 + tabList.length) % tabList.length].focus();
-            }
-        });
-    });
 
     /* ── "Forstå processen" panel ─────────────────────────────────────────── */
     var processBtn   = document.getElementById('bv-rm-process-btn');
@@ -539,7 +389,7 @@
         if (!processPanel) return;
         processPanel.classList.add('is-open');
         processPanel.setAttribute('aria-hidden', 'false');
-        processBtn.setAttribute('aria-expanded', 'true');
+        if (processBtn) processBtn.setAttribute('aria-expanded', 'true');
         document.body.style.overflow = 'hidden';
         if (processClose) {
             setTimeout(function () { processClose.focus(); }, 50);
@@ -550,7 +400,7 @@
         if (!processPanel) return;
         processPanel.classList.remove('is-open');
         processPanel.setAttribute('aria-hidden', 'true');
-        processBtn.setAttribute('aria-expanded', 'false');
+        if (processBtn) processBtn.setAttribute('aria-expanded', 'false');
         document.body.style.overflow = '';
         if (processBtn) {
             try { processBtn.focus(); } catch (e) {}
@@ -588,15 +438,13 @@
     /* ── Card click → inline action bar ──────────────────────────────────── */
     document.querySelectorAll('.bv-rm-card[data-item-id]').forEach(function (card) {
         card.addEventListener('click', function (e) {
-            // If the face vote button was clicked, handle vote directly (not action bar)
+            // If the face vote button was clicked, handle vote directly
             var faceVoteBtn = e.target.closest('.bv-rm-card__vote-btn');
             if (faceVoteBtn && faceVoteBtn.tagName === 'BUTTON') {
                 e.stopPropagation();
-                // Only handle direct votes on active (non-locked/non-solved) items
                 if (!faceVoteBtn.disabled && faceVoteBtn.dataset.action) {
                     submitVoteFromBtn(faceVoteBtn, card);
                 } else if (!AUTH) {
-                    // Unauthenticated: open login overlay
                     var loginOverlay = document.getElementById('bv-login-overlay');
                     if (loginOverlay) {
                         loginOverlay.classList.add('is-open');
@@ -623,7 +471,7 @@
 
     /* ── Star vote-button keyboard activation ────────────────────────────── */
     document.querySelectorAll('.bv-rm-card__vote-btn').forEach(function (btn) {
-        if (btn.tagName !== 'BUTTON') return; // skip non-interactive divs
+        if (btn.tagName !== 'BUTTON') return;
         btn.addEventListener('keydown', function (e) {
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
@@ -640,7 +488,6 @@
 
     /**
      * Submit a vote AJAX call from either a face star button or an action bar button.
-     * This is the single shared vote submission function.
      */
     function submitVoteFromBtn(btn, card) {
         if (!AUTH) return;
@@ -658,9 +505,7 @@
 
         // Capture pre-request state for rollback
         var countEl    = card.querySelector('.bv-rm-card__vote-count');
-        var budgetEl   = document.getElementById(itemType === 'bug' ? 'bv-rm-bug-budget-count' : 'bv-rm-feature-budget-count');
         var prevCount  = countEl  ? parseInt(countEl.textContent, 10)  : 0;
-        var prevBudget = budgetEl ? parseInt(budgetEl.textContent, 10) : 0;
 
         // Disable all vote buttons for this card during request
         card.querySelectorAll('button[data-action]').forEach(function (b) { b.disabled = true; });
@@ -693,42 +538,36 @@
 
                 var actualAction = result.data.action || (VOTED.indexOf(itemId) !== -1 ? 'remove' : 'add');
 
-                // Update ALL vote count elements for this item (across all tab panels)
+                // Update ALL vote count elements for this item
                 document.querySelectorAll('[data-item-id="' + itemId + '"]').forEach(function (c) {
                     c.querySelectorAll('.bv-rm-card__vote-count').forEach(function (el) {
                         el.textContent = result.data.vote_count;
                     });
                 });
 
-                // Update budget counters
-                var bugBudEl  = document.getElementById('bv-rm-bug-budget-count');
-                var featBudEl = document.getElementById('bv-rm-feature-budget-count');
-                if (bugBudEl)  bugBudEl.textContent  = result.data.bug_budget;
-                if (featBudEl) featBudEl.textContent = result.data.feature_budget;
+                // Update budget variables
                 BUG_BUD  = result.data.bug_budget;
                 FEAT_BUD = result.data.feature_budget;
 
-                // Update voted tracking and toggle button state for ALL matching cards
+                // Update voted tracking and toggle button state
                 document.querySelectorAll('[data-item-id="' + itemId + '"]').forEach(function (c) {
                     updateCardVoteState(c, itemId, actualAction, itemType);
                 });
 
             } else {
-                if (countEl)  countEl.textContent  = prevCount;
-                if (budgetEl) budgetEl.textContent = prevBudget;
+                if (countEl) countEl.textContent = prevCount;
                 var errMsg = (result.data && result.data.error) || 'Stemme mislykkedes. Prøv igen.';
                 showToast(errMsg, 'error');
             }
         })
         .catch(function () {
             card.querySelectorAll('button[data-action]').forEach(function (b) { b.disabled = false; });
-            if (countEl)  countEl.textContent  = prevCount;
-            if (budgetEl) budgetEl.textContent = prevBudget;
+            if (countEl) countEl.textContent = prevCount;
             showToast('Netværksfejl. Kontrollér din forbindelse og prøv igen.', 'error');
         });
     }
 
-    /* ── Action bar vote button clicks (delegates to shared submitVoteFromBtn) ── */
+    /* ── Action bar vote button clicks ───────────────────────────────────── */
     document.querySelectorAll('.bv-rm-vote-btn[data-action]').forEach(function (btn) {
         btn.addEventListener('click', function (e) {
             e.stopPropagation();
@@ -740,21 +579,19 @@
     });
 
     /**
-     * After a successful vote, update the card's action bar and face button to reflect new state.
+     * After a successful vote, update the card's action bar and face button.
      */
     function updateCardVoteState(card, itemId, action, itemType) {
         if (!card) return;
 
         var addBtn    = card.querySelector('.bv-rm-vote-btn[data-action="add"]');
         var removeBtn = card.querySelector('.bv-rm-vote-btn[data-action="remove"]');
-        // Star button on the card face (not inside the action bar)
         var starBtn   = card.querySelector('.bv-rm-card__vote-btn[data-action]');
 
         var currentBudget = (itemType === 'bug') ? BUG_BUD : FEAT_BUD;
 
         if (action === 'add') {
             VOTED.push(itemId);
-            // Switch to "Fjern stemme" state: hide addBtn, show removeBtn
             if (addBtn) {
                 addBtn.setAttribute('aria-disabled', 'true');
                 addBtn.classList.add('is-voted');
@@ -765,7 +602,6 @@
                 removeBtn.removeAttribute('disabled');
                 removeBtn.classList.remove('bv-rm-vote-btn--hidden');
             }
-            // Update face star button to reflect voted state
             if (starBtn) {
                 starBtn.classList.add('is-voted');
                 starBtn.setAttribute('data-action', 'remove');
@@ -774,7 +610,6 @@
             }
         } else { // remove
             VOTED = VOTED.filter(function (id) { return id !== itemId; });
-            // Switch to "Tilføj stemme" state
             if (removeBtn) {
                 removeBtn.setAttribute('aria-disabled', 'true');
                 removeBtn.classList.add('bv-rm-vote-btn--hidden');
@@ -782,7 +617,6 @@
             if (addBtn) {
                 addBtn.classList.remove('is-voted');
                 addBtn.classList.remove('bv-rm-vote-btn--hidden');
-                // Check budget
                 if (currentBudget > 0) {
                     addBtn.removeAttribute('aria-disabled');
                     addBtn.removeAttribute('disabled');
@@ -790,7 +624,6 @@
                     addBtn.setAttribute('aria-disabled', 'true');
                 }
             }
-            // Update face star button to reflect unvoted state
             if (starBtn) {
                 starBtn.classList.remove('is-voted');
                 starBtn.setAttribute('data-action', 'add');
@@ -832,310 +665,6 @@
             toast.classList.remove('is-visible');
         }, 5000);
     }
-
-    /* ── Filter & "Vis løste" functionality ──────────────────────────────── */
-    var filterStatus   = document.getElementById('bv-rm-filter-status');
-    var filterPriority = document.getElementById('bv-rm-filter-priority');
-    var filterClear    = document.getElementById('bv-rm-filter-clear');
-    var showSolvedBtn  = document.getElementById('bv-rm-show-solved');
-    var solvedCountEl  = document.getElementById('bv-rm-solved-count');
-
-    var showSolved = false; // Løste items are hidden by default
-
-    // All roadmap card elements
-    function getAllCards() {
-        return Array.from(document.querySelectorAll('.bv-rm-card[data-item-id]'));
-    }
-
-    // Update tab count badges based on visible (non-hidden) cards in each section
-    function updateTabCounts() {
-        var activeStatusFilter   = filterStatus   ? filterStatus.value   : '';
-        var activePriorityFilter = filterPriority ? filterPriority.value : '';
-
-        // Deduplicate counts by item-id (items appear in both "Alle" and type panels)
-        var seenIds         = {};
-        var totalVisible    = 0;
-        var bugsVisible     = 0;
-        var featuresVisible = 0;
-
-        getAllCards().forEach(function (card) {
-            var itemId   = card.dataset.itemId   || '';
-            var type     = card.dataset.itemType || '';
-            var status   = card.dataset.itemStatus   || '';
-            var priority = card.dataset.itemPriority || '';
-            var isSolved = (status === 'loest');
-
-            var matchesStatus   = !activeStatusFilter   || status === activeStatusFilter;
-            var matchesPriority = !activePriorityFilter || priority === activePriorityFilter;
-            var matchesSolved   = showSolved || !isSolved;
-
-            var visible = matchesStatus && matchesPriority && matchesSolved;
-
-            // Show/hide this card element (applies to all copies across all panels)
-            card.style.display = visible ? '' : 'none';
-
-            // Count each unique item only once (deduplicate across Alle + type panels)
-            if (visible && itemId && !seenIds[itemId]) {
-                seenIds[itemId] = true;
-                totalVisible++;
-                if (type === 'bug') bugsVisible++;
-                else                featuresVisible++;
-            }
-        });
-
-        // Update tab count badges
-        var allCountEl  = document.querySelector('#bv-rm-tab-alle .bv-rm-tab__count');
-        var bugCountEl  = document.querySelector('#bv-rm-tab-fejl .bv-rm-tab__count');
-        var featCountEl = document.querySelector('#bv-rm-tab-feature-forslag .bv-rm-tab__count');
-        if (allCountEl)  allCountEl.textContent  = totalVisible;
-        if (bugCountEl)  bugCountEl.textContent  = bugsVisible;
-        if (featCountEl) featCountEl.textContent = featuresVisible;
-
-        // Show/hide empty states inside tab panels
-        updateEmptyStates(bugsVisible, featuresVisible, totalVisible);
-
-        // Show/hide clear button
-        var hasFilter = activeStatusFilter || activePriorityFilter;
-        if (filterClear) {
-            if (hasFilter) {
-                filterClear.removeAttribute('hidden');
-            } else {
-                filterClear.setAttribute('hidden', '');
-            }
-        }
-    }
-
-    function updateEmptyStates(bugsVisible, featuresVisible, totalVisible) {
-        // Alle panel
-        var allePanel = document.getElementById('bv-rm-tabpanel-alle');
-        if (allePanel) {
-            var emptyAlle  = allePanel.querySelector('.bv-rm-empty-state');
-            var cardsAlle  = allePanel.querySelector('.bv-rm-cards');
-            var filterMsgAlle = allePanel.querySelector('.bv-rm-filter-empty');
-            var hasAnyCards = cardsAlle && cardsAlle.querySelectorAll('.bv-rm-card[data-item-id]').length > 0;
-            if (hasAnyCards) {
-                if (totalVisible === 0) {
-                    if (cardsAlle) cardsAlle.style.display = 'none';
-                    if (!filterMsgAlle) {
-                        filterMsgAlle = createFilterEmptyMsg();
-                        allePanel.appendChild(filterMsgAlle);
-                    } else { filterMsgAlle.style.display = ''; }
-                } else {
-                    if (cardsAlle) cardsAlle.style.display = '';
-                    if (filterMsgAlle) filterMsgAlle.style.display = 'none';
-                }
-            }
-        }
-
-        // Fejl panel
-        var fejlPanel = document.getElementById('bv-rm-tabpanel-fejl');
-        if (fejlPanel) {
-            var emptyFejl  = fejlPanel.querySelector('.bv-rm-empty-state');
-            var cardsFejl  = fejlPanel.querySelector('.bv-rm-cards');
-            var filterMsgFejl = fejlPanel.querySelector('.bv-rm-filter-empty');
-            var hasAnyBugCards = cardsFejl && cardsFejl.querySelectorAll('.bv-rm-card[data-item-id]').length > 0;
-            if (hasAnyBugCards) {
-                if (bugsVisible === 0) {
-                    if (cardsFejl) cardsFejl.style.display = 'none';
-                    if (!filterMsgFejl) {
-                        filterMsgFejl = createFilterEmptyMsg();
-                        fejlPanel.appendChild(filterMsgFejl);
-                    } else { filterMsgFejl.style.display = ''; }
-                } else {
-                    if (cardsFejl) cardsFejl.style.display = '';
-                    if (filterMsgFejl) filterMsgFejl.style.display = 'none';
-                }
-            }
-        }
-
-        // Feature panel
-        var featPanel = document.getElementById('bv-rm-tabpanel-feature-forslag');
-        if (featPanel) {
-            var emptyFeat  = featPanel.querySelector('.bv-rm-empty-state');
-            var cardsFeat  = featPanel.querySelector('.bv-rm-cards');
-            var filterMsgFeat = featPanel.querySelector('.bv-rm-filter-empty');
-            var hasAnyFeatCards = cardsFeat && cardsFeat.querySelectorAll('.bv-rm-card[data-item-id]').length > 0;
-            if (hasAnyFeatCards) {
-                if (featuresVisible === 0) {
-                    if (cardsFeat) cardsFeat.style.display = 'none';
-                    if (!filterMsgFeat) {
-                        filterMsgFeat = createFilterEmptyMsg();
-                        featPanel.appendChild(filterMsgFeat);
-                    } else { filterMsgFeat.style.display = ''; }
-                } else {
-                    if (cardsFeat) cardsFeat.style.display = '';
-                    if (filterMsgFeat) filterMsgFeat.style.display = 'none';
-                }
-            }
-        }
-    }
-
-    function createFilterEmptyMsg() {
-        var el = document.createElement('div');
-        el.className = 'bv-rm-empty-state bv-rm-filter-empty';
-        el.innerHTML =
-            '<span class="material-symbols-outlined bv-rm-empty-state__icon" aria-hidden="true">filter_alt_off</span>' +
-            '<h2 class="bv-rm-empty-state__title">Ingen emner matcher filteret</h2>' +
-            '<p class="bv-rm-empty-state__text">Prøv at vælge et andet filter eller nulstil for at se alle emner.</p>';
-        return el;
-    }
-
-    // Apply initial state: hide solved cards
-    (function initSolvedState() {
-        var solvedCards = getAllCards().filter(function (c) {
-            return (c.dataset.itemStatus || '') === 'loest';
-        });
-
-        // Count unique solved items (deduplicate across Alle + type panels)
-        var seenSolvedIds = {};
-        var solvedCount = 0;
-        solvedCards.forEach(function (c) {
-            var id = c.dataset.itemId || '';
-            if (id && !seenSolvedIds[id]) {
-                seenSolvedIds[id] = true;
-                solvedCount++;
-            }
-        });
-
-        // Hide all solved card elements initially
-        solvedCards.forEach(function (c) { c.style.display = 'none'; });
-
-        // Update toggle button label
-        if (showSolvedBtn && solvedCount > 0) {
-            if (solvedCountEl) solvedCountEl.textContent = '(' + solvedCount + ')';
-        } else if (showSolvedBtn) {
-            // No solved items — hide toggle
-            showSolvedBtn.style.display = 'none';
-        }
-
-        // Update initial tab counts (without solved)
-        updateTabCounts();
-    }());
-
-    // "Vis løste" toggle click
-    if (showSolvedBtn) {
-        showSolvedBtn.addEventListener('click', function () {
-            showSolved = !showSolved;
-            showSolvedBtn.setAttribute('aria-pressed', showSolved ? 'true' : 'false');
-            showSolvedBtn.classList.toggle('is-active', showSolved);
-            updateTabCounts();
-        });
-    }
-
-    // Filter change handlers
-    if (filterStatus) {
-        filterStatus.addEventListener('change', function () { updateTabCounts(); });
-    }
-    if (filterPriority) {
-        filterPriority.addEventListener('change', function () { updateTabCounts(); });
-    }
-
-    // Clear filters
-    if (filterClear) {
-        filterClear.addEventListener('click', function () {
-            if (filterStatus)   filterStatus.value   = '';
-            if (filterPriority) filterPriority.value = '';
-            updateTabCounts();
-        });
-    }
-
-    /* ── Copy-link button ────────────────────────────────────────────────── */
-    document.querySelectorAll('.bv-rm-card__copy-btn[data-anchor]').forEach(function (btn) {
-        btn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            var anchor    = btn.dataset.anchor;
-            var fullUrl   = window.location.origin + '/roadmap#' + anchor;
-            var labelEl   = btn.querySelector('.bv-rm-card__copy-btn-label');
-            var iconEl    = btn.querySelector('.material-symbols-outlined');
-            var origLabel = labelEl ? labelEl.textContent : 'Kopier link';
-            var origIcon  = iconEl  ? iconEl.textContent  : 'link';
-
-            function showConfirm() {
-                btn.classList.add('bv-rm-card__copy-btn--copied');
-                if (labelEl) labelEl.textContent = 'Kopieret!';
-                if (iconEl)  iconEl.textContent  = 'check';
-                setTimeout(function () {
-                    btn.classList.remove('bv-rm-card__copy-btn--copied');
-                    if (labelEl) labelEl.textContent = origLabel;
-                    if (iconEl)  iconEl.textContent  = origIcon;
-                }, 2000);
-            }
-
-            function showError() {
-                // Fallback: select a temporary input field with the URL
-                var inp = document.createElement('input');
-                inp.value = fullUrl;
-                inp.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
-                document.body.appendChild(inp);
-                inp.select();
-                inp.setSelectionRange(0, 99999);
-                try {
-                    document.execCommand('copy');
-                    showConfirm();
-                } catch (ex) {
-                    if (labelEl) labelEl.textContent = 'Kopier fejlede';
-                    setTimeout(function () { if (labelEl) labelEl.textContent = origLabel; }, 3000);
-                }
-                document.body.removeChild(inp);
-            }
-
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(fullUrl).then(showConfirm, showError);
-            } else {
-                showError();
-            }
-        });
-    });
-
-    /* ── Anchor deep-link: scroll to card on page load if URL has fragment ── */
-    (function () {
-        var hash = window.location.hash;
-        if (!hash) return;
-        // Normalise to lowercase so #B004 and #b004 both resolve to id="b004"
-        var id = hash.slice(1).toLowerCase();
-
-        // Update URL to canonical lowercase form if needed
-        if (hash.slice(1) !== id) {
-            history.replaceState(null, '', '/roadmap#' + id);
-        }
-
-        // Find any card with this anchor id (using data-anchor-id, available on all panels)
-        // This lets us read item metadata without relying on the id attribute
-        var anyCard = document.querySelector('[data-anchor-id="' + id + '"]');
-        if (!anyCard) return;
-
-        // Make sure solved card is visible before switching tabs
-        if ((anyCard.dataset.itemStatus || '') === 'loest') {
-            showSolved = true;
-            if (showSolvedBtn) {
-                showSolvedBtn.setAttribute('aria-pressed', 'true');
-                showSolvedBtn.classList.add('is-active');
-            }
-            updateTabCounts();
-        }
-
-        // Switch to the correct type-specific tab so the canonical-id element becomes visible.
-        // Cards in the type panels carry id="{{ anchor_id }}"; cards in the Alle panel do NOT,
-        // so after the tab switch document.getElementById(id) will find the now-visible card.
-        var itemType = anyCard.dataset.itemType || '';
-        var targetTabId = itemType === 'bug'
-            ? 'bv-rm-tab-fejl'
-            : (itemType === 'feature' ? 'bv-rm-tab-feature-forslag' : null);
-
-        if (targetTabId) {
-            var targetTab = document.getElementById(targetTabId);
-            if (targetTab) targetTab.click();
-        }
-
-        // After the tab switch (and the DOM is updated), locate the now-visible canonical element
-        setTimeout(function () {
-            var target = document.getElementById(id);
-            if (!target) return;
-            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            target.classList.add('bv-rm-card--highlighted');
-            setTimeout(function () { target.classList.remove('bv-rm-card--highlighted'); }, 2000);
-        }, 100);
-    }());
 
 }());
 </script>

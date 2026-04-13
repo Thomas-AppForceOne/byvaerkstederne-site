@@ -1,5 +1,5 @@
 {# ============================================================================
-   Roadmap item card partial
+   Roadmap item card partial — v7 simplified design
    Variables:
      item        — roadmap item data array
      item_id     — item YAML key
@@ -39,17 +39,8 @@
 {# Display ID: use display_id if set, otherwise derive from key #}
 {% set display_id = item.display_id ?? ('#' ~ item_id|slice(-4)|upper) %}
 
-{# Anchor fragment: display_id lowercased with # stripped, e.g. #B004 → b004 #}
+{# Anchor fragment #}
 {% set anchor_id = display_id|lower|replace({'#': ''}) %}
-
-{# Type label and CSS modifier #}
-{% set type_label = (item_type == 'bug') ? 'Fejl' : 'Feature' %}
-
-{# Submitter username — may be stored as submitter_username or source_username #}
-{% set submitter = item.submitter_username ?? item.source_username ?? '' %}
-
-{# Submission date formatted as DD/MM/YYYY #}
-{% set submission_date = item.timestamp ? item.timestamp|date('d/m/Y') : '' %}
 
 {# Is this item locked for voting? #}
 {% set is_locked = status in ['under_implementation', 'klar_til_test', 'loest'] %}
@@ -58,20 +49,19 @@
 
 {# Vote count to display #}
 {% set vote_count = item.vote_count|default(0) %}
-{% if is_solved %}
-    {# For løst, show historical count if available #}
-    {% set hist_count = item.vote_history is defined ? item.vote_history|length : vote_count %}
-    {% set vote_count = hist_count %}
-{% endif %}
 
 <article
     {% if use_canonical_id is defined and use_canonical_id %}id="{{ anchor_id }}"{% endif %}
-    class="bv-rm-card{% if is_locked %} bv-rm-card--locked{% endif %}{% if is_solved %} bv-rm-card--solved{% endif %}"
+    class="bv-rm-card{% if is_locked %} bv-rm-card--locked{% endif %}{% if is_solved %} bv-rm-card--solved{% endif %}{% if status == 'under_implementation' %} bv-rm-card--under-implementation{% endif %}"
     data-anchor-id="{{ anchor_id }}"
     data-item-id="{{ item_id|e }}"
     data-item-type="{{ item_type|e }}"
     data-item-status="{{ status|e }}"
     data-item-priority="{{ item.priority|default('middel')|e }}"
+    {% if not is_solved %}
+    data-voted="{{ user_voted ? 'true' : 'false' }}"
+    data-budget="{{ budget }}"
+    {% endif %}
     role="listitem"
     tabindex="0"
     aria-label="{{ item.title|e }}"
@@ -81,11 +71,8 @@
         {# Card content (left side) #}
         <div class="bv-rm-card__content">
 
-            {# Meta row: type, priority, ID, status #}
+            {# Meta row: priority → ID → status → (lock icon) #}
             <div class="bv-rm-card__meta" aria-label="Metadata">
-                <span class="bv-rm-type-badge bv-rm-type-badge--{{ item_type }}" aria-label="Type: {{ type_label }}">
-                    {{ type_label }}
-                </span>
                 <span class="bv-rm-priority-badge bv-rm-priority--{{ priority_info.css }}" aria-label="Prioritet: {{ priority_info.label }}">
                     {{ priority_info.label }}
                 </span>
@@ -101,94 +88,22 @@
             {# Title #}
             <h3 class="bv-rm-card__title">{{ item.title|e }}</h3>
 
-            {# Description (two lines) #}
+            {# Description (two-line clamp) #}
             <p class="bv-rm-card__desc">{{ item.description|e|truncate(120, true, '…') }}</p>
-
-            {# Community value — only for feature type #}
-            {% if item_type == 'feature' and item.community_value is defined and item.community_value %}
-            <p class="bv-rm-card__community-value" aria-label="Fællesskabsværdi">
-                <span class="bv-rm-card__community-value-label" aria-hidden="true">Fællesskabsværdi:</span>
-                {{ item.community_value|e|truncate(100, true, '…') }}
-            </p>
-            {% endif %}
-
-            {# Footer: date + submitter + copy-link button #}
-            <div class="bv-rm-card__footer">
-                {% if submission_date %}
-                <span class="bv-rm-card__date" aria-label="Indsendt {{ submission_date }}">
-                    <span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>
-                    {{ submission_date }}
-                </span>
-                {% endif %}
-                {% if submitter %}
-                <span class="bv-rm-card__submitter" aria-label="Indsendt af {{ submitter }}">
-                    <span class="material-symbols-outlined" aria-hidden="true">person</span>
-                    {{ submitter|e }}
-                </span>
-                {% endif %}
-                {# Copy-link button — Feature 8 #}
-                <button
-                    type="button"
-                    class="bv-rm-card__copy-btn"
-                    data-anchor="{{ anchor_id }}"
-                    aria-label="Kopier link til {{ display_id }}"
-                    title="Kopier link">
-                    <span class="material-symbols-outlined" aria-hidden="true">link</span>
-                    <span class="bv-rm-card__copy-btn-label">Kopier link</span>
-                </button>
-            </div>
-
-            {# Step-bar: 6-stage pipeline progress indicator — Feature 10 #}
-            {% set stage_map = {
-                'rapporteret':             1,
-                'under_afklaring':         2,
-                'klar_til_implementation': 3,
-                'under_implementation':    4,
-                'klar_til_test':           5,
-                'loest':                   6,
-            } %}
-            {% set current_stage = stage_map[status] ?? 0 %}
-
-            {% if is_solved %}
-                {# Løst: single check indicator replaces the step-bar #}
-                <div class="bv-rm-step-bar bv-rm-step-bar--solved" role="img" aria-label="Status: Løst — alle stadier gennemført">
-                    <span class="material-symbols-outlined bv-rm-step-bar__check" aria-hidden="true">check_circle</span>
-                    <span class="bv-rm-step-bar__solved-label">Løst</span>
-                </div>
-            {% else %}
-                <div class="bv-rm-step-bar" role="img" aria-label="Pipeline-fremgang: stadie {{ current_stage }} af 6">
-                    <div class="bv-rm-step-bar__stages" aria-hidden="true">
-                        {% for stage_num in 1..6 %}
-                            <div class="bv-rm-step-bar__step{% if stage_num <= current_stage %} bv-rm-step-bar__step--active{% endif %}"></div>
-                        {% endfor %}
-                    </div>
-                    <div class="bv-rm-step-bar__labels" aria-hidden="true">
-                        <span class="bv-rm-step-bar__label-start">Rapporteret</span>
-                        <span class="bv-rm-step-bar__label-end">Løst</span>
-                    </div>
-                </div>
-            {% endif %}
 
         </div>
 
         {# Vote button / completion indicator (right side) #}
         <div class="bv-rm-card__vote-area">
-            {% if is_auth %}
-                {# Authenticated: always render a <button> element; disable if locked/solved/votes_released #}
-                {% if is_solved %}
-                    {# Løst: disabled button with completion indicator #}
-                    <button
-                        type="button"
-                        class="bv-rm-card__vote-btn bv-rm-card__vote-btn--solved"
-                        disabled
-                        aria-disabled="true"
-                        aria-label="Løst: {{ vote_count }} stemmer — stemmeafgivelse er afsluttet">
-                        <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
-                        <span class="bv-rm-card__vote-count">{{ vote_count }}</span>
-                        <span class="bv-rm-card__vote-label">Stem</span>
-                    </button>
-                {% elseif votes_released %}
-                    {# Votes released by admin: permanently disabled for all users #}
+            {% if is_solved %}
+                {# Løst: green check_circle icon only — no button, no count #}
+                <span
+                    class="material-symbols-outlined bv-rm-card__check-icon"
+                    aria-label="Løst"
+                    style="font-variation-settings: 'FILL' 1; color: var(--primary); font-size: 1.75rem;">check_circle</span>
+            {% elseif is_auth %}
+                {% if votes_released %}
+                    {# Votes released by admin #}
                     <button
                         type="button"
                         class="bv-rm-card__vote-btn bv-rm-card__vote-btn--locked"
@@ -200,7 +115,7 @@
                         <span class="bv-rm-card__vote-label">Låst</span>
                     </button>
                 {% elseif is_locked %}
-                    {# Locked: disabled Stem button showing count #}
+                    {# Locked: disabled #}
                     <button
                         type="button"
                         class="bv-rm-card__vote-btn bv-rm-card__vote-btn--locked"
@@ -212,7 +127,7 @@
                         <span class="bv-rm-card__vote-label">Stem</span>
                     </button>
                 {% else %}
-                    {# Active: interactive Stem button #}
+                    {# Active: interactive vote button #}
                     {% set no_budget = (budget <= 0) and not user_voted %}
                     <button
                         type="button"
@@ -227,7 +142,7 @@
                     </button>
                 {% endif %}
             {% else %}
-                {# Unauthenticated: show count with disabled button (disabled attribute prevents AJAX calls) #}
+                {# Unauthenticated #}
                 <button
                     type="button"
                     class="bv-rm-card__vote-btn bv-rm-card__vote-btn--unauth"
