@@ -586,7 +586,7 @@
         .catch(function () {
             card.querySelectorAll('button[data-action]').forEach(function (b) { b.disabled = false; });
             if (countEl) countEl.textContent = prevCount;
-            showToast('Netværksfejl. Kontrollér din forbindelse og prøv igen.', 'error');
+            showToast('Stemme mislykkedes. Prøv igen.', 'error');
         });
     }
 
