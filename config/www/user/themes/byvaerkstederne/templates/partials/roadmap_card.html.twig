@@ -196,6 +196,87 @@
                 Fjern stemme
             </button>
         {% endif %}
+
+        {# ── Detail panel (non-locked, non-solved items only) ─────────────── #}
+        {% if not is_locked %}
+
+            {# Bug detail panel: steps, page_url, expected, submitter, timestamp #}
+            {% if item_type == 'bug' %}
+            <div class="bv-rm-card__detail-panel">
+
+                {# Reproduktionsskridt (Steps to reproduce) #}
+                <div class="bv-rm-card__detail-row">
+                    <span class="bv-rm-card__detail-label">Reproduktionsskridt</span>
+                    {% if item.steps is defined and item.steps is not empty %}
+                    <ol class="bv-rm-card__detail-steps">
+                        {% for step in item.steps %}
+                        <li>{{ step|e }}</li>
+                        {% endfor %}
+                    </ol>
+                    {% else %}
+                    <span class="bv-rm-card__detail-empty">Ingen trin angivet</span>
+                    {% endif %}
+                </div>
+
+                {# Berørt side (Affected page URL) — only if present #}
+                {% if item.page_url is defined and item.page_url is not empty %}
+                <div class="bv-rm-card__detail-row">
+                    <span class="bv-rm-card__detail-label">Berørt side</span>
+                    <span class="bv-rm-card__detail-value">{{ item.page_url|e }}</span>
+                </div>
+                {% endif %}
+
+                {# Forventet adfærd (Expected behaviour) — only if present #}
+                {% if item.expected is defined and item.expected is not empty %}
+                <div class="bv-rm-card__detail-row">
+                    <span class="bv-rm-card__detail-label">Forventet adfærd</span>
+                    <span class="bv-rm-card__detail-value">{{ item.expected|e }}</span>
+                </div>
+                {% endif %}
+
+                {# Systemoplysninger (System metadata) — only if submitter present #}
+                {% if item.submitter_username is defined and item.submitter_username is not empty %}
+                <div class="bv-rm-card__detail-row">
+                    <span class="bv-rm-card__detail-label">Systemoplysninger</span>
+                    <span class="bv-rm-card__detail-value">
+                        <span class="bv-rm-card__submitter">
+                            <span class="material-symbols-outlined" aria-hidden="true">person</span>
+                            {{ item.submitter_username|e }}
+                        </span>
+                        {% if item.timestamp is defined and item.timestamp is not empty %}
+                            {% if item.timestamp matches '/^\\d{4}-\\d{2}-\\d{2}/' %}
+                                {% set months_da = {
+                                    '01': 'januar', '02': 'februar', '03': 'marts',  '04': 'april',
+                                    '05': 'maj',    '06': 'juni',    '07': 'juli',   '08': 'august',
+                                    '09': 'september', '10': 'oktober', '11': 'november', '12': 'december'
+                                } %}
+                                <span class="bv-rm-card__date">
+                                    <span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>
+                                    {{ item.timestamp|date('j') }}. {{ months_da[item.timestamp|date('m')]|default('Ukendt dato') }} {{ item.timestamp|date('Y') }}
+                                </span>
+                            {% else %}
+                                <span class="bv-rm-card__date">Ukendt dato</span>
+                            {% endif %}
+                        {% endif %}
+                    </span>
+                </div>
+                {% endif %}
+
+            </div>
+            {% endif %}{# end bug detail panel #}
+
+            {# Feature community value block — only if community_value is present #}
+            {% if item_type == 'feature' and item.community_value is defined and item.community_value is not empty %}
+            <div class="bv-rm-card__detail-panel">
+                <div class="bv-rm-card__detail-row">
+                    <span class="bv-rm-card__detail-label">Værdi for fællesskabet</span>
+                    <span class="bv-rm-card__detail-value">{{ item.community_value|e }}</span>
+                </div>
+            </div>
+            {% endif %}{# end feature community value #}
+
+        {% endif %}{# end not is_locked #}
+
     </div>
     {% endif %}
 
