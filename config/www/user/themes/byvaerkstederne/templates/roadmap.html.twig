@@ -561,7 +561,25 @@
 
             } else {
                 if (countEl) countEl.textContent = prevCount;
-                var errMsg = (result.data && result.data.error) || 'Stemme mislykkedes. Prøv igen.';
+                // Defensive error extraction: handle both response shapes and non-string error values.
+                // New server format: {status:"error", data:{error:"string"}}
+                // Fallback format:   {error:"string"} or {error:{message:"string"}}
+                var rawErr = null;
+                if (result.data) {
+                    if (result.data.data && result.data.data.error !== undefined) {
+                        rawErr = result.data.data.error;
+                    } else if (result.data.error !== undefined) {
+                        rawErr = result.data.error;
+                    }
+                }
+                var errMsg;
+                if (typeof rawErr === 'string' && rawErr !== '') {
+                    errMsg = rawErr;
+                } else if (rawErr !== null && typeof rawErr === 'object' && typeof rawErr.message === 'string' && rawErr.message !== '') {
+                    errMsg = rawErr.message;
+                } else {
+                    errMsg = 'Stemme mislykkedes. Prøv igen.';
+                }
                 showToast(errMsg, 'error');
             }
         })

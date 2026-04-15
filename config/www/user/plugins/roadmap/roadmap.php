@@ -30,7 +30,7 @@ class RoadmapPlugin extends Plugin
     public static function getSubscribedEvents(): array
     {
         return [
-            'onPluginsInitialized' => ['onPluginsInitialized', 0],
+            'onPluginsInitialized' => ['onPluginsInitialized', 1000],
             'onFlexAfterSave'      => ['onFlexAfterSave', 0],
         ];
     }
@@ -255,7 +255,7 @@ class RoadmapPlugin extends Plugin
         // Must be authenticated
         $user = $this->grav['user'] ?? null;
         if (!$user || !$user->authenticated || !$user->authorized) {
-            $this->sendJson(['error' => 'Ikke autoriseret. Log ind for at stemme.'], 401);
+            $this->sendError('Ikke autoriseret. Log ind for at stemme.', 401);
         }
 
         // CSRF nonce — two-layer check:
@@ -263,7 +263,7 @@ class RoadmapPlugin extends Plugin
         // 2) One-time-use enforcement via session blacklist to prevent replay
         $nonce = $_POST['vote_nonce'] ?? '';
         if (!Utils::verifyNonce($nonce, 'roadmap-vote')) {
-            $this->sendJson(['error' => 'Ugyldig sikkerhedstoken. Genindlæs siden og prøv igen.'], 403);
+            $this->sendError('Ugyldig sikkerhedstoken. Genindlæs siden og prøv igen.', 403);
         }
 
         // Replay protection: reject nonces that have already been used
@@ -271,7 +271,7 @@ class RoadmapPlugin extends Plugin
         $usedNonces = ($session ? ($session->get('bv_used_vote_nonces') ?? []) : []);
 
         if (in_array($nonce, $usedNonces, true)) {
-            $this->sendJson(['error' => 'Sikkerhedstoken er allerede brugt. Genindlæs siden og prøv igen.'], 403);
+            $this->sendError('Sikkerhedstoken er allerede brugt. Genindlæs siden og prøv igen.', 403);
         }
 
         // Mark nonce as used (cap to 100 entries to prevent session bloat)
@@ -286,17 +286,17 @@ class RoadmapPlugin extends Plugin
         $itemId = trim($_POST['item_id'] ?? '');
 
         if ($itemId === '') {
-            $this->sendJson(['error' => 'Ugyldige parametre.'], 400);
+            $this->sendError('Ugyldige parametre.', 400);
         }
 
         $dataFile = $this->getDataFilePath();
         if (!file_exists($dataFile)) {
-            $this->sendJson(['error' => 'Roadmap-database ikke fundet.'], 500);
+            $this->sendError('Roadmap-database ikke fundet.', 500);
         }
 
         $items = $this->loadYaml($dataFile);
         if (!isset($items[$itemId])) {
-            $this->sendJson(['error' => 'Roadmap-element ikke fundet.'], 404);
+            $this->sendError('Roadmap-element ikke fundet.', 404);
         }
 
         $item     = $items[$itemId];
@@ -306,12 +306,12 @@ class RoadmapPlugin extends Plugin
 
         // Only published items are voteable
         if (empty($item['published'])) {
-            $this->sendJson(['error' => 'Dette element er ikke tilgængeligt.'], 403);
+            $this->sendError('Dette element er ikke tilgængeligt.', 403);
         }
 
         // Votes-released lock: if admin has released votes, voting is permanently closed for this item
         if (!empty($item['votes_released'])) {
-            $this->sendJson(['error' => 'Stemmeafgivelse er frigivet og låst for dette element.'], 423);
+            $this->sendError('Stemmeafgivelse er frigivet og låst for dette element.', 409);
         }
 
         // Safety net: auto-release votes if status is klar_til_implementation and votes haven't been released
@@ -330,13 +330,13 @@ class RoadmapPlugin extends Plugin
         if ($action === 'add') {
             // Rule 3: locked status check
             if (in_array($status, self::LOCKED_STATUSES, true)) {
-                $this->sendJson(['error' => 'Stemmeafgivelse er låst for dette element.'], 409);
+                $this->sendError('Stemmeafgivelse er låst for dette element.', 409);
             }
 
             // Rule 1: budget check
             $budget = $this->getUserBudget($items, $username, $type);
             if ($budget <= 0) {
-                $this->sendJson(['error' => 'Du har ikke flere stemmer til rådighed i denne kategori.'], 409);
+                $this->sendError('Du har ikke flere stemmer til rådighed i denne kategori.', 409);
             }
 
             // Apply vote
@@ -351,7 +351,7 @@ class RoadmapPlugin extends Plugin
         }
 
         if (!$this->saveYaml($dataFile, $items)) {
-            $this->sendJson(['error' => 'Kunne ikke gemme stemme. Prøv igen.'], 500);
+            $this->sendError('Kunne ikke gemme stemme. Prøv igen.', 500);
         }
 
         // Re-compute budgets after save
@@ -491,6 +491,15 @@ class RoadmapPlugin extends Plugin
             \Symfony\Component\Yaml\Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK
         );
         return file_put_contents($path, $yaml, LOCK_EX) !== false;
+    }
+
+    /**
+     * Send a well-formed error JSON response and terminate.
+     * Body format: {"status":"error","data":{"error":"<message>"}}
+     */
+    private function sendError(string $message, int $status): never
+    {
+        $this->sendJson(['status' => 'error', 'data' => ['error' => $message]], $status);
     }
 
     private function sendJson(array $data, int $status = 200): never
