@@ -268,7 +268,7 @@ class RoadmapPlugin extends Plugin
 
         // Replay protection: reject nonces that have already been used
         $session    = $this->grav['session'] ?? null;
-        $usedNonces = ($session ? ($session->get('bv_used_vote_nonces') ?? []) : []);
+        $usedNonces = ($session ? ($session->bv_used_vote_nonces ?? []) : []);
 
         if (in_array($nonce, $usedNonces, true)) {
             $this->sendError('Sikkerhedstoken er allerede brugt. Genindlæs siden og prøv igen.', 403);
@@ -280,7 +280,7 @@ class RoadmapPlugin extends Plugin
             $usedNonces = array_slice($usedNonces, -100);
         }
         if ($session) {
-            $session->set('bv_used_vote_nonces', $usedNonces);
+            $session->bv_used_vote_nonces = $usedNonces;
         }
 
         $itemId = trim($_POST['item_id'] ?? '');
