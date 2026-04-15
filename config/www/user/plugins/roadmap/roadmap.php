@@ -322,10 +322,10 @@ class RoadmapPlugin extends Plugin
             $item  = $items[$itemId];
         }
 
-        // Auto-toggle: determine action from current vote state (ignores client-supplied action)
         $votes    = $item['votes'] ?? [];
         $hasVoted = isset($votes[$username]);
-        $action   = $hasVoted ? 'remove' : 'add';
+        $action   = trim($_POST['action'] ?? 'add');
+        if ($action === 'add' && $hasVoted) $this->sendError('Du har allerede stemt på dette element.', 409);
 
         if ($action === 'add') {
             // Rule 3: locked status check
