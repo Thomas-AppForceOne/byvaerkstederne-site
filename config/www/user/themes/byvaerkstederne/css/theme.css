@@ -1252,6 +1252,24 @@ a { color: inherit; text-decoration: none; }
     transition: background 0.1s;
 }
 .bv-footer__nav a:hover { background: var(--surface-container-high); }
+.bv-footer__nav button {
+    font-family: var(--font-headline);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
+    color: var(--on-surface-variant);
+    padding: var(--space-1) var(--space-2);
+    margin: 0 calc(var(--space-2) * -1);
+    transition: background 0.1s;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: inherit;
+    text-align: left;
+    display: block;
+    width: 100%;
+}
+.bv-footer__nav button:hover { background: var(--surface-container-high); }
 
 .bv-footer__contact { display: flex; flex-direction: column; gap: var(--space-6); }
 .bv-footer__contact-item {
