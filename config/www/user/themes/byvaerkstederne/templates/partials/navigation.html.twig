@@ -18,17 +18,19 @@
             <a href="/vaerkstedskalenderen" class="bv-nav__link {% if page.route == '/vaerkstedskalenderen' %}is-active{% endif %}">V&aelig;rkstedskalenderen</a>
             <a href="/vaerksteder" class="bv-nav__link {% if page.route starts with '/vaerksteder' %}is-active{% endif %}">V&aelig;rksteder</a>
             <a href="/kontakt" class="bv-nav__link {% if page.route == '/kontakt' %}is-active{% endif %}">Kontakt</a>
+            <a href="/foreslaa-feature" class="bv-nav__link {% if page.route == '/foreslaa-feature' %}is-active{% endif %}">Forsl&aring; Feature</a>
+            <a href="/roadmap" class="bv-nav__link {% if page.route == '/roadmap' %}is-active{% endif %}">Roadmap</a>
         {% endif %}
 
         {% if grav.user.authenticated and grav.user.authorized %}
+            <a href="#" class="bv-nav__link bv-nav__link--bug-report" onclick="bvBugReport.open(); return false;" aria-haspopup="dialog">
+                <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;" aria-hidden="true">bug_report</span>
+                Rapport&eacute;r fejl
+            </a>
             <span class="bv-nav__user">
                 <span class="material-symbols-outlined" style="font-size: 1.25rem; vertical-align: middle;">person</span>
                 {{ grav.user.fullname|default(grav.user.username) }}
             </span>
-            <button class="bv-nav__link bv-nav__rapporter" type="button" onclick="bvBugReport.open(); return false;" aria-label="Rapportér fejl på siden">
-                <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;" aria-hidden="true">bug_report</span>
-                Rapportér fejl
-            </button>
             <a href="{{ logout_url|e }}" class="bv-nav__link">Log ud</a>
         {% else %}
             <a href="#" class="bv-nav__link" onclick="document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;">Log ind</a>
@@ -48,6 +50,8 @@
         <a href="/vaerkstedskalenderen" class="bv-mobile-menu__link">V&aelig;rkstedskalenderen</a>
         <a href="/vaerksteder" class="bv-mobile-menu__link">V&aelig;rksteder</a>
         <a href="/kontakt" class="bv-mobile-menu__link">Kontakt</a>
+        <a href="/foreslaa-feature" class="bv-mobile-menu__link {% if page.route == '/foreslaa-feature' %}is-active{% endif %}">Forsl&aring; Feature</a>
+        <a href="/roadmap" class="bv-mobile-menu__link {% if page.route == '/roadmap' %}is-active{% endif %}">Roadmap</a>
         <hr class="bv-mobile-menu__divider"/>
         <a href="/vedtaegter" class="bv-mobile-menu__link bv-mobile-menu__link--secondary">Vedt&aelig;gter</a>
         <a href="/privatlivspolitik" class="bv-mobile-menu__link bv-mobile-menu__link--secondary">Privatliv</a>
@@ -55,14 +59,14 @@
         <a href="/presse" class="bv-mobile-menu__link bv-mobile-menu__link--secondary">Presse</a>
         <hr class="bv-mobile-menu__divider"/>
         {% if grav.user.authenticated and grav.user.authorized %}
+            <a href="#" class="bv-mobile-menu__link" onclick="document.body.classList.remove('menu-open'); bvBugReport.open(); return false;" aria-haspopup="dialog">
+                <span class="material-symbols-outlined" style="vertical-align: middle; margin-right: 0.5rem;" aria-hidden="true">bug_report</span>
+                Rapport&eacute;r fejl
+            </a>
             <span class="bv-mobile-menu__link" style="color: var(--primary);">
                 <span class="material-symbols-outlined" style="vertical-align: middle; margin-right: 0.5rem;">person</span>
                 {{ grav.user.fullname|default(grav.user.username) }}
             </span>
-            <button class="bv-mobile-menu__link" style="background:none;border:none;cursor:pointer;text-align:left;padding:0;font:inherit;width:100%;" type="button" onclick="document.body.classList.remove('menu-open'); bvBugReport.open(); return false;">
-                <span class="material-symbols-outlined" style="vertical-align: middle; margin-right: 0.5rem;" aria-hidden="true">bug_report</span>
-                Rapportér fejl
-            </button>
             <a href="{{ logout_url|e }}" class="bv-mobile-menu__link">Log ud</a>
         {% else %}
             <a href="#" class="bv-mobile-menu__link" onclick="document.body.classList.remove('menu-open'); document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;">Log ind</a>

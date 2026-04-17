@@ -243,10 +243,16 @@
         conf.setAttribute('role', 'status');
         // Escape the plain message text before embedding in HTML
         var safemsg = msg.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        var linkHtml = '';
-        if (roadmapUrl) {
-            linkHtml = '<p class="bv-fs-confirmation__text">' +
-                '<a href="' + roadmapUrl + '" class="bv-fs-sidebar__link">Se dit forslag p&aring; roadmappet &rarr;</a>' +
+        // Link 1: General roadmap link
+        var linkHtml = '<p class="bv-fs-confirmation__text">' +
+            '<a href="/roadmap" class="bv-fs-sidebar__link">Se alle emner p&aring; roadmappet &rarr;</a>' +
+            '</p>';
+        // Link 2: Direct anchor link to the specific item
+        if (roadmapUrl && roadmapUrl.indexOf('#') !== -1) {
+            var safeAnchorUrl = roadmapUrl.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+            var safeDisplayId = (displayId || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            linkHtml += '<p class="bv-fs-confirmation__text">' +
+                '<a href="' + safeAnchorUrl + '" class="bv-fs-sidebar__link">G&aring; direkte til dit forslag (' + safeDisplayId + ') &rarr;</a>' +
                 '</p>';
         }
         conf.innerHTML =

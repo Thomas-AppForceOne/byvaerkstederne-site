@@ -142,3 +142,11 @@ form:
     vote_count:
       type: display
       label: Antal stemmer (skrivebeskyttet)
+
+    votes_released:
+      type: display
+      label: Stemmer frigivet
+
+    display_id:
+      type: text
+      label: Visnings-ID (f.eks. #A1B2)

@@ -1,0 +1,14 @@
+name: Feature Suggestion
+version: 1.0.0
+description: Giver autentificerede medlemmer mulighed for at indsende feature-forslag, og giver admins mulighed for at godkende eller afvise dem.
+icon: lightbulb
+author:
+  name: Byværkstederne
+  email: kontakt@byvaerkstederne.dk
+homepage: https://byvaerkstederne.dk
+license: MIT
+
+dependencies:
+  - { name: grav, version: '>=1.7.0' }
+  - { name: flex-objects, version: '>=1.0.0' }
+  - { name: login, version: '>=3.0.0' }

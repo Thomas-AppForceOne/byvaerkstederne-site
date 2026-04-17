@@ -1,17 +1,33 @@
 suggestion_promoted_dark_mode:
   username: testmedlem
   created_at: '2026-04-03T08:15:00Z'
-  title: "Mørkt tema til platformen"
-  description: "Giv brugerne mulighed for at skifte mellem lyst og mørkt interface via en toggle i navigationen eller brugerindstillingerne. Systemets foretrukne tema (prefers-color-scheme) bør respekteres automatisk."
-  community_value: "Reducerer øjenbelastning ved aftenssessioner og forbedrer tilgængelighed for brugere med lysfølsomhed. Mange af vores medlemmer arbejder i værkstedet om aftenen."
+  title: 'Mørkt tema til platformen'
+  description: 'Giv brugerne mulighed for at skifte mellem lyst og mørkt interface via en toggle i navigationen eller brugerindstillingerne. Systemets foretrukne tema (prefers-color-scheme) bør respekteres automatisk.'
+  community_value: 'Reducerer øjenbelastning ved aftenssessioner og forbedrer tilgængelighed for brugere med lysfølsomhed. Mange af vores medlemmer arbejder i værkstedet om aftenen.'
   status: approved
   roadmap_id: rm_promoted_dark_mode
-
 suggestion_promoted_qr_codes:
   username: aktivtmedlem
   created_at: '2026-04-04T13:00:00Z'
-  title: "QR-koder på maskiner i værkstedet"
-  description: "Opsæt QR-koder på alle maskiner i værkstedet, som scanner direkte til den tilhørende brugervejledning på hjemmesiden. Vejledningerne bør indeholde sikkerhedsinstruktioner, vedligeholdelsesinfo og video-tutorials."
-  community_value: "Gør det markant nemmere for nye medlemmer at bruge maskinerne korrekt og reducerer behovet for personlig oplæring. Kan også hjælpe erfarne brugere med at genfinde specifikke procedurer."
+  title: 'QR-koder på maskiner i værkstedet'
+  description: 'Opsæt QR-koder på alle maskiner i værkstedet, som scanner direkte til den tilhørende brugervejledning på hjemmesiden. Vejledningerne bør indeholde sikkerhedsinstruktioner, vedligeholdelsesinfo og video-tutorials.'
+  community_value: 'Gør det markant nemmere for nye medlemmer at bruge maskinerne korrekt og reducerer behovet for personlig oplæring. Kan også hjælpe erfarne brugere med at genfinde specifikke procedurer.'
   status: approved
   roadmap_id: rm_promoted_qr_codes
+suggestion_1874a0331f5973e4:
+  username: thomasadmin
+  created_at: '2026-04-12T19:03:28Z'
+  title: 'test af nye features'
+  description: 'det skal lave automatiserede tests af nye features når de implementers'
+  community_value: 'at skabe en bedre oplevelse med websiteted'
+  status: pending
+  roadmap_id: null
+suggestion_417deccbd0bfb941:
+  username: thomasadmin
+  created_at: '2026-04-13T04:14:09Z'
+  title: 'test test test'
+  description: test
+  community_value: test
+  status: approved
+  roadmap_id: '#F003'
+  display_id: '#F003'

@@ -343,10 +343,15 @@ var bvBugReport = (function() {
         toast.className = 'bv-bug-report-toast';
         toast.setAttribute('role', 'status');
         toast.setAttribute('aria-live', 'polite');
-        // Build HTML: message text + optional roadmap link
+        // Build HTML: message text + roadmap links (general + anchor to specific item)
         var html = '<span>' + message.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>';
-        if (roadmapUrl) {
-            html += ' <a href="' + roadmapUrl + '" style="color:inherit;text-decoration:underline;margin-left:0.25em;">Se på roadmap</a>';
+        // Link 1: General roadmap page
+        html += ' <a href="/roadmap" style="color:inherit;text-decoration:underline;margin-left:0.25em;">Se roadmap</a>';
+        // Link 2: Direct anchor link to the specific item (roadmapUrl is /roadmap#b004)
+        if (roadmapUrl && roadmapUrl.indexOf('#') !== -1) {
+            var safeAnchorUrl = roadmapUrl.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+            var safeDisplayId = (displayId || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            html += ' &mdash; <a href="' + safeAnchorUrl + '" style="color:inherit;text-decoration:underline;">G&aring; til ' + safeDisplayId + '</a>';
         }
         toast.innerHTML = html;
         toast.style.cssText = [

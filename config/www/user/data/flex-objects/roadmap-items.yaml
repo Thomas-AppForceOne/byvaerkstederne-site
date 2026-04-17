@@ -3,81 +3,128 @@ rm_promoted_login_mobile:
   type: bug
   priority: hoej
   status: rapporteret
-  title: "Login overlay lukker ikke når man trykker på baggrunden på iOS"
-  description: "Når man trykker på baggrunden af login-overlayden på iOS Safari, lukker den ikke korrekt. Man er nødt til at bruge luk-knappen."
-  expected: "Overlayden lukker når man trykker uden for boksen, ligesom på desktop."
+  title: 'Login overlay lukker ikke når man trykker på baggrunden på iOS'
+  description: 'Når man trykker på baggrunden af login-overlayden på iOS Safari, lukker den ikke korrekt. Man er nødt til at bruge luk-knappen.'
+  expected: 'Overlayden lukker når man trykker uden for boksen, ligesom på desktop.'
   steps:
-    - "Åbn hjemmesiden på en iPhone i Safari"
-    - "Klik på 'Log ind' i navigationen"
-    - "Tryk på den mørke baggrund uden for login-boksen"
-    - "Login-overlayden lukker ikke"
+    - 'Åbn hjemmesiden på en iPhone i Safari'
+    - 'Klik på ''Log ind'' i navigationen'
+    - 'Tryk på den mørke baggrund uden for login-boksen'
+    - 'Login-overlayden lukker ikke'
   page_url: /log-ind
   submitter_username: testmedlem
   source_report_id: br_promoted_login_mobile
   source_suggestion_id: ''
   timestamp: '2026-04-01T09:30:00Z'
   vote_count: 0
-  votes: {}
-  vote_history: {}
+  votes: {  }
+  vote_history: {  }
   votes_released: false
   display_id: '#B001'
-
 rm_promoted_contact_form:
   published: true
   type: bug
   priority: middel
   status: under_afklaring
-  title: "Kontaktformular viser generisk fejlbesked ved lange beskeder"
-  description: "Hvis beskeden i kontaktformularen overstiger 500 tegn, vises en generisk fejlbesked i stedet for en forklaring om tegngrænserne."
-  expected: "En klar fejlbesked om tegngrænserne vises direkte under tekstfeltet."
+  title: 'Kontaktformular viser generisk fejlbesked ved lange beskeder'
+  description: 'Hvis beskeden i kontaktformularen overstiger 500 tegn, vises en generisk fejlbesked i stedet for en forklaring om tegngrænserne.'
+  expected: 'En klar fejlbesked om tegngrænserne vises direkte under tekstfeltet.'
   steps:
-    - "Gå til /kontakt siden"
-    - "Skriv mere end 500 tegn i beskedfeltet"
-    - "Klik 'Send besked'"
-    - "En generisk fejl vises i stedet for en specifik forklaring"
+    - 'Gå til /kontakt siden'
+    - 'Skriv mere end 500 tegn i beskedfeltet'
+    - 'Klik ''Send besked'''
+    - 'En generisk fejl vises i stedet for en specifik forklaring'
   page_url: /kontakt
   submitter_username: testmedlem
   source_report_id: br_promoted_contact_form
   source_suggestion_id: ''
   timestamp: '2026-04-02T11:45:00Z'
   vote_count: 0
-  votes: {}
-  vote_history: {}
+  votes: {  }
+  vote_history:
+    thomasadmin: true
   votes_released: false
   display_id: '#B002'
-
 rm_promoted_dark_mode:
   published: true
   type: feature
   priority: nyhed
   status: rapporteret
-  title: "Mørkt tema til platformen"
-  description: "Giv brugerne mulighed for at skifte mellem lyst og mørkt interface via en toggle i navigationen. Systemets foretrukne tema bør respekteres automatisk."
-  community_value: "Reducerer øjenbelastning ved aftenssessioner og forbedrer tilgængelighed for brugere med lysfølsomhed."
+  title: 'Mørkt tema til platformen'
+  description: 'Giv brugerne mulighed for at skifte mellem lyst og mørkt interface via en toggle i navigationen. Systemets foretrukne tema bør respekteres automatisk.'
+  community_value: 'Reducerer øjenbelastning ved aftenssessioner og forbedrer tilgængelighed for brugere med lysfølsomhed.'
   source_username: testmedlem
   source_suggestion_id: suggestion_promoted_dark_mode
   source_report_id: ''
   timestamp: '2026-04-03T08:15:00Z'
-  vote_count: 0
-  votes: {}
-  vote_history: {}
+  vote_count: 1
+  votes:
+    thomasadmin: true
+  vote_history:
+    thomasadmin: true
   votes_released: false
   display_id: '#F001'
-
 rm_promoted_qr_codes:
   published: true
   type: feature
   priority: forbedring
   status: under_afklaring
-  title: "QR-koder på maskiner i værkstedet"
-  description: "Scanning af QR-koder på maskiner i værkstedet linker direkte til deres brugervejledning på hjemmesiden med sikkerhedsinstruktioner og video-tutorials."
-  community_value: "Gør det nemmere for nye medlemmer at bruge maskinerne korrekt og reducerer behovet for personlig instruktion."
+  title: 'QR-koder på maskiner i værkstedet'
+  description: 'Scanning af QR-koder på maskiner i værkstedet linker direkte til deres brugervejledning på hjemmesiden med sikkerhedsinstruktioner og video-tutorials.'
+  community_value: 'Gør det nemmere for nye medlemmer at bruge maskinerne korrekt og reducerer behovet for personlig instruktion.'
   source_username: aktivtmedlem
   source_suggestion_id: suggestion_promoted_qr_codes
   source_report_id: ''
   timestamp: '2026-04-04T13:00:00Z'
-  vote_count: 0
-  votes: {}
-  vote_history: {}
+  vote_count: 1
+  votes:
+    thomasadmin: true
+  vote_history:
+    thomasadmin: true
   votes_released: false
   display_id: '#F002'
+rm_2a20e548c5c296a7:
+  published: true
+  roadmap_id: rm_2a20e548c5c296a7
+  type: feature
+  priority: nyhed
+  status: rapporteret
+  display_id: '#F003'
+  title: 'test test test'
+  description: test
+  community_value: test
+  source_username: thomasadmin
+  source_suggestion_id: suggestion_417deccbd0bfb941
+  source_report_id: ''
+  timestamp: '2026-04-13T04:14:09Z'
+  vote_count: 0
+  votes: {  }
+  vote_history: {  }
+  votes_released: false
+rm_33b1f83311238c96:
+  published: true
+  promoted: true
+  roadmap_id: rm_33b1f83311238c96
+  type: bug
+  priority: middel
+  status: rapporteret
+  display_id: '#B003'
+  title: gogogogo
+  description: gogogogo
+  expected: 'gogo?'
+  steps:
+    - qoq1
+    - qwe2
+    - erere3
+    - aaaa4
+  page_url: 'http://localhost:8080/roadmap'
+  submitter_username: thomasadmin
+  source_report_id: br_65d6e613c9f9220e
+  source_suggestion_id: ''
+  timestamp: '2026-04-13T04:16:13Z'
+  vote_count: 1
+  votes:
+    thomasadmin: true
+  vote_history:
+    thomasadmin: true
+  votes_released: false
