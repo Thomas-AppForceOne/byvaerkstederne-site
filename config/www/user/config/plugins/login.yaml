@@ -6,6 +6,7 @@ route_after_login: '/'
 route_after_logout: '/'
 redirect_after_login: true
 redirect_after_logout: true
+redirect_to_login: true
 dynamic_page_visibility: true
 
 user_registration:
