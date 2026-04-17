@@ -391,6 +391,269 @@ var bvBugReport = (function() {
 }());
 
 // ============================================================================
+// Feature Suggestion Overlay
+// ============================================================================
+var bvFeatureSuggestion = (function() {
+    'use strict';
+
+    var overlay = null;
+    var panel = null;
+    var prevFocus = null;
+
+    // All focusable elements selector
+    var FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    function init() {
+        overlay = document.getElementById('bv-feature-suggestion-overlay');
+        if (!overlay) return; // Not rendered (unauthenticated) — no-op
+
+        panel = overlay.querySelector('.bv-feature-suggestion-overlay__panel');
+
+        // Close buttons
+        var closeBtn  = document.getElementById('bv-fs-overlay-close');
+        var cancelBtn = document.getElementById('bv-fs-overlay-cancel-btn');
+        if (closeBtn)  closeBtn.addEventListener('click', close);
+        if (cancelBtn) cancelBtn.addEventListener('click', close);
+
+        // Submit
+        var submitBtn = document.getElementById('bv-fs-overlay-submit');
+        if (submitBtn) submitBtn.addEventListener('click', submit);
+
+        // Backdrop click closes overlay
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) close();
+        });
+
+        // Escape key + focus trap
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && overlay.classList.contains('is-open')) {
+                close();
+            }
+            if (e.key === 'Tab' && overlay.classList.contains('is-open')) {
+                trapFocus(e);
+            }
+        });
+    }
+
+    function generateToken() {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            return crypto.randomUUID();
+        }
+        return 'tok_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
+
+    function refreshToken() {
+        var tokenInput = document.getElementById('bv-fs-overlay-submission-token');
+        if (tokenInput) tokenInput.value = generateToken();
+    }
+
+    function open() {
+        if (!overlay) return;
+        prevFocus = document.activeElement;
+        // Reset form state on each open
+        resetForm();
+        // Generate a fresh submission token
+        refreshToken();
+        overlay.classList.add('is-open');
+        overlay.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        // Move focus to first focusable element inside panel
+        setTimeout(function() {
+            if (panel) {
+                var focusable = panel.querySelectorAll(FOCUSABLE);
+                if (focusable.length > 0) focusable[0].focus();
+            }
+        }, 50);
+    }
+
+    function close() {
+        if (!overlay) return;
+        overlay.classList.remove('is-open');
+        overlay.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+        if (prevFocus) {
+            try { prevFocus.focus(); } catch(e) {}
+        }
+    }
+
+    function resetForm() {
+        var form = document.getElementById('bv-fs-overlay-form');
+        if (form) form.reset();
+        // Clear field errors
+        clearFieldErrors();
+        // Hide message box
+        showMessage('', '');
+        // Hide confirmation, show form
+        var confirmEl = document.getElementById('bv-fs-overlay-confirmation');
+        if (confirmEl) { confirmEl.style.display = 'none'; confirmEl.innerHTML = ''; }
+        if (form) form.style.display = '';
+    }
+
+    function trapFocus(e) {
+        if (!panel) return;
+        var focusable = Array.prototype.slice.call(panel.querySelectorAll(FOCUSABLE));
+        if (focusable.length === 0) { e.preventDefault(); return; }
+        var first = focusable[0];
+        var last  = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+            if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+        } else {
+            if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+        }
+    }
+
+    function showMessage(text, type) {
+        var msgEl = document.getElementById('bv-fs-overlay-message');
+        if (!msgEl) return;
+        if (!text) { msgEl.style.display = 'none'; msgEl.textContent = ''; return; }
+        msgEl.className = 'bv-fs-message bv-fs-message--' + type;
+        msgEl.textContent = text;
+        msgEl.style.display = '';
+        msgEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function showFieldError(errorId, msg) {
+        var el = document.getElementById(errorId);
+        if (el) el.textContent = msg;
+    }
+
+    function clearFieldErrors() {
+        ['bv-fs-overlay-title-error', 'bv-fs-overlay-description-error', 'bv-fs-overlay-community-value-error'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.textContent = '';
+        });
+    }
+
+    function setSubmitting(busy) {
+        var submitBtn = document.getElementById('bv-fs-overlay-submit');
+        if (!submitBtn) return;
+        submitBtn.disabled = busy;
+        if (busy) {
+            submitBtn.textContent = 'Sender...';
+        } else {
+            submitBtn.innerHTML = 'Indsend forslag <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.125rem;">arrow_forward</span>';
+        }
+    }
+
+    function showConfirmation(msg, roadmapUrl, displayId) {
+        var form = document.getElementById('bv-fs-overlay-form');
+        var confirmEl = document.getElementById('bv-fs-overlay-confirmation');
+        if (!confirmEl) return;
+
+        // Hide form, show confirmation panel
+        if (form) form.style.display = 'none';
+        showMessage('', '');
+
+        var safemsg = msg.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+        // General roadmap link
+        var linkHtml = '<p class="bv-fs-confirmation__text">' +
+            '<a href="/roadmap" class="bv-fs-sidebar__link">Se alle emner p\u00e5 roadmappet \u2192</a>' +
+            '</p>';
+
+        // Direct anchor link to the specific item
+        if (roadmapUrl && roadmapUrl.indexOf('#') !== -1) {
+            var safeAnchorUrl = roadmapUrl.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+            var safeDisplayId = (displayId || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            linkHtml += '<p class="bv-fs-confirmation__text">' +
+                '<a href="' + safeAnchorUrl + '" class="bv-fs-sidebar__link">G\u00e5 direkte til dit forslag (' + safeDisplayId + ') \u2192</a>' +
+                '</p>';
+        }
+
+        confirmEl.innerHTML =
+            '<div class="bv-fs-confirmation__icon"><span class="material-symbols-outlined" aria-hidden="true">check_circle</span></div>' +
+            '<h2 class="bv-fs-confirmation__title">Forslag publiceret!</h2>' +
+            '<p class="bv-fs-confirmation__text">' + safemsg + '</p>' +
+            linkHtml;
+
+        confirmEl.style.display = '';
+        confirmEl.focus();
+    }
+
+    function submit() {
+        clearFieldErrors();
+        showMessage('', '');
+
+        var titleEl = document.getElementById('bv-fs-overlay-title-input');
+        var descEl  = document.getElementById('bv-fs-overlay-description');
+        var valueEl = document.getElementById('bv-fs-overlay-community-value');
+        var isValid = true;
+
+        // Client-side required field validation — first invalid field gets focus
+        if (!titleEl || titleEl.value.trim() === '') {
+            showFieldError('bv-fs-overlay-title-error', 'Dette felt er p\u00e5kr\u00e6vet.');
+            if (titleEl && isValid) titleEl.focus();
+            isValid = false;
+        }
+        if (!descEl || descEl.value.trim() === '') {
+            showFieldError('bv-fs-overlay-description-error', 'Dette felt er p\u00e5kr\u00e6vet.');
+            if (descEl && isValid) descEl.focus();
+            isValid = false;
+        }
+        if (!valueEl || valueEl.value.trim() === '') {
+            showFieldError('bv-fs-overlay-community-value-error', 'Dette felt er p\u00e5kr\u00e6vet.');
+            if (valueEl && isValid) valueEl.focus();
+            isValid = false;
+        }
+
+        if (!isValid) return;
+
+        var form = document.getElementById('bv-fs-overlay-form');
+        var formData = new FormData(form);
+
+        setSubmitting(true);
+
+        fetch('/feature-suggestion/submit', {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+        })
+        .then(function(response) {
+            return response.json().then(function(data) {
+                return { status: response.status, data: data };
+            });
+        })
+        .then(function(result) {
+            setSubmitting(false);
+            if (result.status === 200 && result.data.success) {
+                var displayId  = result.data.display_id || '';
+                var roadmapUrl = result.data.roadmap_url || '/roadmap';
+                var msg = result.data.message || 'Tak! Dit forslag er nu live p\u00e5 roadmappet.';
+                showConfirmation(msg, roadmapUrl, displayId);
+            } else {
+                var errMsg = result.data.error || 'Indsendelsen mislykkedes. Pr\u00f8v igen.';
+                showMessage(errMsg, 'error');
+                // Map field-level errors from server response
+                if (result.data.field === 'title') {
+                    showFieldError('bv-fs-overlay-title-error', errMsg);
+                    if (titleEl) titleEl.focus();
+                } else if (result.data.field === 'description') {
+                    showFieldError('bv-fs-overlay-description-error', errMsg);
+                    if (descEl) descEl.focus();
+                } else if (result.data.field === 'community_value') {
+                    showFieldError('bv-fs-overlay-community-value-error', errMsg);
+                    if (valueEl) valueEl.focus();
+                }
+            }
+        })
+        .catch(function() {
+            setSubmitting(false);
+            showMessage('Netv\u00e6rksfejl. Kontroll\u00e9r din forbindelse og pr\u00f8v igen.', 'error');
+        });
+    }
+
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+
+    return { open: open, close: close };
+}());
+
+// ============================================================================
 // Mobile menu toggle & existing UI
 // ============================================================================
 // Mobile menu toggle
