@@ -258,29 +258,18 @@ class RoadmapPlugin extends Plugin
             $this->sendError('Ikke autoriseret. Log ind for at stemme.', 401);
         }
 
-        // CSRF nonce — two-layer check:
-        // 1) Grav standard time-based verification
-        // 2) One-time-use enforcement via session blacklist to prevent replay
+        // CSRF nonce — validated via Grav's built-in time-window verifyNonce().
+        // This is the sole CSRF gate; no session-based single-use blacklist is used.
         $nonce = $_POST['vote_nonce'] ?? '';
         if (!Utils::verifyNonce($nonce, 'roadmap-vote')) {
             $this->sendError('Ugyldig sikkerhedstoken. Genindlæs siden og prøv igen.', 403);
         }
 
-        // Replay protection: reject nonces that have already been used
-        $session    = $this->grav['session'] ?? null;
-        $usedNonces = ($session ? ($session->bv_used_vote_nonces ?? []) : []);
-
-        if (in_array($nonce, $usedNonces, true)) {
-            $this->sendError('Sikkerhedstoken er allerede brugt. Genindlæs siden og prøv igen.', 403);
-        }
-
-        // Mark nonce as used (cap to 100 entries to prevent session bloat)
-        $usedNonces[] = $nonce;
-        if (count($usedNonces) > 100) {
-            $usedNonces = array_slice($usedNonces, -100);
-        }
-        if ($session) {
-            $session->bv_used_vote_nonces = $usedNonces;
+        // Defensive cleanup: remove any legacy bv_used_vote_nonces key left in
+        // long-lived sessions from prior deploys that used the session blacklist.
+        $session = $this->grav['session'] ?? null;
+        if ($session && isset($session->bv_used_vote_nonces)) {
+            unset($session->bv_used_vote_nonces);
         }
 
         $itemId = trim($_POST['item_id'] ?? '');
