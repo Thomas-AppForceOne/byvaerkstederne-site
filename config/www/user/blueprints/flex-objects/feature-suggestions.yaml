@@ -1,0 +1,92 @@
+title: Feature-forslag
+description: Indsendte feature-forslag fra medlemmer
+type: flex-objects
+
+config:
+  admin:
+    list:
+      title: title
+      filters:
+        status: pending
+      fields:
+        status:
+          field:
+            type: select
+            label: Status
+          width: 12
+        username:
+          label: Bruger
+          width: 15
+        created_at:
+          label: Tidspunkt
+          width: 20
+        title:
+          label: Idé (titel)
+          link: edit
+    edit:
+      title:
+        template: "Forslag fra {{ object.username ?? 'ukendt' }} — {{ object.title ?? '' }}"
+    configure:
+      authorize: admin.super
+
+  data:
+    object: 'Grav\Common\Flex\Types\Generic\GenericObject'
+    collection: 'Grav\Common\Flex\Types\Generic\GenericCollection'
+    index: 'Grav\Common\Flex\Types\Generic\GenericIndex'
+    storage:
+      class: 'Grav\Framework\Flex\Storage\SimpleStorage'
+      options:
+        formatter:
+          class: 'Grav\Framework\File\Formatter\YamlFormatter'
+        folder: user-data://flex-objects/feature-suggestions.yaml
+    search:
+      options:
+        contains: 1
+      fields:
+        - username
+        - title
+        - description
+
+form:
+  validation: loose
+  fields:
+    username:
+      type: text
+      label: Bruger
+      readonly: true
+
+    created_at:
+      type: text
+      label: Tidspunkt (ISO 8601 UTC)
+      readonly: true
+
+    title:
+      type: text
+      label: Hvad er din idé? (titel)
+      readonly: true
+
+    description:
+      type: textarea
+      label: Beskrivelse af idéen
+      rows: 4
+      readonly: true
+
+    community_value:
+      type: textarea
+      label: Værdi for fællesskabet
+      rows: 3
+      readonly: true
+
+    status:
+      type: select
+      label: Status
+      default: pending
+      options:
+        pending: Afventer gennemgang
+        approved: Godkendt → roadmap
+        archived: Arkiveret
+
+    roadmap_id:
+      type: text
+      label: Roadmap element ID (hvis godkendt)
+      readonly: true

@@ -16,3 +16,6 @@ directories:
   - 'user://blueprints/flex-objects/oenskeliste.yaml'
   - 'user://blueprints/flex-objects/begivenheder.yaml'
   - 'user://blueprints/flex-objects/teammedlemmer.yaml'
+  - 'user://blueprints/flex-objects/bug-reports.yaml'
+  - 'user://blueprints/flex-objects/roadmap-items.yaml'
+  - 'user://blueprints/flex-objects/feature-suggestions.yaml'

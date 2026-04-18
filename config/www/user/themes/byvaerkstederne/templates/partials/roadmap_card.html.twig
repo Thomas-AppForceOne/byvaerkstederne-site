@@ -1,0 +1,283 @@
+{# ============================================================================
+   Roadmap item card partial — v7 simplified design
+   Variables:
+     item        — roadmap item data array
+     item_id     — item YAML key
+     is_auth     — bool: user is authenticated
+     user_voted  — bool: current user has voted on this item
+     bug_budget  — int: remaining bug votes
+     feature_budget — int: remaining feature votes
+   ============================================================================ #}
+
+{% set status = item.status|default('rapporteret') %}
+{% set item_type = item.type|default('bug') %}
+{% set budget = (item_type == 'bug') ? bug_budget : feature_budget %}
+
+{# Map status keys to CSS modifier and display label #}
+{% set status_map = {
+    'rapporteret':             { label: 'Rapporteret',             css: 'rapporteret' },
+    'under_afklaring':         { label: 'Under afklaring',         css: 'under-afklaring' },
+    'klar_til_implementation': { label: 'Klar til implementation', css: 'klar-til-implementation' },
+    'under_implementation':    { label: 'Under implementation',    css: 'under-implementation' },
+    'klar_til_test':           { label: 'Klar til test',           css: 'klar-til-test' },
+    'loest':                   { label: 'Løst',                    css: 'loest' },
+} %}
+{% set status_info = status_map[status] ?? { label: status, css: 'rapporteret' } %}
+
+{# Priority label #}
+{% set priority_map = {
+    'kritisk':     { label: 'Kritisk',     css: 'kritisk' },
+    'hoej':        { label: 'Høj',         css: 'hoej' },
+    'middel':      { label: 'Middel',      css: 'middel' },
+    'lav':         { label: 'Lav',         css: 'lav' },
+    'nyhed':       { label: 'Nyhed',       css: 'nyhed' },
+    'forbedring':  { label: 'Forbedring',  css: 'forbedring' },
+} %}
+{% set priority_key = item.priority|default('middel') %}
+{% set priority_info = priority_map[priority_key] ?? { label: priority_key, css: 'middel' } %}
+
+{# Display ID: use display_id if set, otherwise derive from key #}
+{% set display_id = item.display_id ?? ('#' ~ item_id|slice(-4)|upper) %}
+
+{# Anchor fragment #}
+{% set anchor_id = display_id|lower|replace({'#': ''}) %}
+
+{# Is this item locked for voting? #}
+{% set is_locked = status in ['under_implementation', 'klar_til_test', 'loest'] %}
+{% set is_solved = status == 'loest' %}
+{% set votes_released = item.votes_released is defined and item.votes_released %}
+
+{# Vote count to display #}
+{% set vote_count = item.vote_count|default(0) %}
+
+<article
+    {% if use_canonical_id is defined and use_canonical_id %}id="{{ anchor_id }}"{% endif %}
+    class="bv-rm-card{% if is_locked %} bv-rm-card--locked{% endif %}{% if is_solved %} bv-rm-card--solved{% endif %}{% if status == 'under_implementation' %} bv-rm-card--under-implementation{% endif %}"
+    data-anchor-id="{{ anchor_id }}"
+    data-item-id="{{ item_id|e }}"
+    data-item-type="{{ item_type|e }}"
+    data-item-status="{{ status|e }}"
+    data-item-priority="{{ item.priority|default('middel')|e }}"
+    {% if not is_solved %}
+    data-voted="{{ user_voted ? 'true' : 'false' }}"
+    data-budget="{{ budget }}"
+    {% endif %}
+    role="listitem"
+    tabindex="0"
+    aria-label="{{ item.title|e }}"
+    {% if is_auth and not is_solved %}aria-expanded="false"{% endif %}>
+
+    <div class="bv-rm-card__inner">
+        {# Card content (left side) #}
+        <div class="bv-rm-card__content">
+
+            {# Meta row: priority → ID → status → (lock icon) #}
+            <div class="bv-rm-card__meta" aria-label="Metadata">
+                <span class="bv-rm-priority-badge bv-rm-priority--{{ priority_info.css }}" aria-label="Prioritet: {{ priority_info.label }}">
+                    {{ priority_info.label }}
+                </span>
+                <span class="bv-rm-id-badge" aria-label="ID">{{ display_id }}</span>
+                <span class="bv-rm-status-badge bv-rm-status--{{ status_info.css }}" aria-label="Status: {{ status_info.label }}">
+                    {{ status_info.label }}
+                </span>
+                {% if is_locked and not is_solved %}
+                    <span class="material-symbols-outlined bv-rm-card__lock-icon" aria-label="Låst for stemmeafgivelse">lock</span>
+                {% endif %}
+            </div>
+
+            {# Title #}
+            <h3 class="bv-rm-card__title">{{ item.title|e }}</h3>
+
+            {# Description (two-line clamp) #}
+            <p class="bv-rm-card__desc">{{ item.description|e|truncate(120, true, '…') }}</p>
+
+        </div>
+
+        {# Vote button / completion indicator (right side) #}
+        <div class="bv-rm-card__vote-area">
+            {% if is_solved %}
+                {# Løst: green check_circle icon only — no button, no count #}
+                <span
+                    class="material-symbols-outlined bv-rm-card__check-icon"
+                    aria-label="Løst"
+                    style="font-variation-settings: 'FILL' 1; color: var(--primary); font-size: 1.75rem;">check_circle</span>
+            {% elseif is_auth %}
+                {% if votes_released %}
+                    {# Votes released by admin #}
+                    <button
+                        type="button"
+                        class="bv-rm-card__vote-btn bv-rm-card__vote-btn--locked"
+                        disabled
+                        aria-disabled="true"
+                        aria-label="Stemmeafgivelse er frigivet og låst ({{ vote_count }} stemmer)">
+                        <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+                        <span class="bv-rm-card__vote-count">{{ vote_count }}</span>
+                        <span class="bv-rm-card__vote-label">Låst</span>
+                    </button>
+                {% elseif is_locked %}
+                    {# Locked: disabled #}
+                    <button
+                        type="button"
+                        class="bv-rm-card__vote-btn bv-rm-card__vote-btn--locked"
+                        disabled
+                        aria-disabled="true"
+                        aria-label="Stemmeafgivelse er låst ({{ vote_count }} stemmer)">
+                        <span class="material-symbols-outlined" aria-hidden="true">star</span>
+                        <span class="bv-rm-card__vote-count">{{ vote_count }}</span>
+                        <span class="bv-rm-card__vote-label">Stem</span>
+                    </button>
+                {% else %}
+                    {# Active: interactive vote button #}
+                    {% set no_budget = (budget <= 0) and not user_voted %}
+                    <button
+                        type="button"
+                        class="bv-rm-card__vote-btn{% if user_voted %} is-voted{% endif %}"
+                        data-action="{{ user_voted ? 'remove' : 'add' }}"
+                        aria-pressed="{{ user_voted ? 'true' : 'false' }}"
+                        aria-label="{{ user_voted ? 'Fjern din stemme (' ~ vote_count ~ ' stemmer)' : 'Stem (' ~ vote_count ~ ' stemmer)' }}"
+                        {% if no_budget and not user_voted %}aria-disabled="true"{% endif %}>
+                        <span class="material-symbols-outlined" aria-hidden="true">star</span>
+                        <span class="bv-rm-card__vote-count">{{ vote_count }}</span>
+                        <span class="bv-rm-card__vote-label">Stem</span>
+                    </button>
+                {% endif %}
+            {% else %}
+                {# Unauthenticated #}
+                <button
+                    type="button"
+                    class="bv-rm-card__vote-btn bv-rm-card__vote-btn--unauth"
+                    disabled
+                    aria-disabled="true"
+                    aria-label="{{ vote_count }} stemmer — log ind for at stemme">
+                    <span class="material-symbols-outlined" aria-hidden="true">star</span>
+                    <span class="bv-rm-card__vote-count">{{ vote_count }}</span>
+                </button>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Inline action bar (expanded on card click, authenticated only) #}
+    {% if is_auth and not is_solved %}
+    <div class="bv-rm-card__action-bar" hidden aria-label="Stemme-handlinger">
+        {% if is_locked %}
+            <p class="bv-rm-card__action-locked">
+                <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+                Stemmeafgivelse er låst — dette emne er under arbejde eller afsluttet.
+            </p>
+        {% elseif votes_released %}
+            <p class="bv-rm-card__action-locked">
+                <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+                Stemmeafgivelse er frigivet og låst af administrator.
+            </p>
+        {% else %}
+            {# Tilføj stemme #}
+            {% set add_disabled = (budget <= 0 and not user_voted) %}
+            <button
+                type="button"
+                class="bv-rm-vote-btn bv-rm-vote-btn--add{% if user_voted %} bv-rm-vote-btn--hidden{% endif %}"
+                data-action="add"
+                {% if add_disabled %}aria-disabled="true"{% endif %}
+                aria-label="Tilføj stemme til {{ item.title|e }}">
+                <span class="material-symbols-outlined" aria-hidden="true">star</span>
+                Tilføj stemme
+                {% if add_disabled %}
+                    <span class="bv-rm-vote-btn__hint">(ingen stemmer tilbage)</span>
+                {% endif %}
+            </button>
+
+            {# Fjern stemme #}
+            <button
+                type="button"
+                class="bv-rm-vote-btn bv-rm-vote-btn--remove{% if not user_voted %} bv-rm-vote-btn--hidden{% endif %}"
+                data-action="remove"
+                {% if not user_voted %}aria-disabled="true"{% endif %}
+                aria-label="Fjern din stemme fra {{ item.title|e }}">
+                <span class="material-symbols-outlined" aria-hidden="true">cancel</span>
+                Fjern stemme
+            </button>
+        {% endif %}
+
+        {# ── Detail panel (non-locked, non-solved items only) ─────────────── #}
+        {% if not is_locked %}
+
+            {# Bug detail panel: steps, page_url, expected, submitter, timestamp #}
+            {% if item_type == 'bug' %}
+            <div class="bv-rm-card__detail-panel">
+
+                {# Reproduktionsskridt (Steps to reproduce) #}
+                <div class="bv-rm-card__detail-row">
+                    <span class="bv-rm-card__detail-label">Reproduktionsskridt</span>
+                    {% if item.steps is defined and item.steps is not empty %}
+                    <ol class="bv-rm-card__detail-steps">
+                        {% for step in item.steps %}
+                        <li>{{ step|e }}</li>
+                        {% endfor %}
+                    </ol>
+                    {% else %}
+                    <span class="bv-rm-card__detail-empty">Ingen trin angivet</span>
+                    {% endif %}
+                </div>
+
+                {# Berørt side (Affected page URL) — only if present #}
+                {% if item.page_url is defined and item.page_url is not empty %}
+                <div class="bv-rm-card__detail-row">
+                    <span class="bv-rm-card__detail-label">Berørt side</span>
+                    <span class="bv-rm-card__detail-value">{{ item.page_url|e }}</span>
+                </div>
+                {% endif %}
+
+                {# Forventet adfærd (Expected behaviour) — only if present #}
+                {% if item.expected is defined and item.expected is not empty %}
+                <div class="bv-rm-card__detail-row">
+                    <span class="bv-rm-card__detail-label">Forventet adfærd</span>
+                    <span class="bv-rm-card__detail-value">{{ item.expected|e }}</span>
+                </div>
+                {% endif %}
+
+                {# Systemoplysninger (System metadata) — only if submitter present #}
+                {% if item.submitter_username is defined and item.submitter_username is not empty %}
+                <div class="bv-rm-card__detail-row">
+                    <span class="bv-rm-card__detail-label">Systemoplysninger</span>
+                    <span class="bv-rm-card__detail-value">
+                        <span class="bv-rm-card__submitter">
+                            <span class="material-symbols-outlined" aria-hidden="true">person</span>
+                            {{ item.submitter_username|e }}
+                        </span>
+                        {% if item.timestamp is defined and item.timestamp is not empty %}
+                            {% if item.timestamp matches '/^\\d{4}-\\d{2}-\\d{2}/' %}
+                                {% set months_da = {
+                                    '01': 'januar', '02': 'februar', '03': 'marts',  '04': 'april',
+                                    '05': 'maj',    '06': 'juni',    '07': 'juli',   '08': 'august',
+                                    '09': 'september', '10': 'oktober', '11': 'november', '12': 'december'
+                                } %}
+                                <span class="bv-rm-card__date">
+                                    <span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>
+                                    {{ item.timestamp|date('j') }}. {{ months_da[item.timestamp|date('m')]|default('Ukendt dato') }} {{ item.timestamp|date('Y') }}
+                                </span>
+                            {% else %}
+                                <span class="bv-rm-card__date">Ukendt dato</span>
+                            {% endif %}
+                        {% endif %}
+                    </span>
+                </div>
+                {% endif %}
+
+            </div>
+            {% endif %}{# end bug detail panel #}
+
+            {# Feature community value block — only if community_value is present #}
+            {% if item_type == 'feature' and item.community_value is defined and item.community_value is not empty %}
+            <div class="bv-rm-card__detail-panel">
+                <div class="bv-rm-card__detail-row">
+                    <span class="bv-rm-card__detail-label">Værdi for fællesskabet</span>
+                    <span class="bv-rm-card__detail-value">{{ item.community_value|e }}</span>
+                </div>
+            </div>
+            {% endif %}{# end feature community value #}
+
+        {% endif %}{# end not is_locked #}
+
+    </div>
+    {% endif %}
+
+</article>

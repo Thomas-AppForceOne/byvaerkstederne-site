@@ -1,0 +1,115 @@
+{% extends 'partials/base.html.twig' %}
+
+{% block body %}
+<section class="bv-section bv-fs-page">
+    <div class="bv-container">
+
+        {# Page headline #}
+        <div class="bv-fs-hero">
+            <span class="bv-fs-hero__eyebrow">Byg fremtiden for foreningens digitale hjem</span>
+            <h1 class="bv-headline bv-fs-hero__title">
+                Forsl&aring; ny <span style="color: var(--secondary);">Feature</span>
+            </h1>
+            <div class="bv-fs-hero__divider" aria-hidden="true"></div>
+            <p class="bv-body-lg bv-fs-hero__lead">
+                Har du en id&eacute; til hvordan vi kan g&oslash;re vores digitale v&aelig;rksted bedre?
+                Udfyld formularen herunder. Vi bygger f&aelig;llesskabet sammen.
+            </p>
+        </div>
+
+        {# Two-column layout: sidebar + form area #}
+        <div class="bv-fs-layout">
+
+            {# Guidelines sidebar — always visible #}
+            <aside class="bv-fs-sidebar" aria-label="Retningslinjer for forslag">
+                <h2 class="bv-fs-sidebar__heading">Retningslinjer</h2>
+
+                <ul class="bv-fs-sidebar__list" role="list">
+                    <li class="bv-fs-sidebar__item">
+                        <span class="bv-fs-sidebar__num" aria-hidden="true">01</span>
+                        <div>
+                            <strong class="bv-fs-sidebar__principle">V&aelig;r specifik.</strong>
+                            <p class="bv-fs-sidebar__text">
+                                Beskriv hvad du vil have til at ske, ikke bare et vagt ønske.
+                                Jo mere detaljeret din beskrivelse er, jo lettere er det at forstå visionen.
+                            </p>
+                        </div>
+                    </li>
+                    <li class="bv-fs-sidebar__item">
+                        <span class="bv-fs-sidebar__num" aria-hidden="true">02</span>
+                        <div>
+                            <strong class="bv-fs-sidebar__principle">F&aelig;llesskab f&oslash;rst.</strong>
+                            <p class="bv-fs-sidebar__text">
+                                Forslag der gavner mange medlemmer f&aring;r prioritet.
+                                T&aelig;nk over hvordan din id&eacute; gavner flest mulige.
+                            </p>
+                        </div>
+                    </li>
+                    <li class="bv-fs-sidebar__item">
+                        <span class="bv-fs-sidebar__num" aria-hidden="true">03</span>
+                        <div>
+                            <strong class="bv-fs-sidebar__principle">Stem p&aring; andre.</strong>
+                            <p class="bv-fs-sidebar__text">
+                                Tjek <a href="/roadmap" class="bv-fs-sidebar__link">roadmappet</a> — hvis en id&eacute; allerede eksisterer, st&eacute;m p&aring; den i stedet for at duplikere den.
+                            </p>
+                        </div>
+                    </li>
+                </ul>
+            </aside>
+
+            {# Form area — conditional on auth state #}
+            <div class="bv-fs-form-area">
+
+                {% if grav.user.authenticated and grav.user.authorized %}
+
+                    {# Authenticated: show overlay trigger landing #}
+                    <div class="bv-fs-overlay-landing" id="bv-fs-overlay-landing">
+                        <div class="bv-fs-login-prompt__icon">
+                            <span class="material-symbols-outlined" aria-hidden="true">lightbulb</span>
+                        </div>
+                        <h2 class="bv-fs-login-prompt__title">Indsend dit forslag</h2>
+                        <p class="bv-fs-login-prompt__text">
+                            Klik p&aring; knappen herunder for at &aring;bne forslagsformularen.
+                            Du kan ogs&aring; bruge linket &ldquo;Forsl&aring; feature&rdquo; i sidens footer n&aring;r som helst.
+                        </p>
+                        <button
+                            type="button"
+                            class="bv-btn bv-btn--primary"
+                            onclick="bvFeatureSuggestion.open(); return false;">
+                            Forsl&aring; ny feature
+                            <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.125rem;">arrow_forward</span>
+                        </button>
+                    </div>
+
+                {% else %}
+
+                    {# Unauthenticated: login prompt — no form fields rendered #}
+                    <div class="bv-fs-login-prompt">
+                        <div class="bv-fs-login-prompt__icon">
+                            <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+                        </div>
+                        <h2 class="bv-fs-login-prompt__title">Log ind for at indsende forslag</h2>
+                        <p class="bv-fs-login-prompt__text">
+                            Kun medlemmer kan indsende feature-forslag.
+                            Log ind med din konto for at komme i gang.
+                        </p>
+                        <button
+                            type="button"
+                            class="bv-btn bv-btn--primary"
+                            onclick="document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;">
+                            Log ind
+                        </button>
+                        <p class="bv-fs-login-prompt__register">
+                            Ikke medlem endnu?
+                            <a href="/opret-medlemskab" class="bv-fs-login-prompt__link">Bliv medlem</a>
+                        </p>
+                    </div>
+
+                {% endif %}
+
+            </div>{# /.bv-fs-form-area #}
+        </div>{# /.bv-fs-layout #}
+
+    </div>{# /.bv-container #}
+</section>
+{% endblock %}

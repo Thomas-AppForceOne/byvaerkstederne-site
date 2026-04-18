@@ -28,6 +28,18 @@
             </nav>
         </div>
 
+        {# Fællesskab — authenticated users only #}
+        {% if grav.user.authenticated and grav.user.authorized %}
+        <div class="bv-footer__col">
+            <h3 class="bv-footer__heading">F&aelig;llesskab</h3>
+            <nav class="bv-footer__nav">
+                <a href="/roadmap">Roadmap</a>
+                <button type="button" onclick="bvFeatureSuggestion.open(); return false;">Forsl&aring; feature</button>
+                <button type="button" onclick="bvBugReport.open(); return false;">Rapport&eacute;r fejl</button>
+            </nav>
+        </div>
+        {% endif %}
+
         {# Find os #}
         <div class="bv-footer__col">
             <h3 class="bv-footer__heading">Find os</h3>

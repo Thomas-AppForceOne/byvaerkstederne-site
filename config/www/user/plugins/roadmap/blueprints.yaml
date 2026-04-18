@@ -1,0 +1,29 @@
+name: Roadmap
+version: 1.0.0
+description: "Public roadmap with voting for bug reports and feature suggestions."
+icon: bar-chart
+author:
+  name: Byværkstederne
+homepage: https://byvaerkstederne.dk
+keywords: roadmap, voting
+bugs: https://byvaerkstederne.dk
+license: MIT
+
+dependencies:
+  - { name: grav, version: '>=1.7.0' }
+  - { name: flex-objects }
+  - { name: login }
+
+form:
+  validation: strict
+  fields:
+    enabled:
+      type: toggle
+      label: Plugin Status
+      highlight: 1
+      default: 0
+      options:
+        1: PLUGIN_ADMIN.ENABLED
+        0: PLUGIN_ADMIN.DISABLED
+      validate:
+        type: bool
