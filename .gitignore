@@ -58,3 +58,6 @@ config/www/user/data/feed/
 
 # Claude Code
 .claude/
+
+# Adev workspace (local AI tooling state — not project artefacts)
+.adev-workspace/
