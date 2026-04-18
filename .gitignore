@@ -61,3 +61,6 @@ config/www/user/data/feed/
 
 # Adev workspace (local AI tooling state — not project artefacts)
 .adev-workspace/
+
+# GAN harness runtime state (regenerated each run — not project artefacts)
+.gan/
