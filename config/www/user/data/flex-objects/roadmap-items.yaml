@@ -18,7 +18,8 @@ rm_promoted_login_mobile:
   timestamp: '2026-04-01T09:30:00Z'
   vote_count: 0
   votes: {  }
-  vote_history: {  }
+  vote_history:
+    thomasadmin: true
   votes_released: false
   display_id: '#B001'
 rm_promoted_contact_form:
@@ -43,6 +44,7 @@ rm_promoted_contact_form:
   votes: {  }
   vote_history:
     thomasadmin: true
+    qatester: true
   votes_released: false
   display_id: '#B002'
 rm_promoted_dark_mode:
@@ -57,11 +59,12 @@ rm_promoted_dark_mode:
   source_suggestion_id: suggestion_promoted_dark_mode
   source_report_id: ''
   timestamp: '2026-04-03T08:15:00Z'
-  vote_count: 1
-  votes:
-    thomasadmin: true
+  vote_count: 0
+  votes: {  }
   vote_history:
     thomasadmin: true
+    qatester: true
+    votebot: true
   votes_released: false
   display_id: '#F001'
 rm_promoted_qr_codes:
@@ -76,11 +79,12 @@ rm_promoted_qr_codes:
   source_suggestion_id: suggestion_promoted_qr_codes
   source_report_id: ''
   timestamp: '2026-04-04T13:00:00Z'
-  vote_count: 1
-  votes:
-    thomasadmin: true
+  vote_count: 0
+  votes: {  }
   vote_history:
     thomasadmin: true
+    qatester: true
+    votebot: true
   votes_released: false
   display_id: '#F002'
 rm_2a20e548c5c296a7:
@@ -99,7 +103,9 @@ rm_2a20e548c5c296a7:
   timestamp: '2026-04-13T04:14:09Z'
   vote_count: 0
   votes: {  }
-  vote_history: {  }
+  vote_history:
+    votebot: true
+    thomasadmin: true
   votes_released: false
 rm_33b1f83311238c96:
   published: true
@@ -122,9 +128,8 @@ rm_33b1f83311238c96:
   source_report_id: br_65d6e613c9f9220e
   source_suggestion_id: ''
   timestamp: '2026-04-13T04:16:13Z'
-  vote_count: 1
-  votes:
-    thomasadmin: true
+  vote_count: 0
+  votes: {  }
   vote_history:
     thomasadmin: true
   votes_released: false

@@ -53,6 +53,9 @@ config/www/user/data/scheduler/
 # Notifications (runtime)
 config/www/user/data/notifications/
 
+# Remember-me tokens (runtime auth state)
+config/www/user/data/rememberme/
+
 # Feed cache
 config/www/user/data/feed/
 
