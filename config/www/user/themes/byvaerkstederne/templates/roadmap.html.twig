@@ -515,8 +515,10 @@
         // Disable all vote buttons for this card during request
         card.querySelectorAll('button[data-action]').forEach(function (b) { b.disabled = true; });
 
+        var action   = btn.dataset.action || 'add';
         var formData = new FormData();
         formData.append('item_id',    itemId);
+        formData.append('action',     action);
         formData.append('vote_nonce', nonce);
 
         fetch('/roadmap/vote', {
