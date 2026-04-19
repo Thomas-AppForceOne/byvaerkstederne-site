@@ -1,7 +1,12 @@
 {% extends 'partials/base.html.twig' %}
 
 {% block body %}
-    {% for module in page.collection() %}
+    {# Modular children may include pages with `feature:` frontmatter. Pipe
+       the collection through `|feature_visible` so disabled-gated modules
+       never render. When no child has a `feature:` key (the repo's state
+       today) this is a no-op — verified by the Sprint 3 byte-identical
+       render criterion in .gan/sprint-3-contract.json. #}
+    {% for module in page.collection()|feature_visible %}
         <div id="{{ module.menu|hyphenize }}" class="bv-module">
             {{ module.content|raw }}
         </div>

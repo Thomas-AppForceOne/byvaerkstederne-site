@@ -1,0 +1,21 @@
+# Example environment override for the feature-flags plugin.
+#
+# This file is inactive by design. Grav's environment-config loader only reads
+# `features.yaml` from `user/env/<host>/config/`. The `.example` suffix keeps
+# this template checked into the repo without affecting any environment.
+#
+# To activate on staging:
+#   1. Copy this file to `features.yaml` (drop the `.example` suffix) inside the
+#      directory that matches the actual host, e.g. `user/env/<real-host>/config/features.yaml`.
+#   2. Keep each value as the quoted string `"true"` or `"false"`. Any other
+#      shape (bare YAML boolean, integer, null, list, uppercase TRUE) resolves
+#      to `false` and logs a warning — see the plugin README for the full
+#      resolution table.
+#   3. Run `bin/grav clearcache` on the target host.
+#
+# Secrets, credentials, API keys, or host identifiers must never appear here.
+# The plugin accepts only the literal strings "true" and "false".
+enabled:
+  checkout_v2: "true"
+  pricing_experiment: "true"
+  promo_banner: "false"

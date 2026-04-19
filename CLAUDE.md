@@ -36,23 +36,32 @@ Write spec (specifications/)
     ↓
 Implement (via /gan or direct development)
     ↓
-Write ADR (decisions/) capturing key decisions and rationale
+Move spec to specifications/archive/ — preserves the original prompt
     ↓
-Delete the spec — the ADR is the permanent record
+Open PR; reviewer may request an ADR before merge if the
+implementation encodes decisions worth recording permanently
+    ↓
+On merge: if an ADR was written, the spec in archive/ stays as its
+historical counterpart; if no ADR, archive/ remains the only record
 ```
 
-### ADR obligation — merge-time only
+### PR-time obligations (orchestrator responsibility, not sub-agents)
 
-**This applies only when preparing a branch for PR or merge, after all implementation work is verified complete.**
+**This applies when preparing a branch for PR, after implementation is verified complete.** GAN sub-agents (planner, proposer, reviewer, generator, evaluator) must not modify `specifications/`, `decisions/`, or `ROADMAP.md` during sprint work — those changes belong to the orchestrating session at PR time.
 
-Before opening a PR, check whether any spec in `specifications/` is now fully implemented by the work on this branch. If so:
+When a `/gan` run (or direct work) has fully implemented one or more specs, the orchestrating session MUST, as part of post-completion handoff:
 
-1. Create an ADR in `decisions/` using `decisions/ADR-template.md`
-2. Delete the spec file from `specifications/`
-3. Add a row to the index table in `decisions/README.md`
-4. Include these changes in the PR branch
+1. `git mv specifications/<spec>.md specifications/archive/<spec>.md` for each implemented spec.
+2. Update `specifications/ROADMAP.md` to mark the step IMPLEMENTED and repoint the link to `archive/<spec>.md`.
+3. Commit as a dedicated chore commit on the run branch, e.g. `chore: archive implemented spec and mark roadmap step done`.
+4. Open the PR with `gh pr create --base develop` (see Git workflow below — never rely on `gh`'s default base).
+5. In the PR body, call out that the ADR is pending reviewer decision. The reviewer decides during PR review whether an ADR is required before merge; if yes, it lands as an additional commit on the same branch via `decisions/ADR-template.md` plus a row in `decisions/README.md`. ADRs are optional when the implementation is a straightforward realisation of the spec with no surprising decisions.
 
-**This does not apply to GAN sub-agents** (planner, proposer, reviewer, generator, evaluator) operating within a sprint. Those agents must not modify `specifications/` or `decisions/` during sprint work. ADR creation is the responsibility of the orchestrating session at PR time.
+### GAN orchestrator automation
+
+When `/gan` completes with `status: complete` and `--target` points at this repo, the orchestrating session MUST perform steps 1-4 above automatically as part of Step 3.2 of the skill, before presenting the run to the human. Do not stop at "branch ready for review" — push and open the PR. The human reviews the PR, not the branch.
+
+On `status: failed`, do none of the above — leave the branch for debugging and let the user decide.
 
 ---
 

@@ -8,13 +8,13 @@ Folder policy (what belongs here, how specs become ADRs) lives in [CLAUDE.md](..
 
 ## Order
 
-### 1. Feature-flag infrastructure
+### 1. Feature-flag infrastructure — IMPLEMENTED
 
-**Spec:** [development_flags_specification.md](development_flags_specification.md) (condensed reference: [development_flags_specification_condensed.md](development_flags_specification_condensed.md))
+**Spec (archived):** [archive/development_flags_specification.md](archive/development_flags_specification.md)
 
-Ship first. Nothing else in this roadmap works without the `FeatureFlag` enum, `FlagStore`, Twig helpers, and page-frontmatter gating this spec introduces. No product feature changes — this is pure plumbing.
+Shipped on branch `gan/20260419T154559Z-f8eb`. `FeatureFlag` enum, `FlagStore`, Twig helpers (`feature_enabled`, `enabled_features`, `feature_visible`), page-level `feature:` frontmatter gating, and centralized collection filter are all in place under `config/www/user/plugins/feature-flags/`. Flags default to false; no visible site changes.
 
-**Exit criteria:** acceptance criteria in the spec pass; flags default to false across the board with no change in visible site behaviour.
+**Exit criteria:** met. PHPUnit suite: 122 tests / 397 assertions. Live HTTP verified. ADR to be written at PR-merge time per CLAUDE.md.
 
 ### 2. End-to-end test coverage for Roadmap, Rapportér fejl, Forslå Feature
 
