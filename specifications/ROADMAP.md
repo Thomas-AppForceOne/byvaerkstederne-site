@@ -16,15 +16,13 @@ Shipped on branch `gan/20260419T154559Z-f8eb`. `FeatureFlag` enum, `FlagStore`, 
 
 **Exit criteria:** met. PHPUnit suite: 122 tests / 397 assertions. Live HTTP verified. ADR to be written at PR-merge time per CLAUDE.md.
 
-### 2. End-to-end test coverage for Roadmap, Rapportér fejl, Forslå Feature
+### 2. End-to-end test coverage for Roadmap, Rapportér fejl, Forslå Feature — IMPLEMENTED
 
-**Spec:** [roadmap_bug_feature_tests_specification.md](roadmap_bug_feature_tests_specification.md)
+**Spec (archived):** [archive/roadmap_bug_feature_tests_specification.md](archive/roadmap_bug_feature_tests_specification.md)
 
-Ship second. Adds Playwright coverage for the three community features before they get flagged. This gives us a regression net: when step 3 wires flags into these surfaces, we can run the same suite under the internal profile and prove nothing broke.
+Shipped on branch `gan/20260419T200123Z-5ee1`. Playwright suite covers anonymous rejection paths and authenticated flows for Roadmap voting, Rapportér fejl (bug report overlay + submission), and Forslå Feature. Includes globalSetup/globalTeardown-driven account provisioning/cleanup, feature-flag touchpoint assertion, and acceptance-criteria matrix under [tests/ACCEPTANCE.md](../tests/ACCEPTANCE.md).
 
-Depends on step 1 only for the test that asserts `feature_enabled()` in templates — otherwise independent.
-
-**Exit criteria:** the suite passes locally under both anonymous and authenticated credentials. Admin tests skip cleanly without admin creds.
+**Exit criteria:** met. Anonymous suite 23 passed / 34 skipped / 0 failed; authenticated tests skip cleanly with env-var-named reasons when creds are absent.
 
 ### 3. Feature-flag rollout to unfinished features and pages
 
