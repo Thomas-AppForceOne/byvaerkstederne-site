@@ -12,3 +12,5 @@ require('./anonymous/navigation');
 require('./anonymous/footer');
 require('./anonymous/access-control');
 require('./anonymous/gitignore');
+require('./anonymous/bug-report');
+require('./anonymous/feature-suggestion');
