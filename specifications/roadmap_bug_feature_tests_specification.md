@@ -56,10 +56,40 @@ Admin-credential tests live inside the relevant authenticated file inside their 
 ## Test environment
 
 - Base URL: `http://127.0.0.1:8080` (configured in `playwright.config.js`).
-- User credentials: `TEST_USERNAME` / `TEST_PASSWORD` env vars. Tests skip when unset.
-- Admin credentials: `TEST_ADMIN_USERNAME` / `TEST_ADMIN_PASSWORD` for admin smoke tests only. Skip when unset.
-- Every test that creates persistent data (roadmap vote, bug report, feature suggestion) must clean up after itself in an `afterEach` where possible. Where cleanup is not possible (e.g. submitted bug report) the test must use a clearly prefixed payload (`[TEST] …`) so the data is identifiable and can be pruned manually.
+- The suite owns its test accounts. The developer does not create them by hand and does not supply usernames.
+
+### Self-managed test accounts
+
+Usernames are constants owned by the suite:
+
+- `playwright-test-user` — standard authenticated user
+- `playwright-test-admin` — admin user, used only by the admin smoke tests
+
+Passwords are supplied via env vars and are the only secrets the developer provides:
+
+- `TEST_PASSWORD` — required to run the authenticated tests; suite skips them with a clear reason when unset
+- `TEST_ADMIN_PASSWORD` — required to run the admin smoke tests; those skip when unset
+
+Lifecycle, implemented as Playwright `globalSetup` / `globalTeardown`:
+
+1. **Setup** (once before the suite): for each required account, check whether `config/www/user/accounts/<username>.yaml` exists. If not, create it via:
+   ```
+   docker exec grav bin/plugin login new-user \
+     -u playwright-test-user -e playwright-test-user@example.invalid \
+     -p "$TEST_PASSWORD" -n 'Playwright Test User' \
+     -t default -s enabled
+   ```
+   The admin variant adds `-a admin.super` and uses `playwright-test-admin`. The check-then-create makes setup idempotent: a second run, or a leftover file from a crashed previous run, does not error.
+2. **Teardown** (once after the suite): `rm -f config/www/user/accounts/playwright-test-user.yaml` and the admin counterpart. Use `-f` so a missing file (e.g. setup failed before creating it) is not an error.
+3. **Per-test cleanup**: each test that creates domain artefacts (roadmap vote, bug report, feature suggestion) must remove them in `afterEach`. Where removal is not possible via a public endpoint (a submitted bug report), the test prefixes content with `[TEST]` so it is identifiable for later manual pruning. There is no `[TEST]` user — the user is removed by teardown.
+
+### Robustness rules
+
+- The `globalSetup` script must tolerate Docker not running by failing fast with an actionable error, not by silently skipping authenticated tests.
+- A crash mid-suite may leave the account YAML on disk. This is harmless because setup is idempotent — the next run reuses the existing account.
+- `make reset-users` already purges everything except the developer's admin. It will also wipe these test accounts, which is fine — the next test run recreates them.
 - Tests must not rely on the state of existing roadmap items. Each test that needs a voteable item picks `.bv-rm-vote-btn[data-action="add"]:first` and tolerates the case where the budget is already full (skip with a clear message).
+- Tests must never read or write any account file other than the two declared above.
 
 ---
 
@@ -151,11 +181,19 @@ Anonymous tests in `tests/anonymous/feature-suggestion.js`, authenticated in `te
 
 ## Shared helpers
 
-**`tests/helpers/auth.js`** (exists, CommonJS)
+**`tests/helpers/accounts.js`** (new, CommonJS)
+
+- `TEST_USER` / `TEST_ADMIN` — frozen objects holding the canonical username, email, and full name for each account.
+- `ensureAccount(account, password)` — runs the idempotent `docker exec … bin/plugin login new-user` command described above. Used by `globalSetup`.
+- `removeAccount(account)` — `rm -f` on the account YAML. Used by `globalTeardown`.
+- `hasUserPassword` / `hasAdminPassword` — booleans the test files use to skip when the corresponding password is not set.
+
+**`tests/helpers/auth.js`** (exists, CommonJS — extend, do not break existing imports)
 
 ```js
-const { login, hasCredentials } = require('../helpers/auth');
-// Add loginAsAdmin() and hasAdminCredentials for admin smoke tests
+const { login, loginAsAdmin } = require('../helpers/auth');
+// login() and loginAsAdmin() use TEST_USER / TEST_ADMIN from accounts.js plus the env-var passwords.
+// Old hasCredentials export is replaced by hasUserPassword / hasAdminPassword from accounts.js.
 ```
 
 **`tests/helpers/cleanup.js`** (new, CommonJS)
@@ -163,16 +201,21 @@ const { login, hasCredentials } = require('../helpers/auth');
 - `removeVote(page, itemId)` — POSTs a remove to `/roadmap/vote` for the given item using the current nonce.
 - `testMarker(prefix = 'TEST')` — returns `[TEST] <timestamp> <uuid>` so created items are identifiable.
 
+**`tests/global-setup.js`** and **`tests/global-teardown.js`** (new) — wired into `playwright.config.js` via `globalSetup` / `globalTeardown`. They call `ensureAccount` / `removeAccount` for the user account always, and the admin account only when `TEST_ADMIN_PASSWORD` is set.
+
 ---
 
 ## Acceptance criteria
 
-1. `npx playwright test` (without credentials) passes all anonymous tests and skips authenticated ones with a clear reason.
-2. With user creds set, the full user-facing matrix above passes against a fresh local Docker site.
-3. With admin creds set, the admin smoke tests pass.
-4. No test leaves a vote, bug report, or feature suggestion behind except `[TEST]`-prefixed items that cannot be cleaned via public endpoints.
-5. Each test file is <500 lines and uses `test.describe` blocks mirroring the headings above.
-6. `playwright.config.js` retains its current shape; no new projects or browsers are added.
+1. `npx playwright test` with no env vars set passes all anonymous tests and skips authenticated ones with a clear reason.
+2. With `TEST_PASSWORD` set, `globalSetup` creates `playwright-test-user` if absent, the full user-facing matrix passes, and `globalTeardown` removes the account YAML so `config/www/user/accounts/` looks identical to before the run.
+3. With `TEST_ADMIN_PASSWORD` also set, `playwright-test-admin` is created/torn down the same way and the admin smoke tests pass.
+4. Re-running the suite immediately after a previous successful run, and re-running it after a previous crashed run that left the account YAML on disk, both succeed without manual intervention.
+5. No test leaves a vote, bug report, feature suggestion, or account behind except `[TEST]`-prefixed domain items that cannot be cleaned via public endpoints.
+6. The developer is never required to create a Grav account by hand to run the suite. The README testing section names only the two password env vars.
+6a. `git check-ignore config/www/user/accounts/playwright-test-user.yaml` and the admin counterpart both report the file as ignored. The existing wildcard rule at `.gitignore` line 44 (`config/www/user/accounts/*`) covers this; the spec only requires that the rule remain in place, not that a new entry be added.
+7. Each test file is <500 lines and uses `test.describe` blocks mirroring the headings above.
+8. `playwright.config.js` gains `globalSetup` and `globalTeardown` entries; no new projects or browsers are added.
 
 ---
 
