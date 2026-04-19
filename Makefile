@@ -1,4 +1,4 @@
-.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging backup-prod backup-test
+.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging backup-prod backup-test test test-headed test-auth test-install
 
 # Default target
 help: ## Show this help
@@ -115,6 +115,26 @@ clean: ## Remove Docker volumes and cache (keeps content)
 
 cache-clear: ## Clear Grav cache
 	@docker exec grav bash -c 'cd /var/www/html && bin/grav cache' 2>/dev/null || echo "Container not running. Start with: make start"
+
+# ── Tests ──────────────────────────────────────────────
+
+test-install: ## Install Playwright and browser binaries
+	@npm install
+	@npx playwright install chromium
+	@echo "  ✓ Playwright ready"
+
+test: ## Run all anonymous tests (no credentials needed)
+	@curl -s -o /dev/null http://127.0.0.1:8080 || { echo "❌  Site not running. Run: make start"; exit 1; }
+	@npx playwright test tests/anonymous.spec.js
+
+test-headed: ## Run tests with browser visible (for debugging)
+	@curl -s -o /dev/null http://127.0.0.1:8080 || { echo "❌  Site not running. Run: make start"; exit 1; }
+	@npx playwright test tests/anonymous.spec.js --headed
+
+test-auth: ## Run authenticated tests (requires TEST_USERNAME and TEST_PASSWORD)
+	@curl -s -o /dev/null http://127.0.0.1:8080 || { echo "❌  Site not running. Run: make start"; exit 1; }
+	@[ -n "$$TEST_USERNAME" ] && [ -n "$$TEST_PASSWORD" ] || { echo "❌  Set TEST_USERNAME and TEST_PASSWORD before running authenticated tests"; exit 1; }
+	@npx playwright test tests/authenticated.spec.js
 
 # ── Reset ──────────────────────────────────────────────
 
