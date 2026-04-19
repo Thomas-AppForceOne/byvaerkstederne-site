@@ -2,7 +2,7 @@
 'use strict';
 
 const { test, expect } = require('@playwright/test');
-const { login, hasCredentials } = require('../helpers/auth');
+const { login, hasUserPassword } = require('../helpers/auth');
 
 // The Fællesskab footer column must be visible for authenticated users and all
 // three triggers must be present and functional. See decisions/ADR-001.
@@ -11,7 +11,7 @@ const { login, hasCredentials } = require('../helpers/auth');
 // håndværk" — tests targeting the column heading must use the h3 selector.
 
 test.describe('Footer — authenticated', () => {
-  test.skip(!hasCredentials, 'Set TEST_USERNAME and TEST_PASSWORD to run authenticated tests');
+  test.skip(!hasUserPassword, 'TEST_PASSWORD not set — skipping authenticated footer tests');
   test.beforeEach(async ({ page }) => { await login(page); });
 
   test('Fællesskab column is visible', async ({ page }) => {

@@ -6,6 +6,8 @@ module.exports = defineConfig({
   timeout: 60_000,
   retries: 1,
   reporter: [['list'], ['html', { open: 'never' }]],
+  globalSetup: require.resolve('./tests/global-setup.js'),
+  globalTeardown: require.resolve('./tests/global-teardown.js'),
 
   use: {
     // Use 127.0.0.1 explicitly — on macOS, 'localhost' may resolve to IPv6 (::1)

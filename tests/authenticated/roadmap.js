@@ -2,10 +2,10 @@
 'use strict';
 
 const { test, expect } = require('@playwright/test');
-const { login, hasCredentials } = require('../helpers/auth');
+const { login, hasUserPassword } = require('../helpers/auth');
 
 test.describe('Roadmap — authenticated', () => {
-  test.skip(!hasCredentials, 'Set TEST_USERNAME and TEST_PASSWORD to run authenticated tests');
+  test.skip(!hasUserPassword, 'TEST_PASSWORD not set — skipping authenticated roadmap tests');
   test.beforeEach(async ({ page }) => { await login(page); });
 
   test('/roadmap is accessible', async ({ page }) => {

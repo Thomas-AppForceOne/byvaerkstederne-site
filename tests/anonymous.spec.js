@@ -11,3 +11,4 @@ require('./anonymous/smoke');
 require('./anonymous/navigation');
 require('./anonymous/footer');
 require('./anonymous/access-control');
+require('./anonymous/gitignore');
