@@ -14,3 +14,4 @@ require('./authenticated/navigation');
 require('./authenticated/footer');
 require('./authenticated/roadmap');
 require('./authenticated/bug-report');
+require('./authenticated/feature-suggestion');
