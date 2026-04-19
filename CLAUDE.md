@@ -56,6 +56,31 @@ Before opening a PR, check whether any spec in `specifications/` is now fully im
 
 ---
 
+## Git workflow — branching and PRs
+
+**`main` is release-only and protected.** Never push, force-push, or open a PR directly to `main`. The branch is gated by a "protect branches" GitHub ruleset; pushes will be rejected.
+
+**`develop` is the integration branch.** All work ships through `develop` first.
+
+```
+feature/*  →  develop  →  main
+                           ↑
+                  release PR only, after the work has been
+                  deployed to /test (develop) and verified
+```
+
+Concrete rules for any agent or human session in this repo:
+
+- A new feature branches off `develop`: `git checkout -b feature/<slug> develop`.
+- A PR opened by an agent **must** target `develop` as its base. Pass `--base develop` to `gh pr create` explicitly — do not rely on the default base, which `gh` derives from `defaultBranchRef` and will pick `main`.
+- `main` is updated only via a release PR from `develop`, opened by a human after the change has run on the `/test` environment. Agents do not open release PRs without an explicit instruction naming `main` as the target.
+- Force-pushing or rewriting history on `main` or `develop` is forbidden. The only time it has happened was to undo a PR mistakenly merged into `main`; the recovery itself was a one-off, not a precedent.
+- The `gan/<run-id>` branches produced by `/gan` are feature branches — they merge into `develop`, not `main`.
+
+The full branching/deployment table lives in [README.md](README.md#branching-model). This section is the authoritative agent-facing rule; if the two disagree, this wins until reconciled.
+
+---
+
 ## Known gotchas
 
 ### Grav CLI cache command

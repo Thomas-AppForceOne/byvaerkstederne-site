@@ -153,10 +153,12 @@ Data files live in `config/www/user/data/flex-objects/`. Templates pull from Fle
 ## Branching Model
 
 ```
-main              ← production releases only
+main              ← production releases only — protected, no direct PRs
 develop           ← integration branch, deployed to /test
-feature/*         ← working branches
+feature/*         ← working branches (includes gan/<run-id> from /gan)
 ```
+
+PRs from feature branches always target `develop`. `main` is updated only via a release PR from `develop`, after the change has been verified on `/test`. Agent rules for this are in [CLAUDE.md](CLAUDE.md#git-workflow--branching-and-prs).
 
 | Action | Commands |
 |--------|---------|
