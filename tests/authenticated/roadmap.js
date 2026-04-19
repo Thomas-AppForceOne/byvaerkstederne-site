@@ -21,6 +21,7 @@
  */
 
 const { test, expect } = require('@playwright/test');
+const { execFileSync } = require('child_process');
 const { login, loginAsAdmin, hasUserPassword, hasAdminPassword } = require('../helpers/auth');
 const { removeVote } = require('../helpers/cleanup');
 
@@ -155,6 +156,34 @@ test.describe('Roadmap — authenticated', () => {
         return out;
       }, LOCKED_STATUSES);
       expect(offenders).toEqual([]);
+    });
+
+    // F6.6 — feature-flag touchpoint. Single assertion that verifies
+    // feature_enabled() from the roadmap step 1 plugin is callable and
+    // returns a boolean for a known flag. Does NOT test the flag plugin
+    // itself beyond callability — that is covered by the plugin's own
+    // PHPUnit suite under config/www/user/plugins/feature-flags/tests.
+    test('feature_enabled(\'promo_banner\') returns a boolean via Twig', async () => {
+      // Exercise the Twig function the same way production templates do,
+      // via a tiny inline render run inside the grav container. The known
+      // flag 'promo_banner' is the canonical example from the plugin README.
+      const tpl = "{{ feature_enabled('promo_banner') is same as(true) ? 'bool-true' : "
+        + "(feature_enabled('promo_banner') is same as(false) ? 'bool-false' : 'NOT-BOOL') }}";
+      const php =
+        "require '/app/www/public/vendor/autoload.php';"
+        + "use Grav\\Common\\Grav;"
+        + "$g = Grav::instance();"
+        + "$g['config']->init(); $g['uri']->init(); $g['plugins']->init();"
+        + "$g->fireEvent('onPluginsInitialized');"
+        + "$g['themes']->init(); $g->fireEvent('onThemeInitialized');"
+        + "$g['twig']->init();"
+        + "echo $g['twig']->twig()->createTemplate(getenv('TPL'))->render([]);";
+      const out = execFileSync(
+        'docker',
+        ['exec', '-e', `TPL=${tpl}`, '-w', '/app/www/public', 'grav', 'php', '-r', php],
+        { encoding: 'utf8', timeout: 30_000 }
+      ).trim();
+      expect(['bool-true', 'bool-false']).toContain(out);
     });
   });
 
