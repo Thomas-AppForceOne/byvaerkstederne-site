@@ -62,6 +62,12 @@ config/www/user/data/feed/
 # Claude Code
 .claude/
 
+# Node / Playwright
+node_modules/
+playwright-report/
+test-results/
+.env.test
+
 # Adev workspace (local AI tooling state — not project artefacts)
 .adev-workspace/
 
