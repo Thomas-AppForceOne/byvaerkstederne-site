@@ -1,0 +1,24 @@
+name: Feature Flags
+version: 0.1.0
+description: Static, environment-driven, fail-closed feature flag system for Byværkstederne.
+icon: flag
+author:
+  name: Byværkstederne
+homepage: https://byvaerkstederne.dk
+keywords: feature-flags, config
+bugs: https://github.com/Thomas-AppForceOne/workshop-site/issues
+license: MIT
+
+form:
+  validation: strict
+  fields:
+    enabled:
+      type: toggle
+      label: Plugin status
+      highlight: 1
+      default: 1
+      options:
+        1: PLUGIN_ADMIN.ENABLED
+        0: PLUGIN_ADMIN.DISABLED
+      validate:
+        type: bool
