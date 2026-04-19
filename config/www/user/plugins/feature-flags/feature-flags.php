@@ -2,12 +2,13 @@
 /**
  * Feature Flags Plugin for Byværkstederne
  *
- * Sprint 1 scope: typed FeatureFlag enum + FlagStore parser/resolver +
- * structured warning logs. No Twig helpers, no page gating, no collection
- * filter yet — those arrive in later sprints.
+ * Scope after Sprint 2: typed FeatureFlag enum + FlagStore parser/resolver +
+ * structured warning logs + Twig helpers (feature_enabled, enabled_features).
+ * Page gating and collection filter arrive in Sprint 3.
  *
  * Loads merged Grav config from `features.enabled` and exposes a resolver
- * registered on the Grav container as `feature_flags`.
+ * registered on the Grav container as `feature_flags`. Exposes two Twig
+ * functions on the Grav Twig environment for template-level gating.
  */
 
 namespace Grav\Plugin;
@@ -16,7 +17,9 @@ use Grav\Common\Grav;
 use Grav\Common\Plugin;
 use Grav\Plugin\FeatureFlags\FlagStore;
 use Grav\Plugin\FeatureFlags\FlagStoreInterface;
+use Grav\Plugin\FeatureFlags\TwigHelpers;
 use Psr\Log\LoggerInterface;
+use Twig\TwigFunction;
 
 class FeatureFlagsPlugin extends Plugin
 {
@@ -30,6 +33,12 @@ class FeatureFlagsPlugin extends Plugin
     {
         return [
             'onPluginsInitialized' => ['onPluginsInitialized', 1100],
+            // Twig registration happens after onPluginsInitialized has put
+            // `feature_flags` on the container (priority 1100 above), so
+            // the helper always sees a resolved FlagStore. Default Twig
+            // priority (0) is fine — onTwigInitialized always fires after
+            // onPluginsInitialized in Grav's boot order.
+            'onTwigInitialized'    => ['onTwigInitialized', 0],
         ];
     }
 
@@ -87,22 +96,77 @@ class FeatureFlagsPlugin extends Plugin
         };
     }
 
+    /**
+     * Register feature_enabled() and enabled_features() on the Twig
+     * environment. Both helpers delegate to a TwigHelpers shim that
+     * handles string->enum conversion and the fail-closed contract.
+     *
+     * is_safe: neither helper emits HTML; they return bool / array<string>.
+     * The template is expected to escape the string values itself if it
+     * interpolates them. We do NOT mark anything as safe here — keeping
+     * Twig's autoescape defense on by default.
+     */
+    public function onTwigInitialized(): void
+    {
+        if (!$this->config->get('plugins.feature-flags.enabled')) {
+            return;
+        }
+
+        $twig = $this->grav['twig']->twig();
+
+        $helpers = $this->buildTwigHelpers();
+
+        $twig->addFunction(new TwigFunction(
+            'feature_enabled',
+            // Closure keeps the helper instance encapsulated; Twig will
+            // pass the raw template argument (mixed) straight through.
+            static function (mixed $name) use ($helpers): bool {
+                return $helpers->featureEnabled($name);
+            }
+        ));
+
+        $twig->addFunction(new TwigFunction(
+            'enabled_features',
+            static function () use ($helpers): array {
+                return $helpers->enabledFeatures();
+            }
+        ));
+    }
+
+    private function buildTwigHelpers(): TwigHelpers
+    {
+        // Fetch (or lazily build) the FlagStore via the container. If for
+        // any reason the store is missing, fall back to a dummy store that
+        // resolves everything to false — preserving fail-closed on error
+        // pages where plugin init may have been partial.
+        $store = null;
+        if (isset($this->grav['feature_flags'])) {
+            $candidate = $this->grav['feature_flags'];
+            if ($candidate instanceof FlagStoreInterface) {
+                $store = $candidate;
+            }
+        }
+        if ($store === null) {
+            // Empty array -> every flag resolves false.
+            $store = new FlagStore([], $this->resolveLogger(), $this->resolveEnvironment());
+        }
+
+        return new TwigHelpers($store, $this->resolveLogger(), $this->resolveEnvironment());
+    }
+
+    private function resolveLogger(): ?LoggerInterface
+    {
+        if (!isset($this->grav['log'])) {
+            return null;
+        }
+        $candidate = $this->grav['log'];
+        return $candidate instanceof LoggerInterface ? $candidate : null;
+    }
+
     private function buildFlagStore(): FlagStoreInterface
     {
         $rawEnabled = $this->grav['config']->get('features.enabled', []);
-
-        /** @var LoggerInterface|null $logger */
-        $logger = null;
-        if (isset($this->grav['log'])) {
-            $candidate = $this->grav['log'];
-            if ($candidate instanceof LoggerInterface) {
-                $logger = $candidate;
-            }
-        }
-
-        $environment = $this->resolveEnvironment();
-
-        return new FlagStore($rawEnabled, $logger, $environment);
+        return new FlagStore($rawEnabled, $this->resolveLogger(), $this->resolveEnvironment());
     }
 
     private function resolveEnvironment(): ?string
