@@ -311,30 +311,21 @@ test.describe('Bug report — authenticated', () => {
       await openOverlay(page);
       const { marker } = await fillValidForm(page, '(double-submit)');
 
-      // Fire two clicks in rapid succession without awaiting UI settle.
+      // Snapshot the form's submission_token before submitting so we can replay
+      // it for the second POST. Grav's PHP session lock serializes concurrent
+      // requests with the same cookie, which can hang Playwright's response
+      // body reads. Sequential first-then-second replay avoids the lock race
+      // while still exercising the server-side submission_token guard.
+      const submissionToken = await page.evaluate(() => {
+        const el = /** @type {HTMLInputElement | null} */ (
+          document.querySelector('#bv-bug-report-form input[name="submission_token"]')
+        );
+        return el ? el.value : '';
+      });
+      expect(submissionToken.length).toBeGreaterThan(0);
+
       const r1 = waitSubmitResponse(page);
-      const clickPromises = [
-        page.click('#bv-bug-report-submit'),
-        // The JS disables the button after the first click; to actually hit
-        // the server twice we call the form-submit path via fetch directly —
-        // but the contract's "two rapid clicks" is the surface assertion, and
-        // the submission_token is what guarantees idempotency. We emulate the
-        // second click via page.evaluate to bypass the DOM's disabled state
-        // IF needed; otherwise a plain second click is a no-op (which still
-        // leaves the count at exactly one — same assertion holds).
-        page.evaluate((endpoint) => {
-          const form = /** @type {HTMLFormElement} */ (document.getElementById('bv-bug-report-form'));
-          if (!form) return null;
-          const fd = new FormData(form);
-          return fetch(endpoint, {
-            method: 'POST',
-            body: fd,
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            credentials: 'same-origin',
-          }).then((r) => r.status).catch(() => null);
-        }, SUBMIT_ENDPOINT),
-      ];
-      await Promise.all(clickPromises);
+      await page.click('#bv-bug-report-submit');
       const firstResp = await r1;
       expect(firstResp.status()).toBe(200);
       const firstBody = await firstResp.json();
@@ -342,20 +333,31 @@ test.describe('Bug report — authenticated', () => {
       /** @type {string} */
       const displayId = firstBody.display_id;
 
+      // Replay the same submission_token to verify server-side idempotency.
+      const replay = await page.request.post(SUBMIT_ENDPOINT, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        multipart: {
+          submission_token: submissionToken,
+          bug_report_nonce: await page.evaluate(() => /** @type {HTMLInputElement} */(
+            document.querySelector('#bv-bug-report-form input[name="bug_report_nonce"]')).value),
+          description: `[replay] ${marker}`,
+          expected: 'replay should not create a second item',
+          page_url: '/',
+          browser_os: 'playwright',
+          'steps[]': 'step one',
+        },
+      });
+      expect(replay.status()).toBe(409);
+
       // Navigate to /roadmap and count rendered cards whose badge matches the
       // generated display_id. The submission_token guard guarantees exactly one
-      // roadmap item is created — the second POST returns 409 (duplicate).
+      // roadmap item is created — the second POST returned 409 (duplicate).
       await page.goto('/roadmap');
       const count = await page.locator(`.bv-rm-id-badge`).evaluateAll(
         (nodes, id) => nodes.filter((n) => ((n.textContent || '').trim() === id)).length,
         displayId,
       );
       expect(count).toBe(1);
-
-      // The marker itself should also appear at most once on the page. (It may
-      // not appear verbatim if the card description truncates — we tolerate 0
-      // and assert strictly on the badge count above.)
-      void marker;
     });
 
     test('nonce tampering: garbage bug_report_nonce yields exactly HTTP 403', async ({ page }) => {

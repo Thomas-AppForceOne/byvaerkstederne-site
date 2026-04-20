@@ -235,7 +235,7 @@ test.describe('Roadmap — authenticated', () => {
 
   // ──────────────────────────────────────────────────────────────────────
   test.describe('Nonce re-issue', () => {
-    test('vote_nonce DOM value rotates after a successful add', async ({ page }, testInfo) => {
+    test('handler returns a fresh vote_nonce that the client installs into the form', async ({ page }, testInfo) => {
       await page.goto('/roadmap');
       const item = await findVotableItem(page, 'bug') || await findVotableItem(page, 'feature');
       test.skip(!item, 'no votable roadmap item available for nonce re-issue test');
@@ -248,19 +248,24 @@ test.describe('Roadmap — authenticated', () => {
       await expandCard(page, itemId);
       const respPromise = waitVoteResponse(page);
       await page.locator(`.bv-rm-card[data-item-id="${itemId}"] .bv-rm-vote-btn[data-action="add"]`).click();
-      expect((await respPromise).status()).toBe(200);
+      const resp = await respPromise;
+      expect(resp.status()).toBe(200);
       trackVote(testInfo, itemId);
 
-      // JS rewrites the hidden input from `new_nonce`; poll for rotation.
-      await expect.poll(async () => {
-        const cur = await readVoteNonce(page);
-        return cur && cur !== noncePre;
-      }, { timeout: 5_000 }).toBeTruthy();
+      // The handler always sends a fresh `new_nonce` and the client rewrites
+      // the DOM input from that field. Grav's Utils::getNonce is deterministic
+      // per session+action+time-slot, so the token value may equal noncePre —
+      // the contract is that (a) the handler returned a new_nonce and (b) the
+      // DOM input is populated with that value post-response.
+      const body = await resp.json();
+      expect(body && body.success).toBe(true);
+      expect(typeof body.new_nonce).toBe('string');
+      expect(body.new_nonce.length).toBeGreaterThan(0);
 
-      const noncePost = await readVoteNonce(page);
-      expect(typeof noncePost).toBe('string');
-      expect((noncePost || '').length).toBeGreaterThan(0);
-      expect(noncePost).not.toBe(noncePre);
+      await expect.poll(
+        async () => readVoteNonce(page),
+        { timeout: 5_000 },
+      ).toBe(body.new_nonce);
     });
   });
 
@@ -300,18 +305,20 @@ test.describe('Roadmap — authenticated', () => {
 
       const fourth = ids[3];
       const before = await readVoteCount(page, fourth);
-      await expandCard(page, fourth);
-      const respPromise = waitVoteResponse(page);
-      await page.locator(
-        `.bv-rm-card[data-item-id="${fourth}"] .bv-rm-vote-btn[data-action="add"]`
-      ).click();
-      const resp = await respPromise;
+
+      // Client disables the 4th button via aria-disabled once budget hits 0
+      // and the click handler bails before POSTing (roadmap.html.twig:499).
+      // POST directly to prove server-side enforcement.
+      const nonce = await readVoteNonce(page);
+      const resp = await page.request.post('/roadmap/vote', {
+        form: { item_id: String(fourth), action: 'add', vote_nonce: String(nonce) },
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      });
       expect(resp.status()).toBeGreaterThanOrEqual(400);
       expect(resp.status()).toBeLessThan(500);
-
-      const toast = page.locator('#bv-rm-toast');
-      await expect(toast).toBeVisible({ timeout: 5_000 });
-      await expect(toast).toHaveText(/\S/);
+      const body = await resp.json();
+      const errMsg = body && body.data && typeof body.data.error === 'string' ? body.data.error : '';
+      expect(errMsg.length).toBeGreaterThan(0);
 
       const after = await readVoteCount(page, fourth);
       expect(after).toBe(before);

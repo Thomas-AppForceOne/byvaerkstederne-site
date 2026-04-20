@@ -57,6 +57,10 @@ async function login(page) {
 /**
  * Log in as the canonical test admin. Reads TEST_ADMIN_PASSWORD from the env.
  *
+ * Grav runs separate session cookies for the site (/login) and admin (/admin).
+ * We submit the admin login form at /admin directly so subsequent /admin/*
+ * navigation sees the authenticated admin session.
+ *
  * @param {import('@playwright/test').Page} page
  */
 async function loginAsAdmin(page) {
@@ -64,7 +68,17 @@ async function loginAsAdmin(page) {
   if (!password) {
     throw new Error('loginAsAdmin(): TEST_ADMIN_PASSWORD env var is not set');
   }
-  await loginWith(page, TEST_ADMIN.username, password);
+  await page.goto('/admin');
+  const form = page.locator('#admin-login form');
+  await form.locator('[name="data[username]"]').fill(TEST_ADMIN.username);
+  await form.locator('[name="data[password]"]').fill(password);
+  await Promise.all([
+    page.waitForURL((url) => !/\/admin\/?$/.test(url.pathname) || url.search.includes('task') === false,
+      { timeout: 10_000 }).catch(() => {}),
+    form.locator('[type="submit"], button[type="submit"]').first().click(),
+  ]);
+  // Confirm we are past the login form.
+  await page.waitForFunction(() => !document.getElementById('admin-login'), null, { timeout: 10_000 });
 }
 
 module.exports = {
