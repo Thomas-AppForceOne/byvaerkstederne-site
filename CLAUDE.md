@@ -67,7 +67,9 @@ On `status: failed`, do none of the above — leave the branch for debugging and
 
 ## Git workflow — branching and PRs
 
-**`main` is release-only and protected.** Never push, force-push, or open a PR directly to `main`. The branch is gated by a "protect branches" GitHub ruleset; pushes will be rejected.
+**`main` and `develop` are both sacred.** Never commit, push, force-push, or merge directly to either branch — every change lands through a PR from a feature branch. If `git branch --show-current` prints `develop` or `main` before you stage a change, stop and create a feature branch first. This applies equally to chore/docs/hotfix edits; there are no exceptions.
+
+`main` is additionally gated by a "protect branches" GitHub ruleset; pushes will be rejected. `develop` relies on this rule being honored.
 
 **`develop` is the integration branch.** All work ships through `develop` first.
 
@@ -81,12 +83,25 @@ feature/*  →  develop  →  main
 Concrete rules for any agent or human session in this repo:
 
 - A new feature branches off `develop`: `git checkout -b feature/<slug> develop`.
+- **No direct commits to `develop` or `main`.** Always branch first. `git commit` while either branch is checked out is a bug, not a shortcut.
 - A PR opened by an agent **must** target `develop` as its base. Pass `--base develop` to `gh pr create` explicitly — do not rely on the default base, which `gh` derives from `defaultBranchRef` and will pick `main`.
 - `main` is updated only via a release PR from `develop`, opened by a human after the change has run on the `/test` environment. Agents do not open release PRs without an explicit instruction naming `main` as the target.
 - Force-pushing or rewriting history on `main` or `develop` is forbidden. The only time it has happened was to undo a PR mistakenly merged into `main`; the recovery itself was a one-off, not a precedent.
 - The `gan/<run-id>` branches produced by `/gan` are feature branches — they merge into `develop`, not `main`.
 
 The full branching/deployment table lives in [README.md](README.md#branching-model). This section is the authoritative agent-facing rule; if the two disagree, this wins until reconciled.
+
+---
+
+## Testing discipline
+
+Three rules, no exceptions:
+
+- **Do not add `test.skip()` (or equivalent) unless the user has explicitly told you to.** Skips hide regressions and have repeatedly let real bugs through sprint passes. If a test cannot run, the correct response is to make it run — seed a fixture, fix the product, or surface the failure — not to silence it. If you genuinely believe a skip is warranted, stop and ask first.
+- **Do not commit code that fails the tests.** Run the relevant suite before every commit that touches code or tests. A red suite on a feature branch is a work-in-progress snapshot, not a commit. If you need to checkpoint broken state, use `git stash` or a throwaway branch — do not push it.
+- **New or updated code must be covered by tests that exercise both the success path and at least one failure path.** A handler that returns 200 on valid input and 403 on a tampered nonce needs a test for each. A function that parses input needs a test that feeds it garbage. "Happy path only" coverage is not coverage — the regressions we have shipped came from untested failure paths.
+
+These rules apply to any code change, whether made directly, via `/gan`, or by a sub-agent. If you are reviewing a PR (human or agent) and any of the three is violated, block the merge.
 
 ---
 
