@@ -20,6 +20,11 @@ const {
   hasAdminPassword,
   ensureAccount,
 } = require('./helpers/accounts');
+const {
+  ensureLockedRoadmapItem,
+  ensureReleasableRoadmapItem,
+  ensureUnpromotedBugReport,
+} = require('./helpers/fixtures');
 
 module.exports = async function globalSetup() {
   if (hasUserPassword) {
@@ -29,5 +34,12 @@ module.exports = async function globalSetup() {
   if (hasAdminPassword) {
     const password = process.env.TEST_ADMIN_PASSWORD || '';
     await ensureAccount(TEST_ADMIN, password);
+  }
+  if (hasUserPassword) {
+    try { ensureLockedRoadmapItem(); } catch (_) { /* non-fatal */ }
+  }
+  if (hasAdminPassword) {
+    try { ensureReleasableRoadmapItem(); } catch (_) { /* non-fatal */ }
+    try { ensureUnpromotedBugReport(); } catch (_) { /* non-fatal */ }
   }
 };

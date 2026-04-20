@@ -409,33 +409,17 @@ test.describe('Bug report — authenticated', () => {
     test('POST /admin/bug-report-promote on an already auto-promoted report returns 409 already_auto_published', async ({ page }) => {
       await loginAsAdmin(page);
 
-      // Resolve a promote_nonce by loading the flex-objects list/edit admin view.
-      // The nonce field is rendered on pages that expose admin actions; we try
-      // a couple of known admin paths and fall back to skipping if none of them
-      // surface a promote_nonce input.
-      /** @type {string | null} */
-      let promoteNonce = null;
-      const paths = [
-        '/admin/flex-objects/bug-reports',
-        '/admin/flex-objects/bug-reports/br_promoted_login_mobile',
-      ];
-      for (const p of paths) {
-        try {
-          const r = await page.goto(p);
-          if (r && r.ok()) {
-            promoteNonce = await page.evaluate(() => {
-              const el = document.querySelector('input[name="promote_nonce"]');
-              return el ? /** @type {HTMLInputElement} */ (el).value : null;
-            });
-            if (promoteNonce) break;
-          }
-        } catch (_) { /* try next */ }
-      }
+      // promote_nonce only renders on reports where `promoted == false`.
+      // globalSetup seeds br_fixture_unpromoted so we can source a valid nonce
+      // regardless of the state of real reports.
+      const { UNPROMOTED_BUG_REPORT_ID } = require('../helpers/fixtures');
+      await page.goto(`/admin/flex-objects/bug-reports/${UNPROMOTED_BUG_REPORT_ID}`);
+      const promoteNonce = await page.evaluate(() => {
+        const el = document.querySelector('input[name="promote_nonce"]');
+        return el ? /** @type {HTMLInputElement} */ (el).value : null;
+      });
 
-      // As a fallback, synthesise a nonce by reading any page that the theme
-      // renders with nonce helpers available for the current admin session.
-      // If still missing, skip with a clear reason.
-      test.skip(!promoteNonce, 'promote_nonce not resolvable from admin UI — cannot exercise /admin/bug-report-promote');
+      test.skip(!promoteNonce, 'promote_nonce not rendered on seeded unpromoted fixture edit page');
 
       const reportId = 'br_promoted_login_mobile';
       const resp = await page.request.post(PROMOTE_ENDPOINT, {

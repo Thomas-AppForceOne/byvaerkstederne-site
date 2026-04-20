@@ -409,30 +409,19 @@ test.describe('Roadmap — authenticated', () => {
     test('POST /admin/roadmap/release-votes returns success:true for a single item', async ({ page }) => {
       await loginAsAdmin(page);
 
-      // Resolve a `release_nonce` (action `roadmap-release-votes`) by visiting
-      // the admin flex-objects edit page for any roadmap item.
-      let nonce = null;
-      let itemId = null;
+      // The release_nonce input only renders on items in the
+      // klar_til_implementation state with unreleased votes — globalSetup seeds
+      // rm_fixture_releasable precisely for that condition.
+      const { RELEASABLE_ROADMAP_ITEM_ID } = require('../helpers/fixtures');
+      const itemId = RELEASABLE_ROADMAP_ITEM_ID;
+      await page.goto(`/admin/flex-objects/roadmap-items/${itemId}`);
+      const nonce = await page.evaluate(() => {
+        const el = document.querySelector('input[name="release_nonce"]');
+        return el ? /** @type {HTMLInputElement} */ (el).value : null;
+      });
 
-      const listResp = await page.goto('/admin/flex-objects/roadmap-items');
-      if (listResp && listResp.ok()) {
-        const href = await page.evaluate(() => {
-          const a = document.querySelector('a[href*="/admin/flex-objects/roadmap-items/"]');
-          return a ? a.getAttribute('href') : null;
-        });
-        if (href) {
-          await page.goto(href);
-          nonce = await page.evaluate(() => {
-            const el = document.querySelector('input[name="release_nonce"]');
-            return el ? /** @type {HTMLInputElement} */ (el).value : null;
-          });
-          const m = href.match(/\/roadmap-items\/([^\/?#]+)/);
-          if (m) itemId = decodeURIComponent(m[1]);
-        }
-      }
-
-      test.skip(!nonce || !itemId,
-        'could not resolve release_nonce / item id from admin flex-objects edit page');
+      test.skip(!nonce,
+        'release_nonce not rendered on seeded releasable fixture edit page');
 
       const resp = await page.request.post('/admin/roadmap/release-votes', {
         form: { item_id: String(itemId), release_nonce: String(nonce) },

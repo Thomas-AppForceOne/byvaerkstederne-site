@@ -17,6 +17,11 @@ const {
   TEST_ADMIN,
   removeAccount,
 } = require('./helpers/accounts');
+const {
+  removeLockedRoadmapItem,
+  removeReleasableRoadmapItem,
+  removeUnpromotedBugReport,
+} = require('./helpers/fixtures');
 
 module.exports = async function globalTeardown() {
   try {
@@ -30,4 +35,7 @@ module.exports = async function globalTeardown() {
   } catch (err) {
     console.warn(`globalTeardown: removeAccount(pw-test-admin) failed: ${/** @type {any} */ (err).message}`);
   }
+  try { removeLockedRoadmapItem(); } catch (_) { /* non-fatal */ }
+  try { removeReleasableRoadmapItem(); } catch (_) { /* non-fatal */ }
+  try { removeUnpromotedBugReport(); } catch (_) { /* non-fatal */ }
 };
