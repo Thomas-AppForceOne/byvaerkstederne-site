@@ -16,8 +16,8 @@ const path = require('path');
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
 const ACCOUNT_PATHS = [
-  'config/www/user/accounts/playwright-test-user.yaml',
-  'config/www/user/accounts/playwright-test-admin.yaml',
+  'config/www/user/accounts/pw-test-user.yaml',
+  'config/www/user/accounts/pw-test-admin.yaml',
 ];
 
 test.describe('Gitignore invariant — account YAMLs', () => {

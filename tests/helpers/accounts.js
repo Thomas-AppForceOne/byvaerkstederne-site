@@ -31,15 +31,15 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const USERNAME_PATTERN = /^[a-z0-9-]+$/;
 
 const TEST_USER = Object.freeze({
-  username: 'playwright-test-user',
-  email: 'playwright-test-user@example.invalid',
+  username: 'pw-test-user',
+  email: 'pw-test-user@example.invalid',
   fullName: 'Playwright Test User',
   isAdmin: false,
 });
 
 const TEST_ADMIN = Object.freeze({
-  username: 'playwright-test-admin',
-  email: 'playwright-test-admin@example.invalid',
+  username: 'pw-test-admin',
+  email: 'pw-test-admin@example.invalid',
   fullName: 'Playwright Test Admin',
   isAdmin: true,
 });
@@ -108,7 +108,7 @@ function ensureAccount(account, password) {
   }
 
   const yamlPath = accountYamlPath(a);
-  if (fs.existsSync(yamlPath)) {
+  if (accountExistsInContainer(a) || fs.existsSync(yamlPath)) {
     return Promise.resolve({ created: false });
   }
 
@@ -117,18 +117,17 @@ function ensureAccount(account, password) {
   assertDockerAndGravRunning();
 
   const args = [
-    'exec', 'grav',
+    'exec', '-w', '/app/www/public', 'grav',
     'bin/plugin', 'login', 'new-user',
     '-u', a.username,
     '-p', password,
     '-e', a.email,
     '-N', a.fullName,
-    '-P', 'g', // permissions: site (g)
+    '-l', 'en',
+    '-t', 'Test User',
+    '-P', a.isAdmin ? 'b' : 's', // permissions: both (admin+site) or site-only
     '-s', 'enabled',
   ];
-  if (a.isAdmin) {
-    args.push('-a', 'admin.super');
-  }
 
   return new Promise((resolve, reject) => {
     execFile('docker', args, { timeout: 30_000 }, (err, stdout, stderr) => {
@@ -139,10 +138,19 @@ function ensureAccount(account, password) {
         return;
       }
       // Do not log stdout — it could echo the supplied password back. Confirm
-      // the YAML now exists; if not, surface a generic error.
-      if (!fs.existsSync(yamlPath)) {
+      // the YAML now exists inside the container (authoritative) or on the
+      // host-mounted path; if neither, surface a generic error.
+      if (!accountExistsInContainer(a) && !fs.existsSync(yamlPath)) {
         reject(new Error(`accounts.ensureAccount(${a.username}) reported success but YAML was not created`));
         return;
+      }
+      if (a.isAdmin) {
+        try {
+          grantAdminSuperInContainer(a);
+        } catch (patchErr) {
+          reject(new Error(`accounts.ensureAccount(${a.username}) created but failed to grant admin.super: ${/** @type {any} */ (patchErr).message}`));
+          return;
+        }
       }
       resolve({ created: true });
     });
@@ -159,22 +167,94 @@ function ensureAccount(account, password) {
 function removeAccount(account) {
   const a = validateAccount(account);
   const yamlPath = accountYamlPath(a);
+  let removed = false;
   try {
-    fs.rmSync(yamlPath, { force: true });
-    return { removed: true };
-  } catch (err) {
-    // rm -f semantics: never throw on missing-file. Re-throw anything else.
-    if (err && /** @type {any} */ (err).code === 'ENOENT') {
-      return { removed: false };
+    if (fs.existsSync(yamlPath)) {
+      fs.rmSync(yamlPath, { force: true });
+      removed = true;
     }
-    throw new Error(`accounts.removeAccount(${a.username}) failed: ${/** @type {any} */ (err).message}`);
+  } catch (err) {
+    if (!(err && /** @type {any} */ (err).code === 'ENOENT')) {
+      throw new Error(`accounts.removeAccount(${a.username}) failed: ${/** @type {any} */ (err).message}`);
+    }
   }
+  // Also attempt in-container removal so worktree-run tests clean up the real
+  // mount path. Idempotent; either location is acceptable.
+  if (removeAccountInContainer(a)) {
+    removed = true;
+  }
+  return { removed };
 }
 
 /**
  * Verify Docker is installed/runnable and the `grav` container is up.
  * Throws with a precise, actionable error if not — never silently skips.
  */
+/**
+ * Check whether an account YAML exists inside the running Grav container.
+ * This is authoritative when the host-side mount doesn't match the cwd we're
+ * running from (e.g. Playwright tests executed from a git worktree while
+ * docker compose was started from the main checkout).
+ *
+ * @param {{username: string}} account
+ */
+function accountExistsInContainer(account) {
+  try {
+    execFileSync(
+      'docker',
+      ['exec', 'grav', 'test', '-f', `/config/www/user/accounts/${account.username}.yaml`],
+      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 10_000 }
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Remove an account YAML from inside the container. Used by removeAccount as a
+ * fallback when the host-side path isn't writable from the current cwd.
+ *
+ * @param {{username: string}} account
+ */
+function removeAccountInContainer(account) {
+  try {
+    execFileSync(
+      'docker',
+      ['exec', 'grav', 'rm', '-f', `/config/www/user/accounts/${account.username}.yaml`],
+      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 10_000 }
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Ensure an admin account's YAML has `access.admin.super: true`.
+ * The bin/plugin login new-user command sets admin.login / site.login via -P b
+ * but never grants super; admin smoke tests require super to hit approve flows.
+ *
+ * @param {{username: string}} account
+ */
+function grantAdminSuperInContainer(account) {
+  const yamlPath = `/config/www/user/accounts/${account.username}.yaml`;
+  // Idempotent: replace or append. Using sh -c is safe because username is
+  // already allowlist-validated (/^[a-z0-9-]+$/).
+  const script = [
+    `set -e`,
+    `if grep -q '^\\s*super:' "${yamlPath}"; then`,
+    `  sed -i 's/^\\(\\s*super:\\s*\\).*/\\1true/' "${yamlPath}"`,
+    `else`,
+    `  awk '1; /^\\s*admin:\\s*$/ && !d { print "    super: true"; d=1 }' "${yamlPath}" > "${yamlPath}.tmp" && mv "${yamlPath}.tmp" "${yamlPath}"`,
+    `fi`,
+  ].join('\n');
+  execFileSync('docker', ['exec', 'grav', 'sh', '-c', script], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 10_000,
+  });
+}
+
 function assertDockerAndGravRunning() {
   try {
     execFileSync('docker', ['version', '--format', '{{.Server.Version}}'], {

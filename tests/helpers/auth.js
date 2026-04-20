@@ -27,9 +27,16 @@ const {
  */
 async function loginWith(page, username, password) {
   await page.goto('/login');
-  await page.fill('[name="username"], #username', username);
-  await page.fill('[name="password"], #password', password);
-  await page.click('[type="submit"]');
+  // The login form is rendered inside #bv-login-overlay, which is hidden by
+  // default on /login. Force it open so page.fill doesn't wait for visibility.
+  await page.evaluate(() => {
+    const overlay = document.getElementById('bv-login-overlay');
+    if (overlay) overlay.classList.add('is-open');
+  });
+  const form = page.locator('#bv-login-overlay form[action="/login"]');
+  await form.locator('[name="username"]').fill(username);
+  await form.locator('[name="password"]').fill(password);
+  await form.locator('[type="submit"]').click();
   await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 10_000 });
 }
 

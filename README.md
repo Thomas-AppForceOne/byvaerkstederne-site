@@ -228,8 +228,8 @@ The suite reads **exactly two secrets**, both supplied via environment variables
 
 | Variable | Purpose |
 |----------|---------|
-| `TEST_PASSWORD` | Password for the member account `playwright-test-user` (user-facing tests). |
-| `TEST_ADMIN_PASSWORD` | Password for the admin account `playwright-test-admin` (admin smoke tests only). |
+| `TEST_PASSWORD` | Password for the member account `pw-test-user` (user-facing tests). |
+| `TEST_ADMIN_PASSWORD` | Password for the admin account `pw-test-admin` (admin smoke tests only). |
 
 No other test-related secrets exist. Passwords are read from `process.env` and are
 never committed, logged, or echoed to stdout by the helper code.
@@ -238,7 +238,7 @@ never committed, logged, or echoed to stdout by the helper code.
 
 `playwright.config.js` wires `tests/global-setup.js` and `tests/global-teardown.js`
 as Playwright's `globalSetup` / `globalTeardown`. Before the suite runs, setup
-idempotently creates `playwright-test-user` (and `playwright-test-admin` when
+idempotently creates `pw-test-user` (and `pw-test-admin` when
 `TEST_ADMIN_PASSWORD` is set) via `docker exec grav bin/plugin login new-user …`.
 After the suite, teardown removes the YAMLs under `config/www/user/accounts/`.
 
@@ -279,16 +279,16 @@ required:
 If you want to force-clean by hand before a re-run:
 
 ```bash
-rm -f config/www/user/accounts/playwright-test-user.yaml
-rm -f config/www/user/accounts/playwright-test-admin.yaml
+rm -f config/www/user/accounts/pw-test-user.yaml
+rm -f config/www/user/accounts/pw-test-admin.yaml
 ```
 
 Both paths are covered by the pre-existing `config/www/user/accounts/*` rule in
 [`.gitignore`](.gitignore) — they are never committed. Confirm with:
 
 ```bash
-git check-ignore config/www/user/accounts/playwright-test-user.yaml
-git check-ignore config/www/user/accounts/playwright-test-admin.yaml
+git check-ignore config/www/user/accounts/pw-test-user.yaml
+git check-ignore config/www/user/accounts/pw-test-admin.yaml
 ```
 
 ### Coverage matrix

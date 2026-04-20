@@ -23,11 +23,11 @@ module.exports = async function globalTeardown() {
     removeAccount(TEST_USER);
   } catch (err) {
     // Teardown should not mask the test outcome; log a generic message.
-    console.warn(`globalTeardown: removeAccount(playwright-test-user) failed: ${/** @type {any} */ (err).message}`);
+    console.warn(`globalTeardown: removeAccount(pw-test-user) failed: ${/** @type {any} */ (err).message}`);
   }
   try {
     removeAccount(TEST_ADMIN);
   } catch (err) {
-    console.warn(`globalTeardown: removeAccount(playwright-test-admin) failed: ${/** @type {any} */ (err).message}`);
+    console.warn(`globalTeardown: removeAccount(pw-test-admin) failed: ${/** @type {any} */ (err).message}`);
   }
 };
