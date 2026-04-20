@@ -37,6 +37,18 @@ class RoadmapPlugin extends Plugin
 
     public function onPluginsInitialized(): void
     {
+        spl_autoload_register(static function (string $class): void {
+            $prefix = 'Grav\\Plugin\\Roadmap\\';
+            if (strncmp($class, $prefix, strlen($prefix)) !== 0) {
+                return;
+            }
+            $relative = substr($class, strlen($prefix));
+            $file = __DIR__ . '/classes/' . str_replace('\\', '/', $relative) . '.php';
+            if (is_file($file)) {
+                require_once $file;
+            }
+        });
+
         if (!$this->config->get('plugins.roadmap.enabled')) {
             return;
         }
