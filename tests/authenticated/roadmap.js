@@ -420,8 +420,7 @@ test.describe('Roadmap — authenticated', () => {
         return el ? /** @type {HTMLInputElement} */ (el).value : null;
       });
 
-      test.skip(!nonce,
-        'release_nonce not rendered on seeded releasable fixture edit page');
+      expect(nonce, 'release_nonce must render on releasable fixture edit page').toBeTruthy();
 
       const resp = await page.request.post('/admin/roadmap/release-votes', {
         form: { item_id: String(itemId), release_nonce: String(nonce) },
