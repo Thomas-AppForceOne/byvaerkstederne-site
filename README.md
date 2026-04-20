@@ -216,6 +216,92 @@ Tracked formats: `png jpg jpeg gif webp svg ico pdf mp4 mov avi mkv webm m4v wmv
 
 Edit markdown files directly in `config/www/user/pages/`. Component configuration lives in YAML front matter.
 
+## Testing
+
+End-to-end tests use [Playwright](https://playwright.dev) and run against the local
+Docker Grav container at `http://127.0.0.1:8080`. Configuration lives in
+[`playwright.config.js`](playwright.config.js); test files live under `tests/`.
+
+### Environment variables
+
+The suite reads **exactly two secrets**, both supplied via environment variables:
+
+| Variable | Purpose |
+|----------|---------|
+| `TEST_PASSWORD` | Password for the member account `pw-test-user` (user-facing tests). |
+| `TEST_ADMIN_PASSWORD` | Password for the admin account `pw-test-admin` (admin smoke tests only). |
+
+No other test-related secrets exist. Passwords are read from `process.env` and are
+never committed, logged, or echoed to stdout by the helper code.
+
+### Account lifecycle — you do not create Grav accounts by hand
+
+`playwright.config.js` wires `tests/global-setup.js` and `tests/global-teardown.js`
+as Playwright's `globalSetup` / `globalTeardown`. Before the suite runs, setup
+idempotently creates `pw-test-user` (and `pw-test-admin` when
+`TEST_ADMIN_PASSWORD` is set) via `docker exec grav bin/plugin login new-user …`.
+After the suite, teardown removes the YAMLs under `config/www/user/accounts/`.
+
+You do **not** need to visit `/admin`, run `bin/plugin login new-user` by hand, or
+pre-seed any account. Just export the password(s) and run the suite.
+
+### Running the suite
+
+```bash
+# Anonymous tests only (authenticated skipped with a named reason)
+npx playwright test
+
+# Full user-facing matrix
+TEST_PASSWORD='…' npx playwright test
+
+# Plus admin smoke
+TEST_PASSWORD='…' TEST_ADMIN_PASSWORD='…' npx playwright test
+```
+
+When `TEST_PASSWORD` is unset, authenticated specs skip with a reason that names
+the missing variable. Same for `TEST_ADMIN_PASSWORD` on admin-smoke tests.
+
+### Re-run robustness
+
+`globalSetup` is **idempotent** (check-then-create). That means the suite is safe
+to re-run in all three common recovery scenarios — no manual intervention
+required:
+
+1. **Clean re-run after a successful previous run.** Previous `globalTeardown`
+   removed both YAMLs; setup re-creates them. Just re-run the suite.
+2. **After a crashed run that left account YAMLs on disk.** Setup detects the
+   existing accounts via `docker exec grav bin/plugin login new-user …` returning
+   "already exists" and proceeds without error. Just re-run the suite.
+3. **After `make reset-users` (or equivalent manual cleanup).** The reset wipes
+   non-admin accounts; setup recreates the test accounts on the next run. Just
+   re-run the suite.
+
+If you want to force-clean by hand before a re-run:
+
+```bash
+rm -f config/www/user/accounts/pw-test-user.yaml
+rm -f config/www/user/accounts/pw-test-admin.yaml
+```
+
+Both paths are covered by the pre-existing `config/www/user/accounts/*` rule in
+[`.gitignore`](.gitignore) — they are never committed. Confirm with:
+
+```bash
+git check-ignore config/www/user/accounts/pw-test-user.yaml
+git check-ignore config/www/user/accounts/pw-test-admin.yaml
+```
+
+### Coverage matrix
+
+See [`tests/ACCEPTANCE.md`](tests/ACCEPTANCE.md) for the mapping of each source-spec
+acceptance criterion to the test file(s) that cover it.
+
+### Spec
+
+The full test-suite specification lives at
+[`specifications/roadmap_bug_feature_tests_specification.md`](specifications/roadmap_bug_feature_tests_specification.md)
+(moved to `specifications/archive/` after merge).
+
 ## Contact
 
 **Byværkstederne i Hundested**

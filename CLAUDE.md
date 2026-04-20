@@ -117,3 +117,26 @@ Forslå Feature, Roadmap, and Rapportér fejl must not appear in the main naviga
 GAN state lives in `.gan/` (gitignored). Schemas are in `~/.claude/skills/gan/schemas/`. Use `bin/grav clearcache` in evaluator prompts, not `clear-cache`.
 
 When running `/gan`, the orchestrator (main Claude session) is the sole writer of `.gan/progress.json`. Sub-agents communicate via stdout only.
+
+### Test credentials for the evaluator
+
+Playwright's authenticated suite needs `TEST_PASSWORD` and `TEST_ADMIN_PASSWORD`. Without them, ~34 authenticated tests `test.skip()` at the describe level and the evaluator never exercises the real flows — Sprint 5's DOM-attribute bug got through a sprint pass for exactly this reason.
+
+Credentials live **outside the repo** at `~/.gan-secrets/workshop-site.env`, mode `600`. Do not commit them, do not reference them in prompts (telemetry captures prompts verbatim now).
+
+The orchestrator, when writing evaluator prompts that invoke `npx playwright test`, MUST instruct the evaluator to source that file first:
+
+```bash
+if [ -f ~/.gan-secrets/workshop-site.env ]; then
+  set -a; . ~/.gan-secrets/workshop-site.env; set +a
+fi
+# Fail loudly rather than silently skipping if creds should be set but aren't.
+if [ -f ~/.gan-secrets/workshop-site.env ] && [ -z "$TEST_PASSWORD" ]; then
+  echo "FATAL: ~/.gan-secrets/workshop-site.env exists but TEST_PASSWORD is empty" >&2; exit 1
+fi
+npx playwright test
+```
+
+Rationale: the file exists on operator machines (populated once), absent on fresh clones. Presence-implies-must-work prevents silent skips masquerading as passes. If the file is missing entirely, skipping is acceptable — that's the spec's "anonymous-only" mode.
+
+Contributors populate `~/.gan-secrets/workshop-site.env` manually; the passwords match what was used to provision `playwright-test-user` / `playwright-test-admin` in the running Grav instance.

@@ -105,10 +105,9 @@ class FeatureSuggestionPlugin extends Plugin
             return;
         }
 
-        // Sanitize inputs
-        $title          = htmlspecialchars($title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $description    = htmlspecialchars($description, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $communityValue = htmlspecialchars($communityValue, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        // Store inputs raw; Twig autoescape (system.yaml: twig.autoescape: true)
+        // handles HTML escaping on render. Pre-escaping here produced
+        // double-escaped output ("&amp;lt;script&amp;gt;") in roadmap cards.
 
         // Build IDs and timestamp
         $timestamp    = gmdate('Y-m-d\TH:i:s\Z');

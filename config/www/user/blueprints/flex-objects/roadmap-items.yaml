@@ -37,7 +37,7 @@ config:
       authorize: admin.super
 
   data:
-    object: 'Grav\Common\Flex\Types\Generic\GenericObject'
+    object: 'Grav\Plugin\Roadmap\Flex\RoadmapItemObject'
     collection: 'Grav\Common\Flex\Types\Generic\GenericCollection'
     index: 'Grav\Common\Flex\Types\Generic\GenericIndex'
     storage:
@@ -121,6 +121,8 @@ form:
       type: textarea
       label: Reproduktionsskridt
       rows: 4
+      validate:
+        type: array
 
     page_url:
       type: text
