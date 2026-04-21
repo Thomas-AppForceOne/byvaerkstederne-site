@@ -105,6 +105,67 @@ These rules apply to any code change, whether made directly, via `/gan`, or by a
 
 ---
 
+## Testing in worktrees (Docker port management)
+
+Each worktree can run its own Grav container on its own port so multiple
+worktrees coexist without fighting over :8080. Ports are discovered
+automatically, and the discovery chain survives Claude Desktop restarts.
+
+### Start / stop a worktree
+
+```bash
+# From the worktree directory — port defaults to 8081
+scripts/gan-up.sh . 9000
+
+# Tear down
+scripts/gan-down.sh .
+```
+
+`gan-up.sh` validates the port is free, starts a container named
+`grav-<sha256_8>` where the hash is derived from the worktree's absolute
+path (so the name is deterministic and unique per worktree), waits for
+Grav to respond, writes `.gan/port-registry.json`, and exports
+`GRAV_PORT`, `GRAV_CONTAINER`, `GRAV_ROOT` for the current shell.
+
+### Running tests
+
+`make test`, `make test-headed`, and `make test-auth` discover the port
+automatically via `scripts/discover-grav-port.js`. The targets echo the
+port they are using and fail loudly (exit 1) if no port can be found — no
+silent defaulting, because Sprint-5 style bugs come from tests pointing at
+the wrong instance.
+
+### Discovery chain
+
+Tests find the port in this order:
+
+1. `GRAV_PORT` env var — set by `gan-up.sh` for the session.
+2. `.gan/port-registry.json` — per-worktree, survives Claude Desktop
+   restarts, updated by `gan-up.sh` / `gan-down.sh`.
+3. `docker ps` — filter by the hashed container name, then by the legacy
+   bare `grav` name (so `make start` on the main repo still works).
+4. Fallback to `8080` **in `playwright.config.js` only** (with a warning).
+   Makefile targets do not fall back — they fail loud.
+
+### Claude Desktop restart
+
+The env vars disappear but `.gan/port-registry.json` persists. Just rerun
+`scripts/gan-up.sh .`; it sees the existing registry entry and either
+re-exports the vars (if the container is still running) or restarts on
+the same port.
+
+### Common errors
+
+- **"Port X is already in use"** — `gan-up.sh` uses `lsof`/`netstat`/`ss`
+  and a `docker ps` scan. Pick a different port or stop the conflict.
+- **"Cannot determine GRAV_PORT"** from a Make target — run
+  `scripts/gan-up.sh . [port]`, or set `GRAV_PORT=<port>` manually.
+- **"Grav not responding on port X"** — the registry is stale. Either
+  `scripts/gan-down.sh . && scripts/gan-up.sh . <port>` to restart, or
+  delete `.gan/port-registry.json` and start fresh.
+
+---
+
 ## Known gotchas
 
 ### Grav CLI cache command
