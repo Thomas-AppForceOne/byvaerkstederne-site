@@ -133,6 +133,41 @@ GAN state lives in `.gan/` (gitignored). Schemas are in `~/.claude/skills/gan/sc
 
 When running `/gan`, the orchestrator (main Claude session) is the sole writer of `.gan/progress.json`. Sub-agents communicate via stdout only.
 
+### Confinement — GAN agents are sandboxed to the worktree
+
+GAN sub-agents (generator and evaluator in particular) run under a `PreToolUse` hook that restricts their writes to `$WORKTREE_PATH` plus a narrow carve-out for harness metadata under `$REPO_ROOT/.gan/`. Everything else in the main repo is off-limits: `config/`, `tests/`, `specifications/`, `decisions/`, `scripts/`, `.claude/`, `CLAUDE.md`, `docker-compose.yml` — all read-only to them.
+
+The hook lives at `.claude/hooks/gan-confine.sh` and activates when the orchestrator writes the marker file `.gan/confinement-active` (a single line containing the absolute path of the worktree). The orchestrator writes the marker when it creates the worktree and removes it on teardown. Sub-agents must never remove the marker themselves.
+
+In addition to the filesystem confinement, a fixed list of bash patterns is always blocked under an active marker:
+- `rsync --delete` anywhere (caused the April 2026 accounts wipe)
+- `rm -r` with `..` traversal
+- Any command referencing live-state dirs (`config/www/user/accounts/`, `config/www/user/data/`, `config/www/logs/`) without first `cd`-ing into the worktree
+- Any command containing an absolute path inside the main repo but outside the worktree
+
+If the hook rejects a command, the agent must *not* try to work around it. It must either reconsider the approach or surface the problem via the normal channel — an objection (generator) or `blockingConcerns` (evaluator).
+
+Rules the agents are bound to independent of the hook are spelled out in `~/.claude/agents/gan-evaluator.md` and `~/.claude/agents/gan-generator.md` under "Confinement — non-negotiable". The hook and the prose are belt-and-braces; neither is sufficient alone.
+
+### Live-server testing during a GAN run
+
+The primary dev Grav container runs on `:8080` bound to `./config` (the main repo). **GAN agents must never test against it** — it reflects nothing the generator wrote. Instead, the evaluator spins up a separate container bound to the worktree:
+
+```sh
+scripts/gan-up.sh "$WORKTREE_PATH" 8081    # brings up a container scoped to this GAN run
+tests/fixtures/grav-seeds/playwright/apply.sh <container-name>   # seeds test accounts
+# ... probes against http://localhost:8081 ...
+scripts/gan-down.sh "$WORKTREE_PATH"       # tears it down
+```
+
+Each GAN run gets a unique Compose project name derived from the worktree path, so multiple runs never collide. The primary `:8080` container keeps serving your actual dev workflow while GAN runs.
+
+### Seed bundles
+
+Tests that need live Grav state (accounts, flex data, pages) seed it via the bundles under `tests/fixtures/grav-seeds/`. Each bundle is idempotent and sources passwords from `~/.gan-secrets/workshop-site.env` rather than committing hashes. See `tests/fixtures/grav-seeds/README.md` for the full contract; `tests/fixtures/grav-seeds/playwright/` is the canonical example.
+
+The principle: tests must not depend on pre-existing state. Every test suite either pre-fills what it needs, or documents the seed bundle it requires in its own setup. No more "works on Thomas's machine because his accounts happen to exist".
+
 ### Test credentials for the evaluator
 
 Playwright's authenticated suite needs `TEST_PASSWORD` and `TEST_ADMIN_PASSWORD`. Without them, ~34 authenticated tests `test.skip()` at the describe level and the evaluator never exercises the real flows — Sprint 5's DOM-attribute bug got through a sprint pass for exactly this reason.
@@ -154,4 +189,4 @@ npx playwright test
 
 Rationale: the file exists on operator machines (populated once), absent on fresh clones. Presence-implies-must-work prevents silent skips masquerading as passes. If the file is missing entirely, skipping is acceptable — that's the spec's "anonymous-only" mode.
 
-Contributors populate `~/.gan-secrets/workshop-site.env` manually; the passwords match what was used to provision `playwright-test-user` / `playwright-test-admin` in the running Grav instance.
+Contributors populate `~/.gan-secrets/workshop-site.env` manually; the passwords must match what the `tests/fixtures/grav-seeds/playwright/` bundle provisioned into the local Grav instance (usernames `pw-test-user` and `pw-test-admin`).

@@ -59,8 +59,15 @@ config/www/user/data/rememberme/
 # Feed cache
 config/www/user/data/feed/
 
-# Claude Code
-.claude/
+# Claude Code — ignore by default, but track project-level settings + hooks.
+# Local per-operator state (permissions, worktree registry, transient
+# scratch files) stays ignored via the patterns below.
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+.claude/settings.local.json
+.claude/launch.json
+.claude/worktrees/
 
 # Node / Playwright
 node_modules/
