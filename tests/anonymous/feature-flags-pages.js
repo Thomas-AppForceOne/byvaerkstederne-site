@@ -76,6 +76,59 @@ function clearGravCache() {
   });
 }
 
+/**
+ * Ensure at least one admin account exists in the worktree-scoped Grav
+ * container. Without one, Grav's admin plugin intercepts every route with
+ * its "Register Admin User" page and our 404 assertions fail spuriously.
+ *
+ * The shared tests/global-setup.js uses the literal "grav" container
+ * (primary :8080 dev instance) — it does not seed the worktree container
+ * a GAN run brings up via scripts/gan-up.sh. This helper closes that gap.
+ * Idempotent: if the account YAML already exists we skip the docker exec.
+ *
+ * Credentials are sourced from ~/.gan-secrets/workshop-site.env per
+ * CLAUDE.md; if absent we skip without failing.
+ */
+function seedAdminIfPossible() {
+  const adminPw = process.env.TEST_ADMIN_PASSWORD;
+  if (!adminPw) return;
+  const { execFileSync } = require('child_process');
+  // Check container-side whether the account is already provisioned.
+  try {
+    execFileSync(
+      'docker',
+      ['exec', CONTAINER, 'test', '-f', '/app/www/public/user/accounts/pw-test-admin.yaml'],
+      { stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+    return; // already exists
+  } catch (_) {
+    // file missing — create the account
+  }
+  try {
+    execFileSync(
+      'docker',
+      [
+        'exec', '-w', '/app/www/public', CONTAINER,
+        'bin/plugin', 'login', 'new-user',
+        '-u', 'pw-test-admin',
+        '-p', adminPw,
+        '-e', 'pw-test-admin@example.invalid',
+        '-N', 'Playwright Test Admin',
+        '-l', 'en',
+        '-t', 'Admin',
+        '-P', 'b',
+        '-s', 'enabled',
+        '-n',
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 }
+    );
+  } catch (err) {
+    // Non-fatal — any test that actually needs the admin will surface
+    // the failure downstream with a clear error message.
+    console.warn(`feature-flags-pages: admin seed failed (non-fatal): ${err && err.message}`);
+  }
+}
+
 // URLs that are gated in public-demo and open in internal.
 const GATED_URLS = [
   '/roadmap',
@@ -118,6 +171,7 @@ test.describe('feature-flags: public-demo profile 404s flagged pages', () => {
   let ctx;
 
   test.beforeAll(async () => {
+    seedAdminIfPossible();
     clearGravCache();
     ctx = await profileContext('public-demo.example.com');
   });
@@ -181,6 +235,7 @@ test.describe('feature-flags: internal profile renders flagged pages', () => {
   let ctx;
 
   test.beforeAll(async () => {
+    seedAdminIfPossible();
     clearGravCache();
     ctx = await profileContext('staging.example.com');
   });
