@@ -5,7 +5,7 @@
     </div>
     <div class="bv-container">
         <div class="bv-workgroups">
-            {% for group in h.groups %}
+            {% for group in h.groups|feature_visible %}
             <a href="{{ group.url|default('#') }}" class="bv-workgroup-card bv-workgroup-card--{{ group.color|default('primary') }}">
                 {% if group.image %}
                 <img class="bv-workgroup-card__bg" src="{{ group.image }}" alt="{{ group.title }}"/>
