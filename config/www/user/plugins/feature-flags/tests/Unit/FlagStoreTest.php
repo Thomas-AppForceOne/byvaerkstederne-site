@@ -164,19 +164,26 @@ final class FlagStoreTest extends TestCase
         $logger = new ArrayLogger();
         $store = new FlagStore($raw, $logger);
 
+        // Behavioural contract (preserved across enum-case additions):
+        //   (a) every declared FeatureFlag case resolves to disabled and unconfigured,
+        //   (b) getEnabledFlags() returns empty,
+        //   (c) allFlags() contains one false-seeded entry per declared case,
+        //       in FeatureFlag::cases() declaration order.
         foreach (FeatureFlag::cases() as $case) {
             $this->assertFalse($store->isEnabled($case));
             $this->assertFalse($store->isConfigured($case));
         }
         $this->assertSame([], $store->getEnabledFlags());
-        $this->assertSame(
-            [
-                'checkout_v2'        => false,
-                'pricing_experiment' => false,
-                'promo_banner'       => false,
-                'partner_portal'     => false,
-            ],
-            $store->allFlags()
+
+        $expectedAll = [];
+        foreach (FeatureFlag::cases() as $case) {
+            $expectedAll[$case->value] = false;
+        }
+        $this->assertSame($expectedAll, $store->allFlags());
+        $this->assertCount(
+            count(FeatureFlag::cases()),
+            $store->allFlags(),
+            'allFlags() must have exactly one entry per declared enum case.'
         );
 
         $warnings = $logger->warnings();
@@ -315,15 +322,29 @@ final class FlagStoreTest extends TestCase
         $expectedConfigured = ['checkout_v2', 'partner_portal', 'promo_banner'];
         $this->assertSame($expectedConfigured, $debug['configured']);
 
-        // all: array<string,bool> with exactly the four declared keys.
+        // Behavioural contract (preserved across enum-case additions):
+        // debug()['all'] has exactly the key set and stable ordering of
+        // FeatureFlag::cases(); the three configured keys above resolve
+        // as set and every other declared case resolves to false.
+        $expectedAll = [];
+        foreach (FeatureFlag::cases() as $case) {
+            $expectedAll[$case->value] = false;
+        }
+        $expectedAll['checkout_v2'] = true;
+        // promo_banner and partner_portal already seeded false above; explicit
+        // assignment keeps the intent readable.
+        $expectedAll['promo_banner']   = false;
+        $expectedAll['partner_portal'] = false;
+
         $this->assertSame(
-            [
-                'checkout_v2'        => true,
-                'pricing_experiment' => false,
-                'promo_banner'       => false,
-                'partner_portal'     => false,
-            ],
-            $debug['all']
+            $expectedAll,
+            $debug['all'],
+            'debug()["all"] keys must match FeatureFlag::cases() exactly, in declaration order.'
+        );
+        $this->assertSame(
+            array_map(static fn (FeatureFlag $c): string => $c->value, FeatureFlag::cases()),
+            array_keys($debug['all']),
+            'debug()["all"] key ordering must mirror FeatureFlag::cases().'
         );
     }
 
@@ -413,13 +434,38 @@ final class FlagStoreTest extends TestCase
 
     public function testAllFlagsAlwaysHasFourDeclaredKeys(): void
     {
+        // Behavioural contract (preserved across enum-case additions):
+        // allFlags() returns exactly one entry per declared FeatureFlag case,
+        // in declaration order, with no extras — independent of which subset
+        // of keys appeared in the raw config.
         $store = new FlagStore(['checkout_v2' => 'true']);
         $all = $store->allFlags();
-        $this->assertSame(
-            ['checkout_v2', 'pricing_experiment', 'promo_banner', 'partner_portal'],
-            array_keys($all)
+
+        $expectedKeys = array_map(
+            static fn (FeatureFlag $c): string => $c->value,
+            FeatureFlag::cases()
         );
+        $this->assertSame(
+            $expectedKeys,
+            array_keys($all),
+            'allFlags() key set and order must match FeatureFlag::cases() exactly.'
+        );
+        $this->assertCount(
+            count(FeatureFlag::cases()),
+            $all,
+            'allFlags() must have exactly one entry per declared enum case (no extras).'
+        );
+
+        // Only the single configured key flipped; everything else stays false.
         $this->assertTrue($all['checkout_v2']);
-        $this->assertFalse($all['pricing_experiment']);
+        foreach (FeatureFlag::cases() as $case) {
+            if ($case->value === 'checkout_v2') {
+                continue;
+            }
+            $this->assertFalse(
+                $all[$case->value],
+                "Unconfigured flag {$case->value} must be false."
+            );
+        }
     }
 }
