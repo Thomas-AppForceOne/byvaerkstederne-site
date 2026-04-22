@@ -1,0 +1,31 @@
+# Internal / staging environment profile.
+#
+# Active when the site is served under the host `staging.example.com`
+# (placeholder hostname — ops maps the real internal/staging host by
+# renaming this directory, mirroring the `public-demo.example.com`
+# treatment). Every one of the 17 rollout-catalogue flags is enabled so
+# that internal reviewers can exercise every feature surface that the
+# public-demo profile hides.
+#
+# Values are the strict strings `"true"` or `"false"`. Any other value
+# (bare YAML booleans, `TRUE`, `1`, `yes`, nulls, nested maps) is treated
+# by FlagStore as invalid, logs a warning, and fails closed. Secrets,
+# credentials, API keys, or host identifiers must never appear here.
+enabled:
+  roadmap: "true"
+  feature_suggestion: "true"
+  bug_report: "true"
+  community_footer_column: "true"
+  membership_signup: "true"
+  newsletter_signup: "true"
+  event_highlight: "true"
+  press_page: "true"
+  minutes_archive: "true"
+  workshop_calendar: "true"
+  workshop_calendar_filters: "true"
+  workshop_calendar_featured: "true"
+  workshop_detail_pages: "true"
+  press_assets_download: "true"
+  press_stats: "true"
+  contact_page: "true"
+  statutes_page: "true"
