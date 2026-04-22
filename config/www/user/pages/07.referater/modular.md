@@ -1,5 +1,6 @@
 ---
 title: Referater
+feature: minutes_archive
 nav_type: info
 content:
     items: '@self.modular'
