@@ -1,13 +1,13 @@
 services:
   grav:
     image: lscr.io/linuxserver/grav:latest
-    container_name: grav
+    container_name: ${GRAV_CONTAINER:-grav}
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=Europe/Copenhagen
     volumes:
-      - ./config:/config
+      - ${GRAV_ROOT:-./config}:/config
     ports:
-      - "8080:80"
+      - "${GRAV_PORT:-8080}:80"
     restart: unless-stopped

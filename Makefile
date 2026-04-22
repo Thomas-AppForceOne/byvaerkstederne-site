@@ -124,17 +124,35 @@ test-install: ## Install Playwright and browser binaries
 	@echo "  ✓ Playwright ready"
 
 test: ## Run all anonymous tests (no credentials needed)
-	@curl -s -o /dev/null http://127.0.0.1:8080 || { echo "❌  Site not running. Run: make start"; exit 1; }
-	@npx playwright test tests/anonymous.spec.js
+	@PORT="$${GRAV_PORT}"; \
+	if [ -z "$$PORT" ]; then PORT=$$(node scripts/discover-grav-port.js 2>/dev/null || echo ""); fi; \
+	if [ -z "$$PORT" ]; then \
+		echo "❌  Cannot determine GRAV_PORT. Run: scripts/gan-up.sh . [port]"; exit 1; \
+	fi; \
+	curl -s -o /dev/null "http://127.0.0.1:$$PORT" || { echo "❌  Grav not responding on port $$PORT. Run: scripts/gan-up.sh . $$PORT"; exit 1; }; \
+	echo "Running tests against http://127.0.0.1:$$PORT"; \
+	GRAV_PORT=$$PORT npx playwright test tests/anonymous.spec.js
 
 test-headed: ## Run tests with browser visible (for debugging)
-	@curl -s -o /dev/null http://127.0.0.1:8080 || { echo "❌  Site not running. Run: make start"; exit 1; }
-	@npx playwright test tests/anonymous.spec.js --headed
+	@PORT="$${GRAV_PORT}"; \
+	if [ -z "$$PORT" ]; then PORT=$$(node scripts/discover-grav-port.js 2>/dev/null || echo ""); fi; \
+	if [ -z "$$PORT" ]; then \
+		echo "❌  Cannot determine GRAV_PORT. Run: scripts/gan-up.sh . [port]"; exit 1; \
+	fi; \
+	curl -s -o /dev/null "http://127.0.0.1:$$PORT" || { echo "❌  Grav not responding on port $$PORT. Run: scripts/gan-up.sh . $$PORT"; exit 1; }; \
+	echo "Running tests against http://127.0.0.1:$$PORT (headed)"; \
+	GRAV_PORT=$$PORT npx playwright test tests/anonymous.spec.js --headed
 
 test-auth: ## Run authenticated tests (requires TEST_USERNAME and TEST_PASSWORD)
-	@curl -s -o /dev/null http://127.0.0.1:8080 || { echo "❌  Site not running. Run: make start"; exit 1; }
-	@[ -n "$$TEST_USERNAME" ] && [ -n "$$TEST_PASSWORD" ] || { echo "❌  Set TEST_USERNAME and TEST_PASSWORD before running authenticated tests"; exit 1; }
-	@npx playwright test tests/authenticated.spec.js
+	@PORT="$${GRAV_PORT}"; \
+	if [ -z "$$PORT" ]; then PORT=$$(node scripts/discover-grav-port.js 2>/dev/null || echo ""); fi; \
+	if [ -z "$$PORT" ]; then \
+		echo "❌  Cannot determine GRAV_PORT. Run: scripts/gan-up.sh . [port]"; exit 1; \
+	fi; \
+	curl -s -o /dev/null "http://127.0.0.1:$$PORT" || { echo "❌  Grav not responding on port $$PORT. Run: scripts/gan-up.sh . $$PORT"; exit 1; }; \
+	[ -n "$$TEST_USERNAME" ] && [ -n "$$TEST_PASSWORD" ] || { echo "❌  Set TEST_USERNAME and TEST_PASSWORD before running authenticated tests"; exit 1; }; \
+	echo "Running tests against http://127.0.0.1:$$PORT"; \
+	GRAV_PORT=$$PORT npx playwright test tests/authenticated.spec.js
 
 # ── Reset ──────────────────────────────────────────────
 
