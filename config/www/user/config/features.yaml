@@ -1,1 +1,34 @@
-enabled: {}
+# Default feature-flag profile.
+#
+# This file is active when no env-specific `user/env/<host>/config/features.yaml`
+# overrides it — i.e., local development, CI containers probed directly by
+# IP/127.0.0.1, and any host without a dedicated env directory. Local dev
+# must see every feature surface so existing tests, demos, and manual
+# walkthroughs keep working.
+#
+# Host-scoped profiles narrow this down:
+#   - user/env/public-demo.example.com/config/features.yaml  → all off
+#   - user/env/staging.example.com/config/features.yaml       → all on (explicit)
+#
+# Values MUST be the literal quoted strings `"true"` or `"false"`. Any
+# other shape (bare YAML boolean, `TRUE`, integer, null) resolves to
+# `false` and logs a warning per the FlagStore strict-string rule.
+# Secrets, credentials, or API keys must never appear here.
+enabled:
+  roadmap: "true"
+  feature_suggestion: "true"
+  bug_report: "true"
+  community_footer_column: "true"
+  membership_signup: "true"
+  newsletter_signup: "true"
+  event_highlight: "true"
+  press_page: "true"
+  minutes_archive: "true"
+  workshop_calendar: "true"
+  workshop_calendar_filters: "true"
+  workshop_calendar_featured: "true"
+  workshop_detail_pages: "true"
+  press_assets_download: "true"
+  press_stats: "true"
+  contact_page: "true"
+  statutes_page: "true"

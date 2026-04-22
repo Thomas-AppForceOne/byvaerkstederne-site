@@ -14,3 +14,4 @@ require('./anonymous/access-control');
 require('./anonymous/gitignore');
 require('./anonymous/bug-report');
 require('./anonymous/feature-suggestion');
+require('./anonymous/feature-flags-pages');
