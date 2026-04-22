@@ -21,23 +21,37 @@
         <div class="bv-footer__col">
             <h3 class="bv-footer__heading">Information</h3>
             <nav class="bv-footer__nav">
+                {% if feature_enabled('statutes_page') %}
                 <a href="/vedtaegter">Vedt&aelig;gter</a>
+                {% endif %}
                 <a href="/privatlivspolitik">Privatlivspolitik</a>
+                {% if feature_enabled('minutes_archive') %}
                 <a href="/referater">Referater</a>
+                {% endif %}
+                {% if feature_enabled('press_page') %}
                 <a href="/presse">Presse</a>
+                {% endif %}
             </nav>
         </div>
 
-        {# Fællesskab — authenticated users only #}
+        {# Fællesskab — authenticated users only, gated by community_footer_column flag #}
+        {% if feature_enabled('community_footer_column') %}
         {% if grav.user.authenticated and grav.user.authorized %}
         <div class="bv-footer__col">
             <h3 class="bv-footer__heading">F&aelig;llesskab</h3>
             <nav class="bv-footer__nav">
+                {% if feature_enabled('roadmap') %}
                 <a href="/roadmap">Roadmap</a>
+                {% endif %}
+                {% if feature_enabled('feature_suggestion') %}
                 <button type="button" onclick="bvFeatureSuggestion.open(); return false;">Forsl&aring; feature</button>
+                {% endif %}
+                {% if feature_enabled('bug_report') %}
                 <button type="button" onclick="bvBugReport.open(); return false;">Rapport&eacute;r fejl</button>
+                {% endif %}
             </nav>
         </div>
+        {% endif %}
         {% endif %}
 
         {# Find os #}

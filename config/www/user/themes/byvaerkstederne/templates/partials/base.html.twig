@@ -33,8 +33,12 @@
     {% endblock %}
 
     {% include 'partials/login_overlay.html.twig' %}
+    {% if feature_enabled('bug_report') %}
     {% include 'partials/bug_report_overlay.html.twig' %}
+    {% endif %}
+    {% if feature_enabled('feature_suggestion') %}
     {% include 'partials/feature_suggestion_overlay.html.twig' %}
+    {% endif %}
 
     <script src="{{ url('theme://js/site.js') }}?v={{ 'now'|date('U') }}"></script>
 

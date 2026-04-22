@@ -9,15 +9,25 @@
         {% set nav_type = page.header.nav_type|default('main') %}
 
         {% if nav_type == 'info' %}
+            {% if feature_enabled('statutes_page') %}
             <a href="/vedtaegter" class="bv-nav__link {% if page.route == '/vedtaegter' %}is-active{% endif %}">Vedt&aelig;gter</a>
+            {% endif %}
             <a href="/privatlivspolitik" class="bv-nav__link {% if page.route == '/privatlivspolitik' %}is-active{% endif %}">Privatliv</a>
+            {% if feature_enabled('minutes_archive') %}
             <a href="/referater" class="bv-nav__link {% if page.route == '/referater' %}is-active{% endif %}">Referater</a>
+            {% endif %}
+            {% if feature_enabled('press_page') %}
             <a href="/presse" class="bv-nav__link {% if page.route == '/presse' %}is-active{% endif %}">Presse</a>
+            {% endif %}
         {% else %}
             <a href="/" class="bv-nav__link {% if page.route == '/' or page.route == '/home' %}is-active{% endif %}">Forsiden</a>
+            {% if feature_enabled('workshop_calendar') %}
             <a href="/vaerkstedskalenderen" class="bv-nav__link {% if page.route == '/vaerkstedskalenderen' %}is-active{% endif %}">V&aelig;rkstedskalenderen</a>
+            {% endif %}
             <a href="/vaerksteder" class="bv-nav__link {% if page.route starts with '/vaerksteder' %}is-active{% endif %}">V&aelig;rksteder</a>
+            {% if feature_enabled('contact_page') %}
             <a href="/kontakt" class="bv-nav__link {% if page.route == '/kontakt' %}is-active{% endif %}">Kontakt</a>
+            {% endif %}
         {% endif %}
 
         {% if grav.user.authenticated and grav.user.authorized %}
@@ -28,7 +38,9 @@
             <a href="{{ logout_url|e }}" class="bv-nav__link">Log ud</a>
         {% else %}
             <a href="#" class="bv-nav__link" onclick="document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;">Log ind</a>
+            {% if feature_enabled('membership_signup') %}
             <a href="/opret-medlemskab?redirect={{ page.route|url_encode }}" class="bv-btn bv-btn--primary bv-btn--sm">Bliv medlem</a>
+            {% endif %}
         {% endif %}
     </nav>
 
@@ -41,14 +53,24 @@
 <div class="bv-mobile-menu">
     <nav class="bv-mobile-menu__nav">
         <a href="/" class="bv-mobile-menu__link">Forsiden</a>
+        {% if feature_enabled('workshop_calendar') %}
         <a href="/vaerkstedskalenderen" class="bv-mobile-menu__link">V&aelig;rkstedskalenderen</a>
+        {% endif %}
         <a href="/vaerksteder" class="bv-mobile-menu__link">V&aelig;rksteder</a>
+        {% if feature_enabled('contact_page') %}
         <a href="/kontakt" class="bv-mobile-menu__link">Kontakt</a>
+        {% endif %}
         <hr class="bv-mobile-menu__divider"/>
+        {% if feature_enabled('statutes_page') %}
         <a href="/vedtaegter" class="bv-mobile-menu__link bv-mobile-menu__link--secondary">Vedt&aelig;gter</a>
+        {% endif %}
         <a href="/privatlivspolitik" class="bv-mobile-menu__link bv-mobile-menu__link--secondary">Privatliv</a>
+        {% if feature_enabled('minutes_archive') %}
         <a href="/referater" class="bv-mobile-menu__link bv-mobile-menu__link--secondary">Referater</a>
+        {% endif %}
+        {% if feature_enabled('press_page') %}
         <a href="/presse" class="bv-mobile-menu__link bv-mobile-menu__link--secondary">Presse</a>
+        {% endif %}
         <hr class="bv-mobile-menu__divider"/>
         {% if grav.user.authenticated and grav.user.authorized %}
             <span class="bv-mobile-menu__link" style="color: var(--primary);">
@@ -58,7 +80,9 @@
             <a href="{{ logout_url|e }}" class="bv-mobile-menu__link">Log ud</a>
         {% else %}
             <a href="#" class="bv-mobile-menu__link" onclick="document.body.classList.remove('menu-open'); document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;">Log ind</a>
+            {% if feature_enabled('membership_signup') %}
             <a href="/opret-medlemskab" class="bv-btn bv-btn--primary bv-mobile-menu__cta">Bliv medlem</a>
+            {% endif %}
         {% endif %}
     </nav>
 </div>
