@@ -1,5 +1,6 @@
 ---
 title: Stor Arbejdsdag
+feature: workshop_calendar_featured
 day_name: Torsdag
 day_number: "25"
 month: April
