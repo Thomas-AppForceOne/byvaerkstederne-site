@@ -13,7 +13,8 @@ if [[ $# -lt 1 ]]; then
 fi
 
 WORKTREE_PATH="$1"
-WORKTREE_ABS="$(cd "$WORKTREE_PATH" && pwd 2>/dev/null || echo "$WORKTREE_PATH")"
+# Physical path (symlink-resolved) — see gan-up.sh for rationale.
+WORKTREE_ABS="$(cd "$WORKTREE_PATH" && pwd -P 2>/dev/null || echo "$WORKTREE_PATH")"
 
 WORKTREE_ID="$(printf '%s' "$WORKTREE_ABS" | shasum -a 256 | cut -c1-8)"
 CONTAINER_NAME="grav-$WORKTREE_ID"

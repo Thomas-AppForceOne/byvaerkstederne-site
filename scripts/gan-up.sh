@@ -32,7 +32,12 @@ if [[ ! -d "$WORKTREE_PATH/config/www" ]]; then
   exit 1
 fi
 
-WORKTREE_ABS="$(cd "$WORKTREE_PATH" && pwd)"
+# Use the physical (symlink-resolved) path so the registry key matches what
+# node's fs.realpathSync / path.resolve produces in discover-grav-port.js.
+# On macOS `/tmp` -> `/private/tmp`; without -P the shell keeps the logical
+# form and discover-grav-port.js misses the registry, falls through to the
+# bare `grav` container, and returns the wrong port.
+WORKTREE_ABS="$(cd "$WORKTREE_PATH" && pwd -P)"
 
 # Deterministic, collision-resistant id from the absolute path.
 # Uses shasum -a 256 for cross-platform support (macOS lacks sha256sum).

@@ -32,7 +32,18 @@ function discoverGravPort(worktreePath = '.') {
     }
   }
 
-  const worktreeAbs = path.resolve(worktreePath);
+  // Resolve symlinks so the registry key matches what `cd && pwd -P`
+  // writes in gan-up.sh. Without realpathSync, `/tmp/foo` (logical) would
+  // miss a registry entry written as `/private/tmp/foo` (physical) on macOS
+  // — and we'd silently fall through to the bare `grav` container.
+  // If the path doesn't exist yet, fall back to path.resolve so the caller
+  // still gets a sensible error message from layer 3.
+  let worktreeAbs;
+  try {
+    worktreeAbs = fs.realpathSync(path.resolve(worktreePath));
+  } catch (_) {
+    worktreeAbs = path.resolve(worktreePath);
+  }
 
   // Layer 2: port registry file
   const registryPath = path.join(worktreeAbs, '.gan', 'port-registry.json');
