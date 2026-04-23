@@ -24,15 +24,13 @@ Shipped on branch `gan/20260419T200123Z-5ee1`. Playwright suite covers anonymous
 
 **Exit criteria:** met. Anonymous suite 23 passed / 34 skipped / 0 failed; authenticated tests skip cleanly with env-var-named reasons when creds are absent.
 
-### 3. Feature-flag rollout to unfinished features and pages
+### 3. Feature-flag rollout to unfinished features and pages — IMPLEMENTED
 
-**Spec:** [feature_flag_rollout_specification.md](feature_flag_rollout_specification.md)
+**Spec (archived):** [archive/feature_flag_rollout_specification.md](archive/feature_flag_rollout_specification.md)
 
-Ship third. This is the payoff: flag every unfinished surface so the public-demo profile exposes only the polished pages, while the internal profile continues to show everything.
+Shipped on branch `gan/20260422T182055Z-5cb6`. 17-flag rollout catalogue declared in the `FeatureFlag` enum; `public-demo.example.com` and `staging.example.com` env profiles under `config/www/user/env/`; page-level frontmatter gates across home sub-sections, workshop detail pages, roadmap, community affordances, membership-signup, press/minutes/calendar/contact/statutes; Twig partial gates on navigation, footer, base overlays, and the roadmap card grid; `|feature_visible` on the workgroups card grid; PHP handler gates on the roadmap/feature-suggestion/bug-report plugins returning a non-leaking `404 Not Found` before any nonce/auth/input parsing when their flag is off. Playwright coverage across both profiles: 117 anonymous tests passing.
 
-Depends on step 1 (the mechanism) and step 2 (the regression net).
-
-**Exit criteria:** public-demo and internal profiles both pass their respective Playwright runs; production host is switched to the public-demo profile.
+**Exit criteria:** met. Anonymous suite 117/117 passed under both profiles; PHPUnit feature-flags suite 139 tests / 1113 assertions; pre-existing Sprint-1+2 regression baseline intact. ADR to be written at PR-merge time per CLAUDE.md.
 
 ---
 
