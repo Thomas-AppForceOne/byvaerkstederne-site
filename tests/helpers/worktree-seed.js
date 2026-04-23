@@ -6,7 +6,7 @@
  *
  * Context: tests/global-setup.js provisions accounts inside the literal
  * "grav" container (the primary :8080 dev instance). When a GAN run
- * brings up its own container via scripts/gan-up.sh, those accounts
+ * brings up its own container via scripts/grav-up.sh, those accounts
  * live in the wrong container and the worktree Grav instance boots
  * with zero users — which trips Grav's admin plugin into serving the
  * "Register Admin User" page for every route. All anonymous tests that

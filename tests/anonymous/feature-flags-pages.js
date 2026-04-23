@@ -45,7 +45,7 @@ const BASE = `http://127.0.0.1:${PORT}`;
 
 /** Find the docker container servicing this worktree. */
 function resolveContainer() {
-  // Layer 1: env, set by gan-up.sh
+  // Layer 1: env, set by grav-up.sh
   if (process.env.GRAV_CONTAINER) return process.env.GRAV_CONTAINER;
 
   // Layer 2: port-registry.json (survives Claude Desktop restart)
@@ -83,7 +83,7 @@ function clearGravCache() {
  *
  * The shared tests/global-setup.js uses the literal "grav" container
  * (primary :8080 dev instance) — it does not seed the worktree container
- * a GAN run brings up via scripts/gan-up.sh. This helper closes that gap.
+ * a GAN run brings up via scripts/grav-up.sh. This helper closes that gap.
  * Idempotent: if the account YAML already exists we skip the docker exec.
  *
  * Credentials are sourced from ~/.gan-secrets/workshop-site.env per

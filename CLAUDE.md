@@ -115,13 +115,13 @@ automatically, and the discovery chain survives Claude Desktop restarts.
 
 ```bash
 # From the worktree directory — port defaults to 8081
-scripts/gan-up.sh . 9000
+scripts/grav-up.sh . 9000
 
 # Tear down
-scripts/gan-down.sh .
+scripts/grav-down.sh .
 ```
 
-`gan-up.sh` validates the port is free, starts a container named
+`grav-up.sh` validates the port is free, starts a container named
 `grav-<sha256_8>` where the hash is derived from the worktree's absolute
 path (so the name is deterministic and unique per worktree), waits for
 Grav to respond, writes `.gan/port-registry.json`, and exports
@@ -139,9 +139,9 @@ the wrong instance.
 
 Tests find the port in this order:
 
-1. `GRAV_PORT` env var — set by `gan-up.sh` for the session.
+1. `GRAV_PORT` env var — set by `grav-up.sh` for the session.
 2. `.gan/port-registry.json` — per-worktree, survives Claude Desktop
-   restarts, updated by `gan-up.sh` / `gan-down.sh`.
+   restarts, updated by `grav-up.sh` / `grav-down.sh`.
 3. `docker ps` — filter by the hashed container name, then by the legacy
    bare `grav` name (so `make start` on the main repo still works).
 4. Fallback to `8080` **in `playwright.config.js` only** (with a warning).
@@ -150,18 +150,18 @@ Tests find the port in this order:
 ### Claude Desktop restart
 
 The env vars disappear but `.gan/port-registry.json` persists. Just rerun
-`scripts/gan-up.sh .`; it sees the existing registry entry and either
+`scripts/grav-up.sh .`; it sees the existing registry entry and either
 re-exports the vars (if the container is still running) or restarts on
 the same port.
 
 ### Common errors
 
-- **"Port X is already in use"** — `gan-up.sh` uses `lsof`/`netstat`/`ss`
+- **"Port X is already in use"** — `grav-up.sh` uses `lsof`/`netstat`/`ss`
   and a `docker ps` scan. Pick a different port or stop the conflict.
 - **"Cannot determine GRAV_PORT"** from a Make target — run
-  `scripts/gan-up.sh . [port]`, or set `GRAV_PORT=<port>` manually.
+  `scripts/grav-up.sh . [port]`, or set `GRAV_PORT=<port>` manually.
 - **"Grav not responding on port X"** — the registry is stale. Either
-  `scripts/gan-down.sh . && scripts/gan-up.sh . <port>` to restart, or
+  `scripts/grav-down.sh . && scripts/grav-up.sh . <port>` to restart, or
   delete `.gan/port-registry.json` and start fresh.
 
 ---
@@ -215,10 +215,10 @@ Rules the agents are bound to independent of the hook are spelled out in `~/.cla
 The primary dev Grav container runs on `:8080` bound to `./config` (the main repo). **GAN agents must never test against it** — it reflects nothing the generator wrote. Instead, the evaluator spins up a separate container bound to the worktree:
 
 ```sh
-scripts/gan-up.sh "$WORKTREE_PATH" 8081    # brings up a container scoped to this GAN run
+scripts/grav-up.sh "$WORKTREE_PATH" 8081    # brings up a container scoped to this GAN run
 tests/fixtures/grav-seeds/playwright/apply.sh <container-name>   # seeds test accounts
 # ... probes against http://localhost:8081 ...
-scripts/gan-down.sh "$WORKTREE_PATH"       # tears it down
+scripts/grav-down.sh "$WORKTREE_PATH"       # tears it down
 ```
 
 Each GAN run gets a unique Compose project name derived from the worktree path, so multiple runs never collide. The primary `:8080` container keeps serving your actual dev workflow while GAN runs.

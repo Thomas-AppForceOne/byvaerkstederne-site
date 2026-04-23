@@ -5,7 +5,7 @@ const path = require('path');
 // Resolve the base URL for this worktree's Grav container.
 // Precedence:
 //   1. BASE_URL (explicit override — used in CI or when pointing at staging).
-//   2. GRAV_PORT env var (set by scripts/gan-up.sh within a session).
+//   2. GRAV_PORT env var (set by scripts/grav-up.sh within a session).
 //   3. Port-discovery helper (registry → docker ps) so tests still find the
 //      container after a Claude Desktop restart clears the env.
 //   4. Default 8080 with a warning — matches the primary dev container.

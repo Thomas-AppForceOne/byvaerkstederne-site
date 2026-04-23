@@ -3,7 +3,7 @@
 // Discover which port the Grav container for a given worktree is bound to.
 //
 // Three-layer fallback:
-//   1. GRAV_PORT environment variable (set by gan-up.sh) — fastest, primary.
+//   1. GRAV_PORT environment variable (set by grav-up.sh) — fastest, primary.
 //   2. .gan/port-registry.json inside the worktree — survives Claude restart.
 //   3. docker ps query by container name — ultimate fallback if registry is
 //      missing or corrupt.
@@ -33,7 +33,7 @@ function discoverGravPort(worktreePath = '.') {
   }
 
   // Resolve symlinks so the registry key matches what `cd && pwd -P`
-  // writes in gan-up.sh. Without realpathSync, `/tmp/foo` (logical) would
+  // writes in grav-up.sh. Without realpathSync, `/tmp/foo` (logical) would
   // miss a registry entry written as `/private/tmp/foo` (physical) on macOS
   // — and we'd silently fall through to the bare `grav` container.
   // If the path doesn't exist yet, fall back to path.resolve so the caller
@@ -61,7 +61,7 @@ function discoverGravPort(worktreePath = '.') {
 
   // Layer 3: docker ps query. Try the deterministic hashed name first,
   // then fall back to the legacy bare "grav" container (used by
-  // `make start` on the main repo before gan-up.sh existed).
+  // `make start` on the main repo before grav-up.sh existed).
   const portFromContainer = (name) => {
     try {
       const output = execSync(
@@ -87,7 +87,7 @@ function discoverGravPort(worktreePath = '.') {
   throw new Error(
     `Cannot determine GRAV_PORT for ${worktreeAbs}\n` +
     `Solutions:\n` +
-    `  1. Run: scripts/gan-up.sh ${worktreePath} [port]\n` +
+    `  1. Run: scripts/grav-up.sh ${worktreePath} [port]\n` +
     `  2. Set: export GRAV_PORT=<port>\n` +
     `  3. Check: docker ps | grep grav-`
   );

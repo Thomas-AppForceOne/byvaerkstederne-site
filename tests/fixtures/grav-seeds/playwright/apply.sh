@@ -28,7 +28,7 @@ fi
 
 if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
   echo "FATAL: container '$CONTAINER' is not running." >&2
-  echo "Start it with: scripts/dev-up.sh   (or scripts/gan-up.sh <worktree>)" >&2
+  echo "Start it with: scripts/grav-up.sh <worktree>" >&2
   exit 1
 fi
 
