@@ -112,7 +112,7 @@ cache-clear: ## Clear Grav cache
 	@CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(1) }' 2>/dev/null) || { \
 		echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
 	}; \
-	docker exec -w /app/www/public "$$CONTAINER" bin/grav clearcache
+	docker exec -u abc -w /app/www/public "$$CONTAINER" bin/grav clearcache
 
 # ── Tests ──────────────────────────────────────────────
 
@@ -121,13 +121,22 @@ test-install: ## Install Playwright and browser binaries
 	@npx playwright install chromium
 	@echo "  ✓ Playwright ready"
 
-test: ## Run all anonymous tests (no credentials needed)
+test: ## Run all anonymous tests (auto-sources ~/.gan-secrets/workshop-site.env if present)
 	@PORT="$${GRAV_PORT}"; \
 	if [ -z "$$PORT" ]; then PORT=$$(node scripts/discover-grav-port.js 2>/dev/null || echo ""); fi; \
 	if [ -z "$$PORT" ]; then \
 		echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
 	fi; \
 	curl -s -o /dev/null "http://127.0.0.1:$$PORT" || { echo "❌  Grav not responding on port $$PORT (container is registered but not serving). Check: docker ps ; scripts/grav-down.sh . ; scripts/grav-up.sh . $$PORT"; exit 1; }; \
+	if [ -f $$HOME/.gan-secrets/workshop-site.env ]; then \
+		set -a; . $$HOME/.gan-secrets/workshop-site.env; set +a; \
+		if [ -z "$$TEST_ADMIN_PASSWORD" ]; then \
+			echo "❌  ~/.gan-secrets/workshop-site.env exists but TEST_ADMIN_PASSWORD is empty"; exit 1; \
+		fi; \
+		echo "🔑  Sourced test credentials from ~/.gan-secrets/workshop-site.env"; \
+	else \
+		echo "ℹ️   No ~/.gan-secrets/workshop-site.env — running in anonymous-only mode"; \
+	fi; \
 	echo "Running tests against http://127.0.0.1:$$PORT"; \
 	GRAV_PORT=$$PORT npx playwright test tests/anonymous.spec.js
 
@@ -138,17 +147,19 @@ test-headed: ## Run tests with browser visible (for debugging)
 		echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
 	fi; \
 	curl -s -o /dev/null "http://127.0.0.1:$$PORT" || { echo "❌  Grav not responding on port $$PORT (container is registered but not serving). Check: docker ps ; scripts/grav-down.sh . ; scripts/grav-up.sh . $$PORT"; exit 1; }; \
+	if [ -f $$HOME/.gan-secrets/workshop-site.env ]; then set -a; . $$HOME/.gan-secrets/workshop-site.env; set +a; fi; \
 	echo "Running tests against http://127.0.0.1:$$PORT (headed)"; \
 	GRAV_PORT=$$PORT npx playwright test tests/anonymous.spec.js --headed
 
-test-auth: ## Run authenticated tests (requires TEST_USERNAME and TEST_PASSWORD)
+test-auth: ## Run authenticated tests (auto-sources ~/.gan-secrets/workshop-site.env)
 	@PORT="$${GRAV_PORT}"; \
 	if [ -z "$$PORT" ]; then PORT=$$(node scripts/discover-grav-port.js 2>/dev/null || echo ""); fi; \
 	if [ -z "$$PORT" ]; then \
 		echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
 	fi; \
 	curl -s -o /dev/null "http://127.0.0.1:$$PORT" || { echo "❌  Grav not responding on port $$PORT (container is registered but not serving). Check: docker ps ; scripts/grav-down.sh . ; scripts/grav-up.sh . $$PORT"; exit 1; }; \
-	[ -n "$$TEST_USERNAME" ] && [ -n "$$TEST_PASSWORD" ] || { echo "❌  Set TEST_USERNAME and TEST_PASSWORD before running authenticated tests"; exit 1; }; \
+	if [ -f $$HOME/.gan-secrets/workshop-site.env ]; then set -a; . $$HOME/.gan-secrets/workshop-site.env; set +a; fi; \
+	[ -n "$$TEST_PASSWORD" ] && [ -n "$$TEST_ADMIN_PASSWORD" ] || { echo "❌  TEST_PASSWORD and TEST_ADMIN_PASSWORD required (set via ~/.gan-secrets/workshop-site.env)"; exit 1; }; \
 	echo "Running tests against http://127.0.0.1:$$PORT"; \
 	GRAV_PORT=$$PORT npx playwright test tests/authenticated.spec.js
 
