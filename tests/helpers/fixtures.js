@@ -32,8 +32,11 @@ const UNPROMOTED_BUG_REPORT_ID = 'br_fixture_unpromoted';
 const LOCKED_ROADMAP_YAML_PATH = '/config/www/user/data/flex-objects/roadmap-items.yaml';
 const BUG_REPORTS_YAML_PATH = '/config/www/user/data/flex-objects/bug-reports.yaml';
 
-const LOCKED_FIXTURE_YAML = `
-${LOCKED_ROADMAP_ITEM_ID}:
+// Leading newline is intentionally omitted: the target files already end in
+// a newline, so `cat >>` produces a clean break. Leaving a blank line in
+// would survive sed removal (the blank is outside the /key/,/[a-z]/ range)
+// and dirty the working tree on teardown.
+const LOCKED_FIXTURE_YAML = `${LOCKED_ROADMAP_ITEM_ID}:
   published: true
   type: bug
   priority: middel
@@ -55,8 +58,7 @@ ${LOCKED_ROADMAP_ITEM_ID}:
   display_id: '#FIX1'
 `;
 
-const RELEASABLE_FIXTURE_YAML = `
-${RELEASABLE_ROADMAP_ITEM_ID}:
+const RELEASABLE_FIXTURE_YAML = `${RELEASABLE_ROADMAP_ITEM_ID}:
   published: true
   type: bug
   priority: middel
@@ -79,8 +81,7 @@ ${RELEASABLE_ROADMAP_ITEM_ID}:
   display_id: '#FIX2'
 `;
 
-const UNPROMOTED_BUG_YAML = `
-${UNPROMOTED_BUG_REPORT_ID}:
+const UNPROMOTED_BUG_YAML = `${UNPROMOTED_BUG_REPORT_ID}:
   username: pw-test-user
   timestamp: '2026-04-20T00:00:00Z'
   page_url: /
