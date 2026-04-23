@@ -6,15 +6,10 @@
  * FlagStore boundary. Adding a new flag is a two-line patch: add a case
  * here with its YAML-config key as the backing string value.
  *
- * The enum is split into two sections:
- *
- *   1. Mechanism-sprint cases (checkout_v2, pricing_experiment, promo_banner,
- *      partner_portal) — retained as-is so the mechanism sprint's tests and
- *      any in-flight feature toggles using those names keep resolving.
- *   2. Rollout-catalogue cases — the 17 flags required by the
- *      `feature_flag_rollout_specification.md` spec. Each is the canonical
- *      identifier used in page frontmatter, Twig guards, PHP handler gates,
- *      and the per-environment `features.yaml` profile files.
+ * These are the 17 rollout-catalogue flags required by the
+ * `feature_flag_rollout_specification.md` spec. Each is the canonical
+ * identifier used in page frontmatter, Twig guards, PHP handler gates,
+ * and the per-environment `features.yaml` profile files.
  */
 
 declare(strict_types=1);
@@ -23,13 +18,6 @@ namespace Grav\Plugin\FeatureFlags;
 
 enum FeatureFlag: string
 {
-    // --- Mechanism-sprint cases (preserved) ---
-    case CheckoutV2 = 'checkout_v2';
-    case PricingExperiment = 'pricing_experiment';
-    case PromoBanner = 'promo_banner';
-    case PartnerPortal = 'partner_portal';
-
-    // --- Rollout catalogue (17 cases) ---
     case Roadmap = 'roadmap';
     case FeatureSuggestion = 'feature_suggestion';
     case BugReport = 'bug_report';
@@ -51,8 +39,7 @@ enum FeatureFlag: string
     /**
      * The 17 rollout-catalogue flag string values, in the order specified by
      * the rollout spec. Used by tests and profile validators that need to
-     * assert "every catalogue flag is present" without picking up unrelated
-     * mechanism-sprint cases.
+     * assert "every catalogue flag is present".
      *
      * @return list<string>
      */

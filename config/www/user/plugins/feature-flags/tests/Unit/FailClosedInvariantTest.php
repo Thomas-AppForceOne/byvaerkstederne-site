@@ -42,16 +42,16 @@ final class FailClosedInvariantTest extends TestCase
             'enabled=bool-true'          => [true],
             'enabled=bool-false'         => [false],
             'enabled=empty-array'        => [[]],
-            'value=TRUE-upper'           => [['checkout_v2' => 'TRUE']],
-            'value=1-string'             => [['checkout_v2' => '1']],
-            'value=int-1'                => [['checkout_v2' => 1]],
-            'value=bool-true'            => [['checkout_v2' => true]],
-            'value=null'                 => [['checkout_v2' => null]],
-            'value=array'                => [['checkout_v2' => ['true']]],
+            'value=TRUE-upper'           => [['roadmap' => 'TRUE']],
+            'value=1-string'             => [['roadmap' => '1']],
+            'value=int-1'                => [['roadmap' => 1]],
+            'value=bool-true'            => [['roadmap' => true]],
+            'value=null'                 => [['roadmap' => null]],
+            'value=array'                => [['roadmap' => ['true']]],
             'key=numeric'                => [[0 => 'true']],
             'key=unknown'                => [['mystery' => 'true']],
-            'value=empty-string'         => [['checkout_v2' => '']],
-            'value=yes'                  => [['checkout_v2' => 'yes']],
+            'value=empty-string'         => [['roadmap' => '']],
+            'value=yes'                  => [['roadmap' => 'yes']],
         ];
     }
 
@@ -80,7 +80,7 @@ final class FailClosedInvariantTest extends TestCase
             'float'          => [1.5],
             'bool-true'      => [true],
             'bool-false'     => [false],
-            'array'          => [['checkout_v2']],
+            'array'          => [['roadmap']],
             'object'         => [new \stdClass()],
         ];
     }
@@ -93,10 +93,10 @@ final class FailClosedInvariantTest extends TestCase
         // way featureEnabled($arg) could return true is if the helper let
         // the bad arg through. Fail-closed means it must not.
         $store = new FlagStore([
-            'checkout_v2'        => 'true',
-            'pricing_experiment' => 'true',
-            'promo_banner'       => 'true',
-            'partner_portal'     => 'true',
+            'roadmap'        => 'true',
+            'community_footer_column' => 'true',
+            'bug_report'       => 'true',
+            'feature_suggestion'     => 'true',
         ], $logger);
         $helpers = new TwigHelpers($store, $logger);
 
@@ -113,9 +113,9 @@ final class FailClosedInvariantTest extends TestCase
             'feature-empty'          => [['feature' => '']],
             'feature-int'            => [['feature' => 42]],
             'feature-bool'           => [['feature' => true]],
-            'feature-array'          => [['feature' => ['checkout_v2']]],
+            'feature-array'          => [['feature' => ['roadmap']]],
             'feature-object'         => [['feature' => new \stdClass()]],
-            'feature-known-disabled' => [['feature' => 'checkout_v2']],
+            'feature-known-disabled' => [['feature' => 'roadmap']],
         ];
     }
 
@@ -140,7 +140,7 @@ final class FailClosedInvariantTest extends TestCase
             'empty-string'  => [['header' => ['feature' => '']]],
             'non-string'    => [['header' => ['feature' => 42]]],
             'array-value'   => [['header' => ['feature' => ['x']]]],
-            'disabled-name' => [['header' => ['feature' => 'partner_portal']]],
+            'disabled-name' => [['header' => ['feature' => 'feature_suggestion']]],
         ];
     }
 

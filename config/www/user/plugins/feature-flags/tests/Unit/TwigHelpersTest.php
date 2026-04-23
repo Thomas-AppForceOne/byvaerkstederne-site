@@ -20,24 +20,24 @@ final class TwigHelpersTest extends TestCase
     public function testKnownFlagTrueDelegatesToStoreIsEnabled(): void
     {
         $logger = new ArrayLogger();
-        $store = new FlagStore(['promo_banner' => 'true'], $logger);
+        $store = new FlagStore(['roadmap' => 'true'], $logger);
         $helpers = new TwigHelpers($store, $logger);
 
-        $this->assertTrue($helpers->featureEnabled('promo_banner'));
+        $this->assertTrue($helpers->featureEnabled('roadmap'));
         $this->assertSame([], $logger->warnings(), 'Known enabled flag must not log a warning.');
     }
 
     public function testKnownFlagFalseReturnsFalseAndDoesNotWarn(): void
     {
         $logger = new ArrayLogger();
-        $store = new FlagStore(['promo_banner' => 'false'], $logger);
+        $store = new FlagStore(['roadmap' => 'false'], $logger);
         // Drop the store-side "configured false" records so we only see
         // warnings produced by the helper itself.
         $logger->records = [];
 
         $helpers = new TwigHelpers($store, $logger);
 
-        $this->assertFalse($helpers->featureEnabled('promo_banner'));
+        $this->assertFalse($helpers->featureEnabled('roadmap'));
         $this->assertSame([], $logger->warnings());
     }
 
@@ -47,7 +47,7 @@ final class TwigHelpersTest extends TestCase
         $store = new FlagStore([], $logger);
         $helpers = new TwigHelpers($store, $logger);
 
-        $this->assertFalse($helpers->featureEnabled('promo_banner'));
+        $this->assertFalse($helpers->featureEnabled('roadmap'));
         $this->assertSame([], $logger->warnings());
     }
 
@@ -115,7 +115,7 @@ final class TwigHelpersTest extends TestCase
     {
         $logger = new ArrayLogger();
         $store = new FlagStore(
-            ['promo_banner' => 'true', 'partner_portal' => 'true'],
+            ['roadmap' => 'true', 'feature_suggestion' => 'true'],
             $logger
         );
         $helpers = new TwigHelpers($store, $logger);
@@ -125,8 +125,8 @@ final class TwigHelpersTest extends TestCase
         foreach ($result as $item) {
             $this->assertIsString($item, 'enabled_features() must return strings, not enum instances.');
         }
-        $this->assertContains(FeatureFlag::PromoBanner->value, $result);
-        $this->assertContains(FeatureFlag::PartnerPortal->value, $result);
+        $this->assertContains(FeatureFlag::Roadmap->value, $result);
+        $this->assertContains(FeatureFlag::FeatureSuggestion->value, $result);
         $this->assertCount(2, $result);
     }
 
@@ -171,7 +171,7 @@ final class TwigHelpersTest extends TestCase
         };
 
         $helpers = new TwigHelpers($throwingStore, $logger);
-        $this->assertFalse($helpers->featureEnabled('promo_banner'));
+        $this->assertFalse($helpers->featureEnabled('roadmap'));
         $this->assertSame([], $helpers->enabledFeatures());
     }
 }

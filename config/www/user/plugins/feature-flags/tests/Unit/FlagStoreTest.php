@@ -30,8 +30,8 @@ final class FlagStoreTest extends TestCase
         $logger = new ArrayLogger();
         $store = new FlagStore([], $logger);
 
-        $this->assertFalse($store->isEnabled(FeatureFlag::CheckoutV2));
-        $this->assertFalse($store->isConfigured(FeatureFlag::CheckoutV2));
+        $this->assertFalse($store->isEnabled(FeatureFlag::Roadmap));
+        $this->assertFalse($store->isConfigured(FeatureFlag::Roadmap));
         $this->assertSame([], $logger->warnings(), 'Absent key must not warn.');
     }
 
@@ -52,10 +52,10 @@ final class FlagStoreTest extends TestCase
     public function testExactStringTrueEnables(): void
     {
         $logger = new ArrayLogger();
-        $store = new FlagStore(['checkout_v2' => 'true'], $logger);
+        $store = new FlagStore(['roadmap' => 'true'], $logger);
 
-        $this->assertTrue($store->isEnabled(FeatureFlag::CheckoutV2));
-        $this->assertTrue($store->isConfigured(FeatureFlag::CheckoutV2));
+        $this->assertTrue($store->isEnabled(FeatureFlag::Roadmap));
+        $this->assertTrue($store->isConfigured(FeatureFlag::Roadmap));
         $this->assertSame([], $logger->warnings());
     }
 
@@ -64,10 +64,10 @@ final class FlagStoreTest extends TestCase
     public function testExactStringFalseDisablesWithoutWarning(): void
     {
         $logger = new ArrayLogger();
-        $store = new FlagStore(['checkout_v2' => 'false'], $logger);
+        $store = new FlagStore(['roadmap' => 'false'], $logger);
 
-        $this->assertFalse($store->isEnabled(FeatureFlag::CheckoutV2));
-        $this->assertTrue($store->isConfigured(FeatureFlag::CheckoutV2));
+        $this->assertFalse($store->isEnabled(FeatureFlag::Roadmap));
+        $this->assertTrue($store->isConfigured(FeatureFlag::Roadmap));
         $this->assertSame([], $logger->warnings(), '"false" is a valid value; no warning.');
     }
 
@@ -91,11 +91,11 @@ final class FlagStoreTest extends TestCase
     public function testInvalidStringValueFailsClosedWithExactlyOneWarning(mixed $value): void
     {
         $logger = new ArrayLogger();
-        $store = new FlagStore(['checkout_v2' => $value], $logger);
+        $store = new FlagStore(['roadmap' => $value], $logger);
 
-        $this->assertFalse($store->isEnabled(FeatureFlag::CheckoutV2));
+        $this->assertFalse($store->isEnabled(FeatureFlag::Roadmap));
         $this->assertTrue(
-            $store->isConfigured(FeatureFlag::CheckoutV2),
+            $store->isConfigured(FeatureFlag::Roadmap),
             'Configured-but-disabled: key is present even when value is invalid.'
         );
 
@@ -126,10 +126,10 @@ final class FlagStoreTest extends TestCase
     public function testNonStringScalarValueFailsClosedWithExactlyOneWarning(mixed $value): void
     {
         $logger = new ArrayLogger();
-        $store = new FlagStore(['checkout_v2' => $value], $logger);
+        $store = new FlagStore(['roadmap' => $value], $logger);
 
-        $this->assertFalse($store->isEnabled(FeatureFlag::CheckoutV2));
-        $this->assertTrue($store->isConfigured(FeatureFlag::CheckoutV2));
+        $this->assertFalse($store->isEnabled(FeatureFlag::Roadmap));
+        $this->assertTrue($store->isConfigured(FeatureFlag::Roadmap));
         $this->assertCount(1, $logger->warnings());
     }
 
@@ -138,10 +138,10 @@ final class FlagStoreTest extends TestCase
     public function testArrayValueFailsClosedWithWarning(): void
     {
         $logger = new ArrayLogger();
-        $store = new FlagStore(['checkout_v2' => ['nested']], $logger);
+        $store = new FlagStore(['roadmap' => ['nested']], $logger);
 
-        $this->assertFalse($store->isEnabled(FeatureFlag::CheckoutV2));
-        $this->assertTrue($store->isConfigured(FeatureFlag::CheckoutV2));
+        $this->assertFalse($store->isEnabled(FeatureFlag::Roadmap));
+        $this->assertTrue($store->isConfigured(FeatureFlag::Roadmap));
         $this->assertCount(1, $logger->warnings());
     }
 
@@ -204,11 +204,11 @@ final class FlagStoreTest extends TestCase
     {
         $logger = new ArrayLogger();
         $store = new FlagStore(
-            ['unknown_flag' => 'true', 'checkout_v2' => 'true'],
+            ['unknown_flag' => 'true', 'roadmap' => 'true'],
             $logger
         );
 
-        $this->assertTrue($store->isEnabled(FeatureFlag::CheckoutV2));
+        $this->assertTrue($store->isEnabled(FeatureFlag::Roadmap));
         $debug = $store->debug();
         $this->assertNotContains('unknown_flag', $debug['configured']);
         $this->assertArrayNotHasKey('unknown_flag', $debug['all']);
@@ -248,17 +248,17 @@ final class FlagStoreTest extends TestCase
         $logger = new ArrayLogger();
         $store = new FlagStore(
             [
-                'unknown_flag' => 'true',   // unknown -> warn
-                0              => 'true',   // numeric key -> warn
-                'checkout_v2'  => 'true',   // valid -> resolves true
-                'promo_banner' => 'TRUE',   // invalid value -> warn
+                'unknown_flag'       => 'true',   // unknown -> warn
+                0                    => 'true',   // numeric key -> warn
+                'roadmap'            => 'true',   // valid -> resolves true
+                'feature_suggestion' => 'TRUE',   // invalid value -> warn
             ],
             $logger
         );
 
-        $this->assertTrue($store->isEnabled(FeatureFlag::CheckoutV2));
-        $this->assertFalse($store->isEnabled(FeatureFlag::PromoBanner));
-        $this->assertTrue($store->isConfigured(FeatureFlag::PromoBanner));
+        $this->assertTrue($store->isEnabled(FeatureFlag::Roadmap));
+        $this->assertFalse($store->isEnabled(FeatureFlag::FeatureSuggestion));
+        $this->assertTrue($store->isConfigured(FeatureFlag::FeatureSuggestion));
 
         $messages = array_column($logger->warnings(), 'message');
         $this->assertCount(3, $messages, 'Three defective entries -> three warnings.');
@@ -270,18 +270,18 @@ final class FlagStoreTest extends TestCase
     {
         $logger = new ArrayLogger();
         $store = new FlagStore(
-            ['checkout_v2' => 'TRUE'], // invalid value
+            ['roadmap' => 'TRUE'], // invalid value
             $logger
         );
 
         $this->assertTrue(
-            $store->isConfigured(FeatureFlag::CheckoutV2),
+            $store->isConfigured(FeatureFlag::Roadmap),
             'Present-with-invalid must be configured=true.'
         );
-        $this->assertFalse($store->isEnabled(FeatureFlag::CheckoutV2));
+        $this->assertFalse($store->isEnabled(FeatureFlag::Roadmap));
 
         $this->assertFalse(
-            $store->isConfigured(FeatureFlag::PromoBanner),
+            $store->isConfigured(FeatureFlag::FeatureSuggestion),
             'Absent key must be configured=false.'
         );
     }
@@ -291,10 +291,10 @@ final class FlagStoreTest extends TestCase
     public function testDebugShapeIsExactAndOrdered(): void
     {
         $store = new FlagStore([
-            'checkout_v2'        => 'true',
-            'promo_banner'       => 'false',
-            'partner_portal'     => 'TRUE', // invalid but configured
-            // pricing_experiment absent
+            'roadmap'            => 'true',
+            'feature_suggestion' => 'false',
+            'bug_report'         => 'TRUE', // invalid but configured
+            // community_footer_column absent
         ]);
 
         $debug = $store->debug();
@@ -305,7 +305,7 @@ final class FlagStoreTest extends TestCase
         );
 
         // enabled: list<string>
-        $this->assertSame(['checkout_v2'], $debug['enabled']);
+        $this->assertSame(['roadmap'], $debug['enabled']);
         foreach ($debug['enabled'] as $i => $v) {
             $this->assertIsInt($i, 'enabled must be integer-indexed (a list).');
             $this->assertIsString($v);
@@ -319,7 +319,7 @@ final class FlagStoreTest extends TestCase
             'configured must be a list (integer-indexed, consecutive).'
         );
         sort($debug['configured']); // order-agnostic set check
-        $expectedConfigured = ['checkout_v2', 'partner_portal', 'promo_banner'];
+        $expectedConfigured = ['bug_report', 'feature_suggestion', 'roadmap'];
         $this->assertSame($expectedConfigured, $debug['configured']);
 
         // Behavioural contract (preserved across enum-case additions):
@@ -330,11 +330,11 @@ final class FlagStoreTest extends TestCase
         foreach (FeatureFlag::cases() as $case) {
             $expectedAll[$case->value] = false;
         }
-        $expectedAll['checkout_v2'] = true;
-        // promo_banner and partner_portal already seeded false above; explicit
+        $expectedAll['roadmap'] = true;
+        // feature_suggestion and bug_report already seeded false above; explicit
         // assignment keeps the intent readable.
-        $expectedAll['promo_banner']   = false;
-        $expectedAll['partner_portal'] = false;
+        $expectedAll['feature_suggestion'] = false;
+        $expectedAll['bug_report']         = false;
 
         $this->assertSame(
             $expectedAll,
@@ -353,7 +353,7 @@ final class FlagStoreTest extends TestCase
     public function testInvalidValueWarningMessageAndContextAreVerbatim(): void
     {
         $logger = new ArrayLogger();
-        new FlagStore(['checkout_v2' => 'TRUE'], $logger, 'localhost');
+        new FlagStore(['roadmap' => 'TRUE'], $logger, 'localhost');
 
         $warnings = $logger->warnings();
         $this->assertCount(1, $warnings);
@@ -367,7 +367,7 @@ final class FlagStoreTest extends TestCase
             array_keys($ctx),
             'Context keys must be exactly {flag, raw_value, raw_type, environment}.'
         );
-        $this->assertSame('checkout_v2', $ctx['flag']);
+        $this->assertSame('roadmap', $ctx['flag']);
         $this->assertSame('TRUE', $ctx['raw_value']);
         $this->assertSame('string', $ctx['raw_type']);
         $this->assertSame('localhost', $ctx['environment']);
@@ -418,8 +418,8 @@ final class FlagStoreTest extends TestCase
     public function testEnabledFlagsReturnsEnumCases(): void
     {
         $store = new FlagStore([
-            'checkout_v2'  => 'true',
-            'promo_banner' => 'true',
+            'roadmap'            => 'true',
+            'feature_suggestion' => 'true',
         ]);
 
         $flags = $store->getEnabledFlags();
@@ -428,17 +428,17 @@ final class FlagStoreTest extends TestCase
             $this->assertInstanceOf(FeatureFlag::class, $flag);
         }
         $values = array_map(static fn (FeatureFlag $f): string => $f->value, $flags);
-        $this->assertContains('checkout_v2', $values);
-        $this->assertContains('promo_banner', $values);
+        $this->assertContains('roadmap', $values);
+        $this->assertContains('feature_suggestion', $values);
     }
 
-    public function testAllFlagsAlwaysHasFourDeclaredKeys(): void
+    public function testAllFlagsAlwaysMatchesDeclaredCases(): void
     {
         // Behavioural contract (preserved across enum-case additions):
         // allFlags() returns exactly one entry per declared FeatureFlag case,
         // in declaration order, with no extras — independent of which subset
         // of keys appeared in the raw config.
-        $store = new FlagStore(['checkout_v2' => 'true']);
+        $store = new FlagStore(['roadmap' => 'true']);
         $all = $store->allFlags();
 
         $expectedKeys = array_map(
@@ -457,9 +457,9 @@ final class FlagStoreTest extends TestCase
         );
 
         // Only the single configured key flipped; everything else stays false.
-        $this->assertTrue($all['checkout_v2']);
+        $this->assertTrue($all['roadmap']);
         foreach (FeatureFlag::cases() as $case) {
-            if ($case->value === 'checkout_v2') {
+            if ($case->value === 'roadmap') {
                 continue;
             }
             $this->assertFalse(

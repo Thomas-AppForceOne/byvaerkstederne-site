@@ -5,7 +5,7 @@
  * These tests pin down three properties the rollout spec depends on:
  *
  *   1. Every flag named in the rollout catalogue is a declared FeatureFlag
- *      enum case (and the four mechanism-sprint cases are still there).
+ *      enum case.
  *   2. The `staging.example.com` profile's features.yaml resolves to 17/17
  *      catalogue flags enabled; the `public-demo.example.com` profile's
  *      features.yaml resolves to 0/17 catalogue flags enabled.
@@ -89,22 +89,6 @@ final class FeatureFlagCatalogueTest extends TestCase
                 $flag,
                 $declared,
                 "Catalogue flag `{$flag}` must be a declared FeatureFlag enum case."
-            );
-        }
-    }
-
-    public function testMechanismSprintCasesArePreserved(): void
-    {
-        $declared = array_map(
-            static fn (FeatureFlag $c): string => $c->value,
-            FeatureFlag::cases()
-        );
-
-        foreach (['checkout_v2', 'pricing_experiment', 'promo_banner', 'partner_portal'] as $flag) {
-            $this->assertContains(
-                $flag,
-                $declared,
-                "Mechanism-sprint case `{$flag}` must not be removed or renamed."
             );
         }
     }
@@ -238,7 +222,7 @@ final class FeatureFlagCatalogueTest extends TestCase
      *
      * Exercises the strict-string rule for a representative sample of the
      * newly-added catalogue flags. The rule itself is already proven in
-     * FlagStoreTest for `checkout_v2`; here we demonstrate the same
+     * FlagStoreTest for `roadmap`; here we demonstrate the same
      * behaviour against the new cases so a future `isEnabled()` short-cut
      * that accidentally whitelisted certain values would fail.
      */
