@@ -26,3 +26,4 @@ require('./anonymous/feature-suggestion');
 require('./anonymous/feature-flags-pages');
 require('./anonymous/feature-flags-html');
 require('./anonymous/feature-flags-plugins');
+require('./anonymous/feature-flags-link-hiding');

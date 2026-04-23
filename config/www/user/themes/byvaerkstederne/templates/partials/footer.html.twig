@@ -7,6 +7,7 @@
         </div>
 
         {# Værksteder #}
+        {% if feature_enabled('workshop_detail_pages') %}
         <div class="bv-footer__col">
             <h3 class="bv-footer__heading">V&aelig;rksteder</h3>
             <nav class="bv-footer__nav">
@@ -16,6 +17,7 @@
                 <a href="/vaerksteder/kulturhus">Kulturhus</a>
             </nav>
         </div>
+        {% endif %}
 
         {# Information #}
         <div class="bv-footer__col">
