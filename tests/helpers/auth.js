@@ -33,7 +33,7 @@ async function loginWith(page, username, password) {
     const overlay = document.getElementById('bv-login-overlay');
     if (overlay) overlay.classList.add('is-open');
   });
-  const form = page.locator('#bv-login-overlay form[action="/login"]');
+  const form = page.locator('#bv-login-overlay form');
   await form.locator('[name="username"]').fill(username);
   await form.locator('[name="password"]').fill(password);
   await form.locator('[type="submit"]').click();
