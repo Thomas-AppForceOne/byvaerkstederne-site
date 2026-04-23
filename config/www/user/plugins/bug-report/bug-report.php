@@ -5,6 +5,8 @@ use Grav\Common\Plugin;
 use Grav\Common\Utils;
 use RocketTheme\Toolbox\Event\Event;
 use Grav\Framework\Psr7\Response;
+use Grav\Plugin\FeatureFlags\FeatureFlag;
+use Grav\Plugin\FeatureFlags\FlagStoreInterface;
 
 /**
  * Bug Report Plugin for Byværkstederne
@@ -44,21 +46,41 @@ class BugReportPlugin extends Plugin
         /** @var \Grav\Common\Uri $uri */
         $uri = $this->grav['uri'];
         $path = $uri->path();
+        $method = $_SERVER['REQUEST_METHOD'] ?? '';
+
+        // Identify all bug-report request paths this plugin handles. Include
+        // the contract-aliased `/bug-report/submit` path so a disabled
+        // feature returns 404 regardless of which URL shape a caller uses.
+        $submitPaths  = ['/bug-report-submit', '/bug-report/submit'];
+        $promotePaths = ['/bug-report/promote', '/admin/bug-report-promote'];
+        $isSubmit     = in_array($path, $submitPaths, true) && $method === 'POST';
+        $isPromote    = in_array($path, $promotePaths, true) && $method === 'POST';
+        $isImage      = str_starts_with($path, '/admin/bug-report-image') && $method === 'GET';
+
+        // Feature-flag gate MUST run BEFORE any authentication, CSRF check,
+        // input parsing, or multipart/file-upload handling. An anonymous
+        // caller and an authenticated caller see the same 404 under
+        // public-demo — no 401/403 leak distinguishing the feature's
+        // existence.
+        if (($isSubmit || $isPromote || $isImage) && !$this->featureEnabled(FeatureFlag::BugReport)) {
+            $this->sendFlagDisabled404();
+            return;
+        }
 
         // Handle AJAX bug report submission endpoint
-        if ($path === '/bug-report-submit' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+        if ($path === '/bug-report-submit' && $method === 'POST') {
             $this->handleSubmission();
             return; // handleSubmission calls $this->grav->close()
         }
 
         // Handle admin promote-to-roadmap action (both legacy path and canonical path)
-        if (($path === '/bug-report/promote' || $path === '/admin/bug-report-promote') && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+        if ($isPromote) {
             $this->handlePromote();
             return;
         }
 
         // Handle admin image serving endpoint
-        if (str_starts_with($path, '/admin/bug-report-image') && ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
+        if ($isImage) {
             $this->handleImageServe();
             return;
         }
@@ -769,6 +791,33 @@ class BugReportPlugin extends Plugin
     {
         $body = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         $response = new Response($status, ['Content-Type' => 'application/json; charset=utf-8'], $body);
+        $this->grav->close($response);
+    }
+
+    /**
+     * Resolve the FlagStore singleton from the Grav service container and
+     * evaluate a single flag. Container-only read — no direct YAML parsing
+     * and no re-instantiation of FlagStore.
+     */
+    private function featureEnabled(FeatureFlag $flag): bool
+    {
+        $store = $this->grav['feature_flags'] ?? null;
+        if (!$store instanceof FlagStoreInterface) {
+            return true;
+        }
+        return $store->isEnabled($flag);
+    }
+
+    /**
+     * Generic 404 that leaks no feature name, route, or class identifier.
+     */
+    private function sendFlagDisabled404(): never
+    {
+        $response = new Response(
+            404,
+            ['Content-Type' => 'text/plain; charset=utf-8'],
+            "Not Found\n"
+        );
         $this->grav->close($response);
     }
 }

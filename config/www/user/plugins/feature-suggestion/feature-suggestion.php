@@ -13,6 +13,9 @@ namespace Grav\Plugin;
 use Grav\Common\Plugin;
 use Grav\Common\Utils;
 use RocketTheme\Toolbox\Event\Event;
+use Grav\Framework\Psr7\Response;
+use Grav\Plugin\FeatureFlags\FeatureFlag;
+use Grav\Plugin\FeatureFlags\FlagStoreInterface;
 
 class FeatureSuggestionPlugin extends Plugin
 {
@@ -29,25 +32,68 @@ class FeatureSuggestionPlugin extends Plugin
 
     public function onPluginsInitialized(): void
     {
-        $uri = $this->grav['uri'];
+        $uri  = $this->grav['uri'];
+        $path = $uri->path();
 
-        if ($uri->path() === '/feature-suggestion/submit') {
+        $handledPaths = [
+            '/feature-suggestion/submit',
+            '/feature-suggestion/approve',
+            '/feature-suggestion/decline',
+        ];
+
+        // Feature-flag gate MUST run before any handler registration or
+        // business-logic hook. When `feature_suggestion` resolves to false
+        // the three routes return a generic 404 with no feature-name leak,
+        // before any nonce/CSRF/auth/input parsing takes place.
+        if (in_array($path, $handledPaths, true) && !$this->featureEnabled(FeatureFlag::FeatureSuggestion)) {
+            $this->sendFlagDisabled404();
+            return;
+        }
+
+        if ($path === '/feature-suggestion/submit') {
             $this->enable([
                 'onPageInitialized' => ['handleSubmit', 0],
             ]);
         }
 
-        if ($uri->path() === '/feature-suggestion/approve') {
+        if ($path === '/feature-suggestion/approve') {
             $this->enable([
                 'onPageInitialized' => ['handleApprove', 0],
             ]);
         }
 
-        if ($uri->path() === '/feature-suggestion/decline') {
+        if ($path === '/feature-suggestion/decline') {
             $this->enable([
                 'onPageInitialized' => ['handleDecline', 0],
             ]);
         }
+    }
+
+    /**
+     * Resolve the FlagStore singleton from the Grav service container and
+     * evaluate a single flag. Container-only read — no direct YAML parsing
+     * and no re-instantiation of FlagStore.
+     */
+    private function featureEnabled(FeatureFlag $flag): bool
+    {
+        $store = $this->grav['feature_flags'] ?? null;
+        if (!$store instanceof FlagStoreInterface) {
+            return true;
+        }
+        return $store->isEnabled($flag);
+    }
+
+    /**
+     * Generic 404 that leaks no feature name, route, or class identifier.
+     */
+    private function sendFlagDisabled404(): never
+    {
+        $response = new Response(
+            404,
+            ['Content-Type' => 'text/plain; charset=utf-8'],
+            "Not Found\n"
+        );
+        $this->grav->close($response);
     }
 
     // -------------------------------------------------------------------------

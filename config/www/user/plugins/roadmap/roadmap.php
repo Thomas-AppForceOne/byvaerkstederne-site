@@ -16,6 +16,8 @@ use Grav\Common\Plugin;
 use Grav\Common\Utils;
 use RocketTheme\Toolbox\Event\Event;
 use Grav\Framework\Psr7\Response;
+use Grav\Plugin\FeatureFlags\FeatureFlag;
+use Grav\Plugin\FeatureFlags\FlagStoreInterface;
 
 class RoadmapPlugin extends Plugin
 {
@@ -60,12 +62,22 @@ class RoadmapPlugin extends Plugin
 
         // Public AJAX vote endpoint
         if ($path === '/roadmap/vote' && $method === 'POST') {
+            // Feature-flag gate MUST run before any nonce/CSRF/auth/input handling
+            // so a disabled feature never leaks its existence or parses payloads.
+            if (!$this->featureEnabled(FeatureFlag::Roadmap)) {
+                $this->sendFlagDisabled404();
+                return;
+            }
             $this->handleVote();
             return;
         }
 
         // Admin vote-release endpoint
         if ($path === '/admin/roadmap/release-votes' && $method === 'POST') {
+            if (!$this->featureEnabled(FeatureFlag::Roadmap)) {
+                $this->sendFlagDisabled404();
+                return;
+            }
             $this->handleReleaseVotes();
             return;
         }
@@ -507,6 +519,43 @@ class RoadmapPlugin extends Plugin
     {
         $body     = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         $response = new Response($status, ['Content-Type' => 'application/json; charset=utf-8'], $body);
+        $this->grav->close($response);
+    }
+
+    /**
+     * Resolve the FlagStore singleton from the Grav service container and
+     * evaluate a single feature flag.
+     *
+     * NOTE: this is a container read — NOT a direct YAML parse, NOT a
+     * `new FlagStore(...)` instantiation. Profile resolution stays identical
+     * to the rest of the app so a flag is never "on here, off there".
+     *
+     * Fails open (returns true) only if the container entry is missing or
+     * the wrong type — a mis-configured feature-flags plugin must never
+     * cause routes to disappear silently. The test matrix asserts the
+     * correct profile wiring.
+     */
+    private function featureEnabled(FeatureFlag $flag): bool
+    {
+        $store = $this->grav['feature_flags'] ?? null;
+        if (!$store instanceof FlagStoreInterface) {
+            return true;
+        }
+        return $store->isEnabled($flag);
+    }
+
+    /**
+     * Emit a generic 404 and close the request. The body intentionally
+     * carries no feature-specific text: a disabled feature must not leak
+     * its name, route, or structure via the 404 surface.
+     */
+    private function sendFlagDisabled404(): never
+    {
+        $response = new Response(
+            404,
+            ['Content-Type' => 'text/plain; charset=utf-8'],
+            "Not Found\n"
+        );
         $this->grav->close($response);
     }
 }
