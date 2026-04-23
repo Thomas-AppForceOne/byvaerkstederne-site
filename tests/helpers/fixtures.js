@@ -15,6 +15,16 @@
  */
 
 const { execFileSync } = require('child_process');
+const path = require('path');
+const { discoverGravEnv } = require(path.join(__dirname, '..', '..', 'scripts', 'discover-grav-port.js'));
+
+// Resolve once; throw loud if the worktree's container isn't running.
+let _cachedContainer = null;
+function gravContainer() {
+  if (_cachedContainer) return _cachedContainer;
+  _cachedContainer = discoverGravEnv(path.resolve(__dirname, '..', '..')).container;
+  return _cachedContainer;
+}
 
 const LOCKED_ROADMAP_ITEM_ID = 'rm_fixture_locked';
 const RELEASABLE_ROADMAP_ITEM_ID = 'rm_fixture_releasable';
@@ -104,7 +114,7 @@ function appendIfMissing(path, key, yaml) {
   if (yamlContains(path, `^${key}:`)) return { seeded: false };
   execFileSync(
     'docker',
-    ['exec', '-i', 'grav', 'sh', '-c', `cat >> ${path}`],
+    ['exec', '-i', gravContainer(), 'sh', '-c', `cat >> ${path}`],
     { input: yaml, stdio: ['pipe', 'pipe', 'pipe'], timeout: 10_000 }
   );
   return { seeded: true };
@@ -132,7 +142,7 @@ function removeFixture(path, key) {
   // untrusted input.
   const script = `sed -i '/^${key}:$/,/^[a-zA-Z_]/{ /^${key}:$/d; /^[a-zA-Z_]/!d; }' ${path}`;
   try {
-    execFileSync('docker', ['exec', 'grav', 'sh', '-c', script], {
+    execFileSync('docker', ['exec', gravContainer(), 'sh', '-c', script], {
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 10_000,
     });
@@ -144,7 +154,7 @@ function removeFixture(path, key) {
 
 function yamlContains(path, pattern) {
   try {
-    execFileSync('docker', ['exec', 'grav', 'grep', '-qE', pattern, path], {
+    execFileSync('docker', ['exec', gravContainer(), 'grep', '-qE', pattern, path], {
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 10_000,
     });

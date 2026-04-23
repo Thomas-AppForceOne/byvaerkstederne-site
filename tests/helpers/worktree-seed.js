@@ -21,23 +21,8 @@
  */
 
 const { execFileSync } = require('child_process');
-const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
-
-function resolveContainer(worktreeAbs) {
-  if (process.env.GRAV_CONTAINER) return process.env.GRAV_CONTAINER;
-  const registryPath = path.join(worktreeAbs, '.gan', 'port-registry.json');
-  if (fs.existsSync(registryPath)) {
-    try {
-      const reg = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
-      const entry = reg.worktrees && reg.worktrees[fs.realpathSync(worktreeAbs)];
-      if (entry && entry.container) return entry.container;
-    } catch (_) { /* fall through */ }
-  }
-  const hash = crypto.createHash('sha256').update(fs.realpathSync(worktreeAbs)).digest('hex').slice(0, 8);
-  return `grav-${hash}`;
-}
+const { discoverGravEnv } = require(path.join(__dirname, '..', '..', 'scripts', 'discover-grav-port.js'));
 
 /**
  * Idempotently seed pw-test-admin into the worktree container so the
@@ -48,7 +33,14 @@ function seedWorktreeAdmin() {
   if (!adminPw) return { seeded: false, reason: 'no TEST_ADMIN_PASSWORD' };
 
   const worktree = path.resolve(__dirname, '..', '..');
-  const container = resolveContainer(worktree);
+  let container;
+  try {
+    ({ container } = discoverGravEnv(worktree));
+  } catch (err) {
+    // No container for this worktree — nothing to seed. Callers treat
+    // this as an anonymous-only mode signal rather than an error.
+    return { seeded: false, reason: `no worktree container: ${err.message.split('\n')[0]}` };
+  }
 
   // Short-circuit if the YAML already exists in the container.
   try {
@@ -59,17 +51,6 @@ function seedWorktreeAdmin() {
     );
     return { seeded: false, reason: 'already present' };
   } catch (_) { /* file missing */ }
-
-  // Also short-circuit if the container does not exist or is not running.
-  try {
-    execFileSync(
-      'docker',
-      ['inspect', '--format', '{{.State.Running}}', container],
-      { stdio: ['ignore', 'pipe', 'pipe'] }
-    );
-  } catch (_) {
-    return { seeded: false, reason: `container ${container} not running` };
-  }
 
   try {
     execFileSync(

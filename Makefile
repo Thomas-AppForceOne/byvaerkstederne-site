@@ -27,8 +27,10 @@ create-admin: ## Create an admin account (interactive)
 		read -p "  Email: " email; \
 		read -p "  Full name: " fullname; \
 		read -s -p "  Password: " password; echo ""; \
-		docker exec grav bash -c "cd /var/www/html && bin/plugin login new-user -u $$username -e $$email -p $$password -n '$$fullname' -t admin -s enabled -a admin.super" 2>/dev/null \
-			|| docker exec grav bash -c "cd /app/www/public && bin/plugin login new-user -u $$username -e $$email -p $$password -n '$$fullname' -t admin -s enabled -a admin.super"; \
+		CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(1) }' 2>/dev/null) || { \
+			echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
+		}; \
+		docker exec -w /app/www/public "$$CONTAINER" bin/plugin login new-user -u $$username -e $$email -p $$password -n "$$fullname" -t admin -s enabled -a admin.super; \
 		echo ""; \
 		echo "  ✓ Admin account '$$username' created"; \
 	else \
@@ -57,19 +59,12 @@ lfs-pull: ## Pull all LFS files (images, videos, etc.)
 # ── Docker ─────────────────────────────────────────────
 
 start: ## Start the site (Docker)
-	@docker compose up -d
-	@echo "Waiting for Grav to start..."
-	@for i in 1 2 3 4 5 6 7 8 9 10; do \
-		curl -s -o /dev/null http://localhost:8080 && break || sleep 2; \
-	done
-	@echo "Site is live at http://localhost:8080"
+	@scripts/grav-up.sh . 8080
 
 stop: ## Stop the site
-	@docker compose down
+	@scripts/grav-down.sh .
 
-restart: ## Restart the site
-	@docker compose restart
-	@echo "Restarted. Site at http://localhost:8080"
+restart: stop start ## Restart the site
 
 logs: ## Tail container logs
 	@docker compose logs -f --tail=50
@@ -114,7 +109,10 @@ clean: ## Remove Docker volumes and cache (keeps content)
 	@echo "Containers and volumes removed."
 
 cache-clear: ## Clear Grav cache
-	@docker exec grav bash -c 'cd /var/www/html && bin/grav cache' 2>/dev/null || echo "Container not running. Start with: make start"
+	@CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(1) }' 2>/dev/null) || { \
+		echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
+	}; \
+	docker exec -w /app/www/public "$$CONTAINER" bin/grav clearcache
 
 # ── Tests ──────────────────────────────────────────────
 
@@ -127,9 +125,9 @@ test: ## Run all anonymous tests (no credentials needed)
 	@PORT="$${GRAV_PORT}"; \
 	if [ -z "$$PORT" ]; then PORT=$$(node scripts/discover-grav-port.js 2>/dev/null || echo ""); fi; \
 	if [ -z "$$PORT" ]; then \
-		echo "❌  Cannot determine GRAV_PORT. Run: scripts/grav-up.sh . [port]"; exit 1; \
+		echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
 	fi; \
-	curl -s -o /dev/null "http://127.0.0.1:$$PORT" || { echo "❌  Grav not responding on port $$PORT. Run: scripts/grav-up.sh . $$PORT"; exit 1; }; \
+	curl -s -o /dev/null "http://127.0.0.1:$$PORT" || { echo "❌  Grav not responding on port $$PORT (container is registered but not serving). Check: docker ps ; scripts/grav-down.sh . ; scripts/grav-up.sh . $$PORT"; exit 1; }; \
 	echo "Running tests against http://127.0.0.1:$$PORT"; \
 	GRAV_PORT=$$PORT npx playwright test tests/anonymous.spec.js
 
@@ -137,9 +135,9 @@ test-headed: ## Run tests with browser visible (for debugging)
 	@PORT="$${GRAV_PORT}"; \
 	if [ -z "$$PORT" ]; then PORT=$$(node scripts/discover-grav-port.js 2>/dev/null || echo ""); fi; \
 	if [ -z "$$PORT" ]; then \
-		echo "❌  Cannot determine GRAV_PORT. Run: scripts/grav-up.sh . [port]"; exit 1; \
+		echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
 	fi; \
-	curl -s -o /dev/null "http://127.0.0.1:$$PORT" || { echo "❌  Grav not responding on port $$PORT. Run: scripts/grav-up.sh . $$PORT"; exit 1; }; \
+	curl -s -o /dev/null "http://127.0.0.1:$$PORT" || { echo "❌  Grav not responding on port $$PORT (container is registered but not serving). Check: docker ps ; scripts/grav-down.sh . ; scripts/grav-up.sh . $$PORT"; exit 1; }; \
 	echo "Running tests against http://127.0.0.1:$$PORT (headed)"; \
 	GRAV_PORT=$$PORT npx playwright test tests/anonymous.spec.js --headed
 
@@ -147,9 +145,9 @@ test-auth: ## Run authenticated tests (requires TEST_USERNAME and TEST_PASSWORD)
 	@PORT="$${GRAV_PORT}"; \
 	if [ -z "$$PORT" ]; then PORT=$$(node scripts/discover-grav-port.js 2>/dev/null || echo ""); fi; \
 	if [ -z "$$PORT" ]; then \
-		echo "❌  Cannot determine GRAV_PORT. Run: scripts/grav-up.sh . [port]"; exit 1; \
+		echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
 	fi; \
-	curl -s -o /dev/null "http://127.0.0.1:$$PORT" || { echo "❌  Grav not responding on port $$PORT. Run: scripts/grav-up.sh . $$PORT"; exit 1; }; \
+	curl -s -o /dev/null "http://127.0.0.1:$$PORT" || { echo "❌  Grav not responding on port $$PORT (container is registered but not serving). Check: docker ps ; scripts/grav-down.sh . ; scripts/grav-up.sh . $$PORT"; exit 1; }; \
 	[ -n "$$TEST_USERNAME" ] && [ -n "$$TEST_PASSWORD" ] || { echo "❌  Set TEST_USERNAME and TEST_PASSWORD before running authenticated tests"; exit 1; }; \
 	echo "Running tests against http://127.0.0.1:$$PORT"; \
 	GRAV_PORT=$$PORT npx playwright test tests/authenticated.spec.js

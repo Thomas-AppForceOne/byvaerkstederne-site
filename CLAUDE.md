@@ -105,47 +105,50 @@ These rules apply to any code change, whether made directly, via `/gan`, or by a
 
 ---
 
-## Testing in worktrees (Docker port management)
+## Testing in worktrees (Docker container management)
 
-Each worktree can run its own Grav container on its own port so multiple
-worktrees coexist without fighting over :8080. Ports are discovered
-automatically, and the discovery chain survives Claude Desktop restarts.
+Every checkout — the main repo and every worktree — runs its own Grav
+container, named `grav-<sha256_8>` where the hash is derived from the
+checkout's absolute path. This makes the name deterministic and unique
+per checkout, so `make test` from checkout A can never accidentally
+probe checkout B's Grav.
 
-### Start / stop a worktree
+### Start / stop
 
 ```bash
-# From the worktree directory — port defaults to 8081
-scripts/grav-up.sh . 9000
+# Main repo (convention: port 8080). Same under the hood as the worktree case.
+make start        # wraps: scripts/grav-up.sh . 8080
+make stop         # wraps: scripts/grav-down.sh .
 
-# Tear down
+# Worktree (pick any free port)
+scripts/grav-up.sh . 9000
 scripts/grav-down.sh .
 ```
 
-`grav-up.sh` validates the port is free, starts a container named
-`grav-<sha256_8>` where the hash is derived from the worktree's absolute
-path (so the name is deterministic and unique per worktree), waits for
+`grav-up.sh` validates the port is free, starts the container, waits for
 Grav to respond, writes `.gan/port-registry.json`, and exports
 `GRAV_PORT`, `GRAV_CONTAINER`, `GRAV_ROOT` for the current shell.
 
-### Running tests
+### Discovery chain (fail-loud)
 
-`make test`, `make test-headed`, and `make test-auth` discover the port
-automatically via `scripts/discover-grav-port.js`. The targets echo the
-port they are using and fail loudly (exit 1) if no port can be found — no
-silent defaulting, because Sprint-5 style bugs come from tests pointing at
-the wrong instance.
+Tests and `make` targets find the container + port in this order — `port`
+and `container` are resolved together so they can never disagree:
 
-### Discovery chain
+1. `GRAV_PORT` + `GRAV_CONTAINER` env vars — set by `grav-up.sh` in the
+   session. Only trusted when `GRAV_CONTAINER` matches this checkout's
+   deterministic hash AND the container is actually running.
+2. `.gan/port-registry.json` — per-checkout, survives Claude Desktop
+   restarts. Entry is trusted only if `status: "running"` AND the
+   container still exists.
+3. `docker ps` filtered by this checkout's deterministic container name.
 
-Tests find the port in this order:
-
-1. `GRAV_PORT` env var — set by `grav-up.sh` for the session.
-2. `.gan/port-registry.json` — per-worktree, survives Claude Desktop
-   restarts, updated by `grav-up.sh` / `grav-down.sh`.
-3. `docker ps` — filter by the hashed container name, then by the legacy
-   bare `grav` name (so `make start` on the main repo still works).
-4. Fallback to `8080` **in `playwright.config.js` only** (with a warning).
-   Makefile targets do not fall back — they fail loud.
+**There is NO layer 4.** If none of those find a running container,
+`scripts/discover-grav-port.js` throws with instructions, and every
+caller — Makefile, `playwright.config.js`, the test helpers — fails
+loud. No silent fallback to :8080, no fallback to a stray `grav`
+container from another checkout. That fallback used to exist; it made
+`make test` pass against a Grav that didn't reflect the code under
+test, which was the Sprint-5 regression vector.
 
 ### Claude Desktop restart
 
@@ -156,13 +159,19 @@ the same port.
 
 ### Common errors
 
+- **"No Grav container for this worktree"** — you haven't started one
+  for this checkout. Run `make start` (main repo) or
+  `scripts/grav-up.sh . [port]` (worktree).
 - **"Port X is already in use"** — `grav-up.sh` uses `lsof`/`netstat`/`ss`
   and a `docker ps` scan. Pick a different port or stop the conflict.
-- **"Cannot determine GRAV_PORT"** from a Make target — run
-  `scripts/grav-up.sh . [port]`, or set `GRAV_PORT=<port>` manually.
-- **"Grav not responding on port X"** — the registry is stale. Either
+- **"Grav not responding on port X (container is registered but not
+  serving)"** — the registry is stale or the container crashed. Either
   `scripts/grav-down.sh . && scripts/grav-up.sh . <port>` to restart, or
   delete `.gan/port-registry.json` and start fresh.
+- **Migrating from a pre-`grav-up.sh` checkout** — if you have a legacy
+  bare `grav` container from `docker compose up`, remove it first
+  (`docker rm -f grav`), then `make start`. The new container will be
+  `grav-<hash>`; discovery won't find the bare one any more.
 
 ---
 

@@ -42,29 +42,13 @@ const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const {
-  discoverGravPort,
-  containerNameFor,
+  discoverGravEnv,
 } = require(path.join(__dirname, '..', '..', 'scripts', 'discover-grav-port.js'));
 const { hasUserPassword } = require(path.join(__dirname, '..', 'helpers', 'accounts'));
 
 const WORKTREE = path.resolve(__dirname, '..', '..');
-const PORT = discoverGravPort(WORKTREE);
+const { port: PORT, container: CONTAINER } = discoverGravEnv(WORKTREE);
 const BASE = `http://127.0.0.1:${PORT}`;
-
-function resolveContainer() {
-  if (process.env.GRAV_CONTAINER) return process.env.GRAV_CONTAINER;
-  const registryPath = path.join(WORKTREE, '.gan', 'port-registry.json');
-  if (fs.existsSync(registryPath)) {
-    try {
-      const reg = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
-      const entry = reg.worktrees && reg.worktrees[fs.realpathSync(WORKTREE)];
-      if (entry && entry.container) return entry.container;
-    } catch (_) { /* fall through */ }
-  }
-  return containerNameFor(fs.realpathSync(WORKTREE));
-}
-
-const CONTAINER = resolveContainer();
 
 function clearGravCache() {
   execSync(`docker exec -w /app/www/public ${CONTAINER} bin/grav clearcache`, {

@@ -24,9 +24,21 @@
 const { execFile, execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { discoverGravEnv } = require(path.join(__dirname, '..', '..', 'scripts', 'discover-grav-port.js'));
 
 const ACCOUNTS_DIR_REL = path.join('config', 'www', 'user', 'accounts');
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
+
+// Resolve the Grav container for this worktree (not a stray 'grav').
+// Cached per-process; assertDockerAndGravRunning below still validates
+// that the container is actually up before any write operation.
+let _cachedContainer = null;
+function gravContainer() {
+  if (_cachedContainer) return _cachedContainer;
+  const { container } = discoverGravEnv(REPO_ROOT);
+  _cachedContainer = container;
+  return container;
+}
 
 const USERNAME_PATTERN = /^[a-z0-9-]+$/;
 
@@ -117,7 +129,7 @@ function ensureAccount(account, password) {
   assertDockerAndGravRunning();
 
   const args = [
-    'exec', '-w', '/app/www/public', 'grav',
+    'exec', '-w', '/app/www/public', gravContainer(),
     'bin/plugin', 'login', 'new-user',
     '-u', a.username,
     '-p', password,
@@ -202,7 +214,7 @@ function accountExistsInContainer(account) {
   try {
     execFileSync(
       'docker',
-      ['exec', 'grav', 'test', '-f', `/config/www/user/accounts/${account.username}.yaml`],
+      ['exec', gravContainer(), 'test', '-f', `/config/www/user/accounts/${account.username}.yaml`],
       { stdio: ['ignore', 'pipe', 'pipe'], timeout: 10_000 }
     );
     return true;
@@ -221,7 +233,7 @@ function removeAccountInContainer(account) {
   try {
     execFileSync(
       'docker',
-      ['exec', 'grav', 'rm', '-f', `/config/www/user/accounts/${account.username}.yaml`],
+      ['exec', gravContainer(), 'rm', '-f', `/config/www/user/accounts/${account.username}.yaml`],
       { stdio: ['ignore', 'pipe', 'pipe'], timeout: 10_000 }
     );
     return true;
@@ -249,7 +261,7 @@ function grantAdminSuperInContainer(account) {
     `  awk '1; /^\\s*admin:\\s*$/ && !d { print "    super: true"; d=1 }' "${yamlPath}" > "${yamlPath}.tmp" && mv "${yamlPath}.tmp" "${yamlPath}"`,
     `fi`,
   ].join('\n');
-  execFileSync('docker', ['exec', 'grav', 'sh', '-c', script], {
+  execFileSync('docker', ['exec', gravContainer(), 'sh', '-c', script], {
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 10_000,
   });
@@ -264,22 +276,18 @@ function assertDockerAndGravRunning() {
   } catch (err) {
     throw new Error(
       'Docker does not appear to be installed or running. Start Docker Desktop and try again. ' +
-      'Test-account setup requires `docker exec grav ...`.'
+      'Test-account setup requires `docker exec` against the worktree\'s Grav container.'
     );
   }
-  let output;
+  // Resolve the worktree's container via the shared chain. discoverGravEnv
+  // throws loud if the container isn't running, which is exactly what we
+  // want — no silent fallback to a stray 'grav' container from some other
+  // checkout.
   try {
-    output = execFileSync('docker', ['ps', '--filter', 'name=^grav$', '--format', '{{.Names}}'], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: 10_000,
-    }).toString().trim();
+    gravContainer();
   } catch (err) {
-    throw new Error('Docker is running but `docker ps` failed. Cannot verify the grav container.');
-  }
-  if (output !== 'grav') {
     throw new Error(
-      'The `grav` Docker container is not running. Start it with `docker compose up -d` ' +
-      'from the repo root, then re-run the test suite.'
+      `Cannot set up test accounts: ${err.message}`
     );
   }
 }

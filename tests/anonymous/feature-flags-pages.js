@@ -33,36 +33,16 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const {
-  discoverGravPort,
-  containerNameFor,
+  discoverGravEnv,
 } = require(path.join(__dirname, '..', '..', 'scripts', 'discover-grav-port.js'));
 
-// Resolve port + container for the current worktree. Fail loud if neither
-// can be determined — silent defaults were the Sprint-5 regression vector.
+// Resolve port + container for this worktree through the single shared
+// chain. Throws loud if the worktree's container isn't running — no
+// silent fallback to :8080 or to a stray 'grav' container, which was
+// the Sprint-5 regression vector.
 const WORKTREE = path.resolve(__dirname, '..', '..');
-const PORT = discoverGravPort(WORKTREE);
+const { port: PORT, container: CONTAINER } = discoverGravEnv(WORKTREE);
 const BASE = `http://127.0.0.1:${PORT}`;
-
-/** Find the docker container servicing this worktree. */
-function resolveContainer() {
-  // Layer 1: env, set by grav-up.sh
-  if (process.env.GRAV_CONTAINER) return process.env.GRAV_CONTAINER;
-
-  // Layer 2: port-registry.json (survives Claude Desktop restart)
-  const registryPath = path.join(WORKTREE, '.gan', 'port-registry.json');
-  if (fs.existsSync(registryPath)) {
-    try {
-      const reg = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
-      const entry = reg.worktrees && reg.worktrees[fs.realpathSync(WORKTREE)];
-      if (entry && entry.container) return entry.container;
-    } catch (_) { /* fall through */ }
-  }
-
-  // Layer 3: deterministic hash
-  return containerNameFor(fs.realpathSync(WORKTREE));
-}
-
-const CONTAINER = resolveContainer();
 
 /**
  * Clear Grav cache INSIDE the container. The `-w /app/www/public` flag is
