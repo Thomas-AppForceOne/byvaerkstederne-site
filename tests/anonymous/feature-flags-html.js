@@ -283,6 +283,26 @@ test.describe('Sprint-3: Twig gates hide flagged affordances under public-demo',
     expect(countMatches(body, /<!--[^>]*bug[_ -]report/i)).toBe(0);
     expect(countMatches(body, /<!--[^>]*feature[_ -]suggestion/i)).toBe(0);
   });
+
+  test('membership_signup=false: Log ind and Bliv medlem nav entries are absent', async () => {
+    const resp = await ctx.get('/');
+    const body = await resp.text();
+    // Nav/mobile-menu Log ind anchors must be gone (only anonymous entries;
+    // authed users see Log ud, which is out of scope for this anonymous ctx).
+    expect(
+      countMatches(body, /class="bv-nav__link"[^>]*>Log ind</),
+      'desktop nav Log ind link must be absent when membership_signup is false'
+    ).toBe(0);
+    expect(
+      countMatches(body, /class="bv-mobile-menu__link"[^>]*>Log ind</),
+      'mobile nav Log ind link must be absent when membership_signup is false'
+    ).toBe(0);
+    // Bliv medlem CTA gone too.
+    expect(countMatches(body, />Bliv medlem</)).toBe(0);
+    // NOTE: the login_overlay partial is intentionally still rendered — its
+    // <form> is reused by Grav's /login route. Gating the include would
+    // break /login under profiles where membership_signup is false.
+  });
 });
 
 // ─── Anonymous: internal profile ─────────────────────────────────────────────
@@ -325,6 +345,19 @@ test.describe('Sprint-3: Twig gates render flagged affordances under internal (a
     expect(resp.status()).toBe(200);
     const body = await resp.text();
     expect(/<title>\s*Login/i.test(body)).toBe(true);
+  });
+
+  test('membership_signup=true: Log ind and Bliv medlem nav entries are present', async () => {
+    const resp = await ctx.get('/');
+    const body = await resp.text();
+    expect(
+      countMatches(body, />Log ind</),
+      'Log ind link must be present when membership_signup is true'
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      countMatches(body, />Bliv medlem</),
+      'Bliv medlem CTA must be present when membership_signup is true'
+    ).toBeGreaterThanOrEqual(1);
   });
 
   test('delta: internal has strictly more flagged-route nav/footer anchors than public-demo', async () => {

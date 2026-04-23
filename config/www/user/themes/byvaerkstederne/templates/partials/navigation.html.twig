@@ -37,8 +37,8 @@
             </span>
             <a href="{{ logout_url|e }}" class="bv-nav__link">Log ud</a>
         {% else %}
-            <a href="#" class="bv-nav__link" onclick="document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;">Log ind</a>
             {% if feature_enabled('membership_signup') %}
+            <a href="#" class="bv-nav__link" onclick="document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;">Log ind</a>
             <a href="/opret-medlemskab?redirect={{ page.route|url_encode }}" class="bv-btn bv-btn--primary bv-btn--sm">Bliv medlem</a>
             {% endif %}
         {% endif %}
@@ -79,8 +79,8 @@
             </span>
             <a href="{{ logout_url|e }}" class="bv-mobile-menu__link">Log ud</a>
         {% else %}
-            <a href="#" class="bv-mobile-menu__link" onclick="document.body.classList.remove('menu-open'); document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;">Log ind</a>
             {% if feature_enabled('membership_signup') %}
+            <a href="#" class="bv-mobile-menu__link" onclick="document.body.classList.remove('menu-open'); document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;">Log ind</a>
             <a href="/opret-medlemskab" class="bv-btn bv-btn--primary bv-mobile-menu__cta">Bliv medlem</a>
             {% endif %}
         {% endif %}

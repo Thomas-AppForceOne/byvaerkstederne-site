@@ -32,6 +32,10 @@
         {% include 'partials/footer.html.twig' %}
     {% endblock %}
 
+    {# login_overlay is always included: the overlay's <form> is also the
+       form rendered by Grav's /login route. Gating it would break /login
+       under profiles where membership_signup is false. The visibility of
+       the "Log ind" button itself is gated in navigation.html.twig. #}
     {% include 'partials/login_overlay.html.twig' %}
     {% if feature_enabled('bug_report') %}
     {% include 'partials/bug_report_overlay.html.twig' %}
