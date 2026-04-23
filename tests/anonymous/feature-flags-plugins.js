@@ -541,9 +541,114 @@ const FLAG_PROBES = [
       expect([200, 301, 302].includes(r.status())).toBe(true);
     },
   },
+  // --- Post-Sprint-1 additions ---
+  {
+    flag: 'privacy_policy',
+    desc: '/privatlivspolitik 404 under public-demo; reachable under internal',
+    async publicDemo(ctx) {
+      const r = await ctx.get('/privatlivspolitik', { maxRedirects: 0 });
+      expect(r.status()).toBe(404);
+    },
+    async internal(ctx) {
+      const r = await ctx.get('/privatlivspolitik', { maxRedirects: 0 });
+      expect([200, 301, 302].includes(r.status())).toBe(true);
+    },
+  },
+  {
+    flag: 'event_rsvp',
+    desc: '"Jeg kommer" button absent from public-demo home; present under internal',
+    async publicDemo(ctx) {
+      const r = await ctx.get('/', { maxRedirects: 0 });
+      expect(r.status()).toBe(200);
+      expect(/Jeg kommer/i.test(await r.text())).toBe(false);
+    },
+    async internal(ctx) {
+      const r = await ctx.get('/', { maxRedirects: 0 });
+      expect(r.status()).toBe(200);
+      expect(/Jeg kommer/i.test(await r.text())).toBe(true);
+    },
+  },
+  {
+    flag: 'workshop_project_blueprints',
+    desc: '"Se Blueprint" / "Vis Projekter" placeholders gated (detail pages 404 under public-demo anyway)',
+    async publicDemo(ctx) {
+      const r = await ctx.get('/vaerksteder/makerspace', { maxRedirects: 0 });
+      expect(r.status()).toBe(404);
+    },
+    async internal(ctx) {
+      const r = await ctx.get('/vaerksteder/makerspace', { maxRedirects: 0 });
+      expect(r.status()).toBe(200);
+      expect(/Se Blueprint/i.test(await r.text())).toBe(true);
+    },
+  },
+  {
+    flag: 'workshop_workday_signup',
+    desc: '"Deltag i næste arbejdsdag" placeholder gated (parent detail page 404 under public-demo)',
+    async publicDemo(ctx) {
+      const r = await ctx.get('/vaerksteder/kreativ-fitness', { maxRedirects: 0 });
+      expect(r.status()).toBe(404);
+    },
+    async internal(ctx) {
+      const r = await ctx.get('/vaerksteder/kreativ-fitness', { maxRedirects: 0 });
+      expect(r.status()).toBe(200);
+      expect(/Deltag i n.+ste arbejdsdag/i.test(await r.text())).toBe(true);
+    },
+  },
+  {
+    flag: 'kulturhus_program',
+    desc: '"Se Program" placeholder gated (parent detail page 404 under public-demo)',
+    async publicDemo(ctx) {
+      const r = await ctx.get('/vaerksteder/kulturhus', { maxRedirects: 0 });
+      expect(r.status()).toBe(404);
+    },
+    async internal(ctx) {
+      const r = await ctx.get('/vaerksteder/kulturhus', { maxRedirects: 0 });
+      expect(r.status()).toBe(200);
+      expect(/Se Program/i.test(await r.text())).toBe(true);
+    },
+  },
+  {
+    flag: 'kulturhus_volunteer',
+    desc: '"Bliv Frivillig" placeholder gated (parent detail page 404 under public-demo)',
+    async publicDemo(ctx) {
+      const r = await ctx.get('/vaerksteder/kulturhus', { maxRedirects: 0 });
+      expect(r.status()).toBe(404);
+    },
+    async internal(ctx) {
+      const r = await ctx.get('/vaerksteder/kulturhus', { maxRedirects: 0 });
+      expect(r.status()).toBe(200);
+      expect(/Bliv Frivillig/i.test(await r.text())).toBe(true);
+    },
+  },
+  {
+    flag: 'donation_mobilepay',
+    desc: '"Donér via MobilePay" placeholder gated (parent detail page 404 under public-demo)',
+    async publicDemo(ctx) {
+      const r = await ctx.get('/vaerksteder/kulturhus', { maxRedirects: 0 });
+      expect(r.status()).toBe(404);
+    },
+    async internal(ctx) {
+      const r = await ctx.get('/vaerksteder/kulturhus', { maxRedirects: 0 });
+      expect(r.status()).toBe(200);
+      expect(/Don.+r via MobilePay/i.test(await r.text())).toBe(true);
+    },
+  },
+  {
+    flag: 'gear_donation',
+    desc: '"Donér Grej" placeholder gated (parent detail page 404 under public-demo)',
+    async publicDemo(ctx) {
+      const r = await ctx.get('/vaerksteder/det-groenne-faellesskab', { maxRedirects: 0 });
+      expect(r.status()).toBe(404);
+    },
+    async internal(ctx) {
+      const r = await ctx.get('/vaerksteder/det-groenne-faellesskab', { maxRedirects: 0 });
+      expect(r.status()).toBe(200);
+      expect(/Don.+r Grej/i.test(await r.text())).toBe(true);
+    },
+  },
 ];
 
-test.describe('feature-flags Sprint-4: per-flag matrix (17 catalogue flags)', () => {
+test.describe('feature-flags Sprint-4: per-flag matrix (catalogue flags)', () => {
   test.beforeAll(() => {
     clearGravCache();
   });

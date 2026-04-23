@@ -119,6 +119,7 @@ const GATED_URLS = [
   '/vaerkstedskalenderen',
   '/kontakt',
   '/vedtaegter',
+  '/privatlivspolitik',
   '/vaerksteder/makerspace', // representative workshop detail subpage
 ];
 
@@ -132,6 +133,7 @@ const LEAK_STRINGS = {
   '/vaerkstedskalenderen': 'Værkstedskalenderen',
   '/kontakt': 'Kontakt',
   '/vedtaegter': 'Vedtægter',
+  '/privatlivspolitik': 'Privatlivspolitik',
   '/vaerksteder/makerspace': 'Makerspace',
 };
 

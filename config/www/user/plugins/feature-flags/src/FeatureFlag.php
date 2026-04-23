@@ -36,10 +36,25 @@ enum FeatureFlag: string
     case ContactPage = 'contact_page';
     case StatutesPage = 'statutes_page';
 
+    // --- Post-Sprint-1 additions (placeholder-CTA gates + privacy page) ---
+    // These cover CTAs whose destination page/backend has not yet been built
+    // (buttons currently pointing at "#"), plus the privacy policy page.
+    case PrivacyPolicy = 'privacy_policy';
+    case EventRsvp = 'event_rsvp';
+    case WorkshopProjectBlueprints = 'workshop_project_blueprints';
+    case WorkshopWorkdaySignup = 'workshop_workday_signup';
+    case KulturhusProgram = 'kulturhus_program';
+    case KulturhusVolunteer = 'kulturhus_volunteer';
+    case DonationMobilepay = 'donation_mobilepay';
+    case GearDonation = 'gear_donation';
+
     /**
-     * The 17 rollout-catalogue flag string values, in the order specified by
-     * the rollout spec. Used by tests and profile validators that need to
-     * assert "every catalogue flag is present".
+     * All rollout-catalogue flag string values, in declaration order. Used by
+     * tests and profile validators that need to assert "every catalogue flag
+     * is present". The initial Sprint-1 catalogue had 17 entries; later
+     * additions (placeholder-CTA gates, privacy_policy) extend it — the
+     * count is therefore no longer a stable "17" and callers should read
+     * count(FeatureFlag::catalogueValues()) instead of hard-coding it.
      *
      * @return list<string>
      */
@@ -63,6 +78,14 @@ enum FeatureFlag: string
             'press_stats',
             'contact_page',
             'statutes_page',
+            'privacy_policy',
+            'event_rsvp',
+            'workshop_project_blueprints',
+            'workshop_workday_signup',
+            'kulturhus_program',
+            'kulturhus_volunteer',
+            'donation_mobilepay',
+            'gear_donation',
         ];
     }
 }

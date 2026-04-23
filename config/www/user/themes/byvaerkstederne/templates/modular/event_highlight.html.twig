@@ -40,7 +40,9 @@
                     </div>
                     <h3 class="bv-title" style="font-size: 1.5rem; margin-top: var(--space-4);">{{ ev_title }}</h3>
                     <p class="u-text-muted" style="margin-top: var(--space-4);">{{ ev_desc }}</p>
+                    {% if feature_enabled('event_rsvp') %}
                     <a href="{{ ev_url }}" class="bv-btn bv-btn--dark bv-btn--full" style="margin-top: var(--space-8);">{{ h.event_cta|default('Jeg kommer') }}</a>
+                    {% endif %}
                 </div>
             </div>
 

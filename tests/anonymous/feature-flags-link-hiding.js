@@ -55,7 +55,10 @@ function clearGravCache() {
 const CRAWL_URLS = [
   '/',
   '/vaerksteder',
-  '/privatlivspolitik',
+  // '/privatlivspolitik' was in this list when the page was un-gated. It's
+  // now gated by the privacy_policy flag and therefore 404s under
+  // public-demo, so we can't crawl it here. Its absence from public-demo
+  // link targets is covered by the flag=privacy_policy entry below.
   '/login',
   '/forgot_password',
 ];
@@ -88,6 +91,7 @@ const FLAG_ROUTES = {
   ],
   contact_page: ['/kontakt'],
   statutes_page: ['/vedtaegter'],
+  privacy_policy: ['/privatlivspolitik'],
 };
 
 /** Extract every href/action path from a response body. */

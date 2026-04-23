@@ -128,6 +128,7 @@ const FLAGGED_ROUTES = [
   '/vaerkstedskalenderen',
   '/kontakt',
   '/vedtaegter',
+  '/privatlivspolitik',
 ];
 
 /** Return an array of href values inside the <nav>…</nav> and <footer>…</footer> regions. */
@@ -322,7 +323,7 @@ test.describe('Sprint-3: Twig gates render flagged affordances under internal (a
 
   // Nav / footer anchors to flagged routes are NOT auth-gated (only the
   // Fællesskab column and overlays are). They must appear under internal.
-  for (const route of ['/vedtaegter', '/referater', '/presse', '/vaerkstedskalenderen', '/kontakt', '/opret-medlemskab']) {
+  for (const route of ['/vedtaegter', '/referater', '/presse', '/vaerkstedskalenderen', '/kontakt', '/opret-medlemskab', '/privatlivspolitik']) {
     test(`home page: ≥1 nav/footer anchor to ${route} under internal`, async () => {
       const resp = await ctx.get('/');
       expect(resp.status()).toBe(200);

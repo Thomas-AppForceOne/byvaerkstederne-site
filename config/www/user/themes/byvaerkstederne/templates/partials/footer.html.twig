@@ -26,7 +26,9 @@
                 {% if feature_enabled('statutes_page') %}
                 <a href="/vedtaegter">Vedt&aelig;gter</a>
                 {% endif %}
+                {% if feature_enabled('privacy_policy') %}
                 <a href="/privatlivspolitik">Privatlivspolitik</a>
+                {% endif %}
                 {% if feature_enabled('minutes_archive') %}
                 <a href="/referater">Referater</a>
                 {% endif %}

@@ -6,9 +6,12 @@
  *
  *   1. Every flag named in the rollout catalogue is a declared FeatureFlag
  *      enum case.
- *   2. The `staging.example.com` profile's features.yaml resolves to 17/17
+ *   2. The `staging.example.com` profile's features.yaml resolves to N/N
  *      catalogue flags enabled; the `public-demo.example.com` profile's
- *      features.yaml resolves to 0/17 catalogue flags enabled.
+ *      features.yaml resolves to 0/N catalogue flags enabled (where N is
+ *      count(self::CATALOGUE) — the count is no longer a stable 17 after
+ *      post-Sprint-1 additions like privacy_policy and placeholder-CTA
+ *      gates).
  *   3. The strict-string `"true"`/`"false"` rule still holds for the newly
  *      added flags (typos fail closed with a warning), and a missing
  *      features.yaml does not crash — it just resolves everything false
@@ -51,6 +54,14 @@ final class FeatureFlagCatalogueTest extends TestCase
         'press_stats',
         'contact_page',
         'statutes_page',
+        'privacy_policy',
+        'event_rsvp',
+        'workshop_project_blueprints',
+        'workshop_workday_signup',
+        'kulturhus_program',
+        'kulturhus_volunteer',
+        'donation_mobilepay',
+        'gear_donation',
     ];
 
     /** Absolute path to `config/www/user/env/`. */
@@ -100,7 +111,7 @@ final class FeatureFlagCatalogueTest extends TestCase
 
     // -------- (2) Profile resolution --------
 
-    public function testStagingProfileEnablesAll17CatalogueFlags(): void
+    public function testStagingProfileEnablesAllCatalogueFlags(): void
     {
         $enabled = self::loadProfileYaml('staging.example.com');
         $this->assertIsArray($enabled, 'staging.example.com features.yaml must parse to an array.');
@@ -109,15 +120,16 @@ final class FeatureFlagCatalogueTest extends TestCase
         $store = new FlagStore($enabled, $logger, 'staging.example.com');
 
         $enabledCount = 0;
+        $total = count(self::CATALOGUE);
         foreach (self::CATALOGUE as $flagValue) {
             $case = FeatureFlag::from($flagValue);
             $this->assertTrue(
                 $store->isEnabled($case),
-                "Staging profile must enable `{$flagValue}` (17/17 rule)."
+                "Staging profile must enable `{$flagValue}` ({$total}/{$total} rule)."
             );
             $enabledCount++;
         }
-        $this->assertSame(17, $enabledCount, 'Staging must flip exactly 17 catalogue flags on.');
+        $this->assertSame($total, $enabledCount, "Staging must flip exactly {$total} catalogue flags on.");
 
         // And the profile must not emit any warnings — that would mean a
         // malformed value or unknown key slipped in.
@@ -128,7 +140,7 @@ final class FeatureFlagCatalogueTest extends TestCase
         );
     }
 
-    public function testPublicDemoProfileDisablesAll17CatalogueFlags(): void
+    public function testPublicDemoProfileDisablesAllCatalogueFlags(): void
     {
         $enabled = self::loadProfileYaml('public-demo.example.com');
         // `enabled: {}` parses to an empty array, which FlagStore treats
@@ -145,7 +157,7 @@ final class FeatureFlagCatalogueTest extends TestCase
             $case = FeatureFlag::from($flagValue);
             $this->assertFalse(
                 $store->isEnabled($case),
-                "Public-demo profile must disable `{$flagValue}` (0/17 rule)."
+                "Public-demo profile must disable `{$flagValue}` (0/N rule)."
             );
             $this->assertFalse(
                 $store->isConfigured($case),

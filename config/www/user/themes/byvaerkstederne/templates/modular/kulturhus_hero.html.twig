@@ -5,7 +5,7 @@
         <h1 class="bv-display" style="font-size: clamp(3rem, 8vw, 6rem); margin-bottom: var(--space-8);">{{ h.hero_heading|default('Kulturhus') }}</h1>
         <p class="bv-body-lg" style="max-width: 32rem; margin-bottom: var(--space-12);">{{ h.subtitle }}</p>
         <div style="display: flex; flex-wrap: wrap; gap: var(--space-4);">
-            {% for button in h.buttons %}
+            {% for button in h.buttons|feature_visible %}
             <a href="{{ button.url|default('#') }}" class="bv-btn bv-btn--{{ button.style|default('secondary') }}">{{ button.text }}</a>
             {% endfor %}
         </div>

@@ -12,7 +12,9 @@
             {% if feature_enabled('statutes_page') %}
             <a href="/vedtaegter" class="bv-nav__link {% if page.route == '/vedtaegter' %}is-active{% endif %}">Vedt&aelig;gter</a>
             {% endif %}
+            {% if feature_enabled('privacy_policy') %}
             <a href="/privatlivspolitik" class="bv-nav__link {% if page.route == '/privatlivspolitik' %}is-active{% endif %}">Privatliv</a>
+            {% endif %}
             {% if feature_enabled('minutes_archive') %}
             <a href="/referater" class="bv-nav__link {% if page.route == '/referater' %}is-active{% endif %}">Referater</a>
             {% endif %}
@@ -64,7 +66,9 @@
         {% if feature_enabled('statutes_page') %}
         <a href="/vedtaegter" class="bv-mobile-menu__link bv-mobile-menu__link--secondary">Vedt&aelig;gter</a>
         {% endif %}
+        {% if feature_enabled('privacy_policy') %}
         <a href="/privatlivspolitik" class="bv-mobile-menu__link bv-mobile-menu__link--secondary">Privatliv</a>
+        {% endif %}
         {% if feature_enabled('minutes_archive') %}
         <a href="/referater" class="bv-mobile-menu__link bv-mobile-menu__link--secondary">Referater</a>
         {% endif %}
