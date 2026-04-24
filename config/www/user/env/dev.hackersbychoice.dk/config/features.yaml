@@ -1,0 +1,44 @@
+# Dev-tier environment profile.
+#
+# Active when the site is served under the host `dev.hackersbychoice.dk`
+# (the bleeding-edge tier in the four-tier topology — see repo README
+# and the adjacent www.hackersbychoice.dk / test.hackersbychoice.dk
+# profiles).
+#
+# Dev runs every flag "true" so in-progress features are exercisable on
+# the deployed dev surface. For local docker development, Grav sees
+# `Host: localhost` and falls back to `config/www/user/config/features.yaml`
+# — this profile is not consulted there.
+#
+# Values are the strict strings `"true"` or `"false"`. Any other value
+# (bare YAML booleans, `TRUE`, `1`, `yes`, nulls, nested maps) is treated
+# by FlagStore as invalid, logs a warning, and fails closed. Secrets,
+# credentials, API keys, or host identifiers must never appear here.
+enabled:
+  roadmap: "true"
+  feature_suggestion: "true"
+  bug_report: "true"
+  community_footer_column: "true"
+  membership_signup: "true"
+  newsletter_signup: "true"
+  event_highlight: "true"
+  press_page: "true"
+  minutes_archive: "true"
+  workshop_calendar: "true"
+  workshop_calendar_filters: "true"
+  workshop_calendar_featured: "true"
+  workshop_detail_pages: "true"
+  press_assets_download: "true"
+  press_stats: "true"
+  contact_page: "true"
+  statutes_page: "true"
+  privacy_policy: "true"
+  event_rsvp: "true"
+  workshop_project_blueprints: "true"
+  workshop_workday_signup: "true"
+  kulturhus_program: "true"
+  kulturhus_volunteer: "true"
+  donation_mobilepay: "true"
+  gear_donation: "true"
+  social_media_links: "true"
+  makerspace_meeting_link: "true"
