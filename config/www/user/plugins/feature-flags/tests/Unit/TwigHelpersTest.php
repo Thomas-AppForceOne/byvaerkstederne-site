@@ -140,13 +140,13 @@ final class TwigHelpersTest extends TestCase
     public function testWarningContextContainsEnvironmentButNoSensitiveData(): void
     {
         $logger = new ArrayLogger();
-        $helpers = new TwigHelpers(new FlagStore([], $logger), $logger, 'staging.example.com');
+        $helpers = new TwigHelpers(new FlagStore([], $logger), $logger, 'www.hackersbychoice.dk');
 
         $helpers->featureEnabled('not_a_real_flag');
         $warnings = $logger->warnings();
         $this->assertCount(1, $warnings);
         $ctx = $warnings[0]['context'];
-        $this->assertSame('staging.example.com', $ctx['environment'] ?? null);
+        $this->assertSame('www.hackersbychoice.dk', $ctx['environment'] ?? null);
         // No forbidden keys — the PSR-3 context map is the only place we
         // might accidentally leak; assert on a small allow-list.
         $allowedKeys = ['flag', 'reason', 'environment', 'arg_type'];

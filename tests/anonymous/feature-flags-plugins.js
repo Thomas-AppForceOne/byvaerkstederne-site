@@ -227,7 +227,7 @@ test.describe('feature-flags Sprint-4: POST endpoint gate matrix', () => {
     let ctx;
 
     test.beforeAll(async () => {
-      ctx = await profileContext('public-demo.example.com');
+      ctx = await profileContext('test.hackersbychoice.dk');
     });
 
     test.afterAll(async () => {
@@ -255,7 +255,7 @@ test.describe('feature-flags Sprint-4: POST endpoint gate matrix', () => {
     let ctx;
 
     test.beforeAll(async () => {
-      ctx = await profileContext('staging.example.com');
+      ctx = await profileContext('www.hackersbychoice.dk');
     });
 
     test.afterAll(async () => {
@@ -691,7 +691,7 @@ test.describe('feature-flags Sprint-4: per-flag matrix (catalogue flags)', () =>
     let ctx;
 
     test.beforeAll(async () => {
-      ctx = await profileContext('public-demo.example.com');
+      ctx = await profileContext('test.hackersbychoice.dk');
     });
 
     test.afterAll(async () => {
@@ -710,7 +710,7 @@ test.describe('feature-flags Sprint-4: per-flag matrix (catalogue flags)', () =>
     let ctx;
 
     test.beforeAll(async () => {
-      ctx = await profileContext('staging.example.com');
+      ctx = await profileContext('www.hackersbychoice.dk');
     });
 
     test.afterAll(async () => {
@@ -731,14 +731,14 @@ test.describe('feature-flags Sprint-4: per-flag matrix (catalogue flags)', () =>
 //
 // Mutates ONLY the worktree copy of the internal features.yaml, flips
 // `contact_page` from "true" to "false", clears Grav cache, asserts
-// /kontakt now 404s under staging.example.com, restores the YAML and
+// /kontakt now 404s under www.hackersbychoice.dk, restores the YAML and
 // clears cache again, asserts /kontakt is reachable. Restore runs in
 // afterAll so a mid-test failure cannot leave the profile dirty.
 // -----------------------------------------------------------------------------
 
 const INTERNAL_YAML = path.join(
   WORKTREE,
-  'config', 'www', 'user', 'env', 'staging.example.com', 'config', 'features.yaml'
+  'config', 'www', 'user', 'env', 'www.hackersbychoice.dk', 'config', 'features.yaml'
 );
 
 test.describe('feature-flags Sprint-4: single-flag cache-flip restoration', () => {
@@ -760,7 +760,7 @@ test.describe('feature-flags Sprint-4: single-flag cache-flip restoration', () =
   test('flip contact_page "true"->"false" and back, cache clear between, under internal', async () => {
     // Sanity — the test target surface starts ENABLED.
     clearGravCache();
-    let ctxInternal = await profileContext('staging.example.com');
+    let ctxInternal = await profileContext('www.hackersbychoice.dk');
     try {
       const before = await ctxInternal.get('/kontakt', { maxRedirects: 0 });
       expect(
@@ -786,7 +786,7 @@ test.describe('feature-flags Sprint-4: single-flag cache-flip restoration', () =
       timeout: 30_000,
     });
 
-    ctxInternal = await profileContext('staging.example.com');
+    ctxInternal = await profileContext('www.hackersbychoice.dk');
     try {
       const flippedResp = await ctxInternal.get('/kontakt', { maxRedirects: 0 });
       expect(
@@ -805,7 +805,7 @@ test.describe('feature-flags Sprint-4: single-flag cache-flip restoration', () =
       timeout: 30_000,
     });
 
-    ctxInternal = await profileContext('staging.example.com');
+    ctxInternal = await profileContext('www.hackersbychoice.dk');
     try {
       const after = await ctxInternal.get('/kontakt', { maxRedirects: 0 });
       expect(
@@ -847,7 +847,7 @@ test.describe('feature-flags Sprint-4: canonical-link / home-page route audit', 
 
   test.beforeAll(async () => {
     clearGravCache();
-    ctx = await profileContext('public-demo.example.com');
+    ctx = await profileContext('test.hackersbychoice.dk');
   });
 
   test.afterAll(async () => {

@@ -376,7 +376,7 @@ final class FlagStoreTest extends TestCase
     public function testUnknownKeyWarningContextShape(): void
     {
         $logger = new ArrayLogger();
-        new FlagStore(['mystery_flag' => 'true'], $logger, 'staging.example.com');
+        new FlagStore(['mystery_flag' => 'true'], $logger, 'www.hackersbychoice.dk');
 
         $warnings = $logger->warnings();
         $this->assertCount(1, $warnings);
@@ -391,7 +391,7 @@ final class FlagStoreTest extends TestCase
         );
         $this->assertSame('mystery_flag', $ctx['flag']);
         $this->assertSame('true', $ctx['raw_value']);
-        $this->assertSame('staging.example.com', $ctx['environment']);
+        $this->assertSame('www.hackersbychoice.dk', $ctx['environment']);
     }
 
     public function testNonArrayTopLevelWarningContextShape(): void

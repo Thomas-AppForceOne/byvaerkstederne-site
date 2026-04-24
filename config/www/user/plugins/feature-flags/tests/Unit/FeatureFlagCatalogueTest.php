@@ -6,8 +6,8 @@
  *
  *   1. Every flag named in the rollout catalogue is a declared FeatureFlag
  *      enum case.
- *   2. The `staging.example.com` profile's features.yaml resolves to N/N
- *      catalogue flags enabled; the `public-demo.example.com` profile's
+ *   2. The `www.hackersbychoice.dk` profile's features.yaml resolves to N/N
+ *      catalogue flags enabled; the `test.hackersbychoice.dk` profile's
  *      features.yaml resolves to 0/N catalogue flags enabled (where N is
  *      count(self::CATALOGUE) — the count is no longer a stable 17 after
  *      post-Sprint-1 additions like privacy_policy and placeholder-CTA
@@ -115,11 +115,11 @@ final class FeatureFlagCatalogueTest extends TestCase
 
     public function testStagingProfileEnablesAllCatalogueFlags(): void
     {
-        $enabled = self::loadProfileYaml('staging.example.com');
-        $this->assertIsArray($enabled, 'staging.example.com features.yaml must parse to an array.');
+        $enabled = self::loadProfileYaml('www.hackersbychoice.dk');
+        $this->assertIsArray($enabled, 'www.hackersbychoice.dk features.yaml must parse to an array.');
 
         $logger = new ArrayLogger();
-        $store = new FlagStore($enabled, $logger, 'staging.example.com');
+        $store = new FlagStore($enabled, $logger, 'www.hackersbychoice.dk');
 
         $enabledCount = 0;
         $total = count(self::CATALOGUE);
@@ -144,16 +144,16 @@ final class FeatureFlagCatalogueTest extends TestCase
 
     public function testPublicDemoProfileDisablesAllCatalogueFlags(): void
     {
-        $enabled = self::loadProfileYaml('public-demo.example.com');
+        $enabled = self::loadProfileYaml('test.hackersbychoice.dk');
         // `enabled: {}` parses to an empty array, which FlagStore treats
         // identically to "no overrides" (no warnings).
         $this->assertTrue(
             $enabled === null || $enabled === [],
-            'public-demo.example.com features.yaml must declare an empty enabled map.'
+            'test.hackersbychoice.dk features.yaml must declare an empty enabled map.'
         );
 
         $logger = new ArrayLogger();
-        $store = new FlagStore($enabled, $logger, 'public-demo.example.com');
+        $store = new FlagStore($enabled, $logger, 'test.hackersbychoice.dk');
 
         foreach (self::CATALOGUE as $flagValue) {
             $case = FeatureFlag::from($flagValue);
@@ -176,12 +176,12 @@ final class FeatureFlagCatalogueTest extends TestCase
 
     public function testPublicDemoYamlPayloadIsFlagMetadataOnly(): void
     {
-        $this->assertFlagPayloadIsMetadataOnly('public-demo.example.com');
+        $this->assertFlagPayloadIsMetadataOnly('test.hackersbychoice.dk');
     }
 
     public function testStagingYamlPayloadIsFlagMetadataOnly(): void
     {
-        $this->assertFlagPayloadIsMetadataOnly('staging.example.com');
+        $this->assertFlagPayloadIsMetadataOnly('www.hackersbychoice.dk');
     }
 
     /**
@@ -262,7 +262,7 @@ final class FeatureFlagCatalogueTest extends TestCase
     ): void {
         $case = FeatureFlag::from($flagValue);
         $logger = new ArrayLogger();
-        $store = new FlagStore([$flagValue => $invalid], $logger, 'staging.example.com');
+        $store = new FlagStore([$flagValue => $invalid], $logger, 'www.hackersbychoice.dk');
 
         $this->assertFalse(
             $store->isEnabled($case),

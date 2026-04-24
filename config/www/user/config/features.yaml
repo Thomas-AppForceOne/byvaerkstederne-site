@@ -7,8 +7,8 @@
 # walkthroughs keep working.
 #
 # Host-scoped profiles narrow this down:
-#   - user/env/public-demo.example.com/config/features.yaml  → all off
-#   - user/env/staging.example.com/config/features.yaml       → all on (explicit)
+#   - user/env/test.hackersbychoice.dk/config/features.yaml  → all off
+#   - user/env/www.hackersbychoice.dk/config/features.yaml       → all on (explicit)
 #
 # Values MUST be the literal quoted strings `"true"` or `"false"`. Any
 # other shape (bare YAML boolean, `TRUE`, integer, null) resolves to

@@ -34,7 +34,7 @@ Source: Grav config at `features.enabled` (after environment overrides).
 # user/config/features.yaml (base — empty)
 enabled: {}
 
-# user/env/staging.example.com/config/features.yaml
+# user/env/www.hackersbychoice.dk/config/features.yaml
 enabled:
   checkout_v2: "true"
   pricing_experiment: "true"

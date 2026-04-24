@@ -14,8 +14,8 @@
  *   instead. APIRequestContext is Node-level; it passes Host through to
  *   the server verbatim, which is exactly what the Grav env-switch needs.
  *
- *   Host 'staging.example.com'       -> PROFILE=internal   (all 17 flags "true")
- *   Host 'public-demo.example.com'   -> PROFILE=public_demo (0 flags enabled)
+ *   Host 'www.hackersbychoice.dk'       -> PROFILE=internal   (all 17 flags "true")
+ *   Host 'test.hackersbychoice.dk'   -> PROFILE=public_demo (0 flags enabled)
  *
  *   Other specs continue to hit 127.0.0.1 directly and resolve to whatever
  *   default profile the Grav container ships — unchanged by this spec.
@@ -155,7 +155,7 @@ test.describe('feature-flags: public-demo profile 404s flagged pages', () => {
   test.beforeAll(async () => {
     seedAdminIfPossible();
     clearGravCache();
-    ctx = await profileContext('public-demo.example.com');
+    ctx = await profileContext('test.hackersbychoice.dk');
   });
 
   test.afterAll(async () => {
@@ -219,7 +219,7 @@ test.describe('feature-flags: internal profile renders flagged pages', () => {
   test.beforeAll(async () => {
     seedAdminIfPossible();
     clearGravCache();
-    ctx = await profileContext('staging.example.com');
+    ctx = await profileContext('www.hackersbychoice.dk');
   });
 
   test.afterAll(async () => {

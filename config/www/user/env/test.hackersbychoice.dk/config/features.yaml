@@ -1,17 +1,17 @@
-# Public-demo environment profile.
+# Test-tier environment profile.
 #
 # This profile is active when the site is served under the host
-# `public-demo.example.com` (see adjacent README.md for how ops maps the
-# real public-demo hostname to this directory).
+# `test.hackersbychoice.dk` (see adjacent README.md for the four-tier
+# topology).
 #
 # The `enabled` map is intentionally empty. Every catalogue flag therefore
 # resolves to `false` per the FlagStore "missing key" rule, which is the
-# defined secure default for the public-demo profile: no roadmap, no bug
-# report surface, no feature suggestion surface, no community footer
-# column, no membership / newsletter / event / press / minutes / workshop
-# calendar / workshop detail / contact / statutes pages.
+# defined secure default for the test tier: no roadmap, no bug report
+# surface, no feature suggestion surface, no community footer column, no
+# membership / newsletter / event / press / minutes / workshop calendar /
+# workshop detail / contact / statutes pages.
 #
-# DO NOT add flags here — adding a key flips a surface ON for public-demo.
+# DO NOT add flags here — adding a key flips a surface ON for the test tier.
 # If you need a single flag enabled for a one-off preview, make that
 # decision explicit in a code review, not a silent YAML edit.
 #

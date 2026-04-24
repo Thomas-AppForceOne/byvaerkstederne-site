@@ -15,8 +15,8 @@
  * Profile-switching follows the Sprint-2 pattern (scoped to THIS spec —
  * no edits to playwright.config.js):
  *
- *   Host 'staging.example.com'       -> PROFILE=internal   (all 17 flags "true")
- *   Host 'public-demo.example.com'   -> PROFILE=public_demo (0 flags enabled)
+ *   Host 'www.hackersbychoice.dk'       -> PROFILE=internal   (all 17 flags "true")
+ *   Host 'test.hackersbychoice.dk'   -> PROFILE=public_demo (0 flags enabled)
  *
  * Chromium forbids setting Host via page.goto() / setExtraHTTPHeaders, so
  * we use APIRequestContext (Node-level) throughout. The same context is
@@ -183,7 +183,7 @@ test.describe('Sprint-3: Twig gates hide flagged affordances under public-demo',
   test.beforeAll(async () => {
     seedAdminIfPossible();
     clearGravCache();
-    ctx = await profileContext('public-demo.example.com');
+    ctx = await profileContext('test.hackersbychoice.dk');
   });
 
   test.afterAll(async () => {
@@ -314,7 +314,7 @@ test.describe('Sprint-3: Twig gates render flagged affordances under internal (a
   test.beforeAll(async () => {
     seedAdminIfPossible();
     clearGravCache();
-    ctx = await profileContext('staging.example.com');
+    ctx = await profileContext('www.hackersbychoice.dk');
   });
 
   test.afterAll(async () => {
@@ -365,7 +365,7 @@ test.describe('Sprint-3: Twig gates render flagged affordances under internal (a
     // This is the "count strictly greater" escape hatch from the
     // contract's html_presence_under_internal_profile criterion — a
     // direct A/B delta check that does not depend on authentication.
-    const pd = await profileContext('public-demo.example.com');
+    const pd = await profileContext('test.hackersbychoice.dk');
     try {
       const [internalResp, pdResp] = await Promise.all([
         ctx.get('/'),
@@ -409,7 +409,7 @@ test.describe('Sprint-3: Twig gates render flagged affordances under internal (a
  * Low-level HTTP fetch that lets us force the Host header AND round-trip
  * cookies across requests. Playwright's APIRequestContext cookie jar
  * matches cookies by the request URL's host — but Grav sets the cookie
- * with `domain=staging.example.com` while we connect to 127.0.0.1, so
+ * with `domain=www.hackersbychoice.dk` while we connect to 127.0.0.1, so
  * the jar never re-sends it. Rolling our own thin fetcher avoids the
  * mismatch.
  *
@@ -605,8 +605,8 @@ test.describe('Sprint-3: overlays + Fællesskab column — authenticated', () =>
     seedAdminIfPossible();
     ensureLocalAccountSafe('pw-test-user', password, { admin: false });
     clearGravCache();
-    internalAuthed = await authedRawContext('staging.example.com', 'pw-test-user', password);
-    pdAuthed = await authedRawContext('public-demo.example.com', 'pw-test-user', password);
+    internalAuthed = await authedRawContext('www.hackersbychoice.dk', 'pw-test-user', password);
+    pdAuthed = await authedRawContext('test.hackersbychoice.dk', 'pw-test-user', password);
   });
 
   test.afterAll(async () => {
