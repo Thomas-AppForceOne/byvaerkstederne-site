@@ -1,0 +1,54 @@
+# Production environment profile.
+#
+# Active when the site is served under the host `www.byvaerkstederne.dk`
+# (the production tier in the four-tier topology — see repo README and
+# the adjacent www.hackersbychoice.dk / test.hackersbychoice.dk /
+# dev.hackersbychoice.dk profiles).
+#
+# ─── Governance rule ──────────────────────────────────────────────────
+# Every flag is listed explicitly so that enabling a feature in
+# production is a single-line, review-gated edit from `"false"` to
+# `"true"`. Do NOT shorten this to `enabled: {}` or omit flags — the
+# explicit false-list IS the audit surface for what prod allows.
+#
+# Before flipping a flag to `"true"` here, confirm:
+#   1. The feature has been exercised end-to-end on staging
+#      (www.hackersbychoice.dk) with production-shaped data.
+#   2. Super users have signed off after testing on test.hackersbychoice.dk.
+#   3. There is no open incident, migration, or rollback attached to
+#      this feature.
+#
+# After editing, run `bin/grav clearcache` on the production host.
+#
+# Values are the strict strings `"true"` or `"false"`. Any other value
+# (bare YAML booleans, `TRUE`, `1`, `yes`, nulls, nested maps) is treated
+# by FlagStore as invalid, logs a warning, and fails closed. Secrets,
+# credentials, API keys, or host identifiers must never appear here.
+enabled:
+  roadmap: "false"
+  feature_suggestion: "false"
+  bug_report: "false"
+  community_footer_column: "false"
+  membership_signup: "false"
+  newsletter_signup: "false"
+  event_highlight: "false"
+  press_page: "false"
+  minutes_archive: "false"
+  workshop_calendar: "false"
+  workshop_calendar_filters: "false"
+  workshop_calendar_featured: "false"
+  workshop_detail_pages: "true"
+  press_assets_download: "false"
+  press_stats: "false"
+  contact_page: "false"
+  statutes_page: "false"
+  privacy_policy: "false"
+  event_rsvp: "false"
+  workshop_project_blueprints: "false"
+  workshop_workday_signup: "false"
+  kulturhus_program: "false"
+  kulturhus_volunteer: "false"
+  donation_mobilepay: "false"
+  gear_donation: "false"
+  social_media_links: "false"
+  makerspace_meeting_link: "false"
