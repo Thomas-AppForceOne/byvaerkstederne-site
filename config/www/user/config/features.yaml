@@ -40,3 +40,5 @@ enabled:
   kulturhus_volunteer: "true"
   donation_mobilepay: "true"
   gear_donation: "true"
+  social_media_links: "true"
+  makerspace_meeting_link: "true"

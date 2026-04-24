@@ -646,6 +646,39 @@ const FLAG_PROBES = [
       expect(/Don.+r Grej/i.test(await r.text())).toBe(true);
     },
   },
+  {
+    flag: 'social_media_links',
+    desc: 'Footer social icons (Facebook/Instagram placeholders) absent on public-demo; present on internal',
+    async publicDemo(ctx) {
+      const r = await ctx.get('/', { maxRedirects: 0 });
+      expect(r.status()).toBe(200);
+      const body = await r.text();
+      expect(/bv-footer__social/.test(body)).toBe(false);
+      expect(/aria-label="Facebook"/.test(body)).toBe(false);
+      expect(/aria-label="Instagram"/.test(body)).toBe(false);
+    },
+    async internal(ctx) {
+      const r = await ctx.get('/', { maxRedirects: 0 });
+      expect(r.status()).toBe(200);
+      const body = await r.text();
+      expect(/bv-footer__social/.test(body)).toBe(true);
+      expect(/aria-label="Facebook"/.test(body)).toBe(true);
+      expect(/aria-label="Instagram"/.test(body)).toBe(true);
+    },
+  },
+  {
+    flag: 'makerspace_meeting_link',
+    desc: '"Næste møde" CTA card placeholder gated (parent detail page 404 under public-demo)',
+    async publicDemo(ctx) {
+      const r = await ctx.get('/vaerksteder/makerspace', { maxRedirects: 0 });
+      expect(r.status()).toBe(404);
+    },
+    async internal(ctx) {
+      const r = await ctx.get('/vaerksteder/makerspace', { maxRedirects: 0 });
+      expect(r.status()).toBe(200);
+      expect(/N.+ste m.+de/i.test(await r.text())).toBe(true);
+    },
+  },
 ];
 
 test.describe('feature-flags Sprint-4: per-flag matrix (catalogue flags)', () => {

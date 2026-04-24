@@ -62,6 +62,8 @@ final class FeatureFlagCatalogueTest extends TestCase
         'kulturhus_volunteer',
         'donation_mobilepay',
         'gear_donation',
+        'social_media_links',
+        'makerspace_meeting_link',
     ];
 
     /** Absolute path to `config/www/user/env/`. */

@@ -47,6 +47,8 @@ enum FeatureFlag: string
     case KulturhusVolunteer = 'kulturhus_volunteer';
     case DonationMobilepay = 'donation_mobilepay';
     case GearDonation = 'gear_donation';
+    case SocialMediaLinks = 'social_media_links';
+    case MakerspaceMeetingLink = 'makerspace_meeting_link';
 
     /**
      * All rollout-catalogue flag string values, in declaration order. Used by
@@ -86,6 +88,8 @@ enum FeatureFlag: string
             'kulturhus_volunteer',
             'donation_mobilepay',
             'gear_donation',
+            'social_media_links',
+            'makerspace_meeting_link',
         ];
     }
 }

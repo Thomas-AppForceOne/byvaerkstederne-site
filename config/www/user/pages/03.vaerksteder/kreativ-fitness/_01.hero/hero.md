@@ -11,4 +11,5 @@ buttons:
     - text: Se Blueprint
       url: "#status"
       style: tertiary
+      feature: workshop_project_blueprints
 ---

@@ -77,10 +77,12 @@
     <div class="bv-footer__bottom">
         <div class="bv-footer__bottom-inner">
             <span class="bv-footer__copyright">&copy; 2026 BYV&AElig;RKSTEDERNE I HUNDESTED.</span>
+            {% if feature_enabled('social_media_links') %}
             <div class="bv-footer__social">
                 <a href="#" aria-label="Facebook"><span class="material-symbols-outlined">groups</span></a>
                 <a href="#" aria-label="Instagram"><span class="material-symbols-outlined">photo_camera</span></a>
             </div>
+            {% endif %}
             <span class="bv-footer__location-tag">HUNDESTED</span>
         </div>
     </div>
