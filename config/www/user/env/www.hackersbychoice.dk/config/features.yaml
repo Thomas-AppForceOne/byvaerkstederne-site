@@ -2,39 +2,51 @@
 #
 # Active when the site is served under the host `www.hackersbychoice.dk`
 # (the staging tier in the four-tier topology — see repo README and the
-# adjacent test.hackersbychoice.dk profile). Every rollout-catalogue flag
-# is enabled so that internal reviewers can exercise every feature
-# surface that the test tier hides by default.
+# adjacent test.hackersbychoice.dk / dev.hackersbychoice.dk profiles).
+#
+# ─── Governance rule ──────────────────────────────────────────────────
+# Staging mirrors production so reviewers see what production users see.
+# Every flag is listed explicitly; flip a flag to `"true"` here only when
+# the corresponding production flag is being prepared for rollout, so the
+# staging surface acts as the rehearsal for the production change.
+#
+# When prod (`www.byvaerkstederne.dk`) flips a flag, this file should
+# flip the same flag at the same time (or earlier, never later). When
+# the two diverge unintentionally, staging stops being a faithful prod
+# rehearsal and bugs slip through.
+#
+# After editing, run `bin/grav clearcache` on the staging host and
+# purge the one.com Varnish cache.
 #
 # Values are the strict strings `"true"` or `"false"`. Any other value
 # (bare YAML booleans, `TRUE`, `1`, `yes`, nulls, nested maps) is treated
 # by FlagStore as invalid, logs a warning, and fails closed. Secrets,
 # credentials, API keys, or host identifiers must never appear here.
 enabled:
-  roadmap: "true"
-  feature_suggestion: "true"
-  bug_report: "true"
-  community_footer_column: "true"
-  membership_signup: "true"
-  newsletter_signup: "true"
-  event_highlight: "true"
-  press_page: "true"
-  minutes_archive: "true"
-  workshop_calendar: "true"
-  workshop_calendar_filters: "true"
-  workshop_calendar_featured: "true"
+  roadmap: "false"
+  feature_suggestion: "false"
+  bug_report: "false"
+  community_footer_column: "false"
+  membership_signup: "false"
+  newsletter_signup: "false"
+  event_highlight: "false"
+  press_page: "false"
+  minutes_archive: "false"
+  workshop_calendar: "false"
+  workshop_calendar_filters: "false"
+  workshop_calendar_featured: "false"
   workshop_detail_pages: "true"
-  press_assets_download: "true"
-  press_stats: "true"
-  contact_page: "true"
-  statutes_page: "true"
-  privacy_policy: "true"
-  event_rsvp: "true"
-  workshop_project_blueprints: "true"
-  workshop_workday_signup: "true"
-  kulturhus_program: "true"
-  kulturhus_volunteer: "true"
-  donation_mobilepay: "true"
-  gear_donation: "true"
-  social_media_links: "true"
-  makerspace_meeting_link: "true"
+  press_assets_download: "false"
+  press_stats: "false"
+  contact_page: "false"
+  statutes_page: "false"
+  privacy_policy: "false"
+  event_rsvp: "false"
+  workshop_project_blueprints: "false"
+  workshop_workday_signup: "false"
+  kulturhus_program: "false"
+  kulturhus_volunteer: "false"
+  donation_mobilepay: "false"
+  gear_donation: "false"
+  social_media_links: "false"
+  makerspace_meeting_link: "false"
