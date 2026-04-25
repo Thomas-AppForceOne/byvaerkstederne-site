@@ -138,9 +138,13 @@ SetEnvIf X-Forwarded-Proto https HTTPS=on
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Redirect www → apex.
-    RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
-    RewriteRule ^(.*)$ https://%1/$1 [R=301,L]
+    # Canonicalise apex → www for the production-class hosts (staging
+    # and prod). The env profiles are named www.hackersbychoice.dk/ and
+    # www.byvaerkstederne.dk/, so Grav only activates the right tier
+    # config when HTTP_HOST is the www form. The regex deliberately
+    # skips test./dev. subdomains — those are their own canonical hosts.
+    RewriteCond %{HTTP_HOST} ^(hackersbychoice|byvaerkstederne)\.dk$ [NC]
+    RewriteRule ^(.*)$ https://www.%{HTTP_HOST}/$1 [R=301,L]
 
     # Force HTTPS — but only when the original request was actually HTTP.
     # Both conditions must pass: Varnish header AND local HTTPS var.
