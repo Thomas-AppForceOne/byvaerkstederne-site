@@ -15,32 +15,37 @@ GRAV_VERSION="1.7.49.5"
 GRAV_ZIP="$PROJECT_DIR/deploy/grav-admin-v${GRAV_VERSION}.zip"
 GRAV_URL="https://getgrav.org/download/core/grav-admin/${GRAV_VERSION}"
 
-# Environment selection
-ENV="${1:-prod}"
+# Environment selection — see decisions/ and the four-tier topology in the
+# project memory for canonical hostnames per tier:
+#   prod    → www.byvaerkstederne.dk  (separate hosting; not yet provisioned)
+#   staging → www.hackersbychoice.dk  (apex of hackersbychoice.dk on one.com)
+#   test    → test.hackersbychoice.dk (folder /test under apex; one.com maps subdomain → folder)
+#   dev     → dev.hackersbychoice.dk  (folder /dev under apex; same mechanism)
+ENV="${1:-staging}"
 case "$ENV" in
     prod|production)
         ENV_LABEL="Production"
         ENV_SUBFOLDER=""
-        ENV_URL="https://hackersbychoice.dk"
+        ENV_URL="https://www.byvaerkstederne.dk"
+        ;;
+    staging)
+        ENV_LABEL="Staging"
+        ENV_SUBFOLDER=""
+        ENV_URL="https://www.hackersbychoice.dk"
         ;;
     test)
         ENV_LABEL="Test"
         ENV_SUBFOLDER="/test"
-        ENV_URL="https://hackersbychoice.dk/test"
+        ENV_URL="https://test.hackersbychoice.dk"
         ;;
     dev)
         ENV_LABEL="Development"
         ENV_SUBFOLDER="/dev"
-        ENV_URL="https://hackersbychoice.dk/dev"
-        ;;
-    staging)
-        ENV_LABEL="Staging"
-        ENV_SUBFOLDER="/staging"
-        ENV_URL="https://hackersbychoice.dk/staging"
+        ENV_URL="https://dev.hackersbychoice.dk"
         ;;
     *)
         echo "❌  Unknown environment: $ENV"
-        echo "    Usage: $0 [prod|test|dev|staging]"
+        echo "    Usage: $0 [prod|staging|test|dev]"
         exit 1
         ;;
 esac
@@ -52,6 +57,22 @@ if [ ! -f "$ENV_FILE" ]; then
     exit 1
 fi
 source "$ENV_FILE"
+
+# Production lives on a separate hosting account from
+# hackersbychoice.dk (which serves staging/test/dev). Gate prod deploys
+# behind its own credential set so a stray `./deploy.sh prod` can't
+# overwrite staging when prod's hosting hasn't been wired up yet.
+if [ "$ENV" = "prod" ] || [ "$ENV" = "production" ]; then
+    : "${DEPLOY_PROD_HOST:?prod deploy requires DEPLOY_PROD_HOST in .env.deploy — production is on a separate hosting account from staging/test/dev. Populate DEPLOY_PROD_HOST/USER/PASS/PORT/PATH there.}"
+    : "${DEPLOY_PROD_USER:?prod deploy requires DEPLOY_PROD_USER in .env.deploy}"
+    : "${DEPLOY_PROD_PASS:?prod deploy requires DEPLOY_PROD_PASS in .env.deploy}"
+    : "${DEPLOY_PROD_PATH:?prod deploy requires DEPLOY_PROD_PATH in .env.deploy}"
+    DEPLOY_HOST="$DEPLOY_PROD_HOST"
+    DEPLOY_USER="$DEPLOY_PROD_USER"
+    DEPLOY_PASS="$DEPLOY_PROD_PASS"
+    DEPLOY_PORT="${DEPLOY_PROD_PORT:-${DEPLOY_PORT}}"
+    DEPLOY_PATH="$DEPLOY_PROD_PATH"
+fi
 
 DEPLOY_TARGET="${DEPLOY_PATH}${ENV_SUBFOLDER}"
 
@@ -90,16 +111,14 @@ rsync -a --exclude='.DS_Store' \
     "$PROJECT_DIR/config/www/user/" \
     "$STAGING_DIR/user/"
 
-# Set base URL for subfolder deployments
-if [ -n "$ENV_SUBFOLDER" ]; then
-    # Update system.yaml to set custom_base_url for subfolder
-    if grep -q "custom_base_url" "$STAGING_DIR/user/config/system.yaml" 2>/dev/null; then
-        sed -i '' "s|custom_base_url:.*|custom_base_url: '${ENV_URL}'|" "$STAGING_DIR/user/config/system.yaml"
-    else
-        echo "" >> "$STAGING_DIR/user/config/system.yaml"
-        echo "custom_base_url: '${ENV_URL}'" >> "$STAGING_DIR/user/config/system.yaml"
-    fi
-fi
+# NOTE: no custom_base_url injection. Earlier versions of this script set
+# custom_base_url for subfolder deploys (e.g. /test → hackersbychoice.dk/test)
+# because tiers were path-based on the apex. Under the four-tier topology
+# the test/ and dev/ filesystem subfolders are docroot-mapped by one.com
+# to test.hackersbychoice.dk / dev.hackersbychoice.dk. Grav running inside
+# those folders sees `/` as its base — injecting a custom_base_url here
+# would break asset paths and routing when accessed via the canonical
+# subdomain URL.
 
 # Create .htaccess
 cat > "$STAGING_DIR/.htaccess" << 'HTACCESS'
