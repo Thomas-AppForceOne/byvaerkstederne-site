@@ -103,12 +103,30 @@ fi
 
 # Create .htaccess
 cat > "$STAGING_DIR/.htaccess" << 'HTACCESS'
-# Grav CMS .htaccess
+# Grav CMS .htaccess for one.com shared hosting (Varnish → Apache).
+#
+# one.com terminates TLS at Varnish and forwards to Apache as plain HTTP,
+# so %{HTTPS} is always 'off'. A naive `RewriteCond %{HTTPS} !=on` redirect
+# loops forever (debugged on test.hackersbychoice.dk 2026-04-25). Two fixes:
+#   1. Gate the force-HTTPS rule on X-Forwarded-Proto so it doesn't fire
+#      when the original request was already HTTPS.
+#   2. Synthesise HTTPS=on for any PHP code (Grav core, plugins) that
+#      reads $_SERVER['HTTPS'] to decide URL schemes.
+
+# Make Apache + PHP see the real scheme behind Varnish.
+SetEnvIf X-Forwarded-Proto https HTTPS=on
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Force HTTPS
+    # Redirect www → apex.
+    RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+    RewriteRule ^(.*)$ https://%1/$1 [R=301,L]
+
+    # Force HTTPS — but only when the original request was actually HTTP.
+    # Both conditions must pass: Varnish header AND local HTTPS var.
+    # This prevents the redirect loop on one.com where %{HTTPS} is always off.
+    RewriteCond %{HTTP:X-Forwarded-Proto} !=https
     RewriteCond %{HTTPS} !=on
     RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
 
