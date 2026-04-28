@@ -155,7 +155,7 @@ $apex = readTierVersion('apex');
                 </div>
 
                 <div class="hbc-actions">
-                    <a class="hbc-btn hbc-btn-primary" href="<?= htmlspecialchars($tier['url']) ?>"><?= htmlspecialchars($tier['cta']) ?> →</a>
+                    <a class="hbc-btn hbc-btn-primary" href="<?= htmlspecialchars($tier['url']) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($tier['cta']) ?> →</a>
                     <?php foreach ($tier['extras'] as $extra): ?>
                     <a class="hbc-btn hbc-btn-outlined" href="<?= htmlspecialchars($extra['url']) ?>"><?= htmlspecialchars($extra['label']) ?></a>
                     <?php endforeach; ?>
