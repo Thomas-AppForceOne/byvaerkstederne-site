@@ -210,9 +210,18 @@ sshpass -p "$DEPLOY_PASS" rsync -avz --delete \
     --exclude='backup/*' \
     --exclude='tmp/*' \
     --exclude='.DS_Store' \
+    --exclude='/dev/' \
+    --exclude='/test/' \
+    --exclude='/staging/' \
     -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
     "$STAGING_DIR/" \
     "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_TARGET}/"
+# /dev /test /staging excludes protect sibling-folder subdomain deploys
+# from being deleted by an apex-target rsync --delete. The leading / pins
+# them to the rsync root (so we don't accidentally exclude e.g. user/test
+# or any nested cache/dev path). On a dev or test deploy the target is
+# already inside the matching folder, so the excludes don't apply
+# (rsync evaluates them relative to the source root).
 
 echo "  ✓ Upload complete"
 
