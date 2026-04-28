@@ -51,7 +51,7 @@ Values are **quoted strings** — only the literal `"true"` or `"false"` are
 accepted:
 
 ```yaml
-# user/env/www.hackersbychoice.dk/config/features.yaml
+# user/env/staging.hackersbychoice.dk/config/features.yaml
 enabled:
   checkout_v2: "true"
   pricing_experiment: "true"
@@ -59,7 +59,7 @@ enabled:
 ```
 
 A committed example is at
-[`user/env/www.hackersbychoice.dk/config/features.yaml.example`](../../../env/www.hackersbychoice.dk/config/features.yaml.example).
+[`user/env/staging.hackersbychoice.dk/config/features.yaml.example`](../../../env/staging.hackersbychoice.dk/config/features.yaml.example).
 The `.example` suffix keeps it inactive — Grav only loads `features.yaml`.
 To activate on a real host, copy it to the matching `user/env/<host>/config/features.yaml`
 and run `bin/grav clearcache`.

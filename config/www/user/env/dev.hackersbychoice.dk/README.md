@@ -10,7 +10,7 @@ This profile represents the **dev** tier in the four-tier topology:
 | Tier       | Host                            | Code                              | Data     |
 |------------|---------------------------------|-----------------------------------|----------|
 | production | `www.byvaerkstederne.dk`        | stable, released                  | real     |
-| staging    | `www.hackersbychoice.dk`        | production-ready                  | copy of prod |
+| staging    | `staging.hackersbychoice.dk`        | production-ready                  | copy of prod |
 | test       | `test.hackersbychoice.dk`       | code ready for super-user testing | dummy    |
 | dev        | `dev.hackersbychoice.dk` (or localhost in docker) | bleeding edge    | dummy    |
 

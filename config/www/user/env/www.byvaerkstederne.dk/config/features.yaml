@@ -2,7 +2,7 @@
 #
 # Active when the site is served under the host `www.byvaerkstederne.dk`
 # (the production tier in the four-tier topology — see repo README and
-# the adjacent www.hackersbychoice.dk / test.hackersbychoice.dk /
+# the adjacent staging.hackersbychoice.dk / test.hackersbychoice.dk /
 # dev.hackersbychoice.dk profiles).
 #
 # ─── Governance rule ──────────────────────────────────────────────────
@@ -13,7 +13,7 @@
 #
 # Before flipping a flag to `"true"` here, confirm:
 #   1. The feature has been exercised end-to-end on staging
-#      (www.hackersbychoice.dk) with production-shaped data.
+#      (staging.hackersbychoice.dk) with production-shaped data.
 #   2. Super users have signed off after testing on test.hackersbychoice.dk.
 #   3. There is no open incident, migration, or rollback attached to
 #      this feature.

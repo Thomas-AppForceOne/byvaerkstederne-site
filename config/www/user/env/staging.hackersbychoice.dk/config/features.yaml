@@ -1,6 +1,6 @@
 # Staging environment profile.
 #
-# Active when the site is served under the host `www.hackersbychoice.dk`
+# Active when the site is served under the host `staging.hackersbychoice.dk`
 # (the staging tier in the four-tier topology — see repo README and the
 # adjacent test.hackersbychoice.dk / dev.hackersbychoice.dk profiles).
 #

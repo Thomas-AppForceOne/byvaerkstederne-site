@@ -6,7 +6,7 @@
  *
  *   1. Every flag named in the rollout catalogue is a declared FeatureFlag
  *      enum case.
- *   2. The `www.hackersbychoice.dk` profile's features.yaml resolves to N/N
+ *   2. The `staging.hackersbychoice.dk` profile's features.yaml resolves to N/N
  *      catalogue flags enabled; the `test.hackersbychoice.dk` profile's
  *      features.yaml resolves to 0/N catalogue flags enabled (where N is
  *      count(self::CATALOGUE) — the count is no longer a stable 17 after
@@ -115,11 +115,11 @@ final class FeatureFlagCatalogueTest extends TestCase
 
     public function testStagingProfileEnablesAllCatalogueFlags(): void
     {
-        $enabled = self::loadProfileYaml('www.hackersbychoice.dk');
-        $this->assertIsArray($enabled, 'www.hackersbychoice.dk features.yaml must parse to an array.');
+        $enabled = self::loadProfileYaml('staging.hackersbychoice.dk');
+        $this->assertIsArray($enabled, 'staging.hackersbychoice.dk features.yaml must parse to an array.');
 
         $logger = new ArrayLogger();
-        $store = new FlagStore($enabled, $logger, 'www.hackersbychoice.dk');
+        $store = new FlagStore($enabled, $logger, 'staging.hackersbychoice.dk');
 
         $enabledCount = 0;
         $total = count(self::CATALOGUE);
@@ -181,7 +181,7 @@ final class FeatureFlagCatalogueTest extends TestCase
 
     public function testStagingYamlPayloadIsFlagMetadataOnly(): void
     {
-        $this->assertFlagPayloadIsMetadataOnly('www.hackersbychoice.dk');
+        $this->assertFlagPayloadIsMetadataOnly('staging.hackersbychoice.dk');
     }
 
     /**
@@ -262,7 +262,7 @@ final class FeatureFlagCatalogueTest extends TestCase
     ): void {
         $case = FeatureFlag::from($flagValue);
         $logger = new ArrayLogger();
-        $store = new FlagStore([$flagValue => $invalid], $logger, 'www.hackersbychoice.dk');
+        $store = new FlagStore([$flagValue => $invalid], $logger, 'staging.hackersbychoice.dk');
 
         $this->assertFalse(
             $store->isEnabled($case),

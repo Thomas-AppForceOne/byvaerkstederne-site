@@ -2,7 +2,7 @@
 #
 # Active when the site is served under the host `dev.hackersbychoice.dk`
 # (the bleeding-edge tier in the four-tier topology — see repo README
-# and the adjacent www.hackersbychoice.dk / test.hackersbychoice.dk
+# and the adjacent staging.hackersbychoice.dk / test.hackersbychoice.dk
 # profiles).
 #
 # Dev runs every flag "true" so in-progress features are exercisable on
