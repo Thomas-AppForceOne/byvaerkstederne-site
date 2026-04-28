@@ -1,0 +1,9 @@
+# Pin Grav's base URL for the staging tier.
+#
+# See dev.hackersbychoice.dk/config/system.yaml for the full diagnosis;
+# the same one.com docroot-mapping quirk applies to staging/ as it does
+# to dev/ and test/. Without this override Grav mis-detects the base as
+# `/staging` from SCRIPT_NAME, breaks Uri::route(), and 404's every
+# subpage on staging.hackersbychoice.dk.
+custom_base_url: 'https://staging.hackersbychoice.dk'
+absolute_urls: false
