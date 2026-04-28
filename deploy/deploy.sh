@@ -94,7 +94,13 @@ fi
 
 DEPLOY_TARGET="${DEPLOY_PATH}${ENV_SUBFOLDER}"
 
-# Capture deploy metadata (used for version.json on every tier)
+# Capture deploy metadata (used for version.json on every tier).
+#
+# `version` is the user-facing label, sourced from the repo's VERSION
+# file (SemVer). `branch` and `sha_short` stay in the manifest for ops
+# debugging — the public landing page reads only `version` + `deployed_at`.
+VERSION="$(cat "$PROJECT_DIR/VERSION" 2>/dev/null | tr -d '[:space:]')"
+VERSION="${VERSION:-unknown}"
 GIT_SHA="$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 GIT_BRANCH="$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%MZ)"
@@ -251,9 +257,10 @@ fi
 cat > "$STAGING_DIR/version.json" << JSON
 {
     "tier": "${ENV}",
+    "version": "${VERSION}",
+    "deployed_at": "${DEPLOYED_AT}",
     "branch": "${GIT_BRANCH}",
-    "sha_short": "${GIT_SHA}",
-    "deployed_at": "${DEPLOYED_AT}"
+    "sha_short": "${GIT_SHA}"
 }
 JSON
 

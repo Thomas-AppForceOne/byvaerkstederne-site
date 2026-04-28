@@ -75,7 +75,10 @@ code {
 /* ----- Layout ----- */
 
 .hbc-shell {
-    max-width: 64rem;
+    /* 80rem = 1.25× of the 64rem we started with. The hero text inside
+       has its own narrower max-widths (.hbc-lede, .hbc-warn) so reading
+       comfort is preserved; only the cards row gets visibly wider. */
+    max-width: 80rem;
     margin: 0 auto;
     padding: var(--space-12) var(--space-6);
 }
@@ -164,24 +167,33 @@ code {
     flex-grow: 1;
 }
 
-/* Version + host metadata */
-
-.hbc-meta {
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: var(--space-2) var(--space-3);
+/* Placeholder for per-version release notes — stays until we have a
+   real source for feature descriptions. Sits between tier intro and
+   the version block. */
+.hbc-card-prep {
     font-size: 0.85rem;
-    padding: var(--space-3);
-    background: var(--surface-container);
-    border-radius: 4px;
-    margin-top: auto;
+    color: var(--on-surface-variant);
+    font-style: italic;
 }
 
-.hbc-meta dt { font-weight: 600; color: var(--on-surface-variant); }
+/* Version + deployment date. Compact, surface-tinted, sits at the
+   bottom of the card so all three line up regardless of description
+   length. */
+.hbc-version {
+    margin-top: auto;
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface-container);
+    border-radius: 4px;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
 
-.hbc-meta dd { color: var(--on-background); word-break: break-all; }
+.hbc-version strong { color: var(--on-background); }
 
-.hbc-branch { color: var(--on-surface-variant); font-family: ui-monospace, monospace; font-size: 0.85em; }
+.hbc-deployed {
+    color: var(--on-surface-variant);
+    font-size: 0.8125rem;
+}
 
 /* Buttons */
 

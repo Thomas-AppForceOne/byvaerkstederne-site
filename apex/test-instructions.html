@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="da">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow, noarchive">
-    <title>Test instructions — hackersbychoice.dk</title>
+    <title>Sådan tester du — hackersbychoice.dk</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=Work+Sans:wght@300..700&display=swap" rel="stylesheet">
@@ -21,56 +21,56 @@
 </head>
 <body>
     <main class="hbc-shell hbc-doc">
-        <a class="hbc-back" href="/">← back to environment selector</a>
+        <a class="hbc-back" href="/">← tilbage til oversigten</a>
 
         <header class="hbc-hero">
-            <h1 class="hbc-title">Test instructions</h1>
+            <h1 class="hbc-title">Sådan tester du</h1>
             <p class="hbc-lede">
-                Walkthrough for super users testing
+                Vejledning til super brugere der afprøver
                 <a href="https://test.hackersbychoice.dk">test.hackersbychoice.dk</a>.
-                This is a draft — please add anything you trip over.
+                Det er et udkast — sig endelig til hvis noget mangler.
             </p>
         </header>
 
-        <h2>What you are testing</h2>
+        <h2>Hvad du tester</h2>
         <p>
-            The test tier mirrors what real visitors will eventually see, but with dummy data.
-            Code here has cleared dev review; your job is to look for bugs, broken flows, awkward copy,
-            and anything that would embarrass us in front of a real visitor.
+            Testversionen ligner det, rigtige besøgende kommer til at se, men med fiktive data.
+            Koden er allerede gennemgået én gang; din opgave er at finde fejl, brudte forløb,
+            akavet sprog og alt andet der vil virke pinligt foran en rigtig besøgende.
         </p>
 
-        <h2>Where to start</h2>
+        <h2>Hvor du starter</h2>
         <ol>
-            <li>Open <a href="https://test.hackersbychoice.dk">test.hackersbychoice.dk</a> in a clean browser tab (or incognito).</li>
-            <li>Browse the site like a curious newcomer would: front page first, then click around. No specific path required.</li>
-            <li>Try any forms you find (membership signup, feature suggestions, contact, etc.). Use obviously fake data — emails like <code>test+yourname@example.com</code> are ideal.</li>
-            <li>Try the site on your phone too. Layout changes on small screens are an easy place to find bugs.</li>
+            <li>Åbn <a href="https://test.hackersbychoice.dk">test.hackersbychoice.dk</a> i en frisk fane (gerne i et privat vindue).</li>
+            <li>Brug siden som en nysgerrig førstegangsbesøgende ville: forsiden først, og så klik dig rundt. Du behøver ikke følge en bestemt rækkefølge.</li>
+            <li>Prøv de formularer du støder på (medlemstilmelding, forslag til funktioner, kontakt osv.). Brug åbenlyst falske oplysninger — for eksempel mailadresser som <code>test+ditnavn@example.com</code>.</li>
+            <li>Prøv også siden på din mobil. Layoutet ændrer sig på små skærme, og det er ofte der man finder fejl.</li>
         </ol>
 
-        <h2>What to look for</h2>
+        <h2>Det du skal kigge efter</h2>
         <ul>
-            <li>Pages that don't load, or load with missing images / broken styling.</li>
-            <li>Buttons or links that go nowhere, or go to the wrong place.</li>
-            <li>Confusing copy — anything that made you stop and reread.</li>
-            <li>Forms that accept obviously bad input, or reject obviously good input.</li>
-            <li>Anything that feels slow, janky, or weird in a way you can't quite name.</li>
+            <li>Sider der ikke loader, eller hvor billeder eller layout er gået i stykker.</li>
+            <li>Knapper og links der ikke fører nogen steder hen, eller fører det forkerte sted hen.</li>
+            <li>Forvirrende tekst — alt der får dig til at standse op og læse igen.</li>
+            <li>Formularer der godtager åbenlyst forkerte oplysninger, eller afviser åbenlyst rigtige.</li>
+            <li>Alt der føles langsomt, hakkende eller bare underligt på en måde du ikke helt kan sætte ord på.</li>
         </ul>
 
-        <h2>How to report</h2>
+        <h2>Sådan rapporterer du</h2>
         <p>
-            For now: write down what you saw and the URL where you saw it, and send it to whoever pointed you at this site.
-            Screenshots help. A "report a bug" form may exist in the footer — feel free to use that too if it works.
+            For nu: notér ned hvad du så og på hvilken adresse, og send det til den der har henvist dig til denne side.
+            Skærmbilleder hjælper. Hvis du finder en "rapportér en fejl"-formular i bunden af siden, må du gerne bruge den.
         </p>
 
-        <h2>Things to know</h2>
+        <h2>Godt at vide</h2>
         <ul>
-            <li>The data here is fake. Don't expect real members, real events, or real personal information.</li>
-            <li>This site may break or change while you're testing. That's normal — we redeploy frequently.</li>
-            <li>If something is missing entirely (whole sections of the site invisible), that's intentional: features we haven't enabled here yet are hidden, not broken.</li>
+            <li>Indholdet er fiktivt. Forvent ikke rigtige medlemmer, rigtige arrangementer eller rigtige personoplysninger.</li>
+            <li>Siden kan ændre sig eller gå ned mens du tester. Det er normalt — vi udruller ofte nye versioner.</li>
+            <li>Hvis hele afsnit af siden ser ud til at mangle, er det bevidst: funktioner vi endnu ikke har slået til her er gemt, ikke i stykker.</li>
         </ul>
 
         <footer class="hbc-foot" style="margin-top: var(--space-12);">
-            <p><a href="/">← back to environment selector</a></p>
+            <p><a href="/">← tilbage til oversigten</a></p>
         </footer>
     </main>
 </body>
