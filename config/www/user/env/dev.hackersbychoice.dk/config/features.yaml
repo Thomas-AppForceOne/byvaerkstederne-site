@@ -27,7 +27,6 @@ enabled:
   workshop_calendar: "true"
   workshop_calendar_filters: "true"
   workshop_calendar_featured: "true"
-  workshop_detail_pages: "true"
   press_assets_download: "true"
   press_stats: "true"
   contact_page: "true"

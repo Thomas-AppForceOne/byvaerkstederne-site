@@ -49,7 +49,6 @@ final class FeatureFlagCatalogueTest extends TestCase
         'workshop_calendar',
         'workshop_calendar_filters',
         'workshop_calendar_featured',
-        'workshop_detail_pages',
         'press_assets_download',
         'press_stats',
         'contact_page',

@@ -83,12 +83,6 @@ const FLAG_ROUTES = {
   press_page: ['/presse'],
   minutes_archive: ['/referater'],
   workshop_calendar: ['/vaerkstedskalenderen'],
-  workshop_detail_pages: [
-    '/vaerksteder/makerspace',
-    '/vaerksteder/kreativ-fitness',
-    '/vaerksteder/kulturhus',
-    '/vaerksteder/det-groenne-faellesskab',
-  ],
   contact_page: ['/kontakt'],
   statutes_page: ['/vedtaegter'],
   privacy_policy: ['/privatlivspolitik'],

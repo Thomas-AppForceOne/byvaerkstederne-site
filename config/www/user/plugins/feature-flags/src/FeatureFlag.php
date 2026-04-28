@@ -30,7 +30,6 @@ enum FeatureFlag: string
     case WorkshopCalendar = 'workshop_calendar';
     case WorkshopCalendarFilters = 'workshop_calendar_filters';
     case WorkshopCalendarFeatured = 'workshop_calendar_featured';
-    case WorkshopDetailPages = 'workshop_detail_pages';
     case PressAssetsDownload = 'press_assets_download';
     case PressStats = 'press_stats';
     case ContactPage = 'contact_page';
@@ -75,7 +74,6 @@ enum FeatureFlag: string
             'workshop_calendar',
             'workshop_calendar_filters',
             'workshop_calendar_featured',
-            'workshop_detail_pages',
             'press_assets_download',
             'press_stats',
             'contact_page',

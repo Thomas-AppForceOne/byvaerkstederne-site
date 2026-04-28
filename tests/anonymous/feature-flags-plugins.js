@@ -31,7 +31,6 @@
  *     workshop_calendar          -> GET  /vaerkstedskalenderen → 404
  *     workshop_calendar_filters  -> GET  / → no calendar-filter anchors
  *     workshop_calendar_featured -> GET  / → no featured-calendar markup
- *     workshop_detail_pages      -> GET  /vaerksteder/makerspace → 404
  *     press_assets_download      -> GET  / → no press-asset download anchors
  *     press_stats                -> GET  / → no press-stats markup
  *     contact_page               -> GET  /kontakt → 404
@@ -482,18 +481,6 @@ const FLAG_PROBES = [
     },
   },
   {
-    flag: 'workshop_detail_pages',
-    desc: 'workshop detail subpages 404 under public-demo',
-    async publicDemo(ctx) {
-      const r = await ctx.get('/vaerksteder/makerspace', { maxRedirects: 0 });
-      expect(r.status()).toBe(404);
-    },
-    async internal(ctx) {
-      const r = await ctx.get('/vaerksteder/makerspace', { maxRedirects: 0 });
-      expect([200, 301, 302].includes(r.status())).toBe(true);
-    },
-  },
-  {
     flag: 'press_assets_download',
     desc: 'press-asset download surface reachable only under internal (parent /presse gated in public-demo)',
     async publicDemo(ctx) {
@@ -896,8 +883,7 @@ test.describe('feature-flags Sprint-4: canonical-link / home-page route audit', 
     for (const route of FLAGGED_ROUTES) {
       // Match the exact route in any URL-like context: either as an
       // href/value boundary or a path segment. `/vaerksteder/...`
-      // subroutes are covered by workshop_detail_pages and are not on
-      // this top-level list.
+      // subroutes are always visible and are not on this top-level list.
       const safePath = route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       // Match the route as a full path component — e.g. href="/roadmap",
       // href="/roadmap?x", href="/roadmap#x", or standalone.

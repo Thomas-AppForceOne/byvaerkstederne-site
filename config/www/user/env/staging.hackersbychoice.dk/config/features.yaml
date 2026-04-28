@@ -35,7 +35,6 @@ enabled:
   workshop_calendar: "false"
   workshop_calendar_filters: "false"
   workshop_calendar_featured: "false"
-  workshop_detail_pages: "true"
   press_assets_download: "false"
   press_stats: "false"
   contact_page: "false"
