@@ -133,6 +133,78 @@ all running commit `abc1234` yield the same integer. That is what
 satisfies the "remain stable from dev through test, staging and prod"
 requirement.
 
+### When does the build number update?
+
+The question hides two clocks. They have different answers.
+
+| Clock | When does the build number change? |
+|-------|--------------------------------------|
+| The conceptual value | When a commit is added to the deploy branch. The number is `git rev-list --count HEAD`, so it gains 1 with every commit. |
+| The deployed BUILD file | When `./deploy/deploy.sh <env>` runs. Computed once per deploy and shipped in the package. |
+| What visitors see | After the next deploy of the new commit. |
+
+Three implications worth being explicit about:
+
+1. **dev / test / staging / prod always agree when they're on the same
+   commit.** Whoever deploys first writes a BUILD file containing N;
+   whoever deploys next on the same commit writes the same N. That is
+   how "stable from dev through test, staging and prod" is achieved.
+2. **A trivial commit bumps the build number even with no SemVer bump.**
+   That's the whole point — the build number disambiguates two
+   "Version 0.1.0" deploys that differ by a typo fix. SemVer says
+   nothing about typo fixes; the build number does.
+3. **The build number for any commit is knowable without deploying.**
+   `git rev-list --count <commit>` gives the number that *would* ship
+   if that commit were deployed. Useful for a developer who wants to
+   reference a build before it's gone out, or for someone debugging
+   "which build introduced this bug?" against git history.
+
+Edge cases to be aware of:
+
+- **Force-pushing or rebasing the deploy branch** changes commit
+  ancestry, which can change the count. Develop is protected against
+  force-push, so this should never happen in practice — but if it does,
+  the displayed build numbers across tiers can briefly disagree until
+  every tier redeploys.
+- **Feature branches in flight** have their own counts (= deploy
+  branch count + branch commits). They never display in production
+  because feature branches don't deploy directly — they merge into
+  develop first. So the count visitors see is always relative to
+  develop's history.
+
+### Example values
+
+A normal deploy of develop's tip:
+
+```
+Version 0.1.0 · build 247
+```
+
+A pre-release SemVer:
+
+```
+Version 0.2.0-rc.1 · build 312
+```
+
+Component sources for the example above:
+
+| Token        | Source on disk                       | How it got there        |
+|--------------|--------------------------------------|-------------------------|
+| `0.1.0`      | `apex/VERSION` or `config/www/VERSION` | Manually edited, committed |
+| `247`        | `apex/BUILD` or `config/www/BUILD`   | `git rev-list --count HEAD`, written by `deploy.sh` |
+| ` · `        | (literal in the template)            | Hard-coded U+00B7 |
+| `0.2.0-rc.1` | `…/VERSION`                          | Manually edited (pre-release per SemVer 2.0.0) |
+
+A fallback rendering (BUILD file missing on the deployed instance):
+
+```
+Version 0.1.0 · build ukendt
+```
+
+A double-fallback (both files missing for that component) — the entire
+combined line is omitted from the output rather than rendered as
+"Version `ukendt` · build `ukendt`".
+
 ---
 
 ## Display
