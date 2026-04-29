@@ -12,6 +12,8 @@
  * filesystem write, so this is restricted to the two sanctioned paths.
  */
 
+const fs = require('fs');
+const path = require('path');
 const {
   TEST_USER,
   TEST_ADMIN,
@@ -22,6 +24,16 @@ const {
   removeReleasableRoadmapItem,
   removeUnpromotedBugReport,
 } = require('./helpers/fixtures');
+
+// Grav auto-generates a per-environment `security.yaml` (salt) the first
+// time a profile is accessed. The Sprint-4 feature-flag tests probe the
+// public-demo and staging profiles via Host-header overrides, which
+// triggers that write. The file is dev-only and leaks into `git status`
+// if left behind; remove it on teardown so `make test` ends clean.
+const GENERATED_ENV_SECURITY_FILES = [
+  'config/www/user/env/public-demo.example.com/config/security.yaml',
+  'config/www/user/env/staging.example.com/config/security.yaml',
+];
 
 module.exports = async function globalTeardown() {
   try {
@@ -38,4 +50,9 @@ module.exports = async function globalTeardown() {
   try { removeLockedRoadmapItem(); } catch (_) { /* non-fatal */ }
   try { removeReleasableRoadmapItem(); } catch (_) { /* non-fatal */ }
   try { removeUnpromotedBugReport(); } catch (_) { /* non-fatal */ }
+
+  const repoRoot = path.resolve(__dirname, '..');
+  for (const rel of GENERATED_ENV_SECURITY_FILES) {
+    try { fs.rmSync(path.join(repoRoot, rel), { force: true }); } catch (_) { /* non-fatal */ }
+  }
 };

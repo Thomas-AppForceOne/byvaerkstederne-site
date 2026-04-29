@@ -202,6 +202,7 @@
             <div class="bv-rm-cards" role="list">
                 {# Solved bugs first (80% opacity via CSS) #}
                 {% for item_id, item in roadmap_bugs if item.status|default('') == 'loest' %}
+                    {% if feature_enabled('roadmap') %}
                     {% include 'partials/roadmap_card.html.twig' with {
                         item: item,
                         item_id: item_id,
@@ -211,10 +212,12 @@
                         feature_budget: roadmap_feature_budget,
                         use_canonical_id: true
                     } only %}
+                    {% endif %}
                 {% endfor %}
 
                 {# Non-solved bugs #}
                 {% for item_id, item in roadmap_bugs if item.status|default('') != 'loest' %}
+                    {% if feature_enabled('roadmap') %}
                     {% include 'partials/roadmap_card.html.twig' with {
                         item: item,
                         item_id: item_id,
@@ -224,6 +227,7 @@
                         feature_budget: roadmap_feature_budget,
                         use_canonical_id: true
                     } only %}
+                    {% endif %}
                 {% endfor %}
 
                 {% if roadmap_bugs is empty %}
@@ -262,6 +266,7 @@
             <div class="bv-rm-cards" role="list">
                 {# Solved features first (80% opacity via CSS) #}
                 {% for item_id, item in roadmap_features if item.status|default('') == 'loest' %}
+                    {% if feature_enabled('roadmap') %}
                     {% include 'partials/roadmap_card.html.twig' with {
                         item: item,
                         item_id: item_id,
@@ -271,10 +276,12 @@
                         feature_budget: roadmap_feature_budget,
                         use_canonical_id: true
                     } only %}
+                    {% endif %}
                 {% endfor %}
 
                 {# Non-solved features #}
                 {% for item_id, item in roadmap_features if item.status|default('') != 'loest' %}
+                    {% if feature_enabled('roadmap') %}
                     {% include 'partials/roadmap_card.html.twig' with {
                         item: item,
                         item_id: item_id,
@@ -284,6 +291,7 @@
                         feature_budget: roadmap_feature_budget,
                         use_canonical_id: true
                     } only %}
+                    {% endif %}
                 {% endfor %}
 
                 {% if roadmap_features is empty %}

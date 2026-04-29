@@ -1,0 +1,21 @@
+# Test-tier environment profile.
+#
+# This profile is active when the site is served under the host
+# `test.hackersbychoice.dk` (see adjacent README.md for the four-tier
+# topology).
+#
+# The `enabled` map is intentionally empty. Every catalogue flag therefore
+# resolves to `false` per the FlagStore "missing key" rule, which is the
+# defined secure default for the test tier: no roadmap, no bug report
+# surface, no feature suggestion surface, no community footer column, no
+# membership / newsletter / event / press / minutes / workshop calendar /
+# workshop detail / contact / statutes pages.
+#
+# DO NOT add flags here — adding a key flips a surface ON for the test tier.
+# If you need a single flag enabled for a one-off preview, make that
+# decision explicit in a code review, not a silent YAML edit.
+#
+# The file contains flag metadata only. No credentials, tokens, API keys,
+# or secrets of any kind may appear in this file; FlagStore will log a
+# warning and fail closed for any non-`"true"`/`"false"` value anyway.
+enabled: {}

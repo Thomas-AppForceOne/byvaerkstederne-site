@@ -1,5 +1,6 @@
 ---
 title: Det sker lige nu
+feature: event_highlight
 section_title: Det sker lige nu
 section_subtitle: "F\xE6llesskabet drives af h\xE6nder og hjerter. Her er overblikket over ugens vigtigste samlingspunkt."
 event_date: "25. APR"

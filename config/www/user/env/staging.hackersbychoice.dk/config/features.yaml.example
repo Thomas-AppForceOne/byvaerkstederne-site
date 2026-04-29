@@ -16,6 +16,6 @@
 # Secrets, credentials, API keys, or host identifiers must never appear here.
 # The plugin accepts only the literal strings "true" and "false".
 enabled:
-  checkout_v2: "true"
-  pricing_experiment: "true"
-  promo_banner: "false"
+  roadmap: "true"
+  feature_suggestion: "true"
+  bug_report: "false"

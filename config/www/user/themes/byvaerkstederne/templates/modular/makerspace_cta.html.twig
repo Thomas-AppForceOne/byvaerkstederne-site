@@ -22,6 +22,7 @@
             {% endif %}
 
             {# Next meeting card #}
+            {% if feature_enabled('makerspace_meeting_link') %}
             <a href="{{ h.meeting_url|default('#') }}" style="background: var(--inverse-surface); color: var(--inverse-on-surface); padding: var(--space-8); display: flex; align-items: center; justify-content: space-between; transition: background 0.3s;" onmouseover="this.style.background='var(--secondary)'" onmouseout="this.style.background='var(--inverse-surface)'">
                 <div>
                     <span style="font-size: 0.625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.2em; color: rgba(161,161,170,1); display: block; margin-bottom: 0.25rem;">Kom forbi</span>
@@ -30,6 +31,7 @@
                 </div>
                 <span class="material-symbols-outlined" style="font-size: 2.5rem;">arrow_forward</span>
             </a>
+            {% endif %}
         </div>
     </div>
 </section>

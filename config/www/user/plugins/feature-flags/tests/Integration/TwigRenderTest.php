@@ -53,26 +53,26 @@ final class TwigRenderTest extends TestCase
         return $twig;
     }
 
-    public function testPromoBannerEnabledRendersThreeSpecSnippets(): void
+    public function testRoadmapEnabledRendersThreeSpecSnippets(): void
     {
         $template = <<<'TWIG'
-            {% if feature_enabled('promo_banner') %}BANNER{% endif %}|{{ feature_enabled('not_a_real_flag') ? 'T' : 'F' }}|{% for f in enabled_features() %}[{{ f }}]{% endfor %}
+            {% if feature_enabled('roadmap') %}BANNER{% endif %}|{{ feature_enabled('not_a_real_flag') ? 'T' : 'F' }}|{% for f in enabled_features() %}[{{ f }}]{% endfor %}
         TWIG;
 
         $logger = null;
         $twig = $this->twigWith(
             ['tpl' => $template],
-            ['promo_banner' => 'true'],
+            ['roadmap' => 'true'],
             $logger
         );
 
         $out = $twig->render('tpl');
         $this->assertStringContainsString('BANNER', $out);
         $this->assertStringContainsString('|F|', $out);
-        $this->assertStringContainsString('[promo_banner]', $out);
+        $this->assertStringContainsString('[roadmap]', $out);
 
         // Ensure no other flag name leaked into the iteration output.
-        foreach (['checkout_v2', 'pricing_experiment', 'partner_portal'] as $other) {
+        foreach (['feature_suggestion', 'bug_report', 'community_footer_column'] as $other) {
             $this->assertStringNotContainsString('[' . $other . ']', $out);
         }
     }
@@ -80,7 +80,7 @@ final class TwigRenderTest extends TestCase
     public function testEmptyConfigProducesNoBannerAndEmptyIteration(): void
     {
         $template = <<<'TWIG'
-            {% if feature_enabled('promo_banner') %}BANNER{% endif %}|{{ feature_enabled('not_a_real_flag') ? 'T' : 'F' }}|{% for f in enabled_features() %}[{{ f }}]{% else %}NONE{% endfor %}
+            {% if feature_enabled('roadmap') %}BANNER{% endif %}|{{ feature_enabled('not_a_real_flag') ? 'T' : 'F' }}|{% for f in enabled_features() %}[{{ f }}]{% else %}NONE{% endfor %}
         TWIG;
 
         $twig = $this->twigWith(['tpl' => $template], []);
@@ -110,12 +110,12 @@ final class TwigRenderTest extends TestCase
 
     public function testEnabledFlagBodyRendersIffTrue(): void
     {
-        $tplSrc = "{% if feature_enabled('promo_banner') %}body{% endif %}";
+        $tplSrc = "{% if feature_enabled('roadmap') %}body{% endif %}";
 
-        $enabledTwig = $this->twigWith(['tpl' => $tplSrc], ['promo_banner' => 'true']);
+        $enabledTwig = $this->twigWith(['tpl' => $tplSrc], ['roadmap' => 'true']);
         $this->assertSame('body', $enabledTwig->render('tpl'));
 
-        $disabledTwig = $this->twigWith(['tpl' => $tplSrc], ['promo_banner' => 'false']);
+        $disabledTwig = $this->twigWith(['tpl' => $tplSrc], ['roadmap' => 'false']);
         $this->assertSame('', $disabledTwig->render('tpl'));
 
         $absentTwig = $this->twigWith(['tpl' => $tplSrc], []);
@@ -132,7 +132,7 @@ final class TwigRenderTest extends TestCase
     {
         $errorTplSrc = <<<'TWIG'
             <!doctype html><html><body><h1>Not Found</h1>
-            {% if feature_enabled('promo_banner') %}<div class="promo"></div>{% endif %}
+            {% if feature_enabled('roadmap') %}<div class="promo"></div>{% endif %}
             <ul>{% for f in enabled_features() %}<li>{{ f }}</li>{% endfor %}</ul>
             </body></html>
         TWIG;

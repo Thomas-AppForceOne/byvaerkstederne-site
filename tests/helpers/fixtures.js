@@ -15,6 +15,16 @@
  */
 
 const { execFileSync } = require('child_process');
+const path = require('path');
+const { discoverGravEnv } = require(path.join(__dirname, '..', '..', 'scripts', 'discover-grav-port.js'));
+
+// Resolve once; throw loud if the worktree's container isn't running.
+let _cachedContainer = null;
+function gravContainer() {
+  if (_cachedContainer) return _cachedContainer;
+  _cachedContainer = discoverGravEnv(path.resolve(__dirname, '..', '..')).container;
+  return _cachedContainer;
+}
 
 const LOCKED_ROADMAP_ITEM_ID = 'rm_fixture_locked';
 const RELEASABLE_ROADMAP_ITEM_ID = 'rm_fixture_releasable';
@@ -22,8 +32,11 @@ const UNPROMOTED_BUG_REPORT_ID = 'br_fixture_unpromoted';
 const LOCKED_ROADMAP_YAML_PATH = '/config/www/user/data/flex-objects/roadmap-items.yaml';
 const BUG_REPORTS_YAML_PATH = '/config/www/user/data/flex-objects/bug-reports.yaml';
 
-const LOCKED_FIXTURE_YAML = `
-${LOCKED_ROADMAP_ITEM_ID}:
+// Leading newline is intentionally omitted: the target files already end in
+// a newline, so `cat >>` produces a clean break. Leaving a blank line in
+// would survive sed removal (the blank is outside the /key/,/[a-z]/ range)
+// and dirty the working tree on teardown.
+const LOCKED_FIXTURE_YAML = `${LOCKED_ROADMAP_ITEM_ID}:
   published: true
   type: bug
   priority: middel
@@ -45,8 +58,7 @@ ${LOCKED_ROADMAP_ITEM_ID}:
   display_id: '#FIX1'
 `;
 
-const RELEASABLE_FIXTURE_YAML = `
-${RELEASABLE_ROADMAP_ITEM_ID}:
+const RELEASABLE_FIXTURE_YAML = `${RELEASABLE_ROADMAP_ITEM_ID}:
   published: true
   type: bug
   priority: middel
@@ -69,8 +81,7 @@ ${RELEASABLE_ROADMAP_ITEM_ID}:
   display_id: '#FIX2'
 `;
 
-const UNPROMOTED_BUG_YAML = `
-${UNPROMOTED_BUG_REPORT_ID}:
+const UNPROMOTED_BUG_YAML = `${UNPROMOTED_BUG_REPORT_ID}:
   username: pw-test-user
   timestamp: '2026-04-20T00:00:00Z'
   page_url: /
@@ -104,7 +115,7 @@ function appendIfMissing(path, key, yaml) {
   if (yamlContains(path, `^${key}:`)) return { seeded: false };
   execFileSync(
     'docker',
-    ['exec', '-i', 'grav', 'sh', '-c', `cat >> ${path}`],
+    ['exec', '-i', gravContainer(), 'sh', '-c', `cat >> ${path}`],
     { input: yaml, stdio: ['pipe', 'pipe', 'pipe'], timeout: 10_000 }
   );
   return { seeded: true };
@@ -132,7 +143,7 @@ function removeFixture(path, key) {
   // untrusted input.
   const script = `sed -i '/^${key}:$/,/^[a-zA-Z_]/{ /^${key}:$/d; /^[a-zA-Z_]/!d; }' ${path}`;
   try {
-    execFileSync('docker', ['exec', 'grav', 'sh', '-c', script], {
+    execFileSync('docker', ['exec', gravContainer(), 'sh', '-c', script], {
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 10_000,
     });
@@ -144,7 +155,7 @@ function removeFixture(path, key) {
 
 function yamlContains(path, pattern) {
   try {
-    execFileSync('docker', ['exec', 'grav', 'grep', '-qE', pattern, path], {
+    execFileSync('docker', ['exec', gravContainer(), 'grep', '-qE', pattern, path], {
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 10_000,
     });

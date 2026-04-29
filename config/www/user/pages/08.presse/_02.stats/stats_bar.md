@@ -1,5 +1,6 @@
 ---
 title: Statistik
+feature: press_stats
 stats:
     - value: "47"
       label: Aktive Medlemmer

@@ -40,16 +40,16 @@ Legend:
 | `isConfigured` true when key is present with invalid value | `FlagStoreTest::testIsConfiguredDistinguishesAbsentFromInvalid` |
 | `isConfigured` false when key is absent | `FlagStoreTest::testIsConfiguredDistinguishesAbsentFromInvalid` |
 | `getEnabledFlags()` returns enum cases | `FlagStoreTest::testEnabledFlagsReturnsEnumCases` |
-| `allFlags()` always returns the four declared keys mapped to booleans | `FlagStoreTest::testAllFlagsAlwaysHasFourDeclaredKeys`, `FlagStoreTest::testMalformedTopLevelFailsClosedForEveryFlag` |
+| `allFlags()` always returns all declared keys mapped to booleans | `FlagStoreTest::testAllFlagsAlwaysMatchesDeclaredCases`, `FlagStoreTest::testMalformedTopLevelFailsClosedForEveryFlag` |
 | `debug()` shape is `{enabled: list<string>, configured: list<string>, all: array<string,bool>}` exactly | `FlagStoreTest::testDebugShapeIsExactAndOrdered` |
 
 ## Rendering (Twig)
 
 | Source bullet | Covered by |
 |---|---|
-| `{% if feature_enabled('promo_banner') %}` renders iff flag is true | `TwigRenderTest::testEnabledFlagBodyRendersIffTrue`, `TwigRenderTest::testPromoBannerEnabledRendersThreeSpecSnippets` |
+| `{% if feature_enabled('roadmap') %}` renders iff flag is true | `TwigRenderTest::testEnabledFlagBodyRendersIffTrue`, `TwigRenderTest::testRoadmapEnabledRendersThreeSpecSnippets` |
 | `{{ feature_enabled('not_a_real_flag') }}` → false, warning, no throw | `TwigHelpersTest::testUnknownNameReturnsFalseAndLogsExactlyOneWarning`, `TwigRenderTest::testUnknownFlagInTemplateDoesNotThrowAndLogsWarning` |
-| `{% for f in enabled_features() %}{{ f }}{% endfor %}` iterates exact string names | `TwigHelpersTest::testEnabledFeaturesReturnsStringArrayNotEnumCases`, `TwigRenderTest::testPromoBannerEnabledRendersThreeSpecSnippets` |
+| `{% for f in enabled_features() %}{{ f }}{% endfor %}` iterates exact string names | `TwigHelpersTest::testEnabledFeaturesReturnsStringArrayNotEnumCases`, `TwigRenderTest::testRoadmapEnabledRendersThreeSpecSnippets` |
 | Helpers are safe from any template including error page | `TwigRenderTest::testHelpersSafeOnErrorPageLikeTemplate`, `TwigHelpersTest::testFailClosedWhenStoreThrows` |
 | Unknown-name / bad-arg path does not throw | `TwigHelpersTest::testNonStringArgumentReturnsFalseAndWarns` (dataProvider), `FailClosedInvariantTest::testTwigFeatureEnabledNeverReturnsTrueForBadArg` |
 | Homepage / `/roadmap` / modular page render identically with empty config | **S3-live** (Sprint 3 evaluator verified against live Docker site; `no_visual_regression_empty_config` criterion) |

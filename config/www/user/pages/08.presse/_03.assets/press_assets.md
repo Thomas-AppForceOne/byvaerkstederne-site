@@ -1,5 +1,6 @@
 ---
 title: Pressemateriale
+feature: press_assets_download
 identity_title: Visuel Identitet
 photos_title: Pressebilleder
 press_pack_url: "#"

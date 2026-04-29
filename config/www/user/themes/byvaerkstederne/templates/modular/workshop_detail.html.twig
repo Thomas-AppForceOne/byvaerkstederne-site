@@ -16,7 +16,7 @@
                         {% endfor %}
                     </div>
                 </div>
-                {% if h.cta_text %}
+                {% if h.cta_text and feature_enabled('workshop_workday_signup') %}
                 <div style="margin-top: var(--space-12); padding-top: var(--space-8); border-top: 1px solid var(--outline-variant);">
                     <a href="{{ h.cta_url|default('#') }}" class="bv-btn bv-btn--{{ h.accent|default('tertiary') }}">{{ h.cta_text }}</a>
                 </div>

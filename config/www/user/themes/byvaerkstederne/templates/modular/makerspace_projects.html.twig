@@ -19,7 +19,7 @@
                     <span class="bv-badge bv-badge--secondary" style="margin-bottom: var(--space-6);">{{ p1.tag|default('Arbejdsuge') }}</span>
                     <h3 class="bv-headline" style="font-size: 2.5rem; margin-bottom: var(--space-4);">{{ p1.title }}</h3>
                     <p class="bv-body-lg" style="max-width: 36rem; margin-bottom: var(--space-8);">{{ p1.description }}</p>
-                    {% if p1.link_text %}
+                    {% if p1.link_text and feature_enabled('workshop_project_blueprints') %}
                     <div style="display: flex; align-items: center; gap: var(--space-4);">
                         <div style="width: 3rem; height: 3rem; background: var(--surface-dim);"></div>
                         <a href="{{ p1.link_url|default('#') }}" class="bv-label" style="text-decoration: underline; text-underline-offset: 4px; color: var(--on-surface-variant);">{{ p1.link_text }}</a>

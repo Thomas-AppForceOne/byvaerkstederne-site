@@ -2,10 +2,10 @@
 set -euo pipefail
 
 # Tear down the Grav container associated with a worktree and mark the
-# worktree as stopped in .gan/port-registry.json. Paired with gan-up.sh.
+# worktree as stopped in .gan/port-registry.json. Paired with grav-up.sh.
 #
 # Usage:
-#   scripts/gan-down.sh <worktree-path>
+#   scripts/grav-down.sh <worktree-path>
 
 if [[ $# -lt 1 ]]; then
   echo "usage: $0 <worktree-path>" >&2
@@ -13,7 +13,7 @@ if [[ $# -lt 1 ]]; then
 fi
 
 WORKTREE_PATH="$1"
-# Physical path (symlink-resolved) — see gan-up.sh for rationale.
+# Physical path (symlink-resolved) — see grav-up.sh for rationale.
 WORKTREE_ABS="$(cd "$WORKTREE_PATH" && pwd -P 2>/dev/null || echo "$WORKTREE_PATH")"
 
 WORKTREE_ID="$(printf '%s' "$WORKTREE_ABS" | shasum -a 256 | cut -c1-8)"

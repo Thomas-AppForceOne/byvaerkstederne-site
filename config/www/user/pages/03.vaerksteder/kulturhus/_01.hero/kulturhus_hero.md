@@ -8,7 +8,9 @@ buttons:
     - text: "Se Program"
       url: "#"
       style: secondary
+      feature: kulturhus_program
     - text: "Bliv Frivillig"
       url: "#"
       style: outlined
+      feature: kulturhus_volunteer
 ---

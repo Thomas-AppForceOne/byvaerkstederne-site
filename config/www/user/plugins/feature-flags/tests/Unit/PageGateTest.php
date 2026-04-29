@@ -66,19 +66,19 @@ final class PageGateTest extends TestCase
     public function testObjectHeaderWithFeatureProperty(): void
     {
         $logger = new ArrayLogger();
-        $gate = $this->makeGate(['checkout_v2' => 'true'], $logger);
+        $gate = $this->makeGate(['roadmap' => 'true'], $logger);
         $header = new \stdClass();
-        $header->feature = 'checkout_v2';
+        $header->feature = 'roadmap';
         $this->assertSame(PageGate::ALLOW, $gate->decide($header));
     }
 
     public function testKnownEnabledFlagAllows(): void
     {
         $logger = new ArrayLogger();
-        $gate = $this->makeGate(['checkout_v2' => 'true'], $logger);
+        $gate = $this->makeGate(['roadmap' => 'true'], $logger);
         $this->assertSame(
             PageGate::ALLOW,
-            $gate->decide(['feature' => 'checkout_v2'])
+            $gate->decide(['feature' => 'roadmap'])
         );
         $this->assertSame([], $logger->warnings(), 'Enabled path must not warn.');
     }
@@ -89,7 +89,7 @@ final class PageGateTest extends TestCase
         $gate = $this->makeGate([], $logger);
         $this->assertSame(
             PageGate::NOT_FOUND,
-            $gate->decide(['feature' => 'checkout_v2'])
+            $gate->decide(['feature' => 'roadmap'])
         );
         // Normal disabled path — no warning, this is the expected state.
         $this->assertSame([], $logger->warnings());
@@ -133,7 +133,7 @@ final class PageGateTest extends TestCase
             'int'        => [['feature' => 42]],
             'bool-true'  => [['feature' => true]],
             'bool-false' => [['feature' => false]],
-            'array'      => [['feature' => ['checkout_v2']]],
+            'array'      => [['feature' => ['roadmap']]],
             'object'     => [['feature' => new \stdClass()]],
         ];
     }
@@ -173,7 +173,7 @@ final class PageGateTest extends TestCase
 
         $this->assertSame(
             PageGate::NOT_FOUND,
-            $gate->decide(['feature' => 'checkout_v2'], '/x')
+            $gate->decide(['feature' => 'roadmap'], '/x')
         );
         $warnings = $logger->warnings();
         $this->assertCount(1, $warnings);
@@ -190,7 +190,7 @@ final class PageGateTest extends TestCase
         $logger = new ArrayLogger();
         $gate = $this->makeGate([], $logger);
 
-        $header = ['feature' => 'checkout_v2'];
+        $header = ['feature' => 'roadmap'];
         $decisionAnon = $gate->decide($header, '/gated');
 
         // Simulate an "authenticated user" context by passing the same

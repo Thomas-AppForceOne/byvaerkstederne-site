@@ -9,7 +9,7 @@ set -euo pipefail
 # because every worktree maps to a unique container + port.
 #
 # Usage:
-#   scripts/gan-up.sh <worktree-path> [port]
+#   scripts/grav-up.sh <worktree-path> [port]
 #
 # Behaviour:
 #   1. If the worktree is already registered and the container is running,
@@ -34,6 +34,7 @@ fi
 
 # Use the physical (symlink-resolved) path so the registry key matches what
 # node's fs.realpathSync / path.resolve produces in discover-grav-port.js.
+# (Same rationale as before: the registry key must match across writer and reader.)
 # On macOS `/tmp` -> `/private/tmp`; without -P the shell keeps the logical
 # form and discover-grav-port.js misses the registry, falls through to the
 # bare `grav` container, and returns the wrong port.

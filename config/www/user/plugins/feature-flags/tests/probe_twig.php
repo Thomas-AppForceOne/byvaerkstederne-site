@@ -49,7 +49,7 @@ foreach (['feature_enabled', 'enabled_features'] as $name) {
 
 // Also smoke-test invocation.
 $result = $twig->createTemplate(
-    "a={{ feature_enabled('promo_banner') ? 'T' : 'F' }} "
+    "a={{ feature_enabled('roadmap') ? 'T' : 'F' }} "
     . "b={{ feature_enabled('not_a_real_flag') ? 'T' : 'F' }} "
     . "c=[{% for f in enabled_features() %}{{ f }}{% endfor %}]"
 )->render([]);

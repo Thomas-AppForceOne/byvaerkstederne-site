@@ -1,0 +1,5 @@
+# hackersbychoice.dk hosts non-production environments only. The
+# real public site is www.byvaerkstederne.dk and has its own robots.txt.
+# Defence in depth: X-Robots-Tag on every response also says noindex.
+User-agent: *
+Disallow: /

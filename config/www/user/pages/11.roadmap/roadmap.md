@@ -1,5 +1,6 @@
 ---
 title: Website Roadmap
+feature: roadmap
 slug: roadmap
 hero_heading: Roadmap
 badge: Digitalt Værksted

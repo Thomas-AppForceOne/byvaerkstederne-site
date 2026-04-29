@@ -39,10 +39,10 @@ final class CollectionFilterTest extends TestCase
 
     public function testEnabledFlagPassesThroughAndPreservesOrder(): void
     {
-        $filter = $this->makeFilter(['checkout_v2' => 'true']);
-        $a = ['id' => 'a', 'header' => ['feature' => 'checkout_v2']];
+        $filter = $this->makeFilter(['roadmap' => 'true']);
+        $a = ['id' => 'a', 'header' => ['feature' => 'roadmap']];
         $b = ['id' => 'b', 'header' => ['title' => 'plain']];
-        $c = ['id' => 'c', 'header' => ['feature' => 'checkout_v2']];
+        $c = ['id' => 'c', 'header' => ['feature' => 'roadmap']];
 
         $out = $filter->filter([$a, $b, $c]);
         $this->assertCount(3, $out);
@@ -53,7 +53,7 @@ final class CollectionFilterTest extends TestCase
     {
         $filter = $this->makeFilter();
         $out = $filter->filter([
-            ['id' => 'a', 'header' => ['feature' => 'checkout_v2']],
+            ['id' => 'a', 'header' => ['feature' => 'roadmap']],
             ['id' => 'b', 'header' => []],
         ]);
         $this->assertSame(['b'], array_column($out, 'id'));
@@ -64,7 +64,7 @@ final class CollectionFilterTest extends TestCase
         $filter = $this->makeFilter();
         $out = $filter->filter([
             ['id' => 'a', 'header' => ['feature' => 'not_a_flag']],
-            ['id' => 'b', 'header' => ['feature' => 'checkout_v2']],
+            ['id' => 'b', 'header' => ['feature' => 'roadmap']],
             ['id' => 'c', 'header' => []],
         ]);
         // Both flag-carrying entries are disabled; only 'c' passes.
@@ -75,7 +75,7 @@ final class CollectionFilterTest extends TestCase
     public static function nonStringValues(): array
     {
         return [
-            'array' => [['checkout_v2']],
+            'array' => [['roadmap']],
             'int'   => [42],
             'bool'  => [true],
             'object' => [new \stdClass()],
@@ -85,10 +85,10 @@ final class CollectionFilterTest extends TestCase
     /** @dataProvider nonStringValues */
     public function testNonStringFeatureValueIsStripped(mixed $badValue): void
     {
-        $filter = $this->makeFilter(['checkout_v2' => 'true']);
+        $filter = $this->makeFilter(['roadmap' => 'true']);
         $out = $filter->filter([
             ['id' => 'bad', 'header' => ['feature' => $badValue]],
-            ['id' => 'good', 'header' => ['feature' => 'checkout_v2']],
+            ['id' => 'good', 'header' => ['feature' => 'roadmap']],
         ]);
         $this->assertSame(['good'], array_column($out, 'id'));
     }
@@ -105,14 +105,14 @@ final class CollectionFilterTest extends TestCase
 
     public function testGravLikePageObjectIsHandled(): void
     {
-        $filter = $this->makeFilter(['partner_portal' => 'true']);
+        $filter = $this->makeFilter(['feature_suggestion' => 'true']);
 
         $disabled = new class {
-            public function header(): object { return (object) ['feature' => 'checkout_v2']; }
+            public function header(): object { return (object) ['feature' => 'roadmap']; }
             public function route(): string { return '/disabled'; }
         };
         $enabled = new class {
-            public function header(): object { return (object) ['feature' => 'partner_portal']; }
+            public function header(): object { return (object) ['feature' => 'feature_suggestion']; }
             public function route(): string { return '/enabled'; }
         };
         $plain = new class {
@@ -131,10 +131,10 @@ final class CollectionFilterTest extends TestCase
         // Some Grav collection shapes (e.g. arrays from config-backed
         // menus) put `feature` at the top level rather than inside a
         // `header` sub-array. The filter must handle both.
-        $filter = $this->makeFilter(['promo_banner' => 'true']);
+        $filter = $this->makeFilter(['feature_suggestion' => 'true']);
         $out = $filter->filter([
-            ['title' => 'A', 'feature' => 'checkout_v2'],
-            ['title' => 'B', 'feature' => 'promo_banner'],
+            ['title' => 'A', 'feature' => 'roadmap'],
+            ['title' => 'B', 'feature' => 'feature_suggestion'],
             ['title' => 'C'],
         ]);
         $this->assertSame(['B', 'C'], array_column($out, 'title'));
@@ -142,9 +142,9 @@ final class CollectionFilterTest extends TestCase
 
     public function testShouldShowSingleEntryApi(): void
     {
-        $filter = $this->makeFilter(['checkout_v2' => 'true']);
-        $this->assertTrue($filter->shouldShow(['header' => ['feature' => 'checkout_v2']]));
-        $this->assertFalse($filter->shouldShow(['header' => ['feature' => 'partner_portal']]));
+        $filter = $this->makeFilter(['roadmap' => 'true']);
+        $this->assertTrue($filter->shouldShow(['header' => ['feature' => 'roadmap']]));
+        $this->assertFalse($filter->shouldShow(['header' => ['feature' => 'feature_suggestion']]));
         $this->assertTrue($filter->shouldShow(['header' => []]));
     }
 
@@ -153,7 +153,7 @@ final class CollectionFilterTest extends TestCase
         $filter = $this->makeFilter();
         $gen = (function (): \Generator {
             yield ['id' => 1, 'header' => []];
-            yield ['id' => 2, 'header' => ['feature' => 'checkout_v2']];
+            yield ['id' => 2, 'header' => ['feature' => 'roadmap']];
             yield ['id' => 3, 'header' => []];
         })();
 
