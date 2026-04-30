@@ -8,19 +8,7 @@ Folder policy (what belongs here, how specs become ADRs) lives in [CLAUDE.md](..
 
 ## Order
 
-### 1. Feature-flag infrastructure — IMPLEMENTED
-
-**Spec (archived):** [archive/development_flags_specification.md](archive/development_flags_specification.md)
-
-### 2. End-to-end test coverage for Roadmap, Rapportér fejl, Forslå Feature — IMPLEMENTED
-
-**Spec (archived):** [archive/roadmap_bug_feature_tests_specification.md](archive/roadmap_bug_feature_tests_specification.md)
-
-### 3. Feature-flag rollout to unfinished features and pages — IMPLEMENTED
-
-**Spec (archived):** [archive/feature_flag_rollout_specification.md](archive/feature_flag_rollout_specification.md)
-
-### 4. Semantic version + build number display for apex and site — PLANNED
+### 1. Semantic version + build number display for apex and site — PLANNED
 
 **Spec:** [semantic_versioning_specification.md](semantic_versioning_specification.md)
 
@@ -32,7 +20,7 @@ Both versions start at `0.1.0`. Independence between apex and site versions is i
 
 **Exit criteria:** apex and site both display "Version <semver> · build <integer>" sourced from files in the repo; version bumps require no deploy-script changes; build number is regenerated automatically and matches across tiers running the same commit; missing/malformed file falls back to "ukendt" for that half without breaking the page.
 
-### 5. Prod backup and restore tooling — PLANNED
+### 2. Prod backup and restore tooling — PLANNED
 
 **Spec:** [prod_backup_restore_specification.md](prod_backup_restore_specification.md)
 
@@ -42,7 +30,7 @@ Independently useful even before any later step ships: gives us "undo what happe
 
 **Exit criteria:** `./deploy/backup.sh prod` and `./deploy/restore.sh <tier-or-dir>` are working commands; backups carry a metadata file with code/data versions; retention enforces correctly; tagged backups are immune to retention sweeps.
 
-### 6. Data versioning and migration runner — PLANNED
+### 3. Data versioning and migration runner — PLANNED
 
 **Spec:** [data_versioning_and_migrations_specification.md](data_versioning_and_migrations_specification.md)
 
@@ -52,17 +40,17 @@ Forward-only by design — rollback is by restore-from-backup, not by reversing 
 
 **Exit criteria:** `data-version.yaml` exists on every tier; migration runner correctly applies the right scripts in order; idempotence is verified by CI; missing migrations halt with a clear error.
 
-### 7. Promote to staging — PLANNED
+### 4. Promote to staging — PLANNED
 
 **Spec:** [promote_to_staging_specification.md](promote_to_staging_specification.md)
 
-A single command (`./deploy/promote-to-staging.sh`) that orchestrates the previous two steps into a working refresh: take a fresh prod backup, restore it to a local scratch dir, run migrations forward to the code's data version, deploy code to staging, push the migrated data into staging, write a "blessing" marker on staging that records the (commit, version, build, data version, features.yaml hash) tuple. The marker is the only signal that step 8 (promote to prod) consumes.
+A single command (`./deploy/promote-to-staging.sh`) that orchestrates the previous two steps into a working refresh: take a fresh prod backup, restore it to a local scratch dir, run migrations forward to the code's data version, deploy code to staging, push the migrated data into staging, write a "blessing" marker on staging that records the (commit, version, build, data version, features.yaml hash) tuple. The marker is the only signal that step 5 (promote to prod) consumes.
 
 Adopts a strict "no preserved test entries on staging" contract: every promotion overwrites staging's data wholesale. The without-stripping-users decision means real member data lands on staging — flagged as a GDPR review point that must be resolved before this spec ships.
 
 **Exit criteria:** the command produces a blessing on success and fails closed (no blessing) on any failure between reachability and data-push; staging visibly carries prod-shaped data afterwards; the test-entries contract is enforced.
 
-### 8. Promote to prod — PLANNED
+### 5. Promote to prod — PLANNED
 
 **Spec:** [promote_to_prod_specification.md](promote_to_prod_specification.md)
 
@@ -78,8 +66,8 @@ A sibling command (`./deploy/rollback-prod.sh --to-backup <id>`) handles undo by
 
 ## Out-of-order risks
 
-- Step 4 is independent of 1–3 and can be implemented at any time. It does touch `apex/index.php`, `deploy/deploy.sh`, and the Grav site footer template — small surface area, but worth a fresh GAN run rather than tacking onto an unrelated branch.
-- Skipping step 5 → steps 6–8 have nothing to back up, restore, or version. Step 5 is the foundation; without it the rest is paper.
-- Skipping step 6 → step 7 can refresh staging only when no schema change is needed; the moment any data-shape edit lands without a migration, promotion silently corrupts staging's data.
-- Reordering 7 before 8 → step 8's gate reads the blessing marker that step 7 produces; without 7 in place there is nothing to gate on, and step 8 collapses to "deploy code to prod" — which is what we have today.
-- Reordering 8 before 7 → step 8 has no input. The gate would always refuse (no marker exists), which is at least fail-closed but means prod cannot be promoted at all.
+- Step 1 is independent of the data-lifecycle chain and can be implemented at any time. It does touch `apex/index.php`, `deploy/deploy.sh`, and the Grav site footer template — small surface area, but worth a fresh GAN run rather than tacking onto an unrelated branch.
+- Skipping step 2 → steps 3–5 have nothing to back up, restore, or version. Step 2 is the foundation; without it the rest is paper.
+- Skipping step 3 → step 4 can refresh staging only when no schema change is needed; the moment any data-shape edit lands without a migration, promotion silently corrupts staging's data.
+- Reordering 4 before 5 → step 5's gate reads the blessing marker that step 4 produces; without 4 in place there is nothing to gate on, and step 5 collapses to "deploy code to prod" — which is what we have today.
+- Reordering 5 before 4 → step 5 has no input. The gate would always refuse (no marker exists), which is at least fail-closed but means prod cannot be promoted at all.
