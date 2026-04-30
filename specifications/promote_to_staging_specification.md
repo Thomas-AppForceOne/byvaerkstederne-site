@@ -36,8 +36,9 @@ command.
 - **Anonymising data.** Staging gets prod data with members intact —
   including email addresses and bcrypt-hashed passwords. The
   team has decided this is acceptable given staging's restricted
-  access. (See "GDPR note" below.) A future spec may add
-  anonymisation; this one doesn't.
+  access — see [ADR-002](../decisions/ADR-002-prod-data-on-staging.md)
+  for the rationale and the conditions that decision depends on.
+  A future spec may add anonymisation; this one doesn't.
 - **Preserving staging's existing test entries.** A promote-to-staging
   always replaces staging's data wholesale. If you need to keep test
   data across promotions, you keep it in a separate scratch space, or
@@ -67,8 +68,27 @@ With `--from-backup <id>`: skips the fresh-backup step and uses the
 specified existing archive. Useful for "restore staging to last
 night's prod state" without re-running the backup.
 
-The command is non-interactive (cron-friendly, scriptable). It
-prints progress per step and exits non-zero on any failure.
+The command is non-interactive (scriptable). It prints progress
+per step and exits non-zero on any failure.
+
+**Where it runs.** This spec assumes the operator's laptop as the
+primary execution host: the laptop holds the SFTP credentials for
+both prod and staging (in `.env.deploy`), and the operator runs the
+command interactively after merging a change to develop. We are
+**not** wiring this to cron in any environment in v1, because:
+
+- Cron on the laptop only fires when the laptop is on, which makes
+  scheduled refreshes unreliable.
+- Cron on a third box (a small ops VM) would require duplicating
+  the prod + staging credentials onto a long-running host, which
+  expands the credential blast radius.
+- Auto-promotion is listed as out-of-scope future work below; until
+  the team has hand-promoted enough to trust the loop, leaving the
+  decision to a human is the right default.
+
+A future spec can add a cron-host story (e.g., a dedicated ops VM
+with its own credentials and a tightened blessing gate) once usage
+patterns justify it.
 
 ---
 
@@ -93,17 +113,41 @@ prints progress per step and exits non-zero on any failure.
      - rsync -a --delete the scratch dir's user/accounts/ into
        staging's user/accounts/, similarly for user/data/, user/pages/,
        user/uploads/, and the data-version.yaml.
+     - **Forbidden:** the rsync MUST be per-subdirectory. A
+       `user/`-level rsync would wipe the blessing marker on the
+       very next promotion (it lives at `config/www/staging-blessed.yaml`
+       per step 9 — see below — but if a future edit ever moves
+       the marker back inside `user/`, this rule prevents the
+       footgun). The script itself enforces this by listing the
+       state paths as a fixed array; widening that array to `user/`
+       requires editing the script in a reviewable PR.
 8. Clear staging's caches (existing deploy.sh post-step).
 9. Write a "blessing" marker on staging:
-     config/www/user/staging-blessed.yaml
+     config/www/staging-blessed.yaml  (Grav root, NOT inside user/)
    containing:
      blessed_at, code_commit, code_version, code_build,
-     data_version, features_yaml_sha256.
-   This file is what the promote-to-prod spec uses to gate prod
-   deploys. Its production is a contract this spec must honour.
-10. Smoke test (curl key URLs, expect 200/expected status). On
-    failure, print the failure but don't auto-rollback — leave the
-    operator to inspect.
+     data_version, features_yaml_sha256, source_backup_id.
+   The marker lives **outside `user/`** specifically so the data-push
+   rsyncs in step 7 can never wipe it, regardless of how the path
+   list evolves. This file is what the promote-to-prod spec uses to
+   gate prod deploys. Its production is a contract this spec must
+   honour.
+10. Smoke test against staging. The script `curl`s the URLs below
+    and asserts the expected status code per URL:
+
+    | URL (relative to https://staging.hackersbychoice.dk)         | Expected |
+    |---------------------------------------------------------------|----------|
+    | `/`                                                           | 200      |
+    | `/login`                                                      | 200      |
+    | `/medlemmer` (member-only landing)                            | 302 → /login |
+    | `/begivenheder` (events list)                                 | 200      |
+    | `/vaerksteder` (workshops list)                               | 200      |
+    | `/staging-blessed.yaml`                                       | 200 — and `code_commit` matches |
+
+    On any failure the script prints the failing URL + actual code,
+    leaves the blessing in place (so later runs can inspect),
+    exits non-zero, and does NOT auto-rollback. The operator decides
+    next step.
 11. Print summary: backup ID consumed, migrations applied, code
     version deployed, blessing details.
 ```
@@ -144,21 +188,13 @@ on staging. Staging is hosted on the same one.com account as test
 and dev, and is accessible by anyone who knows its URL (no auth
 gate at the edge).
 
-Before this spec ships, the team must:
-
-- Confirm that staging access is restricted enough for our
-  data-protection commitments. If not, anonymisation becomes a
-  hard prerequisite and a separate spec.
-- Document in our privacy policy (or its internal counterpart) that
-  member data is replicated to staging for testing purposes.
-- Decide retention: when staging is promoted-to next time, the old
-  data is overwritten. Backups containing prod data are retained
-  per the backup spec's policy. The data on staging itself is
-  retained until the next promotion.
-
-This is a decision flagged here, not solved here. If the answer is
-"we need anonymisation", a separate spec is added before this one
-ships.
+The decision to ship prod data unanonymised — together with the
+conditions that make it acceptable (basic-auth at the edge, privacy
+policy disclosure, retention contract) — is recorded in
+[ADR-002: Prod data on staging](../decisions/ADR-002-prod-data-on-staging.md).
+**This spec must not ship unless the conditions in that ADR are
+met:** basic-auth gating live on staging, privacy-policy text
+updated, and the operator has read and signed off on the ADR.
 
 ---
 
@@ -167,8 +203,10 @@ ships.
 When the promotion succeeds, staging gets a file:
 
 ```
-config/www/user/staging-blessed.yaml
+config/www/staging-blessed.yaml
 ```
+
+(At Grav root, **outside `user/`**, so data-push rsyncs cannot wipe it.)
 
 ```yaml
 blessed_at: 2026-04-29T13:45Z
@@ -176,8 +214,14 @@ code_commit: "abc1234"
 code_version: "0.2.0"
 code_build: "312"
 data_version: "0.2.0"
-features_yaml_sha256: "..."   # of staging's features.yaml
+features_yaml_sha256: "..."          # of staging's features.yaml
+source_backup_id: "prod-2026-04-29T12-34Z-v0.1.0-b247.tar.gz.age"
 ```
+
+`source_backup_id` records the backup the migrated snapshot was
+derived from. The audit trail is then self-contained — given the
+blessing, you can reconstruct what staging was set up from without
+crossreferencing logs.
 
 This file is the *only* signal the promote-to-prod spec uses to
 decide whether prod is allowed to deploy. Producing it correctly is
@@ -223,8 +267,11 @@ which case the operator re-runs to converge.
       account list as prod's at backup time.
 - [ ] After running, staging's `data-version.yaml` matches the
       target data version from the code.
-- [ ] After running, `config/www/user/staging-blessed.yaml` exists
-      with all six fields populated.
+- [ ] After running, `config/www/staging-blessed.yaml` (at Grav
+      root, NOT inside `user/`) exists with all seven fields
+      populated: `blessed_at`, `code_commit`, `code_version`,
+      `code_build`, `data_version`, `features_yaml_sha256`,
+      `source_backup_id`.
 - [ ] Visiting `https://staging.hackersbychoice.dk` returns 200 on
       home, member-protected pages render correctly when logged in
       with a real member's credentials (manual smoke).
@@ -259,7 +306,9 @@ which case the operator re-runs to converge.
       SHA, version, build, data version, and the SHA-256 of
       staging's deployed `features.yaml`.
 - [ ] On any failure between steps 1–7, no blessing is written. If
-      a previous blessing existed, it is removed at step 1.
+      a previous blessing existed at `config/www/staging-blessed.yaml`,
+      it is removed at step 1 of the next promotion attempt so a
+      stale blessing can't survive a failed re-promotion.
 - [ ] Reading the marker via SFTP from another machine returns
       identical content (consumed by promote-to-prod).
 
@@ -268,6 +317,8 @@ which case the operator re-runs to converge.
 - [ ] On success, the local scratch directory is removed.
 - [ ] On failure, the local scratch directory is left in place
       with a path printed in the error.
+- [ ] `./deploy/staging-stage/` is in `.gitignore` (and excluded
+      from Time Machine per the backup spec's hygiene checklist).
 
 ---
 

@@ -81,6 +81,20 @@ This file is part of the deploy bundle. The site code reads it at
 boot for diagnostics; the migration runner reads it (or the value
 from a backup) to know where to start.
 
+The git-tracked file in `config/www/user/data-version.yaml`
+represents **the schema version the current code expects** — it is
+shipped as part of every deploy. On a live tier, the same path is
+overwritten by the data-push step of a promotion to reflect the
+**actual schema version of the data sitting on disk**. After a
+successful promotion the two should agree; between promotions, the
+file in git can be ahead (a code change adds a migration before any
+tier has been promoted to it). The promote specs treat the git copy
+as "target" and the live-tier copy as "current".
+
+A starter file `config/www/user/data-version.yaml.example` is
+committed to give a fresh clone or a freshly reset tier a template
+to copy.
+
 ---
 
 ## Migration script format
@@ -130,10 +144,15 @@ Conventions:
   `$dataDir/config/www/user/data-version.yaml`.
 - It must be idempotent: running it twice in a row produces the
   same result as running it once.
-- It must be self-contained: no `require_once` of project code. If
-  it needs a YAML parser, it `require`s composer's autoload from
-  inside `$dataDir/vendor/` or pulls one in from a known migration
-  helper folder.
+- It must be self-contained: no `require_once` of project code from
+  outside the migration runner. The runner provides its own
+  `composer.json` at `migrations/composer.json` (Symfony YAML is the
+  expected dependency); the runner `require`s that autoload before
+  invoking each migration's closure, and migrations can call the
+  loaded libraries directly. `$dataDir` is a pure data tree
+  (`accounts/`, `data/`, `pages/`, `uploads/`, `data-version.yaml`)
+  and contains no `vendor/` of its own — migrations must not reach
+  into a Grav install for libraries.
 
 ---
 
@@ -142,7 +161,7 @@ Conventions:
 A single CLI:
 
 ```
-./bin/migrate <data-dir> [--to <version>]
+./deploy/migrate.sh <data-dir> [--to <version>]
 ```
 
 Behaviour:
@@ -182,7 +201,12 @@ A one-time bootstrap step:
    (matches the initial code version).
 2. SSH to prod, write `config/www/user/data-version.yaml` with that
    value.
-3. Take a fresh backup. The metadata will pick up the new value.
+3. Take a fresh backup. The backup script (per the
+   [backup spec](prod_backup_restore_specification.md)) reads
+   `config/www/user/data-version.yaml` from the live tier over SFTP
+   and writes its value into the archive's `backup-meta.yaml` —
+   that's the connection that lets a future restore know which
+   schema version the snapshot came from.
 
 This is documented in the spec's "Implementation notes" section
 when this work starts; it does not need a migration script (it's
@@ -190,6 +214,18 @@ not a transformation).
 
 Staging, test, and dev tiers do the same one-time stamp on whatever
 data they currently hold (likely also `0.1.0`).
+
+### Pre-spec backups
+
+Backups produced by the previous `deploy/backup.sh` (before this
+spec ships) carry no `data_version` field in their metadata — most
+of them carry no metadata file at all. The runner treats a missing
+field as **`data_version: "0.1.0"` by convention** so historical
+backups remain restorable. If that assumption is wrong for a given
+backup, the operator stamps the unpacked snapshot manually
+(`echo 'data_version: "X.Y.Z"' > <scratch>/config/www/user/data-version.yaml`)
+before re-running the runner. The runner prints a warning each time
+it hits the convention path so the operator knows it kicked in.
 
 ---
 
@@ -240,15 +276,37 @@ migrations/tests/
       data-version.yaml    # contains "0.2.0"
 ```
 
-A single `migrations/run-tests.sh` (or a PHPUnit suite) iterates
-test directories:
+A single `migrations/run-tests.sh` iterates test directories:
 
-- For each test: copy `before/` to a tmp dir, run the migration,
-  diff the result against `after/`. Equal → pass.
-- Run the migration a second time in the tmp dir. Diff again. Equal
-  → idempotence pass.
+- **Per-migration test.** Copy `before/` to a tmp dir, run the
+  migration, diff the result against `after/`. Equal → pass.
+- **Idempotence test.** Run the migration a second time in the tmp
+  dir. Diff again. Equal → idempotence pass.
+- **Compose-chain test.** Starting from the lowest-version
+  `before/` fixture, apply migrations in declared order through to
+  the highest target version. Diff the result against the highest
+  fixture's `after/`. This catches bugs where each migration is
+  individually correct but their composition isn't (an early
+  migration writes a field a later one assumes is absent, a
+  reordering bug, etc.). The compose-chain test runs alongside the
+  per-migration tests; both must pass.
 
-The CI runs this suite on every PR that touches `migrations/`.
+The runner sorts migrations by **SemVer comparison**, not by
+filename. `0.10.0_X.php` correctly applies after `0.2.0_X.php`
+even though it lex-sorts before it.
+
+### CI integration
+
+A GitHub Actions workflow at `.github/workflows/migrations.yml`
+runs `migrations/run-tests.sh` on every PR whose file changes
+touch `migrations/**`, `config/www/user/data-version.yaml`, or
+`config/www/user/data-version.yaml.example`. The workflow uses
+the matrix-PHP versions Grav itself supports.
+
+If repo CI infrastructure isn't yet in place when this spec lands,
+implementer can ship the test runner first and add the workflow as
+a follow-up commit on the same branch — but the spec's acceptance
+is not met until the workflow is wired and green.
 
 ---
 
@@ -264,7 +322,7 @@ The CI runs this suite on every PR that touches `migrations/`.
 
 ### Runner
 
-- [ ] `./bin/migrate <data-dir>` reads the from-version, computes
+- [ ] `./deploy/migrate.sh <data-dir>` reads the from-version, computes
       the to-version from the deployed code, applies the right set
       of migrations, and writes the new version into the data dir.
 - [ ] Running with no migrations needed (already at target) is a
@@ -280,8 +338,13 @@ The CI runs this suite on every PR that touches `migrations/`.
 ### Migration discipline
 
 - [ ] No two migration files target the same version (CI check).
-- [ ] Migration filenames sort lexicographically in the same order
-      as their target versions (CI check, for human-readability).
+- [ ] The runner sorts migrations by SemVer comparison, not by
+      filename — verified by a test that puts `0.10.0` and `0.2.0`
+      migrations in the chain and asserts the runner applies them
+      in numeric order.
+- [ ] The compose-chain test passes: starting from the earliest
+      fixture's `before/`, applying every migration in order
+      produces the latest fixture's `after/`.
 
 ### Failure modes
 

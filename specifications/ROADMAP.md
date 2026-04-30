@@ -8,7 +8,7 @@ Folder policy (what belongs here, how specs become ADRs) lives in [CLAUDE.md](..
 
 ## Order
 
-### 1. Semantic version + build number display for apex and site — PLANNED
+### 1. Semantic version + build number display for apex and site — Planned
 
 **Spec:** [semantic_versioning_specification.md](semantic_versioning_specification.md)
 
@@ -20,7 +20,7 @@ Both versions start at `0.1.0`. Independence between apex and site versions is i
 
 **Exit criteria:** apex and site both display "Version <semver> · build <integer>" sourced from files in the repo; version bumps require no deploy-script changes; build number is regenerated automatically and matches across tiers running the same commit; missing/malformed file falls back to "ukendt" for that half without breaking the page.
 
-### 2. Prod backup and restore tooling — PLANNED
+### 2. Prod backup and restore tooling — Planned
 
 **Spec:** [prod_backup_restore_specification.md](prod_backup_restore_specification.md)
 
@@ -30,7 +30,7 @@ Independently useful even before any later step ships: gives us "undo what happe
 
 **Exit criteria:** `./deploy/backup.sh prod` and `./deploy/restore.sh <tier-or-dir>` are working commands; backups carry a metadata file with code/data versions; retention enforces correctly; tagged backups are immune to retention sweeps.
 
-### 3. Data versioning and migration runner — PLANNED
+### 3. Data versioning and migration runner — Planned
 
 **Spec:** [data_versioning_and_migrations_specification.md](data_versioning_and_migrations_specification.md)
 
@@ -40,7 +40,7 @@ Forward-only by design — rollback is by restore-from-backup, not by reversing 
 
 **Exit criteria:** `data-version.yaml` exists on every tier; migration runner correctly applies the right scripts in order; idempotence is verified by CI; missing migrations halt with a clear error.
 
-### 4. Promote to staging — PLANNED
+### 4. Promote to staging — Planned
 
 **Spec:** [promote_to_staging_specification.md](promote_to_staging_specification.md)
 
@@ -50,7 +50,7 @@ Adopts a strict "no preserved test entries on staging" contract: every promotion
 
 **Exit criteria:** the command produces a blessing on success and fails closed (no blessing) on any failure between reachability and data-push; staging visibly carries prod-shaped data afterwards; the test-entries contract is enforced.
 
-### 5. Promote to prod — PLANNED
+### 5. Promote to prod — Planned
 
 **Spec:** [promote_to_prod_specification.md](promote_to_prod_specification.md)
 

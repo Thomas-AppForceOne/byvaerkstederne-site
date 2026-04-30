@@ -31,3 +31,12 @@ Use [ADR-template.md](ADR-template.md). File naming: `ADR-NNN-short-slug.md` wit
 | ADR | Title | Status | Date |
 |---|---|---|---|
 | [ADR-001](ADR-001-navigation-footer-placement.md) | Footer-only placement for community feedback affordances | Accepted | 2026-04-18 |
+| [ADR-002](ADR-002-prod-data-on-staging.md) | Prod data on staging — unanonymised, gated by access controls | Accepted | 2026-04-30 |
+| [ADR-003](ADR-003-release-branch-promotion.md) | Release-branch model for prod promotion | Accepted | 2026-04-30 |
+
+The data-lifecycle spec set (semantic versioning, backup/restore,
+data versioning + migrations, promote-to-staging, promote-to-prod)
+is expected to land additional ADRs as it ships — most likely on
+backup encryption-key custody and on the migration-test contract.
+ADR-002 and ADR-003 were written ahead of implementation because
+they resolve cross-spec questions the review surfaced as blockers.

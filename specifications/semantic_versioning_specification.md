@@ -13,6 +13,11 @@ bump). The build number is derived from the commit being deployed and
 is identical on every tier that runs that commit. Together the two
 must be a property of the code, not of the deploy step.
 
+Prerequisites: the deploy host (operator laptop or CI runner) must
+hold a full git clone — `git fetch --depth 1` shallow clones break
+the build-number contract because `git rev-list --count HEAD`
+underreports them silently.
+
 ---
 
 ## Motivation
@@ -88,8 +93,8 @@ automatically by the deploy script.
 
 | Component | Path                | Content              |
 |-----------|---------------------|----------------------|
-| Apex      | `apex/VERSION`      | One line, SemVer 2.0.0 |
-| Site      | `config/www/VERSION`| One line, SemVer 2.0.0 |
+| Apex      | `apex/VERSION`      | A single SemVer string per the [SemVer 2.0.0](https://semver.org) spec |
+| Site      | `config/www/VERSION`| A single SemVer string per the [SemVer 2.0.0](https://semver.org) spec |
 
 Each file:
 
@@ -162,10 +167,20 @@ Three implications worth being explicit about:
 Edge cases to be aware of:
 
 - **Force-pushing or rebasing the deploy branch** changes commit
-  ancestry, which can change the count. Develop is protected against
-  force-push, so this should never happen in practice — but if it does,
-  the displayed build numbers across tiers can briefly disagree until
-  every tier redeploys.
+  ancestry, which can change the count. Per
+  [CLAUDE.md](../CLAUDE.md#git-workflow--branching-and-prs), `develop`
+  is conventionally protected — it relies on the rule being honored
+  but is not gated by a GitHub ruleset the way `main` is. A
+  develop force-push is therefore technically possible and would make
+  build numbers across tiers briefly disagree until every tier
+  redeploys. Treat the disagreement as an alarm: if you see two tiers
+  on what should be the same commit reporting different builds, check
+  for a recent develop-history rewrite.
+- **Shallow clones break the count.** `git rev-list --count HEAD`
+  reports only the depth the clone has. A future CI runner using
+  `git fetch --depth 1` would silently underreport. The deploy host
+  must hold a full clone, not a shallow one, and the deploy script
+  must guard against this — see "Deploy script changes" below.
 - **Feature branches in flight** have their own counts (= deploy
   branch count + branch commits). They never display in production
   because feature branches don't deploy directly — they merge into
@@ -193,7 +208,7 @@ Component sources for the example above:
 | `0.1.0`      | `apex/VERSION` or `config/www/VERSION` | Manually edited, committed |
 | `247`        | `apex/BUILD` or `config/www/BUILD`   | `git rev-list --count HEAD`, written by `deploy.sh` |
 | ` · `        | (literal in the template)            | Hard-coded U+00B7 |
-| `0.2.0-rc.1` | `…/VERSION`                          | Manually edited (pre-release per SemVer 2.0.0) |
+| `0.2.0-rc.1` | `…/VERSION`                          | Manually edited (pre-release per [SemVer 2.0.0](https://semver.org)) |
 
 A fallback rendering (BUILD file missing on the deployed instance):
 
@@ -270,6 +285,29 @@ Implementation choices for the Twig helper, in order of preference:
 
 Use option 1 unless review prefers otherwise.
 
+### Twig fallback snippet (sketched)
+
+The combined-line omission rule ("if both `version` and `build` are
+missing, omit the entire line") needs the template to inspect both
+fields before rendering. Implementer should follow this shape; tweak
+markup to match the surrounding footer:
+
+```twig
+{% set sv = site_version() %}
+{% if sv.version is not null or sv.build is not null %}
+  <p class="footer-version">
+    Version
+    {% if sv.version is not null %}{{ sv.version }}{% else %}<em>ukendt</em>{% endif %}
+    &middot;
+    build
+    {% if sv.build is not null %}{{ sv.build }}{% else %}<em>ukendt</em>{% endif %}
+  </p>
+{% endif %}
+```
+
+The apex's `apex/index.php` runs the same logic in PHP rather than
+Twig (it has no Grav stack); the conditional shape is identical.
+
 ---
 
 ## Robustness — what happens when a file is missing or malformed
@@ -320,7 +358,10 @@ the files to be perfect.
    `BUILD="$(git -C "$PROJECT_DIR" rev-list --count HEAD)"` — this is
    the same integer regardless of which `ENV` is being deployed,
    ensuring the build is identical for every tier running the same
-   commit.
+   commit. Before computing, the script must verify the working tree
+   is a full clone (e.g. `git -C "$PROJECT_DIR" rev-parse --is-shallow-repository`
+   returns `false`) and abort with a clear error if it is shallow —
+   otherwise the count silently underreports.
 2. **Apex (`landing` env) build:**
    - Read `apex/VERSION` from the source tree.
    - Write the trimmed value into the deployed `apex/VERSION`
@@ -383,9 +424,11 @@ A reviewer or test must be able to confirm each of the following.
 ### Apex display
 
 - [ ] On `https://hackersbychoice.dk` the footer line reads
-      "Denne side — Version <X> · build <N> …" where `<X>` matches
-      the SemVer in `apex/VERSION` and `<N>` matches the integer in
-      `apex/BUILD`.
+      "Denne side — Version <X> · build <N>, opdateret <DATE>" where
+      `<X>` matches the SemVer in `apex/VERSION`, `<N>` matches the
+      integer in `apex/BUILD`, and `<DATE>` is the existing
+      apex-deploy timestamp (preserved from the current footer — the
+      "opdateret" date is not lost in this refactor).
 - [ ] If `apex/VERSION` is renamed/deleted on a deployed instance,
       the footer line reads "Denne side — <em>ukendt</em> · build <N>"
       and the page still renders. (Reverted after the test.)
@@ -443,13 +486,23 @@ A reviewer or test must be able to confirm each of the following.
 
 ### Tests
 
-- [ ] Unit test: site-version plugin's `site_version()` function
-      returns `{ version, build }` with trimmed file contents on the
-      happy path; returns `null` for either field that is missing,
-      empty, or invalid.
-- [ ] Live HTTP test (anonymous Playwright suite or a small bash
-      probe): footers on the apex and on each tier carry a matching
-      `Version <semver> · build <N>` substring.
+The repo has no PHPUnit harness today, so this spec uses Playwright +
+a shell probe rather than introducing a new framework. If a future
+spec stands up PHPUnit for `config/www/user/plugins/`, the unit test
+below moves there.
+
+- [ ] Shell-level probe (bash, runnable from `tests/version/`): for
+      each of `(apex/VERSION, apex/BUILD)` and
+      `(config/www/VERSION, config/www/BUILD)`, verify the file
+      reading helper returns `{ version, build }` with trimmed
+      contents on the happy path and `null` for missing / empty /
+      invalid values. The probe wraps the helper script (apex's case)
+      and the Twig helper invoked from `bin/grav` for the Grav case.
+- [ ] Live HTTP test in the existing anonymous Playwright suite:
+      footers on the apex and on each tier carry a matching
+      `Version <semver> · build <N>` substring; a
+      both-files-missing scenario (mocked via a fixture worktree)
+      omits the line entirely rather than rendering double-`ukendt`.
 
 ---
 

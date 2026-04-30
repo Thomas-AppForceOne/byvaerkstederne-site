@@ -9,13 +9,32 @@ in the series consumes backups, none of them produces them.
 
 ---
 
+## Relationship to the existing `deploy/backup.sh`
+
+The repo already ships a `deploy/backup.sh` that does a partial job:
+it rsyncs `accounts/`, `data/`, `pages/`, `config/`, and the theme
+images, keeps the last 30 backups under `./backups/` on the operator
+laptop, and is unencrypted. This spec **replaces** that script —
+fold the additional state paths in (`user/uploads/` is the notable
+omission), add encryption, add metadata, and move retention off the
+operator's laptop into managed storage. The existing local-retention
+behaviour is governed by this spec's "Local copies on the operator's
+laptop" subsection below.
+
+Implementer should treat the work as "rewrite `deploy/backup.sh`
+in place against this spec", not "write a new script alongside the
+old one". One backup tool, one entry point.
+
+---
+
 ## Motivation
 
-There is no tooling today for backing up the production site. Our
-deploy scripts handle code, but production *state* (member accounts,
-flex-objects, uploads, edited page content) lives only on the prod
-server. A disk failure, a botched manual edit, or a faulty migration
-would take real members and real content with it.
+There is no production-grade tooling today for backing up the site.
+The existing `deploy/backup.sh` handles code-shaped state (page
+markdown, theme config) but misses uploads, ships unencrypted, and
+keeps everything on the operator's laptop. A disk failure, a botched
+manual edit, or a faulty migration would take real members and real
+content with it.
 
 The data-lifecycle series of specs (this one + the migration runner
 + promote-to-staging + promote-to-prod) all assume that "fetch a
@@ -91,7 +110,19 @@ producer_version: "0.1.0"        # this script's own version
 ```
 
 `data_version` is the field the migration-runner spec will consume.
-This spec only writes it; it does not interpret or change it.
+This spec only writes it; it does not interpret or change it. The
+script reads the live tier's `config/www/user/data-version.yaml`
+over SFTP to populate this — see the data-versioning spec for the
+field's source-of-truth contract.
+
+`producer_version` is a constant declared near the top of
+`deploy/backup.sh` (e.g. `BACKUP_SCRIPT_VERSION="0.1.0"`); bump it
+in the same commit as a behaviour change to the script.
+
+A JSON Schema for this metadata file lives at
+`deploy/schemas/backup-meta.schema.yaml` (committed alongside the
+script) so future consumers — the migration runner, the promote
+scripts — can validate against it instead of parsing fields by hand.
 
 ---
 
@@ -112,7 +143,12 @@ Three viable storage options, ordered by recommendation:
    Most flexible, smallest blast radius if compromised, costs a few
    euros a month. AWS S3, Backblaze B2, or any S3-compatible service.
    The backup script `aws s3 cp`s or equivalent. Credentials in
-   `.env.deploy` alongside the existing tier credentials.
+   `.env.deploy` alongside the existing tier credentials. The new
+   variables (`BACKUP_S3_BUCKET`, `BACKUP_S3_ENDPOINT`,
+   `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` — name
+   choice up to the implementer, but pinned at acceptance time) must
+   land in `.env.deploy.example` so a fresh clone has a template to
+   fill in.
 2. **One.com's hosting backup feature**, if our plan includes
    programmatic access. Nice that it's already paid for; less nice
    that it's tied to one vendor and may not have a CLI.
@@ -144,7 +180,15 @@ What it does:
    markers and embed it in the archive.
 5. Encrypt the archive (see "Encryption" below).
 6. Upload to storage with a deterministic filename:
-   `prod-2026-04-29T12-34Z-v0.1.0-b247.tar.gz.age` or similar.
+   `prod-2026-04-29T12-34Z-v0.1.0-b247.tar.gz.age`.
+
+   Filename encoding: ISO-8601 UTC timestamp with `:` replaced by `-`
+   (filesystems and S3 prefixes dislike colons). Format is
+   `<tier>-<YYYY-MM-DD>T<HH-MM>Z-v<semver>-b<build>.tar.gz.age`. The
+   colon-to-hyphen swap applies only to the time portion; the date
+   keeps its literal `-` separators. Implementer must use this exact
+   form so the promote specs can derive backup IDs without parsing
+   ambiguity.
 7. Print the storage URL and a short summary.
 
 The script must work non-interactively (cron-friendly) and exit
@@ -195,6 +239,62 @@ expendable.
 
 ---
 
+## Operator-laptop privacy hygiene
+
+Restore-to-scratch unpacks bcrypt password hashes, member email
+addresses, and any uploaded files (including bug-report screenshots)
+into a local directory. macOS Time Machine, Spotlight indexing, and
+cloud-backup tools (Dropbox, iCloud Desktop, Google Drive) can
+silently capture that data. To prevent that:
+
+1. **Time Machine excludes.** Operators must run, once per machine
+   after first checkout:
+
+   ```sh
+   tmutil addexclusion ./backups
+   tmutil addexclusion ./deploy/staging-stage
+   tmutil addexclusion ./deploy/prod-stage
+   ```
+
+2. **Cloud-sync excludes.** `./backups/`, `./deploy/staging-stage/`,
+   and `./deploy/prod-stage/` must not live inside a Dropbox /
+   iCloud Drive / Google Drive synced root. Operators are
+   responsible for their machine layout.
+3. **`.gitignore` lines** for the three paths land in `.gitignore`
+   as part of this spec's acceptance — no scratch-data leak via a
+   stray `git add .`.
+4. **Spotlight.** A `.metadata_never_index` file in each scratch
+   path tells macOS to skip indexing — created by `restore.sh` when
+   it creates the scratch directory.
+
+The README's "First-time setup" section gains a "Backup operator
+hygiene" subsection that calls out these steps; the script prints a
+reminder banner the first time it writes into one of these paths on
+a given laptop.
+
+---
+
+## GAN sandbox compatibility
+
+GAN sub-agents run under the confinement hook documented in
+[CLAUDE.md](../CLAUDE.md#confinement--gan-agents-are-sandboxed-to-the-worktree),
+which blocks `rsync --delete` workflows and writes outside the
+worktree. The implications for this spec:
+
+- A GAN agent **cannot** exercise `restore.sh prod` or
+  `restore.sh staging` — both invoke `rsync --delete` against live
+  tier paths and would be rejected by the hook (correctly).
+- A GAN agent **can** exercise `backup.sh` against a fixture host,
+  and `restore.sh --to <scratch>` against a scratch directory inside
+  the worktree.
+- Acceptance criteria that need an end-to-end restore-to-tier loop
+  are operator-run, not GAN-run. Spec authors should phrase those
+  criteria so a non-destructive stand-in (restore-to-scratch + diff
+  against the backup) gives the GAN evaluator a way to score the
+  feature.
+
+---
+
 ## Encryption
 
 Backups contain bcrypt-hashed passwords, member email addresses, and
@@ -203,8 +303,14 @@ must be encrypted at rest.
 
 Recommended: [`age`](https://age-encryption.org). Single binary, no
 key infrastructure beyond a public key per recipient, integrates
-cleanly with shell scripts. The recipients (people who can decrypt)
-are listed in the backup script's config.
+cleanly with shell scripts.
+
+The recipients (public keys of people who can decrypt) live in
+`deploy/age-recipients.txt` — one age public key per line, comments
+allowed with `#`, committed to the repo. The backup script reads it
+via `age -R deploy/age-recipients.txt …`. Recipient rotation is a
+reviewable PR that adds or removes a line; the file's small size
+makes diffs obvious.
 
 The decryption key lives in a password manager (or hardware key) on
 the operator's machine, never in the repo.
@@ -215,6 +321,8 @@ rotation, multi-recipient policies. Add later if they're needed.
 ---
 
 ## Retention
+
+### In managed storage (S3 / B2 / equivalent)
 
 A simple retention rule, enforced by the backup script after each
 upload:
@@ -233,6 +341,19 @@ Retention enforcement is a step at the end of the upload phase. It
 queries the storage for existing backups and deletes anything that
 falls outside the rules above (and is not tagged).
 
+### Local copies on the operator's laptop
+
+When `--keep-local` is passed (or step 5 below failed to upload), a
+copy lands in `./backups/` on the operator's machine. The local
+retention rule is the simplest one that prevents disk fill: keep
+the most recent 14 local archives, drop older ones with each
+new run. This supersedes the previous `deploy/backup.sh`'s
+"keep last 30" rule — local copies are now a debugging convenience,
+not a primary retention layer (managed storage owns that).
+
+`./backups/` must be in `.gitignore` (it already is) and excluded
+from Time Machine — see "Operator-laptop privacy hygiene" below.
+
 ---
 
 ## Acceptance criteria
@@ -246,10 +367,14 @@ falls outside the rules above (and is not tagged).
 - [ ] The archive root contains a `backup-meta.yaml` with
       backup_taken_at / source_host / code_version / code_build /
       data_version / producer fields populated.
-- [ ] Encrypted with the recipient public keys configured at script
-      level.
+- [ ] Encrypted via `age -R deploy/age-recipients.txt`; the
+      recipients file exists, is committed, and contains at least
+      one valid age public key.
 - [ ] Filename includes a UTC timestamp, source host, code version,
-      and code build for human discoverability.
+      and code build for human discoverability, in the form
+      `<tier>-<YYYY-MM-DD>T<HH-MM>Z-v<semver>-b<build>.tar.gz.age`.
+- [ ] `deploy/schemas/backup-meta.schema.yaml` exists and validates
+      a sample `backup-meta.yaml` produced by the script.
 
 ### Restore — to directory
 
@@ -275,6 +400,17 @@ falls outside the rules above (and is not tagged).
       4 weekly archives in storage (plus any tagged ones).
 - [ ] A backup with `--tag pre-promotion-v0.2.0` is never deleted by
       retention sweeps.
+
+### Configuration plumbing
+
+- [ ] `.env.deploy.example` contains entries for the new managed-
+      storage credentials (bucket name, endpoint, key id, secret).
+- [ ] `.gitignore` excludes `./backups/`, `./deploy/staging-stage/`,
+      and `./deploy/prod-stage/`.
+- [ ] `restore.sh` writes `.metadata_never_index` into any scratch
+      directory it creates.
+- [ ] The README's "First-time setup" section names the
+      `tmutil addexclusion` commands the operator must run.
 
 ### Failure modes
 
