@@ -21,91 +21,11 @@ declare(strict_types=1);
 header('X-Robots-Tag: noindex, nofollow, noarchive');
 header('Content-Type: text/html; charset=utf-8');
 
-/** SemVer 2.0.0 uden build-metadata — build-tallet ligger separat i BUILD. */
-const APEX_VERSION_REGEX = '/^\d+\.\d+\.\d+(-[A-Za-z0-9.-]+)?$/';
-/** Ikke-negativt heltal, op til seks cifre er rigeligt. */
-const APEX_BUILD_REGEX = '/^\d+$/';
-
-/**
- * Læs én tekstfil og valider mod $regex. Returnerer null på manglende,
- * tom eller ikke-matchende fil. Logger nøjagtigt én advarsel pr. (sti,
- * årsag) for hele requestet via error_log().
- */
-function readValidatedFile(string $path, string $regex, string $label): ?string {
-    static $logged = [];
-    $logKey = $path . ':';
-
-    if (!is_readable($path)) {
-        $key = $logKey . 'missing';
-        if (!isset($logged[$key])) {
-            $logged[$key] = true;
-            error_log("[apex-version] $label file " . apexShortenPath($path) . ': missing');
-        }
-        return null;
-    }
-    $raw = @file_get_contents($path);
-    if ($raw === false) {
-        $key = $logKey . 'unreadable';
-        if (!isset($logged[$key])) {
-            $logged[$key] = true;
-            error_log("[apex-version] $label file " . apexShortenPath($path) . ': unreadable');
-        }
-        return null;
-    }
-    $trimmed = trim($raw);
-    if ($trimmed === '') {
-        $key = $logKey . 'empty';
-        if (!isset($logged[$key])) {
-            $logged[$key] = true;
-            error_log("[apex-version] $label file " . apexShortenPath($path) . ': empty');
-        }
-        return null;
-    }
-    if (!preg_match($regex, $trimmed)) {
-        $key = $logKey . 'regex_mismatch';
-        if (!isset($logged[$key])) {
-            $logged[$key] = true;
-            error_log("[apex-version] $label file " . apexShortenPath($path) . ': regex_mismatch');
-        }
-        return null;
-    }
-    return $trimmed;
-}
-
-/**
- * Trim absolutte stier ned til "apex/..."-segmentet, så fejllogning ikke
- * lækker operatorens $HOME eller container-layout.
- */
-function apexShortenPath(string $path): string {
-    $pos = strpos($path, 'apex/');
-    if ($pos !== false) {
-        return substr($path, $pos);
-    }
-    return basename($path);
-}
-
-/**
- * Læs apex' egne VERSION + BUILD ved request-tid (ikke fra version.json).
- * Returnerer { version: ?string, build: ?string }. Hver halvdel kan være
- * null individuelt.
- *
- * Memoiseres med static så templaten kan kalde funktionen flere gange
- * uden at re-logge. Stier konstrueres fra __DIR__ + literal — ingen user
- * input flyder ind i filsystemstien.
- *
- * @return array{version: ?string, build: ?string}
- */
-function readApexSiteVersion(): array {
-    static $cached = null;
-    if ($cached !== null) {
-        return $cached;
-    }
-    $cached = [
-        'version' => readValidatedFile(__DIR__ . '/VERSION', APEX_VERSION_REGEX, 'VERSION'),
-        'build'   => readValidatedFile(__DIR__ . '/BUILD',   APEX_BUILD_REGEX,   'BUILD'),
-    ];
-    return $cached;
-}
+// VERSION/BUILD reader — extracted to apex/site_version.php so the
+// Sprint-3 shell-level probe (tests/version/) can `require` it without
+// rendering the full landing page. Behaviour preserved verbatim; this
+// file just delegates.
+require_once __DIR__ . '/site_version.php';
 
 /**
  * Læs en udgaves version.json. Returnerer altid et normaliseret array
