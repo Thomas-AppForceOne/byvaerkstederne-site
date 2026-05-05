@@ -37,6 +37,13 @@ config/custom-services.d/
 deploy/staging/
 deploy/*.zip
 
+# Auto-generated build-number markers — written by deploy/deploy.sh
+# from `git rev-list --count HEAD` and shipped in the deploy package,
+# never committed (they're a function of the commit, so committing
+# would be a chicken-and-egg loop). See specifications/semantic_versioning_specification.md.
+apex/BUILD
+config/www/BUILD
+
 # Backups (stored locally, not in git)
 backups/
 
