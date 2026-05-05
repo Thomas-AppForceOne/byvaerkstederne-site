@@ -6,7 +6,14 @@
  * ikke udviklere. Hold sproget på dansk og fri af jargon. Versioner vises
  * som SemVer (læst fra repoens VERSION-fil ved deploy), ikke som git-SHA.
  * branch/sha_short ligger fortsat i version.json til drift-fejlsøgning,
- * men landingssiden læser kun `version` og `deployed_at`.
+ * men landingssiden læser kun `version`, `build` og `deployed_at`.
+ *
+ * Apex-egne værdier:
+ *   - apex/VERSION  — manuelt redigeret, committet
+ *   - apex/BUILD    — auto-genereret af deploy/deploy.sh, ikke committet
+ * Begge filer læses ved request-tid (ikke fra version.json) og valideres
+ * mod samme regex som site-version-pluginet på Grav-siden. Logning sker
+ * via PHP's error_log() — ingen Grav-stack tilgængelig her.
  */
 
 declare(strict_types=1);
@@ -14,9 +21,96 @@ declare(strict_types=1);
 header('X-Robots-Tag: noindex, nofollow, noarchive');
 header('Content-Type: text/html; charset=utf-8');
 
+/** SemVer 2.0.0 uden build-metadata — build-tallet ligger separat i BUILD. */
+const APEX_VERSION_REGEX = '/^\d+\.\d+\.\d+(-[A-Za-z0-9.-]+)?$/';
+/** Ikke-negativt heltal, op til seks cifre er rigeligt. */
+const APEX_BUILD_REGEX = '/^\d+$/';
+
+/**
+ * Læs én tekstfil og valider mod $regex. Returnerer null på manglende,
+ * tom eller ikke-matchende fil. Logger nøjagtigt én advarsel pr. (sti,
+ * årsag) for hele requestet via error_log().
+ */
+function readValidatedFile(string $path, string $regex, string $label): ?string {
+    static $logged = [];
+    $logKey = $path . ':';
+
+    if (!is_readable($path)) {
+        $key = $logKey . 'missing';
+        if (!isset($logged[$key])) {
+            $logged[$key] = true;
+            error_log("[apex-version] $label file " . apexShortenPath($path) . ': missing');
+        }
+        return null;
+    }
+    $raw = @file_get_contents($path);
+    if ($raw === false) {
+        $key = $logKey . 'unreadable';
+        if (!isset($logged[$key])) {
+            $logged[$key] = true;
+            error_log("[apex-version] $label file " . apexShortenPath($path) . ': unreadable');
+        }
+        return null;
+    }
+    $trimmed = trim($raw);
+    if ($trimmed === '') {
+        $key = $logKey . 'empty';
+        if (!isset($logged[$key])) {
+            $logged[$key] = true;
+            error_log("[apex-version] $label file " . apexShortenPath($path) . ': empty');
+        }
+        return null;
+    }
+    if (!preg_match($regex, $trimmed)) {
+        $key = $logKey . 'regex_mismatch';
+        if (!isset($logged[$key])) {
+            $logged[$key] = true;
+            error_log("[apex-version] $label file " . apexShortenPath($path) . ': regex_mismatch');
+        }
+        return null;
+    }
+    return $trimmed;
+}
+
+/**
+ * Trim absolutte stier ned til "apex/..."-segmentet, så fejllogning ikke
+ * lækker operatorens $HOME eller container-layout.
+ */
+function apexShortenPath(string $path): string {
+    $pos = strpos($path, 'apex/');
+    if ($pos !== false) {
+        return substr($path, $pos);
+    }
+    return basename($path);
+}
+
+/**
+ * Læs apex' egne VERSION + BUILD ved request-tid (ikke fra version.json).
+ * Returnerer { version: ?string, build: ?string }. Hver halvdel kan være
+ * null individuelt.
+ *
+ * Memoiseres med static så templaten kan kalde funktionen flere gange
+ * uden at re-logge. Stier konstrueres fra __DIR__ + literal — ingen user
+ * input flyder ind i filsystemstien.
+ *
+ * @return array{version: ?string, build: ?string}
+ */
+function readApexSiteVersion(): array {
+    static $cached = null;
+    if ($cached !== null) {
+        return $cached;
+    }
+    $cached = [
+        'version' => readValidatedFile(__DIR__ . '/VERSION', APEX_VERSION_REGEX, 'VERSION'),
+        'build'   => readValidatedFile(__DIR__ . '/BUILD',   APEX_BUILD_REGEX,   'BUILD'),
+    ];
+    return $cached;
+}
+
 /**
  * Læs en udgaves version.json. Returnerer altid et normaliseret array
- * så templaten ikke skal nullchecke.
+ * så templaten ikke skal nullchecke. Schema efter Sprint 1: { tier,
+ * version, build, deployed_at, branch, sha_short }.
  */
 function readTierVersion(string $tier): array {
     $base = __DIR__;
@@ -32,10 +126,20 @@ function readTierVersion(string $tier): array {
         return ['status' => 'malformed'];
     }
 
+    // Validate version.json's `version` and `build` fields against the
+    // same regex contract as the on-disk VERSION/BUILD files. A tier
+    // whose manifest is missing/invalid for either field still surfaces
+    // partial info if the other half is valid.
+    $rawVersion = isset($data['version']) && is_string($data['version']) ? trim($data['version']) : '';
+    $rawBuild   = isset($data['build'])   && is_string($data['build'])   ? trim($data['build'])   : '';
+    $version = ($rawVersion !== '' && preg_match(APEX_VERSION_REGEX, $rawVersion)) ? $rawVersion : null;
+    $build   = ($rawBuild   !== '' && preg_match(APEX_BUILD_REGEX,   $rawBuild))   ? $rawBuild   : null;
+
     return [
         'status'      => 'ok',
-        'version'     => $data['version']     ?? '?',
-        'deployed_at' => $data['deployed_at'] ?? '?',
+        'version'     => $version,
+        'build'       => $build,
+        'deployed_at' => isset($data['deployed_at']) && is_string($data['deployed_at']) ? $data['deployed_at'] : '',
     ];
 }
 
@@ -53,15 +157,40 @@ function formatDanishDateTime(string $iso): string {
     );
 }
 
-/** Render version + tidspunkt for et kort, eller en pæn fallback. */
+/**
+ * Render det kombinerede "Version X · build N" på et udgaveskort, plus
+ * "Lagt op …" tidsstemplet under. Hvis tieren slet ikke har en
+ * gyldig version.json (status != ok), eller hverken `version` eller
+ * `build` kunne valideres, falder vi tilbage til den eksisterende
+ * "endnu ikke udrullet"-fallback. Hvis kun den ene halvdel mangler,
+ * viser vi den der findes plus <em>ukendt</em> for den manglende.
+ *
+ * U+00B7 (interpunkt) bruges som adskiller mellem version og build,
+ * matchende formatet i Grav-sidens footer.
+ */
 function renderVersionLine(array $v): string {
     if ($v['status'] !== 'ok') {
         return '<em>endnu ikke udrullet</em>';
     }
+    $version = $v['version'] ?? null;
+    $build   = $v['build']   ?? null;
+    if ($version === null && $build === null) {
+        return '<em>endnu ikke udrullet</em>';
+    }
+    $vHtml = $version !== null ? htmlspecialchars($version) : '<em>ukendt</em>';
+    $bHtml = $build   !== null ? htmlspecialchars($build)   : '<em>ukendt</em>';
+    $deployedAt = $v['deployed_at'] ?? '';
+    $deployedHtml = $deployedAt !== ''
+        ? sprintf('<br><span class="hbc-deployed">Lagt op %s</span>',
+            htmlspecialchars(formatDanishDateTime($deployedAt)))
+        : '';
+    // Literal U+00B7 interpunct between version and build halves,
+    // matching the Grav-site footer.
     return sprintf(
-        '<strong>Version %s</strong><br><span class="hbc-deployed">Lagt op %s</span>',
-        htmlspecialchars($v['version']),
-        htmlspecialchars(formatDanishDateTime($v['deployed_at']))
+        '<strong>Version %s · build %s</strong>%s',
+        $vHtml,
+        $bHtml,
+        $deployedHtml
     );
 }
 
@@ -106,7 +235,16 @@ $tiers = [
     ],
 ];
 
-$apex = readTierVersion('apex');
+// Apex footer reads VERSION and BUILD directly from the on-disk files
+// at request time (NOT from apex/version.json). The "opdateret <DATE>"
+// timestamp continues to come from version.json — the deploy script is
+// the only thing that knows when this commit was uploaded; the source
+// tree itself doesn't carry deploy time.
+$apexVersion = readApexSiteVersion();
+$apexManifest = readTierVersion('apex');
+$apexDeployedAt = ($apexManifest['status'] === 'ok' && !empty($apexManifest['deployed_at']))
+    ? $apexManifest['deployed_at']
+    : '';
 
 ?><!doctype html>
 <html lang="da">
@@ -165,15 +303,30 @@ $apex = readTierVersion('apex');
         </section>
 
         <footer class="hbc-foot">
-            <p>
-                Denne side —
-                <?php if ($apex['status'] === 'ok'): ?>
-                Version <?= htmlspecialchars($apex['version']) ?>,
-                opdateret <?= htmlspecialchars(formatDanishDateTime($apex['deployed_at'])) ?>.
-                <?php else: ?>
-                <em>endnu ikke udrullet</em>.
-                <?php endif; ?>
-            </p>
+            <?php
+            // Robust footer: render the combined "Denne side — Version X · build N,
+            // opdateret <DATE>" line when at least one of the apex VERSION/BUILD
+            // values is present. If BOTH are missing/malformed, omit the entire
+            // "Denne side" line rather than emit "Version ukendt · build ukendt".
+            // The "opdateret <DATE>" half is preserved from the previous footer
+            // and is sourced from apex/version.json's deployed_at field.
+            $hasVersion = $apexVersion['version'] !== null;
+            $hasBuild   = $apexVersion['build']   !== null;
+            ?>
+            <?php if ($hasVersion || $hasBuild): ?>
+            <p><?php
+                echo 'Denne side — Version ';
+                echo $hasVersion ? htmlspecialchars($apexVersion['version']) : '<em>ukendt</em>';
+                echo ' · build ';
+                echo $hasBuild ? htmlspecialchars($apexVersion['build']) : '<em>ukendt</em>';
+                if ($apexDeployedAt !== '') {
+                    echo ', opdateret ' . htmlspecialchars(formatDanishDateTime($apexDeployedAt));
+                }
+                echo '.';
+            ?></p>
+            <?php elseif ($apexDeployedAt !== ''): ?>
+            <p>Denne side — opdateret <?= htmlspecialchars(formatDanishDateTime($apexDeployedAt)) ?>.</p>
+            <?php endif ?>
         </footer>
     </main>
 </body>
