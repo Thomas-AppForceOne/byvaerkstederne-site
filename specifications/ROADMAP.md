@@ -8,9 +8,9 @@ Folder policy (what belongs here, how specs become ADRs) lives in [CLAUDE.md](..
 
 ## Order
 
-### 1. Semantic version + build number display for apex and site — Planned
+### 1. Semantic version + build number display for apex and site — IMPLEMENTED
 
-**Spec:** [semantic_versioning_specification.md](semantic_versioning_specification.md)
+**Spec:** [archive/semantic_versioning_specification.md](archive/semantic_versioning_specification.md)
 
 Decouple the version label from the deploy script and split it into two component-scoped files: `apex/VERSION` for the selector page and `config/www/VERSION` for the Grav site. Both read at request time, so the displayed version is a property of the deployed code rather than of the deploy step. Add a "Version <X> · build <N>" line to the Grav site footer (currently the version is only visible on the apex).
 
