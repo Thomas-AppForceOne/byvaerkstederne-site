@@ -28,6 +28,26 @@ GRAV_VERSION="1.7.49.5"
 GRAV_ZIP="$PROJECT_DIR/deploy/grav-admin-v${GRAV_VERSION}.zip"
 GRAV_URL="https://getgrav.org/download/core/grav-admin/${GRAV_VERSION}"
 
+# Argument parsing — accept --dry-run as a flag in any position; the
+# remaining positional arg is the env. DEPLOY_DRY_RUN=1 in the
+# environment is also honoured. Dry-run produces all staging-dir
+# artifacts (BUILD, VERSION, version.json, package contents) but skips
+# the rsync/sshpass upload to one.com, so an operator (or test) can
+# verify what *would* be deployed without needing credentials.
+DRY_RUN="${DEPLOY_DRY_RUN:-0}"
+POSITIONAL=()
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run|--staging-only)
+            DRY_RUN=1
+            ;;
+        *)
+            POSITIONAL+=("$arg")
+            ;;
+    esac
+done
+set -- "${POSITIONAL[@]}"
+
 # Environment selection
 ENV="${1:-landing}"
 case "$ENV" in
@@ -68,19 +88,23 @@ case "$ENV" in
         ;;
 esac
 
-# Load credentials
+# Load credentials. Skipped under --dry-run so artifact production
+# can be verified on hosts that don't hold the deploy secrets (e.g.
+# the GAN evaluator running in a worktree).
 ENV_FILE="$PROJECT_DIR/.env.deploy"
-if [ ! -f "$ENV_FILE" ]; then
-    echo "❌  Missing .env.deploy — copy .env.deploy.example and fill in credentials"
-    exit 1
+if [ "$DRY_RUN" != "1" ]; then
+    if [ ! -f "$ENV_FILE" ]; then
+        echo "❌  Missing .env.deploy — copy .env.deploy.example and fill in credentials"
+        exit 1
+    fi
+    source "$ENV_FILE"
 fi
-source "$ENV_FILE"
 
 # Production lives on a separate hosting account from
 # hackersbychoice.dk (which serves landing + staging/test/dev). Gate prod
 # deploys behind its own credential set so a stray `./deploy.sh prod`
 # can't overwrite anything on hackersbychoice.dk.
-if [ "$ENV" = "prod" ] || [ "$ENV" = "production" ]; then
+if [ "$DRY_RUN" != "1" ] && { [ "$ENV" = "prod" ] || [ "$ENV" = "production" ]; }; then
     : "${DEPLOY_PROD_HOST:?prod deploy requires DEPLOY_PROD_HOST in .env.deploy — production is on a separate hosting account from staging/test/dev. Populate DEPLOY_PROD_HOST/USER/PASS/PORT/PATH there.}"
     : "${DEPLOY_PROD_USER:?prod deploy requires DEPLOY_PROD_USER in .env.deploy}"
     : "${DEPLOY_PROD_PASS:?prod deploy requires DEPLOY_PROD_PASS in .env.deploy}"
@@ -92,15 +116,77 @@ if [ "$ENV" = "prod" ] || [ "$ENV" = "production" ]; then
     DEPLOY_PATH="$DEPLOY_PROD_PATH"
 fi
 
-DEPLOY_TARGET="${DEPLOY_PATH}${ENV_SUBFOLDER}"
+DEPLOY_TARGET="${DEPLOY_PATH:-}${ENV_SUBFOLDER}"
 
+# =============================================================================
 # Capture deploy metadata (used for version.json on every tier).
+# =============================================================================
 #
-# `version` is the user-facing label, sourced from the repo's VERSION
-# file (SemVer). `branch` and `sha_short` stay in the manifest for ops
-# debugging — the public landing page reads only `version` + `deployed_at`.
-VERSION="$(cat "$PROJECT_DIR/VERSION" 2>/dev/null | tr -d '[:space:]')"
+# Two component-scoped VERSION files now live in the repo:
+#
+#   apex/VERSION         — version of the apex selector page
+#   config/www/VERSION   — version of the Grav site
+#
+# Plus a single auto-generated build number derived from the commit
+# being deployed. The build number is the same for every tier deployed
+# from the same commit (it is a function of the commit, not of the
+# deploy step). It must be computed exactly once per run, before any
+# per-tier branching, so apex and grav-tier deploys of the same commit
+# produce byte-identical BUILD files.
+#
+# `branch` and `sha_short` stay in the manifest for ops debugging —
+# nothing public reads them.
+
+# 1. Verify the working tree is a real git repository.
+if ! git -C "$PROJECT_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+    echo "❌  Cannot compute build number: \$PROJECT_DIR is not a git repository." >&2
+    echo "    deploy.sh must be run from inside the project's git checkout." >&2
+    exit 1
+fi
+
+# 2. Shallow-clone guard. `git rev-list --count HEAD` reports only the
+#    depth the clone has, so a `git fetch --depth 1` checkout would
+#    silently underreport the build number and break the cross-tier
+#    stability contract. Abort with a clear error before computing.
+IS_SHALLOW="$(git -C "$PROJECT_DIR" rev-parse --is-shallow-repository 2>/dev/null || echo unknown)"
+if [ "$IS_SHALLOW" != "false" ]; then
+    echo "❌  Refusing to deploy from a shallow clone." >&2
+    echo "    git rev-parse --is-shallow-repository returned: '$IS_SHALLOW'" >&2
+    echo "    The build number is computed via 'git rev-list --count HEAD'," >&2
+    echo "    which underreports on shallow clones and would silently produce" >&2
+    echo "    different build numbers across tiers running the same commit." >&2
+    echo "    Re-clone with full history (no --depth) and try again." >&2
+    exit 1
+fi
+
+# 3. Compute the build number EXACTLY ONCE. This integer is the bare
+#    output of `git rev-list --count HEAD` — no env vars or
+#    operator-supplied strings are interpolated into it.
+if ! BUILD="$(git -C "$PROJECT_DIR" rev-list --count HEAD 2>/dev/null)"; then
+    echo "❌  git rev-list --count HEAD failed in the project tree." >&2
+    echo "    Cannot compute build number; aborting." >&2
+    exit 1
+fi
+# Belt-and-braces validation: BUILD must be a non-empty digit string.
+if ! printf '%s' "$BUILD" | grep -Eq '^[0-9]+$'; then
+    echo "❌  git rev-list --count HEAD returned an unexpected value." >&2
+    echo "    Refusing to write a non-integer build number." >&2
+    exit 1
+fi
+
+# 4. Pick the component-scoped VERSION file based on env kind. Apex
+#    deploys label themselves with apex/VERSION; Grav-tier deploys
+#    label themselves with config/www/VERSION. The repo-root VERSION
+#    file has been removed.
+if [ "$ENV_KIND" = "landing" ]; then
+    VERSION_SRC="$PROJECT_DIR/apex/VERSION"
+else
+    VERSION_SRC="$PROJECT_DIR/config/www/VERSION"
+fi
+
+VERSION="$(cat "$VERSION_SRC" 2>/dev/null | tr -d '[:space:]')"
 VERSION="${VERSION:-unknown}"
+
 GIT_SHA="$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 GIT_BRANCH="$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%MZ)"
@@ -115,25 +201,35 @@ echo ""
 
 # ── Step 1: Build deploy package ────────────────────────────
 if [ "$ENV_KIND" = "grav" ]; then
-    echo "→ Step 1/4: Grav core..."
-    if [ -f "$GRAV_ZIP" ]; then
-        echo "  ✓ Cached (v${GRAV_VERSION})"
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "→ Step 1/4: (dry-run — skipping Grav core download/extract)"
+        echo "→ Step 2/4: Building deploy package (dry-run, no Grav core)..."
+        rm -rf "$STAGING_DIR"
+        mkdir -p "$STAGING_DIR"
     else
-        echo "  Downloading Grav v${GRAV_VERSION}..."
-        curl -L -o "$GRAV_ZIP" "$GRAV_URL"
-        echo "  ✓ Downloaded"
+        echo "→ Step 1/4: Grav core..."
+        if [ -f "$GRAV_ZIP" ]; then
+            echo "  ✓ Cached (v${GRAV_VERSION})"
+        else
+            echo "  Downloading Grav v${GRAV_VERSION}..."
+            curl -L -o "$GRAV_ZIP" "$GRAV_URL"
+            echo "  ✓ Downloaded"
+        fi
+
+        echo "→ Step 2/4: Building deploy package..."
+        rm -rf "$STAGING_DIR"
+        mkdir -p "$STAGING_DIR"
+
+        # Extract Grav core
+        unzip -q "$GRAV_ZIP" -d "$STAGING_DIR"
+        cp -a "$STAGING_DIR"/grav-admin/. "$STAGING_DIR"/
+        rm -rf "$STAGING_DIR/grav-admin"
     fi
 
-    echo "→ Step 2/4: Building deploy package..."
-    rm -rf "$STAGING_DIR"
-    mkdir -p "$STAGING_DIR"
-
-    # Extract Grav core
-    unzip -q "$GRAV_ZIP" -d "$STAGING_DIR"
-    cp -a "$STAGING_DIR"/grav-admin/. "$STAGING_DIR"/
-    rm -rf "$STAGING_DIR/grav-admin"
-
-    # Overlay our custom user directory
+    # Overlay our custom user directory (executes in both real and
+    # dry-run mode so version-related staging artifacts still see the
+    # right tree; non-version package contents are validated by the
+    # full deploy in production).
     rm -rf "$STAGING_DIR/user/pages" "$STAGING_DIR/user/themes/quark" 2>/dev/null
 
     rsync -a --exclude='.DS_Store' \
@@ -236,7 +332,7 @@ else
     echo "→ Step 2/4: Building apex landing package..."
     rm -rf "$STAGING_DIR"
     mkdir -p "$STAGING_DIR"
-    rsync -a --exclude='.DS_Store' \
+    rsync -a --exclude='.DS_Store' --exclude='BUILD' \
         "$PROJECT_DIR/apex/" \
         "$STAGING_DIR/"
 fi
@@ -252,12 +348,33 @@ Disallow: /
 ROBOTS
 fi
 
-# Write version manifest. Reads back via apex/index.php for the selector;
-# otherwise just a marker file useful for ops debugging.
+# =============================================================================
+# Stage component-scoped VERSION + BUILD files.
+# =============================================================================
+#
+# - Landing: $STAGING_DIR is the apex docroot, so VERSION + BUILD land
+#   directly at its root. (Rsync copied apex/VERSION already; we
+#   re-write it from the trimmed value to be explicit and to defend
+#   against stray whitespace.)
+# - Grav tiers: $STAGING_DIR is the Grav root, mirroring config/www/
+#   on the remote. Place VERSION + BUILD at its root so the deployed
+#   instance can read config/www/VERSION and config/www/BUILD at
+#   request time (Sprint 2 wires that up).
+#
+# BUILD is the bare integer from `git rev-list --count HEAD`, computed
+# once above. No env vars or operator strings are interpolated.
+printf '%s\n' "$VERSION" > "$STAGING_DIR/VERSION"
+printf '%s\n' "$BUILD"   > "$STAGING_DIR/BUILD"
+
+# Write version manifest. The new schema gains a `build` field
+# alongside `version`. Both mirror the deployed VERSION/BUILD files.
+# `branch` and `sha_short` continue to be written for ops debugging
+# only; nothing public reads them.
 cat > "$STAGING_DIR/version.json" << JSON
 {
     "tier": "${ENV}",
     "version": "${VERSION}",
+    "build": "${BUILD}",
     "deployed_at": "${DEPLOYED_AT}",
     "branch": "${GIT_BRANCH}",
     "sha_short": "${GIT_SHA}"
@@ -265,8 +382,19 @@ cat > "$STAGING_DIR/version.json" << JSON
 JSON
 
 echo "  ✓ Package built ($(du -sh "$STAGING_DIR" | cut -f1))"
+echo "  ✓ Version: ${VERSION} · build ${BUILD}"
 
 # ── Step 3: Upload via rsync ────────────────────────────────
+if [ "$DRY_RUN" = "1" ]; then
+    echo "→ Step 3/4: (dry-run — skipping upload to ${DEPLOY_HOST:-<unset>}:${DEPLOY_TARGET})"
+    echo "  ✓ Staging dir ready at $STAGING_DIR"
+    echo ""
+    echo "  ✅  Dry-run complete — staging dir produced, no remote upload performed."
+    echo "  📦  Inspect: $STAGING_DIR"
+    echo ""
+    exit 0
+fi
+
 echo "→ Step 3/4: Uploading to ${DEPLOY_HOST}:${DEPLOY_TARGET}..."
 
 # Ensure target directory exists
