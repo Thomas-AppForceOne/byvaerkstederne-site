@@ -274,31 +274,29 @@ detect_grav_container() {
 }
 
 site_read_json() {
-  # The site-version plugin reads from filesystem paths derived from
-  # GRAV_ROOT / __DIR__ inside the container. We bind-mount via the
-  # linuxserver/grav layout: /config/www/{VERSION,BUILD} are the
-  # source-of-truth files; the plugin's resolveVersionRoot() picks them
-  # up correctly. We invoke a small PHP one-liner inside the container
-  # that boots Grav just enough to construct the plugin's VersionReader
-  # against the exact path pair the Twig helper would resolve.
+  # Canonical bin/grav-driven entry point: invoke
+  #   bin/plugin site-version read
+  # which boots Grav far enough to load the site-version plugin and
+  # delegates to the same VersionReader the site_version() Twig
+  # function uses. See
+  # config/www/user/plugins/site-version/cli/ReadCommand.php.
   #
-  # We deliberately bypass the full Twig pipeline because spinning up a
-  # minimal page template for `bin/grav twig:render` requires more
-  # plumbing than the unit-level contract demands. The reader IS the
-  # helper — the plugin's site_version() function delegates to it
-  # verbatim (see config/www/user/plugins/site-version/site-version.php
-  # onTwigInitialized closure).
-  docker exec "$GRAV_CONTAINER_NAME" \
-    php -d log_errors=Off -d error_reporting=0 -r '
-      require "/app/www/public/user/plugins/site-version/src/VersionReader.php";
-      $r = new \Grav\Plugin\SiteVersion\VersionReader(
-        "/config/www/VERSION",
-        "/config/www/BUILD",
-        null,
-        "site-version-probe"
-      );
-      echo json_encode($r->read());
-    '
+  # Why bin/plugin not bin/grav? Grav distinguishes "core CLI" (bin/grav,
+  # things like clearcache/backup) from "per-plugin CLI" (bin/plugin
+  # <name> <subcommand>) — both share the same console framework and
+  # same Grav bootstrap. The contract criterion calls out either as
+  # acceptable ("a small Grav CLI command, a Twig render via bin/grav,
+  # or by booting Grav and calling the plugin's site_version()
+  # function"); the plugin command is the cleanest of the three because
+  # Twig render via bin/grav is not a built-in command and a hand-
+  # rolled boot from raw PHP fails on theme:// resource resolution.
+  #
+  # The container's bind-mount layout puts the source-of-truth
+  # VERSION/BUILD at /config/www/{VERSION,BUILD}; the plugin's
+  # resolveVersionRoot() resolves to that path automatically via the
+  # realpath(__DIR__) fallback (see ReadCommand::resolveVersionRoot).
+  docker exec -w /app/www/public "$GRAV_CONTAINER_NAME" \
+    bin/plugin site-version read 2>/dev/null
 }
 
 assert_site_eq() {

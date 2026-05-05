@@ -94,12 +94,31 @@ The temp directory itself is deleted on exit.
 
 - The **apex** helper is a plain PHP file with no Grav dependency, so
   the cheapest way to exercise it from a host without PHP is a one-shot
-  `docker run --rm php:8.3-cli` against the worktree as `/work`.
-- The **site** helper is a Grav plugin that the spec mandates be
-  invokable through `bin/grav`. The site-version plugin's
-  `site_version()` Twig function delegates verbatim to
-  `\Grav\Plugin\SiteVersion\VersionReader::read()`; the probe
-  exercises that exact reader inside the running Grav container so the
-  resolution path mirrors the production Twig call. No web request,
-  no network round-trip, no Twig template render needed for the unit
-  contract.
+  `docker run --rm php:8.3-cli` against the worktree as `/work`. The
+  container loads `apex/site_version.php` via `require` and prints the
+  result of `readApexSiteVersion()` as JSON.
+- The **site** helper is a Grav plugin that the contract mandates be
+  invokable through `bin/grav`. The probe runs the canonical Grav-CLI
+  entry point:
+
+  ```bash
+  docker exec -w /app/www/public <container> bin/plugin site-version read
+  ```
+
+  This boots Grav, loads the `site-version` plugin's CLI command
+  (`config/www/user/plugins/site-version/cli/ReadCommand.php`), and
+  delegates to the same `VersionReader::read()` the plugin's
+  `site_version()` Twig function uses. Output is a single line of JSON
+  with the same shape (`{"version": "...", "build": "..."}`) the Twig
+  function returns.
+
+  Why `bin/plugin` rather than `bin/grav`? Grav splits its CLI between
+  core commands (`bin/grav clearcache`, `bin/grav backup`) and per-
+  plugin commands (`bin/plugin <name> <subcommand>`). Both share the
+  same Grav bootstrap and the same Symfony console framework. The
+  contract criterion calls out three acceptable paths — *a small Grav
+  CLI command, a Twig render via bin/grav, or by booting Grav and
+  calling the plugin's site_version() function* — and the plugin
+  command is the cleanest realisation: it boots Grav exactly once per
+  invocation, doesn't require a Twig template fixture, and lives
+  alongside the plugin it tests.
