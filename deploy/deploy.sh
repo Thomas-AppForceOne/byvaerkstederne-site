@@ -24,9 +24,9 @@ export PATH="/opt/homebrew/bin:$PATH"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 STAGING_DIR="$PROJECT_DIR/deploy/staging"
-GRAV_VERSION="1.7.49.5"
+GRAV_VERSION="1.7.52"
 GRAV_ZIP="$PROJECT_DIR/deploy/grav-admin-v${GRAV_VERSION}.zip"
-GRAV_URL="https://getgrav.org/download/core/grav-admin/${GRAV_VERSION}"
+GRAV_URL="https://github.com/getgrav/grav/releases/download/${GRAV_VERSION}/grav-admin-v${GRAV_VERSION}.zip"
 
 # Argument parsing — accept --dry-run as a flag in any position; the
 # remaining positional arg is the env. DEPLOY_DRY_RUN=1 in the
@@ -212,7 +212,24 @@ if [ "$ENV_KIND" = "grav" ]; then
             echo "  ✓ Cached (v${GRAV_VERSION})"
         else
             echo "  Downloading Grav v${GRAV_VERSION}..."
-            curl -L -o "$GRAV_ZIP" "$GRAV_URL"
+            # --fail aborts on any 4xx/5xx instead of saving the error page as a "zip".
+            # Tmp file + unzip -tq sanity check + atomic rename so a failed
+            # download never leaves a corrupt cache that the next run mistakes
+            # for a hit. (Pre-fix: getgrav.org returned 404 HTML for a typo'd
+            # GRAV_VERSION, curl -L cheerfully saved it as .zip, unzip 30
+            # seconds later was the first sign of trouble.)
+            GRAV_TMP="${GRAV_ZIP}.tmp.$$"
+            if ! curl -fL --retry 2 -o "$GRAV_TMP" "$GRAV_URL"; then
+                rm -f "$GRAV_TMP"
+                echo "  ✗ Failed to download $GRAV_URL — check GRAV_VERSION (currently '$GRAV_VERSION') against https://github.com/getgrav/grav/releases" >&2
+                exit 1
+            fi
+            if ! unzip -tq "$GRAV_TMP" >/dev/null 2>&1; then
+                rm -f "$GRAV_TMP"
+                echo "  ✗ Downloaded file is not a valid zip — refusing to cache" >&2
+                exit 1
+            fi
+            mv "$GRAV_TMP" "$GRAV_ZIP"
             echo "  ✓ Downloaded"
         fi
 
