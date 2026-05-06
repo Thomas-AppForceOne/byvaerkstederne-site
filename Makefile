@@ -76,17 +76,20 @@ status: ## Show container status
 
 deploy: deploy-prod ## Alias for deploy-prod
 
-deploy-prod: ## Deploy to production (hackersbychoice.dk)
+deploy-prod: ## Deploy to production (www.byvaerkstederne.dk — separate hosting)
 	@./deploy/deploy.sh prod
 
-deploy-test: ## Deploy to test (hackersbychoice.dk/test)
+deploy-staging: ## Deploy to staging (staging.hackersbychoice.dk)
+	@./deploy/deploy.sh staging
+
+deploy-test: ## Deploy to test (test.hackersbychoice.dk)
 	@./deploy/deploy.sh test
 
-deploy-dev: ## Deploy to dev (hackersbychoice.dk/dev)
+deploy-dev: ## Deploy to dev (dev.hackersbychoice.dk)
 	@./deploy/deploy.sh dev
 
-deploy-staging: ## Deploy to staging (hackersbychoice.dk/staging)
-	@./deploy/deploy.sh staging
+deploy-landing: ## Deploy the apex selector page (hackersbychoice.dk)
+	@./deploy/deploy.sh landing
 
 # ── Backup ─────────────────────────────────────────────
 
