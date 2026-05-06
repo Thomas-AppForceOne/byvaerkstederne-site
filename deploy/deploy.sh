@@ -191,13 +191,41 @@ GIT_SHA="$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || echo unkn
 GIT_BRANCH="$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%MZ)"
 
-echo ""
-echo "  ╔══════════════════════════════════════╗"
-echo "  ║  Byværkstederne — Deploy             ║"
-echo "  ║  Environment: ${ENV_LABEL}$(printf '%*s' $((20 - ${#ENV_LABEL})) '')║"
-echo "  ║  Target: ${DEPLOY_TARGET}            "
-echo "  ╚══════════════════════════════════════╝"
-echo ""
+# Print a Unicode box that auto-sizes to the longest line. Width is
+# measured with `wc -m` (codepoints) rather than `${#var}` (bytes),
+# so multi-byte characters like 'æ' and the em dash render in the
+# correct column. This replaces an earlier hand-padded banner that
+# couldn't keep its right border aligned across variable-length
+# DEPLOY_TARGET paths.
+draw_banner() {
+    local lines=("$@") line max=0 w pad inner border
+    # `wc -m` only counts codepoints (not bytes) when the current
+    # locale supports multibyte. Make/cron invocations sometimes
+    # strip LANG, leaving wc in C locale where -m falls back to -c
+    # (bytes). With a 2-byte 'æ' and 3-byte '—' that means an
+    # off-by-three on the closing border. Force UTF-8 explicitly.
+    _w() { printf '%s' "$1" | LC_ALL=en_US.UTF-8 wc -m | tr -d ' '; }
+    for line in "${lines[@]}"; do
+        w=$(_w "$line")
+        [ "$w" -gt "$max" ] && max="$w"
+    done
+    inner=$((max + 4))   # one space padding on each interior side, ×2
+    border=$(printf '═%.0s' $(seq 1 "$inner"))
+    echo ""
+    echo "  ╔${border}╗"
+    for line in "${lines[@]}"; do
+        w=$(_w "$line")
+        pad=$((max - w))
+        printf "  ║  %s%*s  ║\n" "$line" "$pad" ""
+    done
+    echo "  ╚${border}╝"
+    echo ""
+}
+
+draw_banner \
+    "Byværkstederne — Deploy" \
+    "Environment: ${ENV_LABEL}" \
+    "Target: ${DEPLOY_TARGET}"
 
 # ── Step 1: Build deploy package ────────────────────────────
 if [ "$ENV_KIND" = "grav" ]; then
