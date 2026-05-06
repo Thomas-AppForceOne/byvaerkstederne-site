@@ -7,3 +7,8 @@
 # subpage on staging.hackersbychoice.dk.
 custom_base_url: 'https://staging.hackersbychoice.dk'
 absolute_urls: false
+
+# Same session-cookie-path fix as dev/test — see
+# dev.hackersbychoice.dk/config/system.yaml for the full diagnosis.
+session:
+  path: /
