@@ -1,4 +1,4 @@
-.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging backup-prod backup-test test test-headed test-auth test-install
+.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging deploy-landing backup-prod backup-test test test-headed test-auth test-install test-deploy
 
 # Default target
 help: ## Show this help
@@ -153,6 +153,9 @@ test-headed: ## Run tests with browser visible (for debugging)
 	if [ -f $$HOME/.gan-secrets/workshop-site.env ]; then set -a; . $$HOME/.gan-secrets/workshop-site.env; set +a; fi; \
 	echo "Running tests against http://127.0.0.1:$$PORT (headed)"; \
 	GRAV_PORT=$$PORT npx playwright test tests/anonymous.spec.js --headed
+
+test-deploy: ## Run deploy-script regression tests (rsync excludes preserve live state)
+	@bash tests/deploy/excludes-preserve-live-state.sh
 
 test-auth: ## Run authenticated tests (auto-sources ~/.gan-secrets/workshop-site.env)
 	@PORT="$${GRAV_PORT}"; \

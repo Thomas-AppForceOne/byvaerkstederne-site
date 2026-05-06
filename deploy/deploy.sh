@@ -419,26 +419,97 @@ sshpass -p "$DEPLOY_PASS" ssh -o StrictHostKeyChecking=no -p "$DEPLOY_PORT" \
     "${DEPLOY_USER}@${DEPLOY_HOST}" \
     "mkdir -p ${DEPLOY_TARGET}"
 
-sshpass -p "$DEPLOY_PASS" rsync -avz --delete \
-    --exclude='cache/compiled/*' \
-    --exclude='cache/twig/*' \
-    --exclude='cache/doctrine/*' \
-    --exclude='logs/*' \
-    --exclude='backup/*' \
-    --exclude='tmp/*' \
-    --exclude='.DS_Store' \
-    --exclude='/dev/' \
-    --exclude='/test/' \
-    --exclude='/staging/' \
+# =============================================================================
+# rsync flag set — used for both the dry-run pre-flight and the real upload.
+# =============================================================================
+#
+# History the comments below encode (read it before you delete an exclude):
+#
+#   April 2026 — accounts wipe. A deploy without `user/accounts/` in
+#                 the exclude list ran `rsync --delete`; every Grav user
+#                 record on the live tier was destroyed. Recovery: manual
+#                 user re-creation. Lesson: live state must be excluded.
+#   May   2026 — dev re-wipe. The post-incident exclude list shrank back
+#                 to what's above this comment block, and a routine
+#                 `make deploy-dev` deleted user 'bobo' plus the entire
+#                 flex-account index, scheduler queue, feed, notifications.
+#                 Same root cause. This time we wrap with belt-and-braces.
+#
+# Three layers of protection:
+#
+#   Layer 1 — explicit excludes for every known live-state path.
+#             Triple-asterisk (`***`) excludes the directory AND its
+#             contents. Plain `/` or `**` leaves the directory itself
+#             eligible for deletion in some rsync builds.
+#
+#   Layer 2 — `--max-delete=N` hard cap. Normal deploys delete ≤5 files
+#             (stale theme assets, removed pages). 25 leaves headroom for
+#             a legitimate cleanup but rsync will refuse the upload if a
+#             misconfiguration would blow past it.
+#
+#   Layer 3 — pre-flight: run rsync with `-n` (dry-run) first, scan the
+#             "deleting …" lines for anything under a live-state path,
+#             abort BEFORE the real upload if any survive the excludes.
+#             Catches cases where someone edits the exclude list and gets
+#             the pattern wrong (e.g. forgets the `***` suffix), letting
+#             user data through despite our intent.
+#
+# The flags are kept in an array so the dry-run and the real run cannot
+# diverge — both call rsync with exactly the same arg vector.
+RSYNC_FLAGS=(
+    -avz --delete --max-delete=25
+    # ── Live-state paths — NEVER touched by deploy ──
+    --exclude='user/accounts/***'              # Grav login/admin user YAMLs
+    --exclude='user/data/***'                  # flex objects, scheduler queue, feed, notifications
+    --exclude='user/config/security.yaml'      # auto-generated salts (root env)
+    --exclude='user/env/*/config/security.yaml' # auto-generated salts (per-env)
+    # ── Transient/regenerable ──
+    --exclude='cache/compiled/*'
+    --exclude='cache/twig/*'
+    --exclude='cache/doctrine/*'
+    --exclude='logs/*'
+    --exclude='backup/*'
+    --exclude='tmp/*'
+    --exclude='.DS_Store'
+    # ── Sibling-folder subdomain protection ──
+    # /dev /test /staging live as sibling folders under the same apex
+    # docroot when deploying `landing`. The leading `/` pins them to
+    # the rsync root, so this doesn't accidentally exclude e.g. user/test
+    # or cache/dev. On a dev/test/staging deploy the target is already
+    # inside the matching folder, so these excludes don't apply at all
+    # (rsync evaluates patterns relative to the source root).
+    --exclude='/dev/'
+    --exclude='/test/'
+    --exclude='/staging/'
+)
+
+# Layer 3 — pre-flight dry-run. Refuse to proceed if anything in the
+# live-state denylist would still be deleted. (`grep -E` returns 1 when
+# nothing matches; `|| true` avoids set -e tripping on the no-match case.)
+echo "  Pre-flight delete check..."
+if ! DRY_OUT="$(sshpass -p "$DEPLOY_PASS" rsync -n "${RSYNC_FLAGS[@]}" \
+        -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
+        "$STAGING_DIR/" \
+        "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_TARGET}/" 2>&1)"; then
+    echo "❌  Pre-flight rsync failed:" >&2
+    printf '%s\n' "$DRY_OUT" >&2
+    exit 1
+fi
+SUSPICIOUS="$(printf '%s\n' "$DRY_OUT" \
+    | grep -E '^deleting (user/accounts/|user/data/|.*security\.yaml$)' || true)"
+if [ -n "$SUSPICIOUS" ]; then
+    echo "❌  Pre-flight rsync would delete live-state paths — aborting:" >&2
+    printf '  %s\n' "$SUSPICIOUS" >&2
+    echo "    The LIVE_STATE excludes in $0 must cover all of these." >&2
+    echo "    DO NOT bypass — these are real user accounts / runtime data." >&2
+    exit 1
+fi
+
+# Real upload — same flag vector as the pre-flight.
+sshpass -p "$DEPLOY_PASS" rsync "${RSYNC_FLAGS[@]}" \
     -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
     "$STAGING_DIR/" \
     "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_TARGET}/"
-# /dev /test /staging excludes protect sibling-folder subdomain deploys
-# from being deleted by an apex-target rsync --delete. The leading / pins
-# them to the rsync root (so we don't accidentally exclude e.g. user/test
-# or any nested cache/dev path). On a dev/test/staging deploy the target
-# is already inside the matching folder, so the excludes don't apply
-# (rsync evaluates them relative to the source root).
 
 echo "  ✓ Upload complete"
 
