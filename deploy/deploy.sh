@@ -491,6 +491,20 @@ RSYNC_FLAGS=(
     --exclude='user/data/***'                  # flex objects, scheduler queue, feed, notifications
     --exclude='user/config/security.yaml'      # auto-generated salts (root env)
     --exclude='user/env/*/config/security.yaml' # auto-generated salts (per-env)
+    # ── Plugin dev-only artefacts — should never reach a live tier ──
+    # feature-flags has only `require-dev` dependencies (phpunit, twig
+    # for tests, etc.) so its vendor/ is dev-only and should never be
+    # on prod/staging/test. Older deploys accidentally shipped a
+    # composer-with-dev install once, leaving thousands of cruft files
+    # on remote tiers; without this exclude rsync's --delete would
+    # try to clean them up and trip the --max-delete cap. Excluding
+    # preserves the cruft (until a separate manual cleanup) and
+    # prevents future re-pollution. Other plugins' vendor dirs (admin,
+    # form, flex-objects, login, email, etc.) are real production
+    # dependencies — they're present locally and ship normally.
+    --exclude='user/plugins/feature-flags/vendor/***'
+    --exclude='user/plugins/feature-flags/tests/***'
+    --exclude='user/plugins/feature-flags/phpunit.xml.dist'
     # ── Transient/regenerable ──
     # Triple-asterisk excludes the directory AND its contents from
     # rsync's deletion bookkeeping. Plain `*` excludes only the
