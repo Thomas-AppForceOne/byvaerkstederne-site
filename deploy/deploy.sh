@@ -464,12 +464,21 @@ RSYNC_FLAGS=(
     --exclude='user/config/security.yaml'      # auto-generated salts (root env)
     --exclude='user/env/*/config/security.yaml' # auto-generated salts (per-env)
     # ── Transient/regenerable ──
-    --exclude='cache/compiled/*'
-    --exclude='cache/twig/*'
-    --exclude='cache/doctrine/*'
-    --exclude='logs/*'
-    --exclude='backup/*'
-    --exclude='tmp/*'
+    # Triple-asterisk excludes the directory AND its contents from
+    # rsync's deletion bookkeeping. Plain `*` excludes only the
+    # contents, leaving the dir eligible for deletion — but since
+    # the (excluded) files inside still register as "non-empty",
+    # rsync prints "cannot delete non-empty directory: …" and moves
+    # on. Functionally identical, but `***` keeps the deploy log
+    # readable so a real deletion-refusal would actually stand out.
+    # Cache invalidation is handled by `bin/grav cache --all` in
+    # Step 4, which fails loud on error.
+    --exclude='cache/compiled/***'
+    --exclude='cache/twig/***'
+    --exclude='cache/doctrine/***'
+    --exclude='logs/***'
+    --exclude='backup/***'
+    --exclude='tmp/***'
     --exclude='.DS_Store'
     # ── Sibling-folder subdomain protection ──
     # /dev /test /staging live as sibling folders under the same apex
