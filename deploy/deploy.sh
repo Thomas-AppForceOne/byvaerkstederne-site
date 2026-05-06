@@ -517,9 +517,28 @@ echo "  ✓ Upload complete"
 echo "→ Step 4/4: Post-deploy tasks..."
 
 if [ "$ENV_KIND" = "grav" ]; then
-    sshpass -p "$DEPLOY_PASS" ssh -o StrictHostKeyChecking=no -p "$DEPLOY_PORT" \
-        "${DEPLOY_USER}@${DEPLOY_HOST}" \
-        "cd ${DEPLOY_TARGET} && php bin/grav cache --all 2>/dev/null || true"
+    # Cache clear must succeed. The rsync block above intentionally
+    # excludes cache/ to avoid uploading dev cache state, which means
+    # the LIVE remote still holds compiled config + twig from the
+    # PREVIOUS deploy after rsync. `bin/grav cache --all` is what
+    # actually invalidates them. If it fails (PHP fatal, permission
+    # glitch, plugin error), the site serves new code against stale
+    # cache — the failure mode that bit before the May 2026 incident.
+    #
+    # Both `|| true` (was swallowing exit code) and `2>/dev/null` (was
+    # discarding stderr) have been removed. Under `set -euo pipefail`
+    # at the top of the script, a non-zero exit here will abort the
+    # deploy with a visible error, which is the correct behaviour.
+    if ! sshpass -p "$DEPLOY_PASS" ssh -o StrictHostKeyChecking=no -p "$DEPLOY_PORT" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "cd ${DEPLOY_TARGET} && php bin/grav cache --all"; then
+        echo ""
+        echo "❌  Cache clear failed on ${DEPLOY_HOST}:${DEPLOY_TARGET}." >&2
+        echo "    The new code is uploaded but compiled config + twig are stale." >&2
+        echo "    SSH in and run: cd ${DEPLOY_TARGET} && php bin/grav cache --all" >&2
+        echo "    Then verify the site renders the expected version/build." >&2
+        exit 1
+    fi
     echo "  ✓ Cache cleared"
 else
     echo "  ✓ (landing — no Grav cache to clear)"
