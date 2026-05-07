@@ -1,0 +1,63 @@
+# deploy/schemas/backup-meta.schema.yaml
+#
+# JSON Schema (Draft 2020-12) for the `backup-meta.yaml` file that
+# `deploy/backup.sh` writes at the root of every produced archive.
+#
+# Future consumers (the migration runner, promote-to-staging,
+# promote-to-prod) MUST validate against this schema instead of
+# parsing the YAML field-by-field. That keeps the metadata contract
+# in one place and makes drift detectable.
+#
+# This file is YAML-encoded for human readability; loaders that
+# require strict JSON Schema can `yaml.safe_load` it before passing
+# to a JSON Schema validator.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://byvaerkstederne.dk/schemas/backup-meta.schema.yaml"
+title: "Backup metadata"
+description: "Metadata embedded at the root of every encrypted backup archive."
+type: "object"
+additionalProperties: false
+required:
+  - backup_taken_at
+  - source_host
+  - code_version
+  - code_build
+  - data_version
+  - producer
+  - producer_version
+properties:
+  backup_taken_at:
+    type: "string"
+    description: "ISO-8601 UTC timestamp at backup creation."
+    pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?Z$"
+  source_host:
+    type: "string"
+    description: "Hostname of the live tier the backup was produced from."
+    minLength: 1
+    maxLength: 253
+    pattern: "^[A-Za-z0-9._-]+$"
+  code_version:
+    type: "string"
+    description: "Semantic version of the deployed code at backup time."
+    pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$"
+  code_build:
+    type: "string"
+    description: "Build number of the deployed code at backup time."
+    pattern: "^[0-9]+$"
+  data_version:
+    type: "string"
+    description: "Schema version of the backed-up data (consumed by migration runner)."
+    pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$"
+  producer:
+    type: "string"
+    description: "Path of the script that produced the archive."
+    const: "deploy/backup.sh"
+  producer_version:
+    type: "string"
+    description: "Version of the producer script (BACKUP_SCRIPT_VERSION)."
+    pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$"
+  tag:
+    type: "string"
+    description: "Optional --tag label, when present."
+    pattern: "^[A-Za-z0-9._-]{1,64}$"
