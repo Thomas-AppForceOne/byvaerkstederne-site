@@ -4,12 +4,24 @@ Status: Planned
 Owner: thomas@appforceone.dk
 Depends on:
 - [prod_backup_restore_specification.md](prod_backup_restore_specification.md)
+- [atomic_deploy_releases_specification.md](atomic_deploy_releases_specification.md)
 - [data_versioning_and_migrations_specification.md](data_versioning_and_migrations_specification.md)
 - [promote_to_staging_specification.md](promote_to_staging_specification.md)
 Scope: A single command that promotes the staging-blessed combination
 of code + data shape + flags to production, with a hard gate
 ensuring nothing reaches prod that hasn't first been blessed on
 staging. The fourth and final step of the data-lifecycle series.
+
+> **Interface with atomic-deploy.** Code goes live via
+> atomic-deploy's release-dir + symlink-swap mechanics, same as
+> staging. Two rollback paths coexist after this spec ships:
+> `./deploy/rollback.sh prod` (atomic-deploy primitive — sub-second
+> symlink swap to the previous release, with its preserved data
+> version) is the fast path; `./deploy/rollback-prod.sh --to-backup
+> <id>` (this spec) is the safety net for situations the symlink
+> swap can't recover (e.g. data corruption that landed during the
+> bad release window and needs to be erased rather than rolled
+> away from). The two are complementary, not redundant.
 
 ---
 

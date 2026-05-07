@@ -2,11 +2,28 @@
 
 Status: Planned
 Owner: thomas@appforceone.dk
-Depends on: [prod_backup_restore_specification.md](prod_backup_restore_specification.md)
+Depends on:
+- [prod_backup_restore_specification.md](prod_backup_restore_specification.md)
+- [atomic_deploy_releases_specification.md](atomic_deploy_releases_specification.md)
+  — the per-version data-dir layout (`<tier>data/v<N>/`) introduced
+  there is what this spec extends with `cp -a` + migrate semantics.
+  Without atomic-deploy in place this spec would have to either
+  invent a parallel layout or run in-place migrations on live data
+  (the latter is an explicit non-goal here).
 Scope: Stamp the site's data with a schema version, define a format
 for migration scripts, and build a runner that brings a snapshot
 forward from one schema version to another. The second step of the
 data-lifecycle series.
+
+> **Interface with atomic-deploy.** A deploy whose required schema
+> version differs from the live tier's `<tier>data/current` triggers
+> `cp -a <tier>data/v<old>/ <tier>data/v<new>/`, runs migrations
+> against the new version dir, points the new release's symlinks at
+> it, and updates `<tier>data/current → v<new>`. The previous
+> release's symlinks still target `v<old>`, which is preserved on
+> disk — that's how rollback across a schema bump stays a single
+> symlink swap. See atomic-deploy §Versioned data dirs for the
+> full handoff.
 
 ---
 

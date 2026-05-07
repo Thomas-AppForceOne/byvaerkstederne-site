@@ -4,11 +4,23 @@ Status: Planned
 Owner: thomas@appforceone.dk
 Depends on:
 - [prod_backup_restore_specification.md](prod_backup_restore_specification.md)
+- [atomic_deploy_releases_specification.md](atomic_deploy_releases_specification.md)
 - [data_versioning_and_migrations_specification.md](data_versioning_and_migrations_specification.md)
 Scope: A single command that refreshes staging with the current code
 *and* a migration-applied snapshot of prod data, so staging genuinely
 mirrors what prod is about to become. The third step of the
 data-lifecycle series.
+
+> **Interface with atomic-deploy.** This spec uses atomic-deploy's
+> machinery for the code-side mechanics — release dirs, symlink swap,
+> rollback. The data-push step does NOT rsync into the live `user/`
+> paths; instead it populates the new `<staging>data/v<target>/`
+> directory (created as `cp -a` of the prior version + migrations
+> applied) before the new release's symlinks point at it. The
+> blessing marker lives at the release-dir root (under
+> `<staging>-releases/<release-id>/`), not inside `user/`, so it's
+> covered by the release's atomicity guarantees and can't be wiped
+> by a stray data push.
 
 ---
 
