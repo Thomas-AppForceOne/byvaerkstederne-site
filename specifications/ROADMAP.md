@@ -20,9 +20,9 @@ Both versions start at `0.1.0`. Independence between apex and site versions is i
 
 **Exit criteria:** apex and site both display "Version <semver> · build <integer>" sourced from files in the repo; version bumps require no deploy-script changes; build number is regenerated automatically and matches across tiers running the same commit; missing/malformed file falls back to "ukendt" for that half without breaking the page.
 
-### 2. Prod backup and restore tooling — Planned
+### 2. Prod backup and restore tooling — IMPLEMENTED
 
-**Spec:** [prod_backup_restore_specification.md](prod_backup_restore_specification.md)
+**Spec:** [prod_backup_restore_specification.md](archive/prod_backup_restore_specification.md)
 
 Foundation for the data-lifecycle work that follows. Build a single command that produces an encrypted, versioned snapshot of everything Grav considers state — member accounts, flex-objects, uploaded files, and their schema marker — and a matching restore command in two modes (to a scratch directory for inspection, or to a tier wholesale). Backups live off the prod server in object storage, protected at rest with `age`, retained on a daily/weekly/monthly schedule plus indefinitely-kept tagged snapshots used by later promotion steps as rollback insurance.
 
