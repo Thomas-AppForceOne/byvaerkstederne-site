@@ -56,6 +56,10 @@ log()  { printf '[restore] %s\n' "$*" >&2; }
 warn() { printf '[restore] WARN: %s\n' "$*" >&2; }
 die()  { local code="${2:-1}"; printf '[restore] ERROR: %s\n' "$1" >&2; exit "$code"; }
 
+# Operator-laptop privacy-hygiene banner (shared with backup.sh).
+# shellcheck disable=SC1091
+. "$SCRIPT_DIR/lib/banner.sh"
+
 # ──────────────────────────────────────────────────────────────────────
 # CLI parsing & validation.
 # ──────────────────────────────────────────────────────────────────────
@@ -344,6 +348,9 @@ fi
 # ──────────────────────────────────────────────────────────────────────
 
 if [ "$MODE" = "scratch" ]; then
+    # First write into a privacy-sensitive path on this laptop — show
+    # the hygiene banner before we materialise PII on disk.
+    bv_show_first_write_banner_if_needed
     log "Restoring '$ARCHIVE_NAME' → $TO_DIR"
     tmp_archive="$(mktemp "${TMPDIR:-/tmp}/bv-restore.XXXXXXXX.age")"
     trap 'rm -f "$tmp_archive"' EXIT

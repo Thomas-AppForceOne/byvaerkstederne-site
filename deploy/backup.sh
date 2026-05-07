@@ -72,6 +72,10 @@ log()  { printf '[backup] %s\n' "$*" >&2; }
 warn() { printf '[backup] WARN: %s\n' "$*" >&2; }
 die()  { local code="${2:-1}"; printf '[backup] ERROR: %s\n' "$1" >&2; exit "$code"; }
 
+# Operator-laptop privacy-hygiene banner (shared with restore.sh).
+# shellcheck disable=SC1091
+. "$SCRIPT_DIR/lib/banner.sh"
+
 # ──────────────────────────────────────────────────────────────────────
 # Argument parsing & validation. Every externally-sourced value is
 # validated before reaching shell commands or storage. Shell-meta and
@@ -532,6 +536,8 @@ rm -f "$TAR_FILE"
 
 LOCAL_KEEP_PATH=""
 if [ "$KEEP_LOCAL" = "1" ]; then
+    # First write into ./backups/ — show the privacy-hygiene banner.
+    bv_show_first_write_banner_if_needed
     mkdir -p "$LOCAL_BACKUP_DIR"
     LOCAL_KEEP_PATH="$LOCAL_BACKUP_DIR/$ARCHIVE_BASENAME"
     cp "$ENC_FILE" "$LOCAL_KEEP_PATH"
@@ -620,6 +626,9 @@ else
     # Preserve the encrypted local archive on upload failure or when
     # no managed storage is configured. This is the spec's failure
     # mode (b): the operator must be able to recover the archive.
+    # First write into ./backups/ here too — show the privacy banner
+    # before the fallback materialises.
+    bv_show_first_write_banner_if_needed
     mkdir -p "$LOCAL_BACKUP_DIR"
     if [ -z "$LOCAL_KEEP_PATH" ]; then
         LOCAL_KEEP_PATH="$LOCAL_BACKUP_DIR/$ARCHIVE_BASENAME"

@@ -95,6 +95,12 @@ EOF
     # and metadata assertions.
     export BACKUP_FAKE_NOW_EPOCH="1777466040"
 
+    # Isolate the privacy-hygiene banner sentinel from the operator's
+    # real ~/.config so each test starts banner-fresh and we never
+    # touch the developer's actual sentinel.
+    export XDG_CONFIG_HOME="$TMP/xdg-config"
+    mkdir -p "$XDG_CONFIG_HOME"
+
     # The backup script's local-keep dir is fixed at $REPO_ROOT/backups,
     # which we don't want to pollute. Tests that exercise --keep-local
     # set HOME-style isolation by running with a different REPO_ROOT
@@ -480,6 +486,102 @@ teardown() {
     # No AWS access key shapes (AKIA*).
     run grep -RIn -E "AKIA[0-9A-Z]{16}" deploy/
     [ "$status" -ne 0 ]
+}
+
+# ─── first-write privacy-hygiene banner ──────────────────────────────
+#
+# The banner reminds the operator to add Time Machine exclusions and
+# warns against keeping the checkout under a Dropbox/iCloud-synced
+# root. It is shown to stderr the first time backup.sh or restore.sh
+# writes into a privacy-sensitive path on a given laptop, then
+# suppressed via a sentinel under XDG_CONFIG_HOME. Tests run with
+# XDG_CONFIG_HOME pointed at a bats temp dir so the operator's real
+# ~/.config is never touched.
+
+@test "banner: first backup.sh --keep-local prints to stderr and creates sentinel" {
+    sentinel="$XDG_CONFIG_HOME/byvaerksted/backup-banner-shown"
+    [ ! -e "$sentinel" ]
+
+    run --separate-stderr "$BACKUP_SH" prod --keep-local
+    [ "$status" -eq 0 ]
+    [[ "$stderr" == *"tmutil addexclusion ./backups"* ]]
+    [[ "$stderr" == *"tmutil addexclusion ./deploy/staging-stage"* ]]
+    [[ "$stderr" == *"tmutil addexclusion ./deploy/prod-stage"* ]]
+    [[ "$stderr" == *"Dropbox"* ]] || [[ "$stderr" == *"iCloud"* ]]
+    [[ "$stderr" == *"Google Drive"* ]] || [[ "$stderr" == *"OneDrive"* ]]
+
+    [ -e "$sentinel" ]
+}
+
+@test "banner: stdout is not polluted by the banner text" {
+    run --separate-stderr "$BACKUP_SH" prod --keep-local
+    [ "$status" -eq 0 ]
+    # stdout still carries the parseable URL/path output (file://...)
+    # and key=value diagnostics — but NONE of the banner text.
+    [[ "$output" != *"tmutil addexclusion"* ]]
+    [[ "$output" != *"Dropbox"* ]]
+    [[ "$output" != *"────"* ]]
+    # And the parseable URL line is still on stdout.
+    archive_url="$(printf '%s\n' "$output" | head -n1)"
+    [[ "$archive_url" == file://* ]]
+}
+
+@test "banner: second invocation with sentinel present does not re-print" {
+    # First run creates the sentinel.
+    run --separate-stderr "$BACKUP_SH" prod --keep-local
+    [ "$status" -eq 0 ]
+    [[ "$stderr" == *"tmutil addexclusion"* ]]
+
+    # Second run must not re-emit the banner text.
+    run --separate-stderr "$BACKUP_SH" prod --keep-local
+    [ "$status" -eq 0 ]
+    [[ "$stderr" != *"tmutil addexclusion"* ]]
+    [[ "$stderr" != *"Dropbox"* ]]
+
+    # Removing the sentinel restores the banner.
+    rm -f "$XDG_CONFIG_HOME/byvaerksted/backup-banner-shown"
+    run --separate-stderr "$BACKUP_SH" prod --keep-local
+    [ "$status" -eq 0 ]
+    [[ "$stderr" == *"tmutil addexclusion"* ]]
+}
+
+@test "banner: first restore.sh --to <dir> prints to stderr and creates sentinel" {
+    # Need an archive to restore from.
+    run "$BACKUP_SH" prod
+    [ "$status" -eq 0 ]
+
+    # Sentinel hasn't been created yet (backup.sh ran without
+    # --keep-local, no fallback). Restore-to-scratch is the first
+    # privacy-sensitive write.
+    sentinel="$XDG_CONFIG_HOME/byvaerksted/backup-banner-shown"
+    [ ! -e "$sentinel" ]
+
+    SCRATCH="$TMP/scratch-banner"
+    run --separate-stderr "$RESTORE_SH" --to "$SCRATCH"
+    [ "$status" -eq 0 ]
+    [[ "$stderr" == *"tmutil addexclusion ./backups"* ]]
+    [[ "$stderr" == *"tmutil addexclusion ./deploy/staging-stage"* ]]
+    [[ "$stderr" == *"tmutil addexclusion ./deploy/prod-stage"* ]]
+
+    [ -e "$sentinel" ]
+
+    # And the restore stdout path is still clean (the path of the scratch dir).
+    [[ "$output" == *"$SCRATCH"* ]]
+    [[ "$output" != *"tmutil addexclusion"* ]]
+}
+
+@test "banner: restore.sh --to with existing sentinel does not re-print" {
+    # Pre-create the sentinel so the banner is already suppressed.
+    mkdir -p "$XDG_CONFIG_HOME/byvaerksted"
+    : > "$XDG_CONFIG_HOME/byvaerksted/backup-banner-shown"
+
+    run "$BACKUP_SH" prod
+    [ "$status" -eq 0 ]
+    SCRATCH="$TMP/scratch-banner-suppressed"
+    run --separate-stderr "$RESTORE_SH" --to "$SCRATCH"
+    [ "$status" -eq 0 ]
+    [[ "$stderr" != *"tmutil addexclusion"* ]]
+    [[ "$stderr" != *"Dropbox"* ]]
 }
 
 # ─── metadata provenance: source-tier reads ──────────────────────────
