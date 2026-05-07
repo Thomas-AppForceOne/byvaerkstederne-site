@@ -13,6 +13,44 @@ make setup
 
 This will check dependencies, pull LFS files, start Docker, and prompt you to create an admin account (username, email, password). The site will then be available at **http://localhost:8080** and admin panel at **http://localhost:8080/admin**.
 
+## First-time setup
+
+### Backup operator hygiene (macOS)
+
+`deploy/backup.sh` and `deploy/restore.sh` write encrypted archives and
+unpacked PII (member emails, bcrypt hashes, bug-report screenshots)
+into three local paths. Time Machine, Spotlight, and cloud-sync tools
+will silently capture that data unless you exclude them. Once per
+machine, after first checkout, run:
+
+```bash
+tmutil addexclusion ./backups
+tmutil addexclusion ./deploy/staging-stage
+tmutil addexclusion ./deploy/prod-stage
+```
+
+Also, do **not** keep this checkout inside a Dropbox / iCloud Drive /
+Google Drive synced root.
+
+`./backups/`, `./deploy/staging-stage/`, and `./deploy/prod-stage/`
+are already covered by `.gitignore`. `restore.sh` writes
+`.metadata_never_index` (Spotlight exclusion marker) into any scratch
+directory it creates.
+
+### Backup tooling dependencies
+
+`deploy/backup.sh` and `deploy/restore.sh` need:
+
+| Tool | Why |
+|------|-----|
+| [`age`](https://age-encryption.org) | Encrypts/decrypts the archive (`brew install age`). |
+| `tar`, `rsync`, `ssh` | Standard on macOS / Linux. |
+| (optional) `aws` CLI | Only when uploading to S3-compatible managed storage. |
+
+The committed test suite (`tests/deploy/backup-restore.bats`) needs
+[`bats-core`](https://github.com/bats-core/bats-core) — `brew install
+bats-core`.
+
 ## Requirements
 
 | Tool | Version | Purpose |

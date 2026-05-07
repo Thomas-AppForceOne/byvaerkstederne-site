@@ -47,6 +47,15 @@ config/www/BUILD
 # Backups (stored locally, not in git)
 backups/
 
+# Restore-to-scratch staging directories — never committed; contain
+# decrypted PII and bug-report screenshots. Operators must also add
+# tmutil exclusions (see README "Backup operator hygiene").
+deploy/staging-stage/
+deploy/prod-stage/
+
+# Restore-operation logs (per-tier, per-timestamp).
+logs/restore-*.log
+
 # User accounts (all excluded — use 'make create-admin' to bootstrap)
 config/www/user/accounts/*
 !config/www/user/accounts/.gitkeep
