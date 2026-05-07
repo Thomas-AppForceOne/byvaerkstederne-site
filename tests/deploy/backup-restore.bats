@@ -53,6 +53,17 @@ setup() {
     echo 'should-not-ship'  > "$FIXTURE/user/logs/access.log"
     echo 'tmpdata'          > "$FIXTURE/user/some.tmp"
 
+    # Plant the live-tier metadata markers that backup.sh now reads
+    # directly from the source (instead of from the operator's repo).
+    # Tests that need different values either override BACKUP_FAKE_*
+    # or rewrite these files before invoking backup.sh.
+    mkdir -p "$FIXTURE/config/www/user"
+    echo '0.1.0' > "$FIXTURE/config/www/VERSION"
+    echo '247'   > "$FIXTURE/config/www/BUILD"
+    cat > "$FIXTURE/config/www/user/data-version.yaml" <<'EOF'
+version: "0.1.0"
+EOF
+
     # Generate a throw-away age keypair for the test run.
     KEYDIR="$TMP/keys"
     mkdir -p "$KEYDIR"
@@ -469,6 +480,115 @@ teardown() {
     # No AWS access key shapes (AKIA*).
     run grep -RIn -E "AKIA[0-9A-Z]{16}" deploy/
     [ "$status" -ne 0 ]
+}
+
+# ─── metadata provenance: source-tier reads ──────────────────────────
+#
+# The version/build/data-version markers must come from the live tier
+# (the fixture in test mode), NOT from the operator's local repo.
+# The BACKUP_FAKE_* env-var overrides exist as explicit injection
+# points; without them, the script must read from the fixture.
+
+@test "code_version comes from fixture VERSION (not from \$REPO_ROOT)" {
+    # Plant a fixture VERSION distinct from the orchestrating repo's
+    # VERSION (currently 0.2.0 on this branch).
+    echo '9.9.9' > "$FIXTURE/config/www/VERSION"
+    # Disable the BACKUP_FAKE_* overrides so the source-read path runs.
+    unset BACKUP_FAKE_CODE_VERSION
+    unset BACKUP_FAKE_DATA_VERSION
+
+    run "$BACKUP_SH" prod
+    [ "$status" -eq 0 ]
+    SCRATCH="$TMP/scratch-cv"
+    run "$RESTORE_SH" --to "$SCRATCH"
+    [ "$status" -eq 0 ]
+    grep -q '^code_version: "9.9.9"$' "$SCRATCH/backup-meta.yaml"
+    # And NOT the repo's VERSION value.
+    repo_ver="$(head -n1 "$REPO_ROOT/config/www/VERSION" 2>/dev/null \
+                | tr -d '\r\n[:space:]')"
+    if [ -n "$repo_ver" ] && [ "$repo_ver" != "9.9.9" ]; then
+        ! grep -q "^code_version: \"$repo_ver\"$" "$SCRATCH/backup-meta.yaml"
+    fi
+}
+
+@test "code_build comes from fixture BUILD (not from \$REPO_ROOT)" {
+    echo '424242' > "$FIXTURE/config/www/BUILD"
+    unset BACKUP_FAKE_CODE_BUILD
+    unset BACKUP_FAKE_DATA_VERSION
+
+    run "$BACKUP_SH" prod
+    [ "$status" -eq 0 ]
+    SCRATCH="$TMP/scratch-cb"
+    run "$RESTORE_SH" --to "$SCRATCH"
+    [ "$status" -eq 0 ]
+    grep -q '^code_build: "424242"$' "$SCRATCH/backup-meta.yaml"
+}
+
+@test "data_version comes from fixture data-version.yaml version: field" {
+    cat > "$FIXTURE/config/www/user/data-version.yaml" <<'EOF'
+# This data version applies to the live tier's flex objects schema.
+version: "3.4.5"
+EOF
+    unset BACKUP_FAKE_DATA_VERSION
+    unset BACKUP_DATA_VERSION
+
+    run "$BACKUP_SH" prod
+    [ "$status" -eq 0 ]
+    SCRATCH="$TMP/scratch-dv"
+    run "$RESTORE_SH" --to "$SCRATCH"
+    [ "$status" -eq 0 ]
+    grep -q '^data_version: "3.4.5"$' "$SCRATCH/backup-meta.yaml"
+}
+
+@test "data_version defaults to 0.0.0 (NOT code_version) when fixture missing data-version.yaml" {
+    rm -f "$FIXTURE/config/www/user/data-version.yaml"
+    # Use distinctive code_version to ensure the fallback isn't
+    # silently inheriting it.
+    echo '1.2.3' > "$FIXTURE/config/www/VERSION"
+    unset BACKUP_FAKE_CODE_VERSION
+    unset BACKUP_FAKE_DATA_VERSION
+    unset BACKUP_DATA_VERSION
+
+    run --separate-stderr "$BACKUP_SH" prod
+    [ "$status" -eq 0 ]
+    # Stderr names the missing file.
+    [[ "$stderr" == *"data-version.yaml"* ]]
+    [[ "$stderr" == *"0.0.0"* ]]
+
+    SCRATCH="$TMP/scratch-dvmiss"
+    run "$RESTORE_SH" --to "$SCRATCH"
+    [ "$status" -eq 0 ]
+    grep -q '^data_version: "0.0.0"$' "$SCRATCH/backup-meta.yaml"
+    # MUST NOT inherit code_version.
+    ! grep -q '^data_version: "1.2.3"$' "$SCRATCH/backup-meta.yaml"
+}
+
+@test "missing fixture VERSION → hard fail (exit 3) naming the file" {
+    rm -f "$FIXTURE/config/www/VERSION"
+    unset BACKUP_FAKE_CODE_VERSION
+
+    run "$BACKUP_SH" prod
+    [ "$status" -eq 3 ]
+    [[ "$output" == *"VERSION"* ]]
+    # No archive should have been produced.
+    ! ls "$BACKUP_LOCAL_STORE_DIR"/*.tar.gz.age >/dev/null 2>&1
+}
+
+@test "missing fixture BUILD → hard fail (exit 3) naming the file" {
+    rm -f "$FIXTURE/config/www/BUILD"
+    unset BACKUP_FAKE_CODE_BUILD
+
+    run "$BACKUP_SH" prod
+    [ "$status" -eq 3 ]
+    [[ "$output" == *"BUILD"* ]]
+    ! ls "$BACKUP_LOCAL_STORE_DIR"/*.tar.gz.age >/dev/null 2>&1
+}
+
+@test "backup.sh contains no read of \$REPO_ROOT/config/www metadata files" {
+    # Static assertion: the production source must not reference the
+    # operator's local-repo VERSION/BUILD/data-version.yaml.
+    ! grep -nE 'REPO_ROOT/config/www/(VERSION|BUILD)' "$REPO_ROOT/deploy/backup.sh"
+    ! grep -nE 'REPO_ROOT/config/www/user/data-version' "$REPO_ROOT/deploy/backup.sh"
 }
 
 # ─── restore-to-scratch by id ────────────────────────────────────────

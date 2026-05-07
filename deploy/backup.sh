@@ -259,21 +259,149 @@ NOW_ISO="$(date -u -r "$NOW_EPOCH" +'%Y-%m-%dT%H:%MZ' 2>/dev/null \
 # Filename uses HH-MM (colon-to-hyphen) but date keeps `-`.
 NOW_FNAME_TIME="${NOW_ISO//:/-}"   # 2026-04-29T12-34Z
 
-# Code version + build come from the deployed VERSION / BUILD markers.
-# Locally, fall back to the in-repo VERSION (the build marker is
-# .gitignored, so default to "0").
-read_first_line() {
-    local f="$1"
-    if [ -f "$f" ]; then
-        head -n 1 "$f" | tr -d '\r\n[:space:]'
-    fi
+# ──────────────────────────────────────────────────────────────────────
+# Source-tier metadata fetch.
+#
+# The version/build/data-version markers MUST come from the live tier
+# being backed up — that's the whole point of "what was the source
+# tier running when this backup was taken". Reading them from the
+# operator's local repo (which used to happen) is the bug we're
+# fixing here: it silently makes downstream consumers (migration
+# runner, promote-to-staging, promote-to-prod) trust laptop-local
+# state that has no relation to the tier.
+#
+# Provenance:
+#   code_version → <source>/config/www/VERSION       (first line, trimmed)
+#   code_build   → <source>/config/www/BUILD         (first line, trimmed)
+#   data_version → <source>/config/www/user/data-version.yaml `version:` field
+#
+# Failure modes:
+#   - VERSION or BUILD missing on the source: hard fail (exit 3,
+#     "archive build" code). Backup metadata would be useless without
+#     them.
+#   - data-version.yaml missing on the source: stderr warning + write
+#     "0.0.0" to meta. The data-versioning spec hasn't shipped yet,
+#     so the file legitimately won't exist on first runs. Defaulting
+#     to 0.0.0 (NOT to code_version, NOT to the operator's local
+#     repo) is the only sensible behaviour.
+#
+# The BACKUP_FAKE_CODE_VERSION / BACKUP_FAKE_CODE_BUILD /
+# BACKUP_FAKE_DATA_VERSION environment overrides exist as explicit
+# test injection points — when set, they win. They are NOT a
+# fallback: if a fake is unset, we read from the source. We never
+# read from $REPO_ROOT.
+# ──────────────────────────────────────────────────────────────────────
+
+# Trim CR/LF and surrounding whitespace from a single-line value.
+trim_line() {
+    printf '%s' "$1" | tr -d '\r\n' | awk '{$1=$1; print}'
 }
 
-CODE_VERSION="${BACKUP_FAKE_CODE_VERSION:-$(read_first_line "$REPO_ROOT/config/www/VERSION")}"
-CODE_VERSION="${CODE_VERSION:-0.0.0}"
-CODE_BUILD="${BACKUP_FAKE_CODE_BUILD:-$(read_first_line "$REPO_ROOT/config/www/BUILD")}"
-CODE_BUILD="${CODE_BUILD:-0}"
-DATA_VERSION="${BACKUP_FAKE_DATA_VERSION:-${BACKUP_DATA_VERSION:-$CODE_VERSION}}"
+# Fetch a single small file from the source tier (≤1KiB) and emit its
+# first line trimmed on stdout. Empty stdout = file missing.
+# In fixture mode the source is a local directory; in SSH mode we
+# round-trip a `cat` over ssh.
+source_read_first_line() {
+    local rel="$1"   # path relative to <source-root>/config/www, e.g. "VERSION"
+    if [ "$USE_FIXTURE" = "1" ]; then
+        local f="$BACKUP_FIXTURE_DIR/config/www/$rel"
+        if [ -f "$f" ]; then
+            head -n 1 "$f"
+        fi
+        return 0
+    fi
+    # SSH path. -n binds stdin to /dev/null so the loop's stdin (if any)
+    # isn't consumed. We swallow stderr to keep "no such file" from
+    # leaking into our parsed value; the calling site interprets the
+    # empty stdout as "missing".
+    ssh -n -o BatchMode=yes -o ConnectTimeout=10 -p "$SSH_PORT" \
+        "${SSH_USER}@${SSH_HOST}" \
+        "test -f $(printf %q "$SSH_PATH/config/www/$rel") && head -n 1 $(printf %q "$SSH_PATH/config/www/$rel")" \
+        2>/dev/null || true
+}
+
+# Parse a yaml `version:` field (top-level) from the supplied content.
+# Accepts quoted or unquoted values. Echoes the value or empty.
+extract_yaml_version_field() {
+    local content="$1"
+    printf '%s\n' "$content" \
+        | awk '
+            /^[[:space:]]*#/ { next }
+            /^version:[[:space:]]*/ {
+                v = $0
+                sub(/^version:[[:space:]]*/, "", v)
+                # strip surrounding quotes
+                gsub(/^["'\'']|["'\'']$/, "", v)
+                # strip trailing comment
+                sub(/[[:space:]]+#.*$/, "", v)
+                # trim
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+                print v
+                exit
+            }
+        '
+}
+
+# Read raw data-version.yaml content from source (empty if missing).
+source_read_data_version_yaml() {
+    if [ "$USE_FIXTURE" = "1" ]; then
+        local f="$BACKUP_FIXTURE_DIR/config/www/user/data-version.yaml"
+        if [ -f "$f" ]; then
+            cat "$f"
+        fi
+        return 0
+    fi
+    ssh -n -o BatchMode=yes -o ConnectTimeout=10 -p "$SSH_PORT" \
+        "${SSH_USER}@${SSH_HOST}" \
+        "test -f $(printf %q "$SSH_PATH/config/www/user/data-version.yaml") && cat $(printf %q "$SSH_PATH/config/www/user/data-version.yaml")" \
+        2>/dev/null || true
+}
+
+# CODE_VERSION ----------------------------------------------------------
+if [ -n "${BACKUP_FAKE_CODE_VERSION:-}" ]; then
+    CODE_VERSION="$(trim_line "$BACKUP_FAKE_CODE_VERSION")"
+else
+    raw="$(source_read_first_line VERSION)"
+    CODE_VERSION="$(trim_line "$raw")"
+    if [ -z "$CODE_VERSION" ]; then
+        die "source tier missing config/www/VERSION (cannot stamp backup metadata)" 3
+    fi
+fi
+
+# CODE_BUILD ------------------------------------------------------------
+if [ -n "${BACKUP_FAKE_CODE_BUILD:-}" ]; then
+    CODE_BUILD="$(trim_line "$BACKUP_FAKE_CODE_BUILD")"
+else
+    raw="$(source_read_first_line BUILD)"
+    CODE_BUILD="$(trim_line "$raw")"
+    if [ -z "$CODE_BUILD" ]; then
+        die "source tier missing config/www/BUILD (cannot stamp backup metadata)" 3
+    fi
+fi
+
+# DATA_VERSION ----------------------------------------------------------
+# Fall-back rule: if the source has no data-version.yaml, write
+# "0.0.0" (the literal string) and emit a stderr warning naming the
+# missing file. Do NOT inherit code_version, do NOT consult the
+# operator's local repo.
+if [ -n "${BACKUP_FAKE_DATA_VERSION:-}" ]; then
+    DATA_VERSION="$(trim_line "$BACKUP_FAKE_DATA_VERSION")"
+elif [ -n "${BACKUP_DATA_VERSION:-}" ]; then
+    # Legacy env override — still honoured but logged so it's auditable.
+    DATA_VERSION="$(trim_line "$BACKUP_DATA_VERSION")"
+else
+    dv_raw="$(source_read_data_version_yaml)"
+    if [ -z "$dv_raw" ]; then
+        warn "source tier has no config/www/user/data-version.yaml — defaulting data_version to 0.0.0"
+        DATA_VERSION="0.0.0"
+    else
+        DATA_VERSION="$(extract_yaml_version_field "$dv_raw")"
+        if [ -z "$DATA_VERSION" ]; then
+            warn "source tier config/www/user/data-version.yaml has no parseable 'version:' field — defaulting data_version to 0.0.0"
+            DATA_VERSION="0.0.0"
+        fi
+    fi
+fi
 
 # Sanity-check version + build shapes (defence-in-depth — the schema
 # enforces them on consumers, but we may as well refuse to write bad
