@@ -75,6 +75,14 @@
     <div class="bv-footer__bottom">
         <div class="bv-footer__bottom-inner">
             <span class="bv-footer__copyright">&copy; 2026 BYV&AElig;RKSTEDERNE I HUNDESTED.</span>
+            {# ── Site version + build, read from config/www/VERSION + BUILD via the
+               site-version plugin. Both `null` ⇒ omit the entire line rather than
+               render a double <em>ukendt</em>. Twig autoescape is on by default so
+               sv.version / sv.build pass through htmlspecialchars implicitly. ──#}
+            {% set sv = site_version() %}
+            {% if sv.version is not null or sv.build is not null %}
+            <span class="bv-footer__version">Version {% if sv.version is not null %}{{ sv.version }}{% else %}<em>ukendt</em>{% endif %} · build {% if sv.build is not null %}{{ sv.build }}{% else %}<em>ukendt</em>{% endif %}</span>
+            {% endif %}
             {% if feature_enabled('social_media_links') %}
             <div class="bv-footer__social">
                 <a href="#" aria-label="Facebook"><span class="material-symbols-outlined">groups</span></a>

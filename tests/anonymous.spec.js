@@ -27,3 +27,4 @@ require('./anonymous/feature-flags-pages');
 require('./anonymous/feature-flags-html');
 require('./anonymous/feature-flags-plugins');
 require('./anonymous/feature-flags-link-hiding');
+require('./anonymous/version-footer');

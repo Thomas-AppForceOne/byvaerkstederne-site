@@ -18,3 +18,16 @@
 # anywhere else this docroot-mapping quirk surfaces.
 custom_base_url: 'https://dev.hackersbychoice.dk'
 absolute_urls: false
+
+# Pin the session cookie path. The same docroot-mapping quirk that
+# breaks Uri::route() also leaks into the session handler: Grav
+# computes `session.path` from `base_url_relative` at session-init
+# time (before `custom_base_url` propagates to all subsystems), so
+# without this override Set-Cookie ships with `path=/dev/`. The
+# subdomain trick strips that prefix from request URLs, so the
+# browser stores the cookie but never sends it back on `/admin`,
+# `/admin/login`, etc. Result: every request gets a fresh empty
+# session and admin form POSTs fail with "Invalid Security Token".
+# Pinning to `/` matches the URL space the subdomain actually serves.
+session:
+  path: /

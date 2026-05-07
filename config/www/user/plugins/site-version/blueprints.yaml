@@ -1,0 +1,25 @@
+name: Site Version
+version: 0.1.0
+description: Reads config/www/VERSION and config/www/BUILD at request time and exposes a site_version() Twig function returning { version, build }. Validates SemVer/integer formats; failures yield null and a single warning per request.
+icon: tag
+author:
+  name: Byværkstederne
+  email: thomas@appforceone.dk
+homepage: https://byvaerkstederne.dk
+keywords: version, semver, build, footer
+bugs: https://github.com/Thomas-AppForceOne/workshop-site/issues
+license: MIT
+
+form:
+  validation: strict
+  fields:
+    enabled:
+      type: toggle
+      label: Plugin status
+      highlight: 1
+      default: 1
+      options:
+        1: PLUGIN_ADMIN.ENABLED
+        0: PLUGIN_ADMIN.DISABLED
+      validate:
+        type: bool

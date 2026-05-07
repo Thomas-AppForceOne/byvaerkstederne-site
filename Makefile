@@ -1,4 +1,4 @@
-.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging backup-prod backup-test test test-headed test-auth test-install
+.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging deploy-landing backup-prod backup-test test test-headed test-auth test-install test-deploy
 
 # Default target
 help: ## Show this help
@@ -76,17 +76,20 @@ status: ## Show container status
 
 deploy: deploy-prod ## Alias for deploy-prod
 
-deploy-prod: ## Deploy to production (hackersbychoice.dk)
+deploy-prod: ## Deploy to production (www.byvaerkstederne.dk — separate hosting)
 	@./deploy/deploy.sh prod
 
-deploy-test: ## Deploy to test (hackersbychoice.dk/test)
+deploy-staging: ## Deploy to staging (staging.hackersbychoice.dk)
+	@./deploy/deploy.sh staging
+
+deploy-test: ## Deploy to test (test.hackersbychoice.dk)
 	@./deploy/deploy.sh test
 
-deploy-dev: ## Deploy to dev (hackersbychoice.dk/dev)
+deploy-dev: ## Deploy to dev (dev.hackersbychoice.dk)
 	@./deploy/deploy.sh dev
 
-deploy-staging: ## Deploy to staging (hackersbychoice.dk/staging)
-	@./deploy/deploy.sh staging
+deploy-landing: ## Deploy the apex selector page (hackersbychoice.dk)
+	@./deploy/deploy.sh landing
 
 # ── Backup ─────────────────────────────────────────────
 
@@ -150,6 +153,9 @@ test-headed: ## Run tests with browser visible (for debugging)
 	if [ -f $$HOME/.gan-secrets/workshop-site.env ]; then set -a; . $$HOME/.gan-secrets/workshop-site.env; set +a; fi; \
 	echo "Running tests against http://127.0.0.1:$$PORT (headed)"; \
 	GRAV_PORT=$$PORT npx playwright test tests/anonymous.spec.js --headed
+
+test-deploy: ## Run deploy-script regression tests (rsync excludes preserve live state)
+	@bash tests/deploy/excludes-preserve-live-state.sh
 
 test-auth: ## Run authenticated tests (auto-sources ~/.gan-secrets/workshop-site.env)
 	@PORT="$${GRAV_PORT}"; \

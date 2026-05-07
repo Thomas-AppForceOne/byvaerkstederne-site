@@ -1299,6 +1299,18 @@ a { color: inherit; text-decoration: none; }
     font-size: 0.875rem;
     color: var(--on-surface-variant);
 }
+/* Version + build line in the footer bottom strip. Inherits the
+   surrounding bottom-strip typography so it sits unobtrusively next to
+   the copyright — same colour family, same font size, no badge or
+   button styling, no monospace, no background. */
+.bv-footer__version {
+    font-size: 0.875rem;
+    color: var(--on-surface-variant);
+    font-weight: 400;
+}
+.bv-footer__version em {
+    font-style: italic;
+}
 .bv-footer__social {
     display: flex;
     gap: var(--space-4);
