@@ -421,6 +421,112 @@ if [ "${RESTORE_TO_TIER_ENABLED:-0}" != "1" ]; then
     exit 0
 fi
 
+# ──────────────────────────────────────────────────────────────────────
+# Local-tier mode (RESTORE_LOCAL_TIER_DIR).
+#
+# This is the testable analogue of the SSH path: it performs the same
+# wipe-and-replace against a local directory instead of via rsync over
+# ssh. Activated only when BOTH:
+#   - RESTORE_TO_TIER_ENABLED=1 (the existing safety gate)
+#   - RESTORE_LOCAL_TIER_DIR=<absolute-path>
+# are set. Without the latter the script falls through to the
+# unchanged SSH path below.
+#
+# The local-tier path lets bats exercise the destructive wipe end-to-end
+# without an SSH daemon and without touching live tier paths — a
+# disaster-recovery code path should be tested before it's needed.
+# ──────────────────────────────────────────────────────────────────────
+
+if [ -n "${RESTORE_LOCAL_TIER_DIR:-}" ]; then
+    case "$RESTORE_LOCAL_TIER_DIR" in
+        /*) ;;  # absolute — required
+        *) die "RESTORE_LOCAL_TIER_DIR must be an absolute path (got: $(printf %q "$RESTORE_LOCAL_TIER_DIR"))" 1 ;;
+    esac
+    case "$RESTORE_LOCAL_TIER_DIR" in
+        *..*) die "RESTORE_LOCAL_TIER_DIR contains '..' — refusing for safety" 1 ;;
+    esac
+    if [ ! -d "$RESTORE_LOCAL_TIER_DIR" ]; then
+        die "RESTORE_LOCAL_TIER_DIR does not exist or is not a directory: $(printf %q "$RESTORE_LOCAL_TIER_DIR")" 1
+    fi
+
+    require_bin tar
+    require_bin age
+    require_bin rsync
+
+    # First-write banner — local-tier restores stage data through the
+    # same privacy-sensitive territory as the operator-laptop paths.
+    bv_show_first_write_banner_if_needed
+
+    log "Local-tier restore mode: target=$RESTORE_LOCAL_TIER_DIR"
+    log_op "local-tier mode: target=$RESTORE_LOCAL_TIER_DIR"
+
+    # Download + decrypt + unpack archive into a private scratch.
+    SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/bv-restore-tier.XXXXXXXX")"
+    chmod 700 "$SCRATCH"
+    trap 'rm -rf "$SCRATCH"' EXIT
+
+    tmp_archive="$SCRATCH/archive.age"
+    download_archive "$ARCHIVE_NAME" "$tmp_archive"
+    decrypt_and_unpack "$tmp_archive" "$SCRATCH/unpacked"
+
+    # Read allow-list.
+    declare -a INCLUDE_PATHS=()
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line%%#*}"
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+        [ -z "$line" ] && continue
+        # Reject traversal/absolute prefixes in the allow-list (defence
+        # in depth — backup.sh already rejects these on read).
+        case "$line" in
+            /*|*..*) die "Invalid allow-list entry: $line" 1 ;;
+        esac
+        INCLUDE_PATHS+=("$line")
+    done < "$PATHS_FILE"
+
+    # Wipe + replace each allow-listed path against the local target.
+    # We use rsync --delete to mirror the SSH path's exact semantics
+    # (deleted files are removed, modified files are replaced, added
+    # untracked files vanish). The trailing slash on `src/` and `dst/`
+    # is load-bearing — without it rsync nests the directory.
+    for rel in "${INCLUDE_PATHS[@]}"; do
+        src="$SCRATCH/unpacked/$rel/"
+        dst="$RESTORE_LOCAL_TIER_DIR/$rel/"
+        if [ ! -d "${src%/}" ]; then
+            log_op "skip $rel (not in archive)"
+            continue
+        fi
+        mkdir -p "$dst"
+        log_op "rsync --delete (local) $rel"
+        rsync -a --delete -- "$src" "$dst" \
+            || die "local rsync to $dst failed (log: $LOG_FILE)" 5
+    done
+
+    # Clear caches if a Grav binary is present at the target. The
+    # spec-mandated command is `bin/grav clearcache` (no hyphen).
+    grav_bin="$RESTORE_LOCAL_TIER_DIR/bin/grav"
+    if [ -x "$grav_bin" ] || [ -f "$grav_bin" ]; then
+        log_op "running bin/grav clearcache from $RESTORE_LOCAL_TIER_DIR"
+        if ( cd "$RESTORE_LOCAL_TIER_DIR" && bin/grav clearcache ) >>"$LOG_FILE" 2>&1; then
+            log_op "clearcache complete"
+        else
+            warn "bin/grav clearcache returned non-zero (continuing)"
+            log_op "clearcache returned non-zero (continuing)"
+        fi
+    else
+        log_op "clearcache skipped — no Grav binary at $grav_bin"
+        log "clearcache skipped — no Grav binary at $grav_bin"
+    fi
+
+    log_op "restore complete"
+    log "Restore complete. Log: $LOG_FILE"
+    printf 'log=%s\n' "$LOG_FILE"
+    printf 'archive=%s\n' "$ARCHIVE_NAME"
+    printf 'mode=tier-local\n'
+    printf 'target=%s\n' "$RESTORE_LOCAL_TIER_DIR"
+    exit 0
+fi
+
 # === Live restore-to-tier path (operator only). ===
 # Reachable only when the operator has set RESTORE_TO_TIER_ENABLED=1
 # AND configured the tier's SSH credentials. Reviewable below.

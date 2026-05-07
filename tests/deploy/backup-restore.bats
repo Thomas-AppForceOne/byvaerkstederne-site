@@ -693,6 +693,151 @@ EOF
     ! grep -nE 'REPO_ROOT/config/www/user/data-version' "$REPO_ROOT/deploy/backup.sh"
 }
 
+# ─── restore-to-tier (local-tier mode) ───────────────────────────────
+#
+# Exercises the destructive wipe-and-replace code path against a
+# bats-temp-dir target instead of via SSH. This is the disaster-
+# recovery path's only test — the SSH variant (real operator runs)
+# is operator-only by design.
+
+@test "RESTORE_LOCAL_TIER_DIR is ignored without RESTORE_TO_TIER_ENABLED=1" {
+    run "$BACKUP_SH" prod
+    [ "$status" -eq 0 ]
+    archive="$(ls "$BACKUP_LOCAL_STORE_DIR"/prod-*.tar.gz.age | head -n1)"
+    id="$(basename "$archive" .tar.gz.age)"
+
+    TIER_B="$TMP/tier-no-gate"
+    mkdir -p "$TIER_B/user/accounts"
+    echo 'username: existing' > "$TIER_B/user/accounts/existing.yaml"
+
+    # Without the safety gate, the local-tier mode must NOT run; the
+    # script falls into the existing tier-standin path.
+    RESTORE_LOCAL_TIER_DIR="$TIER_B" \
+        run "$RESTORE_SH" prod --from "$id" --yes-i-mean-it
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"mode=tier-standin"* ]]
+    # The tier dir must be untouched.
+    [ -f "$TIER_B/user/accounts/existing.yaml" ]
+}
+
+@test "RESTORE_LOCAL_TIER_DIR rejects relative path" {
+    run "$BACKUP_SH" prod
+    [ "$status" -eq 0 ]
+    archive="$(ls "$BACKUP_LOCAL_STORE_DIR"/prod-*.tar.gz.age | head -n1)"
+    id="$(basename "$archive" .tar.gz.age)"
+
+    RESTORE_TO_TIER_ENABLED=1 RESTORE_LOCAL_TIER_DIR="relative/path" \
+        run "$RESTORE_SH" prod --from "$id" --yes-i-mean-it
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"absolute path"* ]]
+}
+
+@test "local-tier restore: backup A → mutate B → restore → byte-identity + log + sentinel" {
+    # Step (a): build fixture A (already done in setup() — $FIXTURE).
+    # Plant a deterministic content set we can mutate later.
+    echo 'sentinel-A' > "$FIXTURE/user/accounts/sentinel.yaml"
+    echo 'page-A'     > "$FIXTURE/user/pages/01.home/default.md"
+    echo 'data-A'     > "$FIXTURE/user/data/flex/tasks.yaml"
+    echo 'avatar-A'   > "$FIXTURE/user/uploads/2026/04/avatar.png"
+
+    # Step (b): take a backup using fixture A.
+    run "$BACKUP_SH" dev
+    [ "$status" -eq 0 ]
+    archive="$(ls "$BACKUP_LOCAL_STORE_DIR"/dev-*.tar.gz.age | head -n1)"
+    id="$(basename "$archive" .tar.gz.age)"
+
+    # Step (c): build tier B from the same fixture content, then
+    # mutate it: delete one file, modify one, add one untracked.
+    TIER_B="$TMP/tier-b"
+    mkdir -p "$TIER_B/user/accounts" \
+             "$TIER_B/user/data/flex" \
+             "$TIER_B/user/pages/01.home" \
+             "$TIER_B/user/uploads/2026/04"
+    cp "$FIXTURE/user/accounts/alice.yaml"          "$TIER_B/user/accounts/"
+    cp "$FIXTURE/user/accounts/bob.yaml"            "$TIER_B/user/accounts/"
+    cp "$FIXTURE/user/accounts/sentinel.yaml"       "$TIER_B/user/accounts/"
+    cp "$FIXTURE/user/data/flex/tasks.yaml"         "$TIER_B/user/data/flex/"
+    cp "$FIXTURE/user/pages/01.home/default.md"    "$TIER_B/user/pages/01.home/"
+    cp "$FIXTURE/user/uploads/2026/04/avatar.png"  "$TIER_B/user/uploads/2026/04/"
+
+    # mutation 1: delete sentinel.yaml (must be restored).
+    rm "$TIER_B/user/accounts/sentinel.yaml"
+    # mutation 2: modify default.md (must match A exactly after restore).
+    echo 'page-MUTATED' > "$TIER_B/user/pages/01.home/default.md"
+    # mutation 3: add an untracked file (must be gone after restore).
+    echo 'rogue'       > "$TIER_B/user/accounts/rogue.yaml"
+    [ -f "$TIER_B/user/accounts/rogue.yaml" ]
+
+    # Banner sentinel must not exist yet (we want this run to create it).
+    sentinel="$XDG_CONFIG_HOME/byvaerksted/backup-banner-shown"
+    [ ! -e "$sentinel" ]
+
+    # Step (d): restore using local-tier mode.
+    RESTORE_TO_TIER_ENABLED=1 RESTORE_LOCAL_TIER_DIR="$TIER_B" \
+        run --separate-stderr "$RESTORE_SH" dev --from "$id" --yes-i-mean-it
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"mode=tier-local"* ]]
+    [[ "$output" == *"target=$TIER_B"* ]]
+
+    # Step (e) assertions:
+    # — the deleted file is back —
+    [ -f "$TIER_B/user/accounts/sentinel.yaml" ]
+    diff -q "$FIXTURE/user/accounts/sentinel.yaml" "$TIER_B/user/accounts/sentinel.yaml"
+    # — the modified file is byte-identical to fixture A —
+    diff -q "$FIXTURE/user/pages/01.home/default.md" "$TIER_B/user/pages/01.home/default.md"
+    # — the added untracked file is gone (rsync --delete semantics) —
+    [ ! -e "$TIER_B/user/accounts/rogue.yaml" ]
+    # — every allow-listed path is byte-identical to the fixture —
+    diff -r "$FIXTURE/user/accounts" "$TIER_B/user/accounts"
+    diff -r "$FIXTURE/user/data"     "$TIER_B/user/data"
+    diff -r "$FIXTURE/user/pages"    "$TIER_B/user/pages"
+    diff -r "$FIXTURE/user/uploads"  "$TIER_B/user/uploads"
+
+    # — restore log was written and contains the expected lines —
+    log_path="$(printf '%s\n' "$output" | grep -E '^log=' | head -n1 | cut -d= -f2-)"
+    [ -f "$log_path" ]
+    grep -q 'restore op begin' "$log_path"
+    grep -q 'restore complete' "$log_path"
+    # — clearcache was correctly skipped (no bin/grav at the target) —
+    grep -q 'clearcache skipped' "$log_path"
+
+    # — first-write banner sentinel was created during this run —
+    [ -e "$sentinel" ]
+    [[ "$stderr" == *"tmutil addexclusion"* ]]
+}
+
+@test "local-tier restore: clearcache invoked when bin/grav exists at target" {
+    echo 'A' > "$FIXTURE/user/accounts/alice.yaml"
+
+    run "$BACKUP_SH" dev
+    [ "$status" -eq 0 ]
+    archive="$(ls "$BACKUP_LOCAL_STORE_DIR"/dev-*.tar.gz.age | head -n1)"
+    id="$(basename "$archive" .tar.gz.age)"
+
+    TIER_B="$TMP/tier-b-grav"
+    mkdir -p "$TIER_B/user/accounts" \
+             "$TIER_B/user/data" \
+             "$TIER_B/user/pages" \
+             "$TIER_B/user/uploads" \
+             "$TIER_B/bin"
+    # Plant a stub `bin/grav` that records the args it was called with
+    # to a marker file. Avoids depending on an actual Grav install.
+    cat > "$TIER_B/bin/grav" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$@" > "$TIER_B/grav-invoked"
+exit 0
+EOF
+    chmod +x "$TIER_B/bin/grav"
+
+    RESTORE_TO_TIER_ENABLED=1 RESTORE_LOCAL_TIER_DIR="$TIER_B" \
+        run "$RESTORE_SH" dev --from "$id" --yes-i-mean-it
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"mode=tier-local"* ]]
+
+    [ -f "$TIER_B/grav-invoked" ]
+    grep -q '^clearcache$' "$TIER_B/grav-invoked"
+}
+
 # ─── restore-to-scratch by id ────────────────────────────────────────
 
 @test "restore.sh --to <dir> --from <id> restores the requested archive" {
