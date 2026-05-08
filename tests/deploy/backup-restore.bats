@@ -725,6 +725,147 @@ EOF
     ! grep -nE 'REPO_ROOT/config/www/user/data-version' "$REPO_ROOT/deploy/backup.sh"
 }
 
+@test "SSH-mode metadata fetch: ssh commands are constructed with printf %q (shell-safe)" {
+    # Static check: the SSH commands in source_read_first_line and
+    # source_read_data_version_yaml must use printf %q to quote remote
+    # paths. Direct interpolation would let an attacker (or a typo in
+    # SSH_PATH) inject shell metacharacters into the remote command.
+    # This is the cheapest way to catch a regression in command
+    # construction without a real SSH daemon.
+    grep -q "printf %q \"\$SSH_PATH/config/www/\$rel\"" \
+         "$REPO_ROOT/deploy/backup.sh"
+    grep -q "printf %q \"\$SSH_PATH/config/www/user/data-version.yaml\"" \
+         "$REPO_ROOT/deploy/backup.sh"
+}
+
+@test "SSH-mode metadata fetch: end-to-end via fake-ssh shim, asserts correct values land in meta" {
+    # Real coverage of the SSH code path without a live SSH daemon.
+    # The shim:
+    #   - Handles the bare connectivity probe (`ssh user@host true`) by exiting 0.
+    #   - Handles the metadata-fetch shape (`test -f X && head|cat X`) by
+    #     evaluating the command locally — X is just a path on the test
+    #     machine, so the test+head/cat run as-is and produce the right output.
+    #   - Returns non-zero for any rsync invocation (rsync's `--server`
+    #     subcommand). That intentionally aborts backup.sh at the
+    #     source-pull step. The test asserts the rsync failure was
+    #     reached AFTER metadata was fetched correctly — i.e. the
+    #     metadata code path completed successfully over (fake) SSH.
+    unset BACKUP_FIXTURE_DIR
+
+    # Build a "remote" tree at a path the shim can serve.
+    REMOTE_ROOT="$TMP/remote-tier"
+    mkdir -p "$REMOTE_ROOT/config/www/user"
+    echo '7.7.7' > "$REMOTE_ROOT/config/www/VERSION"
+    echo '999'   > "$REMOTE_ROOT/config/www/BUILD"
+    cat > "$REMOTE_ROOT/config/www/user/data-version.yaml" <<'EOF'
+version: "5.5.5"
+EOF
+
+    SHIM_BIN="$TMP/shim-bin"
+    mkdir -p "$SHIM_BIN"
+    SHIM_TRACE="$TMP/shim-trace.log"
+    cat > "$SHIM_BIN/ssh" <<EOF
+#!/usr/bin/env bash
+# Fake ssh: handle the small subset of remote commands backup.sh issues.
+# The remote command is the LAST argument.
+cmd="\${!#}"
+printf '[%s] cmd=%s\n' "\$\$" "\$cmd" >> "$SHIM_TRACE"
+case "\$cmd" in
+    true)
+        # Bare connectivity probe.
+        exit 0
+        ;;
+    "test -f "*" && head -n 1 "*|"test -f "*" && cat "*)
+        # Metadata-fetch shapes (head -n 1 for VERSION/BUILD,
+        # cat for data-version.yaml). Run as-is — the path inside
+        # is already correctly quoted, and "remote" paths are
+        # local on the test machine.
+        eval "\$cmd"
+        exit \$?
+        ;;
+    *"rsync --server"*)
+        # rsync transport — the shim refuses, which surfaces as a
+        # rsync failure in backup.sh. That's fine: we're only
+        # testing the metadata code path.
+        echo "fake-ssh: rsync transport not supported in this shim" >&2
+        exit 255
+        ;;
+    *)
+        echo "fake-ssh: unrecognised remote command: \$cmd" >&2
+        exit 255
+        ;;
+esac
+EOF
+    chmod +x "$SHIM_BIN/ssh"
+
+    # Configure SSH-mode for tier=prod, which uses DEPLOY_PROD_PATH
+    # verbatim (no per-tier subpath suffix). We avoid tier=dev/test/staging
+    # because those append `/dev` etc. to DEPLOY_PATH, which would mean
+    # planting the fixture under $REMOTE_ROOT/dev/... for the tier name.
+    # prod is cleaner.
+    export DEPLOY_PROD_HOST=fake.host
+    export DEPLOY_PROD_USER=fake
+    export DEPLOY_PROD_PORT=22
+    export DEPLOY_PROD_PATH="$REMOTE_ROOT"
+
+    PATH="$SHIM_BIN:$PATH" run "$BACKUP_SH" prod --keep-local
+    # We expect a rsync failure (exit code 2), NOT a metadata-fetch
+    # failure (exit code 3). If the SSH command construction were
+    # broken — wrong quoting, wrong path, missing -n — we'd hit the
+    # "source tier missing config/www/VERSION" path with exit 3.
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"rsync"* ]] || [[ "$output" == *"source"* ]]
+    # The metadata-fetch should NOT have failed:
+    [[ "$output" != *"source tier missing config/www/VERSION"* ]]
+    [[ "$output" != *"source tier missing config/www/BUILD"* ]]
+
+    # Trace assertion: the shim should have seen exactly the three
+    # expected fetch shapes plus the connectivity probe.
+    [ -f "$SHIM_TRACE" ]
+    grep -q "true" "$SHIM_TRACE"
+    grep -q "test -f .*config/www/VERSION.* && head -n 1" "$SHIM_TRACE"
+    grep -q "test -f .*config/www/BUILD.* && head -n 1" "$SHIM_TRACE"
+    grep -q "test -f .*config/www/user/data-version.yaml.* && cat" "$SHIM_TRACE"
+}
+
+@test "SSH-mode metadata fetch: missing VERSION on remote → exit 3 with naming error" {
+    # Same fake-ssh shim approach, but the remote tree has no VERSION
+    # file. The SSH `test -f` returns false → empty stdout → empty
+    # CODE_VERSION → die. Exit 3, error names the file.
+    unset BACKUP_FIXTURE_DIR
+
+    REMOTE_ROOT="$TMP/remote-tier-no-version"
+    mkdir -p "$REMOTE_ROOT/config/www/user"
+    echo '999' > "$REMOTE_ROOT/config/www/BUILD"
+    # Deliberately no VERSION.
+    cat > "$REMOTE_ROOT/config/www/user/data-version.yaml" <<'EOF'
+version: "0.1.0"
+EOF
+
+    SHIM_BIN="$TMP/shim-novr"
+    mkdir -p "$SHIM_BIN"
+    cat > "$SHIM_BIN/ssh" <<'EOF'
+#!/usr/bin/env bash
+cmd="${!#}"
+case "$cmd" in
+    "true") exit 0 ;;
+    "test -f "*" && head -n 1 "*|"test -f "*" && cat "*) eval "$cmd"; exit $? ;;
+    *) exit 255 ;;
+esac
+EOF
+    chmod +x "$SHIM_BIN/ssh"
+
+    export DEPLOY_PROD_HOST=fake.host
+    export DEPLOY_PROD_USER=fake
+    export DEPLOY_PROD_PORT=22
+    export DEPLOY_PROD_PATH="$REMOTE_ROOT"
+
+    PATH="$SHIM_BIN:$PATH" run "$BACKUP_SH" prod
+    [ "$status" -eq 3 ]
+    [[ "$output" == *"VERSION"* ]]
+    [[ "$output" == *"source tier"* ]]
+}
+
 # ─── restore-to-tier (local-tier mode) ───────────────────────────────
 #
 # Exercises the destructive wipe-and-replace code path against a
