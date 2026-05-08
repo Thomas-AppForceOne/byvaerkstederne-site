@@ -1,4 +1,4 @@
-.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging deploy-landing backup-prod backup-test test test-headed test-auth test-install test-deploy
+.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging deploy-landing backup-prod backup-test test test-headed test-auth test-install test-deploy test-backup-restore
 
 # Default target
 help: ## Show this help
@@ -156,6 +156,11 @@ test-headed: ## Run tests with browser visible (for debugging)
 
 test-deploy: ## Run deploy-script regression tests (rsync excludes preserve live state)
 	@bash tests/deploy/excludes-preserve-live-state.sh
+
+test-backup-restore: ## Run backup/restore tooling tests (bats)
+	@command -v bats >/dev/null 2>&1 || { echo "❌  bats not installed. Run: brew install bats-core"; exit 1; }
+	@command -v age  >/dev/null 2>&1 || { echo "❌  age not installed. Run: brew install age"; exit 1; }
+	@bats tests/deploy/backup-restore.bats
 
 test-auth: ## Run authenticated tests (auto-sources ~/.gan-secrets/workshop-site.env)
 	@PORT="$${GRAV_PORT}"; \

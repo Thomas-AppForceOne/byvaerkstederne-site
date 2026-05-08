@@ -13,6 +13,83 @@ make setup
 
 This will check dependencies, pull LFS files, start Docker, and prompt you to create an admin account (username, email, password). The site will then be available at **http://localhost:8080** and admin panel at **http://localhost:8080/admin**.
 
+## First-time setup
+
+### Backup operator hygiene (macOS)
+
+`deploy/backup.sh` and `deploy/restore.sh` write encrypted archives and
+unpacked PII (member emails, bcrypt hashes, bug-report screenshots)
+into three local paths. Time Machine, Spotlight, and cloud-sync tools
+will silently capture that data unless you exclude them. Once per
+machine, after first checkout, run:
+
+```bash
+tmutil addexclusion ./backups
+tmutil addexclusion ./deploy/staging-stage
+tmutil addexclusion ./deploy/prod-stage
+```
+
+Also, do **not** keep this checkout inside a Dropbox / iCloud Drive /
+Google Drive synced root.
+
+`./backups/`, `./deploy/staging-stage/`, and `./deploy/prod-stage/`
+are already covered by `.gitignore`. `restore.sh` writes
+`.metadata_never_index` (Spotlight exclusion marker) into any scratch
+directory it creates.
+
+### Backup tooling dependencies
+
+`deploy/backup.sh` and `deploy/restore.sh` need:
+
+| Tool | Why |
+|------|-----|
+| [`age`](https://age-encryption.org) | Encrypts/decrypts the archive (`brew install age`). |
+| `tar`, `rsync`, `ssh` | Standard on macOS / Linux. |
+| (optional) `aws` CLI | Only when uploading to S3-compatible managed storage. |
+
+The committed test suite (`tests/deploy/backup-restore.bats`) needs
+[`bats-core`](https://github.com/bats-core/bats-core) — `brew install
+bats-core`.
+
+### Backup tooling environment variables
+
+Configuration variables for `deploy/backup.sh` and `deploy/restore.sh`.
+The standard ones live in `.env.deploy` (gitignored, see
+`.env.deploy.example`); the test-mode ones are exported per-invocation.
+
+**Standard configuration** (set in `.env.deploy`):
+
+| Variable | Purpose |
+|----------|---------|
+| `DEPLOY_PROD_HOST`, `DEPLOY_PROD_USER`, `DEPLOY_PROD_PORT`, `DEPLOY_PROD_PATH` | SSH credentials for the prod tier. |
+| `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_PATH` | SSH credentials shared across staging / test / dev (see `specifications/archive/prod_backup_restore_specification.md` for the per-tier subpath logic). |
+| `BACKUP_S3_BUCKET`, `BACKUP_S3_ENDPOINT`, `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` | Managed-storage credentials. Either these or `BACKUP_LOCAL_STORE_DIR` must be set. |
+| `BACKUP_LOCAL_STORE_DIR` | Directory acting as managed storage (used for testing and when an S3 bucket is overkill). Mutually exclusive with the S3 backend; if both are set, the local store wins. |
+| `AGE_IDENTITY_FILE` | Absolute path to the operator's age private key (kept in a password manager / hardware key, never committed). Required for any `restore.sh` invocation that decrypts. |
+
+**Disaster-recovery gates** (`deploy/restore.sh` only):
+
+| Variable | Purpose |
+|----------|---------|
+| `RESTORE_TO_TIER_ENABLED=1` | Master safety gate. Without this, `restore.sh <tier> --from <id>` exits early with a stand-in message instead of executing the destructive wipe. Defaults to `0`. |
+| `RESTORE_LOCAL_TIER_DIR=<abs-path>` | When set together with `RESTORE_TO_TIER_ENABLED=1`, the wipe-and-replace runs against this local directory instead of via `rsync` over SSH. Used by the bats test suite to exercise the disaster-recovery code path; operators can use it to dry-run a restore against a scratch tier. The pre-restore safety backup is automatically skipped in this mode (it would SSH to real prod, defeating the dry-run). |
+
+**Test-mode escapes** (set by `tests/deploy/backup-restore.bats`; do not use in production):
+
+| Variable | Purpose |
+|----------|---------|
+| `BACKUP_FIXTURE_DIR=<abs-path>` | Replaces the SSH source-pull with a local directory. The fixture's `config/www/{VERSION,BUILD,user/data-version.yaml}` files are read for backup metadata; the allow-listed `user/*` subtrees are copied into the staging area instead of rsynced. |
+| `BACKUP_RECIPIENTS_FILE=<abs-path>` | Override `deploy/age-recipients.txt` for tests with a throwaway keypair. |
+| `BACKUP_FAKE_NOW_EPOCH=<unix-epoch>` | Pin the script's "now" timestamp for deterministic filename/metadata assertions. |
+| `BACKUP_SOURCE_HOST=<hostname>` | Override the `source_host` field in `backup-meta.yaml` (defaults to `fixture.local` in fixture mode). |
+| `XDG_CONFIG_HOME=<abs-path>` | Standard XDG variable; the bats suite redirects it to a per-test temp dir so the privacy-hygiene banner sentinel is isolated from the operator's real `~/.config/byvaerksted/`. |
+
+There is intentionally no `BACKUP_FAKE_CODE_VERSION` /
+`BACKUP_FAKE_CODE_BUILD` / `BACKUP_FAKE_DATA_VERSION` env-var
+override. Tests inject metadata by populating
+`$BACKUP_FIXTURE_DIR/config/www/{VERSION,BUILD,user/data-version.yaml}`
+— the same source-fetch code path an operator run uses.
+
 ## Requirements
 
 | Tool | Version | Purpose |
