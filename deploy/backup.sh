@@ -218,6 +218,16 @@ if [ "$USE_FIXTURE" = "0" ]; then
     SOURCE_HOST="$SSH_HOST"
     require_bin ssh
     require_bin rsync
+
+    # Probe SSH up front so the spec-mandated "ssh to host:port failed"
+    # error fires BEFORE we try to read VERSION/BUILD/data-version.yaml
+    # over a dead connection. Without this probe, an unreachable host
+    # would surface as "source tier missing config/www/VERSION" — a
+    # misleading message that hides the real failure mode (network).
+    if ! ssh -o BatchMode=yes -o ConnectTimeout=10 -p "$SSH_PORT" \
+             "${SSH_USER}@${SSH_HOST}" true 2>/dev/null; then
+        die "ssh to ${SSH_HOST}:${SSH_PORT} failed" 2
+    fi
 fi
 
 # ──────────────────────────────────────────────────────────────────────
@@ -289,11 +299,17 @@ NOW_FNAME_TIME="${NOW_ISO//:/-}"   # 2026-04-29T12-34Z
 #     to 0.0.0 (NOT to code_version, NOT to the operator's local
 #     repo) is the only sensible behaviour.
 #
-# The BACKUP_FAKE_CODE_VERSION / BACKUP_FAKE_CODE_BUILD /
-# BACKUP_FAKE_DATA_VERSION environment overrides exist as explicit
-# test injection points — when set, they win. They are NOT a
-# fallback: if a fake is unset, we read from the source. We never
-# read from $REPO_ROOT.
+# Tests inject metadata by populating
+# `$BACKUP_FIXTURE_DIR/config/www/{VERSION,BUILD,user/data-version.yaml}`
+# and letting the script's normal source-read path consume it. No
+# env-var bypass exists — the chunked override path used to be a
+# `BACKUP_FAKE_CODE_VERSION` / `BACKUP_FAKE_CODE_BUILD` /
+# `BACKUP_FAKE_DATA_VERSION` triple, but it was a footgun: tests
+# that set those variables skipped the source-fetch code path
+# entirely and would have masked a regression in either fixture
+# mode or SSH mode. Removing the overrides forces every test that
+# touches metadata to exercise the same fetch logic an operator
+# run uses, just routed through the fixture.
 # ──────────────────────────────────────────────────────────────────────
 
 # Trim CR/LF and surrounding whitespace from a single-line value.
@@ -362,48 +378,45 @@ source_read_data_version_yaml() {
 }
 
 # CODE_VERSION ----------------------------------------------------------
-if [ -n "${BACKUP_FAKE_CODE_VERSION:-}" ]; then
-    CODE_VERSION="$(trim_line "$BACKUP_FAKE_CODE_VERSION")"
-else
-    raw="$(source_read_first_line VERSION)"
-    CODE_VERSION="$(trim_line "$raw")"
-    if [ -z "$CODE_VERSION" ]; then
-        die "source tier missing config/www/VERSION (cannot stamp backup metadata)" 3
-    fi
+raw="$(source_read_first_line VERSION)"
+CODE_VERSION="$(trim_line "$raw")"
+if [ -z "$CODE_VERSION" ]; then
+    die "source tier missing config/www/VERSION (cannot stamp backup metadata)" 3
 fi
 
 # CODE_BUILD ------------------------------------------------------------
-if [ -n "${BACKUP_FAKE_CODE_BUILD:-}" ]; then
-    CODE_BUILD="$(trim_line "$BACKUP_FAKE_CODE_BUILD")"
-else
-    raw="$(source_read_first_line BUILD)"
-    CODE_BUILD="$(trim_line "$raw")"
-    if [ -z "$CODE_BUILD" ]; then
-        die "source tier missing config/www/BUILD (cannot stamp backup metadata)" 3
-    fi
+raw="$(source_read_first_line BUILD)"
+CODE_BUILD="$(trim_line "$raw")"
+if [ -z "$CODE_BUILD" ]; then
+    die "source tier missing config/www/BUILD (cannot stamp backup metadata)" 3
 fi
 
 # DATA_VERSION ----------------------------------------------------------
 # Fall-back rule: if the source has no data-version.yaml, write
 # "0.0.0" (the literal string) and emit a stderr warning naming the
 # missing file. Do NOT inherit code_version, do NOT consult the
-# operator's local repo.
-if [ -n "${BACKUP_FAKE_DATA_VERSION:-}" ]; then
-    DATA_VERSION="$(trim_line "$BACKUP_FAKE_DATA_VERSION")"
-elif [ -n "${BACKUP_DATA_VERSION:-}" ]; then
-    # Legacy env override — still honoured but logged so it's auditable.
-    DATA_VERSION="$(trim_line "$BACKUP_DATA_VERSION")"
+# operator's local repo. The malformed-but-present case (file exists
+# but has no parseable `version:` field) is treated as a hard error
+# below — silently defaulting would let downstream migration tooling
+# trust a metadata field that came from corrupted state.
+dv_raw="$(source_read_data_version_yaml)"
+if [ -z "$dv_raw" ]; then
+    # File-not-present: spec-defined fallback to "0.0.0".
+    warn "source tier has no config/www/user/data-version.yaml — defaulting data_version to 0.0.0"
+    DATA_VERSION="0.0.0"
 else
-    dv_raw="$(source_read_data_version_yaml)"
-    if [ -z "$dv_raw" ]; then
-        warn "source tier has no config/www/user/data-version.yaml — defaulting data_version to 0.0.0"
-        DATA_VERSION="0.0.0"
-    else
-        DATA_VERSION="$(extract_yaml_version_field "$dv_raw")"
-        if [ -z "$DATA_VERSION" ]; then
-            warn "source tier config/www/user/data-version.yaml has no parseable 'version:' field — defaulting data_version to 0.0.0"
-            DATA_VERSION="0.0.0"
-        fi
+    DATA_VERSION="$(extract_yaml_version_field "$dv_raw")"
+    if [ -z "$DATA_VERSION" ]; then
+        # File-present-but-malformed: hard fail. Defaulting would
+        # produce metadata claiming a version of 0.0.0 for a tier
+        # whose data-version.yaml exists but is corrupt or
+        # hand-edited. Downstream migration tooling consuming that
+        # metadata could then apply migrations targeting 0.0.0 →
+        # 0.x.y to data that's actually at 0.x.y already, with
+        # destructive results. Refusing to back up is the safe
+        # response — the operator can fix or remove the file and
+        # retry.
+        die "source tier config/www/user/data-version.yaml exists but has no parseable 'version:' field; refusing to stamp metadata" 3
     fi
 fi
 
@@ -445,11 +458,8 @@ if [ "$USE_FIXTURE" = "1" ]; then
     done
 else
     log "Pulling source from ${SSH_USER}@${SSH_HOST}:${SSH_PORT} (${SSH_PATH})"
-    # Probe SSH first so we can produce the spec-mandated error.
-    if ! ssh -o BatchMode=yes -o ConnectTimeout=10 -p "$SSH_PORT" \
-             "${SSH_USER}@${SSH_HOST}" true 2>/dev/null; then
-        die "ssh to ${SSH_HOST}:${SSH_PORT} failed" 2
-    fi
+    # SSH reachability was already probed up front in the credentials
+    # block; if we got here, the connection is alive.
     for rel in "${INCLUDE_PATHS[@]}"; do
         mkdir -p "$STAGE_DIR/$(dirname "$rel")"
         # Use rsync without --delete; we're rsyncing INTO an empty

@@ -87,9 +87,14 @@ EOF
     export BACKUP_LOCAL_STORE_DIR="$STORE"
     export BACKUP_FIXTURE_DIR="$FIXTURE"
     export BACKUP_SOURCE_HOST="fixture.local"
-    export BACKUP_FAKE_CODE_VERSION="0.1.0"
-    export BACKUP_FAKE_CODE_BUILD="247"
-    export BACKUP_FAKE_DATA_VERSION="0.1.0"
+    # Note: BACKUP_FAKE_CODE_VERSION / BACKUP_FAKE_CODE_BUILD /
+    # BACKUP_FAKE_DATA_VERSION used to be exported here as a
+    # convenience. They were removed because their presence skipped
+    # the source-fetch code path — every test that ran with them set
+    # was bypassing the very behaviour the contract asks us to
+    # exercise. The fixture's `config/www/{VERSION,BUILD,user/data-version.yaml}`
+    # files (planted above) ARE the metadata source now, just routed
+    # through the same code path an operator run uses.
     export AGE_IDENTITY_FILE="$KEYDIR/identity.txt"
     # Stable backup time (2026-04-29T12:34:00Z UTC) for filename
     # and metadata assertions.
@@ -647,9 +652,6 @@ EOF
     # Use distinctive code_version to ensure the fallback isn't
     # silently inheriting it.
     echo '1.2.3' > "$FIXTURE/config/www/VERSION"
-    unset BACKUP_FAKE_CODE_VERSION
-    unset BACKUP_FAKE_DATA_VERSION
-    unset BACKUP_DATA_VERSION
 
     run --separate-stderr "$BACKUP_SH" prod
     [ "$status" -eq 0 ]
@@ -665,9 +667,28 @@ EOF
     ! grep -q '^data_version: "1.2.3"$' "$SCRATCH/backup-meta.yaml"
 }
 
+@test "malformed data-version.yaml (no parseable version) → hard fail, NOT silent default to 0.0.0" {
+    # Regression for PR #16 review finding: a present-but-malformed
+    # data-version.yaml used to fall through to "0.0.0" with only a
+    # warning. That's unsafe — a corrupt or hand-edited file would
+    # produce metadata claiming version 0.0.0, which downstream
+    # migration tooling would trust and apply migrations against.
+    # The fix: treat malformed-but-present as a hard error (exit 3).
+    cat > "$FIXTURE/config/www/user/data-version.yaml" <<'EOF'
+# This file exists but has no parseable version: field.
+something_else: "value"
+EOF
+
+    run "$BACKUP_SH" prod
+    [ "$status" -eq 3 ]
+    [[ "$output" == *"data-version.yaml"* ]]
+    [[ "$output" == *"parseable"* || "$output" == *"refusing"* ]]
+    # No archive should have been produced.
+    ! ls "$BACKUP_LOCAL_STORE_DIR"/*.tar.gz.age >/dev/null 2>&1
+}
+
 @test "missing fixture VERSION → hard fail (exit 3) naming the file" {
     rm -f "$FIXTURE/config/www/VERSION"
-    unset BACKUP_FAKE_CODE_VERSION
 
     run "$BACKUP_SH" prod
     [ "$status" -eq 3 ]
@@ -678,7 +699,6 @@ EOF
 
 @test "missing fixture BUILD → hard fail (exit 3) naming the file" {
     rm -f "$FIXTURE/config/www/BUILD"
-    unset BACKUP_FAKE_CODE_BUILD
 
     run "$BACKUP_SH" prod
     [ "$status" -eq 3 ]
