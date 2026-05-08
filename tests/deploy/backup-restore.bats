@@ -509,9 +509,17 @@ teardown() {
 
     run --separate-stderr "$BACKUP_SH" prod --keep-local
     [ "$status" -eq 0 ]
+    # Persistent path: ./backups/ — must be named verbatim with the
+    # exclusion command, since this is the only path the script
+    # always writes to.
     [[ "$stderr" == *"tmutil addexclusion ./backups"* ]]
-    [[ "$stderr" == *"tmutil addexclusion ./deploy/staging-stage"* ]]
-    [[ "$stderr" == *"tmutil addexclusion ./deploy/prod-stage"* ]]
+    # Operator-chosen paths (`--to <dir>` / `RESTORE_LOCAL_TIER_DIR`):
+    # the banner mentions them by env-var name rather than listing
+    # made-up `./deploy/staging-stage/` and `./deploy/prod-stage/`
+    # paths the scripts never actually create.
+    [[ "$stderr" == *"--to <dir>"* ]]
+    [[ "$stderr" == *"RESTORE_LOCAL_TIER_DIR"* ]]
+    # Cloud-sync warning still names at least two of the four major services.
     [[ "$stderr" == *"Dropbox"* ]] || [[ "$stderr" == *"iCloud"* ]]
     [[ "$stderr" == *"Google Drive"* ]] || [[ "$stderr" == *"OneDrive"* ]]
 
@@ -564,9 +572,13 @@ teardown() {
     SCRATCH="$TMP/scratch-banner"
     run --separate-stderr "$RESTORE_SH" --to "$SCRATCH"
     [ "$status" -eq 0 ]
+    # Same banner content as on the backup path: the persistent path
+    # is named with its `tmutil` command, the operator-chosen paths
+    # are referenced by their env-var/flag names rather than by
+    # made-up directory names.
     [[ "$stderr" == *"tmutil addexclusion ./backups"* ]]
-    [[ "$stderr" == *"tmutil addexclusion ./deploy/staging-stage"* ]]
-    [[ "$stderr" == *"tmutil addexclusion ./deploy/prod-stage"* ]]
+    [[ "$stderr" == *"--to <dir>"* ]]
+    [[ "$stderr" == *"RESTORE_LOCAL_TIER_DIR"* ]]
 
     [ -e "$sentinel" ]
 

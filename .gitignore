@@ -48,8 +48,12 @@ config/www/BUILD
 backups/
 
 # Restore-to-scratch staging directories — never committed; contain
-# decrypted PII and bug-report screenshots. Operators must also add
-# tmutil exclusions (see README "Backup operator hygiene").
+# decrypted PII and bug-report screenshots. The script paths
+# operators choose at invocation (`restore.sh --to <dir>`,
+# `RESTORE_LOCAL_TIER_DIR=<dir>`) vary, so we can't pre-list them
+# here. The two below are kept as defensive cover in case an
+# operator manually creates them — the scripts themselves never
+# write to those exact paths.
 deploy/staging-stage/
 deploy/prod-stage/
 

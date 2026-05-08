@@ -2,18 +2,28 @@
 #
 # Operator-laptop privacy-hygiene banner.
 #
-# Both backup.sh and restore.sh write into a small set of paths that
-# can carry user PII (account hashes, flex objects, uploaded files):
+# Both backup.sh and restore.sh can materialise PII (account hashes,
+# flex objects, uploaded files) on the operator's machine. The paths
+# they actually write to are:
 #
-#   ./backups/               — local-keep archives + upload-fallback
-#   ./deploy/staging-stage/  — restore-to-tier scratch staging
-#   ./deploy/prod-stage/     — restore-to-tier scratch staging
+#   ./backups/                 — backup.sh --keep-local + upload-failure fallback
+#   <restore.sh --to TARGET>   — operator-chosen scratch dir (varies)
+#   $RESTORE_LOCAL_TIER_DIR    — operator-chosen tier dir for the
+#                                local-tier restore mode (varies)
 #
-# These paths must be excluded from Time Machine and never live inside
-# a Dropbox/iCloud/Google-Drive synced root. The first time either
-# script writes into one of them on a given laptop, we print a
-# one-shot reminder banner to stderr listing the corresponding
-# `tmutil addexclusion` commands and the cloud-sync warning.
+# Of those, only ./backups/ has a fixed location. The other two are
+# operator-chosen at invocation time, so the banner can't pre-list
+# `tmutil addexclusion` commands for them — instead it warns the
+# operator to remember to exclude their chosen target path the first
+# time they pass --to <dir> or set RESTORE_LOCAL_TIER_DIR.
+#
+# (An earlier draft listed `./deploy/staging-stage/` and
+# `./deploy/prod-stage/` here. The implementation never writes to
+# those — restore.sh uses `/tmp/bv-restore-tier.*` for SSH-mode scratch
+# and the operator's RESTORE_LOCAL_TIER_DIR for local-tier mode. The
+# banner used to mention those ghost paths anyway, which was
+# misleading: operators following the recommendation would exclude
+# directories the script never creates.)
 #
 # "First time on this machine" is tracked by a sentinel file at:
 #
@@ -53,19 +63,22 @@ bv_show_first_write_banner_if_needed() {
         printf '  Byværkstederne backup/restore — operator-laptop hygiene\n'
         printf '────────────────────────────────────────────────────────────────\n'
         printf '  This is the first time backup.sh or restore.sh has written\n'
-        printf '  into one of the privacy-sensitive paths on this machine:\n'
+        printf '  into a privacy-sensitive path on this machine. These paths\n'
+        printf '  can carry user account hashes, Flex Objects, and uploaded\n'
+        printf '  files. Please exclude them from Time Machine.\n'
         printf '\n'
-        printf '    ./backups/\n'
-        printf '    ./deploy/staging-stage/\n'
-        printf '    ./deploy/prod-stage/\n'
-        printf '\n'
-        printf '  These directories may carry user account hashes, Flex\n'
-        printf '  Objects, and uploaded files. Please exclude them from Time\n'
-        printf '  Machine by running:\n'
+        printf '  The persistent path is `./backups/` (local-keep archives\n'
+        printf '  and upload-fallback copies):\n'
         printf '\n'
         printf '    tmutil addexclusion ./backups\n'
-        printf '    tmutil addexclusion ./deploy/staging-stage\n'
-        printf '    tmutil addexclusion ./deploy/prod-stage\n'
+        printf '\n'
+        printf '  If you also use:\n'
+        printf '    - `restore.sh --to <dir>` for scratch inspection, or\n'
+        printf '    - `RESTORE_LOCAL_TIER_DIR=<dir>` for the local-tier\n'
+        printf '      restore mode,\n'
+        printf '  remember to `tmutil addexclusion` whichever path you chose\n'
+        printf '  for those, too. This banner can'\''t pre-list them because\n'
+        printf '  they vary per invocation.\n'
         printf '\n'
         printf '  Cloud-sync warning: do NOT keep this checkout inside a\n'
         printf '  Dropbox / iCloud Drive / Google Drive / OneDrive synced\n'
