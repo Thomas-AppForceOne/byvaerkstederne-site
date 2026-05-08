@@ -395,11 +395,24 @@ log_op() {
 
 if [ "$TIER" = "prod" ]; then
     log_op "prod safety gate passed (--yes-i-mean-it)"
-    log "Taking pre-restore safety backup of prod (tag: pre-restore-${NOW_TS})"
-    if ! "$SCRIPT_DIR/backup.sh" prod --tag "pre-restore-${NOW_TS}" >>"$LOG_FILE" 2>&1; then
-        die "pre-restore backup failed; aborting restore (log: $LOG_FILE)" 4
+    if [ -n "${RESTORE_LOCAL_TIER_DIR:-}" ]; then
+        # Local-tier mode is the testable analogue of the SSH path.
+        # Skipping the pre-restore real-prod backup here is deliberate:
+        # taking one would SSH to real prod, cost a real S3 upload, and
+        # require live prod credentials — none of which makes sense
+        # when the operator's intent is clearly to exercise the
+        # disaster-recovery code path against a local target. The SSH
+        # path below still takes the pre-restore backup unconditionally;
+        # only the local-tier branch skips it.
+        log "Skipping pre-restore safety backup (RESTORE_LOCAL_TIER_DIR is set — local-tier mode does not touch real prod)"
+        log_op "pre-restore safety backup skipped (RESTORE_LOCAL_TIER_DIR set)"
+    else
+        log "Taking pre-restore safety backup of prod (tag: pre-restore-${NOW_TS})"
+        if ! "$SCRIPT_DIR/backup.sh" prod --tag "pre-restore-${NOW_TS}" >>"$LOG_FILE" 2>&1; then
+            die "pre-restore backup failed; aborting restore (log: $LOG_FILE)" 4
+        fi
+        log_op "pre-restore safety backup complete"
     fi
-    log_op "pre-restore safety backup complete"
 fi
 
 # At this point, the restore-to-tier destructive operation would run.

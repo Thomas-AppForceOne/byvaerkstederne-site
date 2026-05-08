@@ -838,6 +838,63 @@ EOF
     grep -q '^clearcache$' "$TIER_B/grav-invoked"
 }
 
+@test "local-tier restore for tier=prod skips the real-prod pre-restore safety backup" {
+    # Regression for the post-merge review of PR #16:
+    # When RESTORE_LOCAL_TIER_DIR is set, the script must NOT take a
+    # pre-restore backup against real prod via SSH — that would
+    # require live prod credentials, cost a real S3 upload, and
+    # contradict the entire premise of local-tier mode being a
+    # safe stand-in. The fix: skip step 4 when local-tier mode is
+    # active. The SSH path keeps the safety backup unconditionally.
+
+    # Build a fixture-shaped prod backup we can restore from.
+    run "$BACKUP_SH" prod
+    [ "$status" -eq 0 ]
+    archive="$(ls "$BACKUP_LOCAL_STORE_DIR"/prod-*.tar.gz.age | head -n1)"
+    id="$(basename "$archive" .tar.gz.age)"
+
+    # Fresh tier-B target. No bin/grav, so clearcache logs "skipped".
+    TIER_B="$TMP/tier-b-prod"
+    mkdir -p "$TIER_B/user/accounts" "$TIER_B/user/data" \
+             "$TIER_B/user/pages" "$TIER_B/user/uploads"
+
+    # Install a fake `ssh` earlier in PATH that records every
+    # invocation. If the script tries to SSH to real prod for the
+    # pre-restore backup, the marker file appears and the test fails.
+    SHIM_BIN="$TMP/shim-bin"
+    mkdir -p "$SHIM_BIN"
+    cat > "$SHIM_BIN/ssh" <<EOF
+#!/usr/bin/env bash
+printf 'ssh-invoked: %s\n' "\$*" >> "$TMP/ssh-invocations"
+exit 1
+EOF
+    chmod +x "$SHIM_BIN/ssh"
+
+    # Deliberately leave DEPLOY_PROD_* unset to ensure the SSH path
+    # would fail if reached. The test passes only if SSH is NEVER
+    # reached — i.e. the local-tier branch correctly skips the
+    # real-prod backup.
+    PATH="$SHIM_BIN:$PATH" \
+    RESTORE_TO_TIER_ENABLED=1 RESTORE_LOCAL_TIER_DIR="$TIER_B" \
+        run "$RESTORE_SH" prod --from "$id" --yes-i-mean-it
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"mode=tier-local"* ]]
+
+    # SSH must never have been invoked.
+    [ ! -f "$TMP/ssh-invocations" ]
+
+    # Log file should record the deliberate skip with a clear reason.
+    # Search by content rather than by timestamp ordering: $REPO_ROOT/logs/
+    # may contain log files from other test scenarios in the same suite run.
+    log_file="$(grep -l 'pre-restore safety backup skipped (RESTORE_LOCAL_TIER_DIR set)' \
+                    "$REPO_ROOT/logs"/restore-prod-*.log 2>/dev/null | head -n1)"
+    [ -n "$log_file" ]
+
+    # Cleanup — remove every prod restore log this test could have produced
+    # so a follow-up test doesn't trip over them.
+    rm -f "$REPO_ROOT/logs"/restore-prod-*.log
+}
+
 # ─── restore-to-scratch by id ────────────────────────────────────────
 
 @test "restore.sh --to <dir> --from <id> restores the requested archive" {
