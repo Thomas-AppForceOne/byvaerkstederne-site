@@ -13,8 +13,15 @@
 #   bv_bootstrap_data_dir         <data-dir> <env>
 #   bv_wire_release_symlinks      <release-dir> <data-dir> <env>
 #   bv_write_release_meta_yaml    <release-dir> <release-id> <prev-release-id> <code-version> <build> <data-version> <deployed-at> <deployed-by>
+#   bv_write_release_meta_yaml_full <release-dir> <release-id> <prev-release-id> <code-version> <build> <data-version> <deployed-at> <deployed-by> <host> <cwd> <branch> <sha> <sha-short> <is-dirty> <previous-data-version>
+#   bv_append_post_swap_meta      <release-dir> <swapped-at> <swap-duration-ms> <probe-url> <probe-status> <probe-substring> <probe-matched>
 #   bv_atomic_swap_symlink        <release-dir> <docroot-symlink>
 #   bv_prune_old_releases         <releases-dir> <current-release-id> <prev-release-id> [keep-N=5]
+#   bv_compute_expected_version_substring <release-dir>             # echoes "Version <X> · build <N>"
+#   bv_smoke_probe                <url> <expected-substring>        # echoes "<status>|<matched>"; rc=0 on match, non-zero otherwise
+#   bv_check_previous_release_data_symlinks <release-dir>           # rc=0 if accounts/, user/data/, logs/ all resolve; non-zero + diagnostic otherwise
+#   bv_rollback_local             <parent-dir> <env> <docroot-name>  # local-mode rollback (no ssh) — used by tests and rollback.sh's --local mode
+#   bv_append_rollback_log_row    <releases-dir> <rolled-back-at> <rolled-back-by> <from-release> <to-release> <swap-duration-ms> <probe-url> <probe-status> <probe-substring> <probe-matched>
 #
 # These run locally (no ssh, no remote) — the deploy script wraps them
 # with sshpass/ssh when invoking against a remote, but the fixture-
@@ -446,4 +453,429 @@ bv_prune_old_releases() {
 
     # <tier>data/v<N>/ retention is NOT in scope this sprint.
     echo "  ℹ️  <tier>data/v<N>/ retention deferred to data-versioning spec" >&2
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# Sprint 2 additions: full release-meta schema, smoke probe, rollback.
+# ─────────────────────────────────────────────────────────────────────
+
+# Write the FULL §Audit-schema release-meta.yaml — pre-swap fields only.
+# Caller appends the post-swap fields via bv_append_post_swap_meta after
+# the swap + probe complete.
+#
+# Quoting discipline:
+#   * release_id and previous_release pass the strict regex; emitted
+#     unquoted (matches §Audit example).
+#   * deployed_at / swapped_at: ISO-8601, contain ':' — quoted.
+#   * deployed_by (email): may contain unusual chars — quoted.
+#   * deployed_from.host / cwd / branch: may contain ':' or spaces —
+#     quoted, with embedded '"' and '\' escaped.
+#   * sha / sha_short / code_version / build / data_version /
+#     previous_data_version: quoted strings (matches §Audit example).
+#   * is_dirty: YAML boolean (true/false) — UNQUOTED.
+bv_write_release_meta_yaml_full() {
+    local release_dir="${1:?release dir required}"
+    local release_id="${2:?release id required}"
+    local prev_release_id="${3:-}"
+    local code_version="${4:?code version required}"
+    local build="${5:?build required}"
+    local data_version="${6:-v0}"
+    local deployed_at="${7:?deployed_at required}"
+    local deployed_by="${8:-unknown}"
+    local host="${9:-unknown}"
+    local cwd="${10:-unknown}"
+    local branch="${11:-unknown}"
+    local sha="${12:-unknown}"
+    local sha_short="${13:-unknown}"
+    local is_dirty="${14:-false}"
+    local previous_data_version="${15:-v0}"
+
+    if ! bv_validate_release_id "$release_id"; then
+        return 1
+    fi
+    if [ -n "$prev_release_id" ] && ! bv_validate_release_id "$prev_release_id"; then
+        return 1
+    fi
+
+    # Normalise is_dirty to a strict {true,false} — anything else is
+    # rejected so the YAML always parses as a real boolean.
+    case "$is_dirty" in
+        true|false) ;;
+        *)
+            echo "FATAL: is_dirty must be 'true' or 'false' (got '$is_dirty')" >&2
+            return 1
+            ;;
+    esac
+
+    if [ ! -d "$release_dir" ]; then
+        echo "FATAL: release dir '$release_dir' does not exist" >&2
+        return 1
+    fi
+
+    local meta="$release_dir/release-meta.yaml"
+    # _esc: escape backslashes and double-quotes so we can wrap a value
+    # in "..." safely without a YAML library.
+    _bv_yaml_quote_escape() {
+        printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+    }
+
+    {
+        printf 'release_id: %s\n' "$release_id"
+        printf 'deployed_at: "%s"\n' "$(_bv_yaml_quote_escape "$deployed_at")"
+        printf 'deployed_by: "%s"\n' "$(_bv_yaml_quote_escape "$deployed_by")"
+        printf 'deployed_from:\n'
+        printf '  host: "%s"\n'   "$(_bv_yaml_quote_escape "$host")"
+        printf '  cwd: "%s"\n'    "$(_bv_yaml_quote_escape "$cwd")"
+        printf '  branch: "%s"\n' "$(_bv_yaml_quote_escape "$branch")"
+        printf '  sha: "%s"\n'    "$(_bv_yaml_quote_escape "$sha")"
+        printf '  sha_short: "%s"\n' "$(_bv_yaml_quote_escape "$sha_short")"
+        printf '  is_dirty: %s\n' "$is_dirty"
+        printf 'code_version: "%s"\n' "$(_bv_yaml_quote_escape "$code_version")"
+        printf 'build: "%s"\n' "$(_bv_yaml_quote_escape "$build")"
+        printf 'data_version: "%s"\n' "$(_bv_yaml_quote_escape "$data_version")"
+        if [ -n "$prev_release_id" ]; then
+            printf 'previous_release: %s\n' "$prev_release_id"
+        else
+            printf 'previous_release: ""\n'
+        fi
+        printf 'previous_data_version: "%s"\n' "$(_bv_yaml_quote_escape "$previous_data_version")"
+    } > "$meta"
+}
+
+# Append the post-swap fields to release-meta.yaml. Caller has already
+# written the pre-swap shape via bv_write_release_meta_yaml_full.
+bv_append_post_swap_meta() {
+    local release_dir="${1:?release dir required}"
+    local swapped_at="${2:?swapped_at required}"
+    local swap_duration_ms="${3:?swap_duration_ms required}"
+    local probe_url="${4:-}"
+    local probe_status="${5:-0}"
+    local probe_substring="${6:-}"
+    local probe_matched="${7:-false}"
+
+    # swap_duration_ms must be a non-negative integer (YAML integer).
+    case "$swap_duration_ms" in
+        ''|*[!0-9]*)
+            echo "FATAL: swap_duration_ms must be a non-negative integer (got '$swap_duration_ms')" >&2
+            return 1
+            ;;
+    esac
+    # probe_status must be a 3-digit integer (or 0 if probe didn't run
+    # — but we require the caller to always run the probe in Sprint 2).
+    case "$probe_status" in
+        ''|*[!0-9]*)
+            echo "FATAL: probe_status must be a non-negative integer (got '$probe_status')" >&2
+            return 1
+            ;;
+    esac
+    case "$probe_matched" in
+        true|false) ;;
+        *)
+            echo "FATAL: probe_matched must be 'true' or 'false' (got '$probe_matched')" >&2
+            return 1
+            ;;
+    esac
+
+    if [ ! -d "$release_dir" ]; then
+        echo "FATAL: release dir '$release_dir' does not exist" >&2
+        return 1
+    fi
+    local meta="$release_dir/release-meta.yaml"
+    if [ ! -f "$meta" ]; then
+        echo "FATAL: release-meta.yaml not found at $meta" >&2
+        return 1
+    fi
+
+    _bv_yaml_quote_escape() {
+        printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+    }
+
+    {
+        printf 'swapped_at: "%s"\n' "$(_bv_yaml_quote_escape "$swapped_at")"
+        printf 'swap_duration_ms: %s\n' "$swap_duration_ms"
+        printf 'smoke_probe:\n'
+        printf '  url: "%s"\n' "$(_bv_yaml_quote_escape "$probe_url")"
+        printf '  status: %s\n' "$probe_status"
+        printf '  expected_version_substring: "%s"\n' "$(_bv_yaml_quote_escape "$probe_substring")"
+        printf '  matched: %s\n' "$probe_matched"
+    } >> "$meta"
+}
+
+# Compute the smoke-probe's expected version substring from the
+# release dir's VERSION + BUILD files. Single source of truth, used by
+# both deploy.sh and rollback.sh.
+#
+# Format: "Version <X> · build <N>" — that middle dot is U+00B7
+# (MIDDLE DOT), the same character the §Audit example uses. The
+# substring is what we grep the smoke-probed body for.
+bv_compute_expected_version_substring() {
+    local release_dir="${1:?release dir required}"
+    local version_file="$release_dir/VERSION"
+    local build_file="$release_dir/BUILD"
+
+    if [ ! -f "$version_file" ]; then
+        echo "FATAL: VERSION file missing at $version_file" >&2
+        return 1
+    fi
+    if [ ! -f "$build_file" ]; then
+        echo "FATAL: BUILD file missing at $build_file" >&2
+        return 1
+    fi
+
+    local version build
+    version="$(tr -d '[:space:]' < "$version_file")"
+    build="$(tr -d '[:space:]' < "$build_file")"
+    if [ -z "$version" ] || [ -z "$build" ]; then
+        echo "FATAL: VERSION or BUILD is empty" >&2
+        return 1
+    fi
+    printf 'Version %s · build %s\n' "$version" "$build"
+}
+
+# Run the smoke probe. Single source of truth used by deploy.sh and
+# rollback.sh.
+#
+# Args:
+#   $1 — full URL to probe (validated by curl, not by us — but we
+#        refuse anything that doesn't start with http:// or https://
+#        as a defensive check).
+#   $2 — expected substring; must appear verbatim in the response body.
+#
+# Echoes a single line of the form "<status>|<matched>" to stdout
+# where <status> is the HTTP status code (or 0 if curl failed to
+# connect) and <matched> is 'true' or 'false'.
+#
+# Returns 0 if status==200 AND substring matched, non-zero otherwise.
+#
+# Curl is invoked with -sS -L so transient redirects are followed but
+# no shell interpolation is performed; --max-time guards against
+# hangs. The response body goes to a tempfile (we don't pipe through
+# shell to avoid metacharacter interpretation in the body).
+bv_smoke_probe() {
+    local url="${1:?url required}"
+    local expected="${2:?expected substring required}"
+
+    case "$url" in
+        http://*|https://*) ;;
+        *)
+            echo "FATAL: smoke probe URL must start with http:// or https:// (got '$url')" >&2
+            printf '0|false\n'
+            return 1
+            ;;
+    esac
+
+    local body_file status
+    body_file="$(mktemp)"
+    # shellcheck disable=SC2064  # we want $body_file expanded now
+    trap "rm -f \"$body_file\"" RETURN
+
+    # -o body_file: write body to file (avoids piping arbitrary bytes
+    #               through the shell)
+    # -w '%{http_code}': write status code to stdout
+    # --max-time 30: hard cap on the probe (don't hang the deploy)
+    # -L: follow redirects
+    # -sS: silent but show errors
+    if ! status="$(curl -sSL --max-time 30 -o "$body_file" -w '%{http_code}' "$url" 2>/dev/null)"; then
+        # Curl failed to connect / DNS / TLS / etc. Status 0.
+        printf '0|false\n'
+        rm -f "$body_file"
+        trap - RETURN
+        return 1
+    fi
+    # Sanitise status — only digits.
+    case "$status" in
+        ''|*[!0-9]*)
+            status=0
+            ;;
+    esac
+
+    local matched=false
+    if [ "$status" = "200" ] && grep -F -q -- "$expected" "$body_file" 2>/dev/null; then
+        matched=true
+    fi
+
+    printf '%s|%s\n' "$status" "$matched"
+    rm -f "$body_file"
+    trap - RETURN
+
+    if [ "$matched" = "true" ]; then
+        return 0
+    fi
+    return 1
+}
+
+# Verify the previous release dir's data symlinks resolve.
+#
+# Per §Symlink contract: accounts/, user/data/, logs/ MUST resolve
+# (Phase 2 will gate this on data-version matching). The two
+# security.yaml symlinks are allowed to dangle — Grav regenerates them
+# on first request.
+#
+# Caller passes the release dir path. Returns 0 if all three resolve;
+# non-zero with diagnostic on stderr if any dangle.
+bv_check_previous_release_data_symlinks() {
+    local release_dir="${1:?release dir required}"
+
+    if [ ! -d "$release_dir" ]; then
+        echo "FATAL: release dir '$release_dir' does not exist" >&2
+        return 1
+    fi
+
+    local sym path bad=0
+    # Note the security.yaml pair are explicitly NOT in this list —
+    # they're allowed to dangle.
+    for sym in "user/accounts" "user/data" "logs"; do
+        path="$release_dir/$sym"
+        if [ ! -L "$path" ]; then
+            echo "FATAL: expected symlink at $sym in previous release dir, but none found" >&2
+            bad=$((bad+1))
+            continue
+        fi
+        # -e on a symlink follows it, so `! -e` means "dangling".
+        if [ ! -e "$path" ]; then
+            local target
+            target="$(readlink "$path" 2>/dev/null || echo "<unreadable>")"
+            echo "FATAL: data symlink dangles in previous release: $sym -> $target" >&2
+            bad=$((bad+1))
+        fi
+    done
+
+    if [ "$bad" -gt 0 ]; then
+        return 1
+    fi
+    return 0
+}
+
+# Append a single rollback row to <releases-dir>/rollback-log.yaml.
+#
+# Format: each row is a YAML list element (- key: value …). The file
+# is appended to, never overwritten — chronology preserved across runs.
+# greppable-without-yaml-library: every field is a literal key on its
+# own line within the row, so `grep '^  to_release: '` etc. works.
+#
+# Quoting discipline mirrors bv_write_release_meta_yaml_full.
+bv_append_rollback_log_row() {
+    local releases_dir="${1:?releases dir required}"
+    local rolled_back_at="${2:?rolled_back_at required}"
+    local rolled_back_by="${3:?rolled_back_by required}"
+    local from_release="${4:?from_release required}"
+    local to_release="${5:?to_release required}"
+    local swap_duration_ms="${6:?swap_duration_ms required}"
+    local probe_url="${7:-}"
+    local probe_status="${8:-0}"
+    local probe_substring="${9:-}"
+    local probe_matched="${10:-false}"
+
+    if ! bv_validate_release_id "$from_release"; then
+        return 1
+    fi
+    if ! bv_validate_release_id "$to_release"; then
+        return 1
+    fi
+    case "$swap_duration_ms" in
+        ''|*[!0-9]*)
+            echo "FATAL: swap_duration_ms must be a non-negative integer" >&2
+            return 1
+            ;;
+    esac
+    case "$probe_status" in
+        ''|*[!0-9]*)
+            echo "FATAL: probe_status must be a non-negative integer" >&2
+            return 1
+            ;;
+    esac
+    case "$probe_matched" in
+        true|false) ;;
+        *)
+            echo "FATAL: probe_matched must be 'true' or 'false'" >&2
+            return 1
+            ;;
+    esac
+
+    if [ ! -d "$releases_dir" ]; then
+        echo "FATAL: releases dir '$releases_dir' does not exist" >&2
+        return 1
+    fi
+
+    local log="$releases_dir/rollback-log.yaml"
+    _bv_yaml_quote_escape() {
+        printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+    }
+
+    # Header on first write, comment-only — no list start needed; YAML
+    # accepts a stream of `- key:` rows directly.
+    if [ ! -f "$log" ]; then
+        {
+            printf '# rollback-log.yaml — append-only audit log of rollback invocations\n'
+            printf '# Each row records: rolled_back_at, rolled_back_by, from_release,\n'
+            printf '#                   to_release, swap_duration_ms, smoke_probe.{url,status,expected_version_substring,matched}\n'
+        } > "$log"
+    fi
+
+    {
+        printf -- '- rolled_back_at: "%s"\n' "$(_bv_yaml_quote_escape "$rolled_back_at")"
+        printf '  rolled_back_by: "%s"\n' "$(_bv_yaml_quote_escape "$rolled_back_by")"
+        printf '  from_release: %s\n' "$from_release"
+        printf '  to_release: %s\n' "$to_release"
+        printf '  swap_duration_ms: %s\n' "$swap_duration_ms"
+        printf '  smoke_probe:\n'
+        printf '    url: "%s"\n' "$(_bv_yaml_quote_escape "$probe_url")"
+        printf '    status: %s\n' "$probe_status"
+        printf '    expected_version_substring: "%s"\n' "$(_bv_yaml_quote_escape "$probe_substring")"
+        printf '    matched: %s\n' "$probe_matched"
+    } >> "$log"
+}
+
+# Read previous_release out of a release-meta.yaml and emit it on
+# stdout. Validates the value against the strict release-id regex
+# BEFORE returning it — caller can use the output as a path component
+# without re-validating.
+#
+# Refuses to emit anything if the file is missing, the field is
+# missing, the field is empty, or the value fails the regex.
+bv_read_previous_release_id() {
+    local meta="${1:?release-meta.yaml path required}"
+
+    if [ ! -f "$meta" ]; then
+        echo "FATAL: release-meta.yaml not found at $meta" >&2
+        return 1
+    fi
+
+    # Read the previous_release value. Strip leading/trailing whitespace
+    # and a single layer of double quotes. We use awk -F': ' on the
+    # FIRST occurrence of ^previous_release: only.
+    local raw
+    raw="$(awk '
+        /^previous_release:/ {
+            sub(/^previous_release:[[:space:]]*/, "")
+            sub(/[[:space:]]+$/, "")
+            # strip one layer of double quotes if present
+            if (length($0) >= 2 && substr($0,1,1)=="\"" && substr($0,length($0),1)=="\"") {
+                $0 = substr($0, 2, length($0)-2)
+            }
+            print
+            exit
+        }
+    ' "$meta")"
+
+    if [ -z "$raw" ]; then
+        echo "FATAL: previous_release is empty in $meta — first deploy or corrupt meta" >&2
+        return 1
+    fi
+
+    # Strict regex validation BEFORE the value is used as a path
+    # component anywhere downstream. Defence in depth: explicit checks
+    # for forbidden patterns first.
+    case "$raw" in
+        *..*|*/*|-*)
+            echo "FATAL: previous_release value '$raw' contains forbidden characters (path traversal)" >&2
+            return 1
+            ;;
+    esac
+    if ! bv_validate_release_id "$raw" 2>/dev/null; then
+        echo "FATAL: previous_release value '$raw' does not match expected release-id regex" >&2
+        return 1
+    fi
+
+    printf '%s\n' "$raw"
 }
