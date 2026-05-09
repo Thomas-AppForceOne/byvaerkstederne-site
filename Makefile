@@ -1,4 +1,4 @@
-.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging deploy-landing rollback-dev rollback-test rollback-staging rollback-prod backup-prod backup-test test test-headed test-auth test-install test-deploy test-backup-restore
+.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging deploy-landing rollback-dev rollback-test rollback-staging rollback-prod migrate-atomic-dev migrate-atomic-test migrate-atomic-staging migrate-atomic-prod backup-prod backup-test test test-headed test-auth test-install test-deploy test-backup-restore
 
 # Default target
 help: ## Show this help
@@ -111,6 +111,40 @@ rollback-staging: ## Roll back staging to the previous release (audit log: stagi
 rollback-prod: ## Roll back prod to the previous release (audit log: prod-releases/rollback-log.yaml)
 	@./deploy/rollback.sh prod
 
+# ── Migrate to atomic layout (one-time, supervised operation) ───────
+#
+# Each target invokes ./deploy/migrate-to-atomic-layout.sh with the
+# env literal hard-coded — no recursive expansion of an unvalidated
+# input. The prod target refuses with a hard-coded directive: the
+# operator must invoke the script directly with --i-mean-it, so an
+# accidental `make migrate-atomic-prod` cannot proceed under any
+# circumstance. This is documented in deploy/migrate-to-atomic-layout.sh
+# --help.
+
+migrate-atomic-dev: ## Migrate dev to atomic layout (this is a one-time, supervised operation)
+	@./deploy/migrate-to-atomic-layout.sh dev
+
+migrate-atomic-test: ## Migrate test to atomic layout (this is a one-time, supervised operation)
+	@./deploy/migrate-to-atomic-layout.sh test
+
+migrate-atomic-staging: ## Migrate staging to atomic layout (this is a one-time, supervised operation)
+	@./deploy/migrate-to-atomic-layout.sh staging
+
+migrate-atomic-prod: ## Migrate prod to atomic layout (this is a one-time, supervised operation — must be invoked directly)
+	@echo ""
+	@echo "❌  'make migrate-atomic-prod' is intentionally refused."
+	@echo ""
+	@echo "    Prod migration is a one-time, operator-supervised, irreversible-"
+	@echo "    without-restore operation. Invoke the script directly with the"
+	@echo "    --i-mean-it flag so the gate is impossible to miss:"
+	@echo ""
+	@echo "        ./deploy/migrate-to-atomic-layout.sh prod --i-mean-it"
+	@echo ""
+	@echo "    See ./deploy/migrate-to-atomic-layout.sh --help for the seven-step"
+	@echo "    sequence and the recovery path on failure."
+	@echo ""
+	@exit 1
+
 # ── Backup ─────────────────────────────────────────────
 
 backup-prod: ## Backup production data (accounts, flex objects, media)
@@ -174,10 +208,11 @@ test-headed: ## Run tests with browser visible (for debugging)
 	echo "Running tests against http://127.0.0.1:$$PORT (headed)"; \
 	GRAV_PORT=$$PORT npx playwright test tests/anonymous.spec.js --headed
 
-test-deploy: ## Run deploy-script regression tests (atomic-layout invariants + structural live-state isolation + rollback)
+test-deploy: ## Run deploy-script regression tests (atomic-layout + rollback + migration probes)
 	@bash tests/deploy/excludes-preserve-live-state.sh
 	@bash tests/deploy/atomic-layout.sh
 	@bash tests/deploy/rollback.sh
+	@bash tests/deploy/migrate.sh
 
 test-backup-restore: ## Run backup/restore tooling tests (bats)
 	@command -v bats >/dev/null 2>&1 || { echo "❌  bats not installed. Run: brew install bats-core"; exit 1; }
