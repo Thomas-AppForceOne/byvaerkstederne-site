@@ -154,8 +154,9 @@ test-headed: ## Run tests with browser visible (for debugging)
 	echo "Running tests against http://127.0.0.1:$$PORT (headed)"; \
 	GRAV_PORT=$$PORT npx playwright test tests/anonymous.spec.js --headed
 
-test-deploy: ## Run deploy-script regression tests (rsync excludes preserve live state)
+test-deploy: ## Run deploy-script regression tests (atomic-layout invariants + structural live-state isolation)
 	@bash tests/deploy/excludes-preserve-live-state.sh
+	@bash tests/deploy/atomic-layout.sh
 
 test-backup-restore: ## Run backup/restore tooling tests (bats)
 	@command -v bats >/dev/null 2>&1 || { echo "❌  bats not installed. Run: brew install bats-core"; exit 1; }
