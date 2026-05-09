@@ -174,10 +174,23 @@ VERSION="$(cat "$VERSION_SRC" 2>/dev/null | tr -d '[:space:]')"
 VERSION="${VERSION:-unknown}"
 
 GIT_SHA="$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+GIT_SHA_FULL="$(git -C "$PROJECT_DIR" rev-parse HEAD 2>/dev/null || echo unknown)"
 GIT_BRANCH="$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%MZ)"
 DEPLOYED_AT_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 DEPLOYED_BY="$(git -C "$PROJECT_DIR" config user.email 2>/dev/null || echo unknown)"
+
+# Audit context for the full release-meta schema.
+DEPLOYED_FROM_HOST="$(hostname 2>/dev/null || echo unknown)"
+DEPLOYED_FROM_CWD="$PROJECT_DIR"
+# is_dirty is a YAML boolean — check working tree for unstaged changes
+# AND staged-but-uncommitted, i.e. anything `git status --porcelain`
+# emits.
+if [ -z "$(git -C "$PROJECT_DIR" status --porcelain 2>/dev/null)" ]; then
+    DEPLOYED_IS_DIRTY="false"
+else
+    DEPLOYED_IS_DIRTY="true"
+fi
 
 # Compute the release id once. It's used as a path component on the
 # remote, so we validate it through the strict regex BEFORE using it.
@@ -603,14 +616,22 @@ remote_ssh "set -eu; \
 
 echo "  ✓ Symlinks wired"
 
-# ── Step 6: Write release-meta.yaml ───────────────────────────────────
-echo "→ Step 6/8: Writing release-meta.yaml..."
+# ── Step 6: Write release-meta.yaml (pre-swap fields) ────────────────
+#
+# Pre-swap field set (per §Audit + sprint-2 contract):
+#   release_id, deployed_at, deployed_by, deployed_from.{host,cwd,
+#   branch,sha,sha_short,is_dirty}, code_version, build, data_version,
+#   previous_release, previous_data_version
+#
+# Post-swap fields (swapped_at, swap_duration_ms, smoke_probe.*) are
+# APPENDED after step 8 + 10 below, via bv_append_post_swap_meta.
+echo "→ Step 6/8: Writing release-meta.yaml (pre-swap fields)..."
 
 # Write the YAML locally to the staging dir, then rsync that single
-# file up. This keeps the YAML-emitter (bv_write_release_meta_yaml) on
-# the local side so it can be unit-tested without ssh.
+# file up. This keeps the YAML-emitter on the local side so it can be
+# unit-tested without ssh.
 META_LOCAL="$STAGING_DIR/release-meta.yaml"
-bv_write_release_meta_yaml \
+bv_write_release_meta_yaml_full \
     "$STAGING_DIR" \
     "$RELEASE_ID" \
     "$PREV_RELEASE_ID" \
@@ -618,14 +639,21 @@ bv_write_release_meta_yaml \
     "$BUILD" \
     "v0" \
     "$DEPLOYED_AT_ISO" \
-    "$DEPLOYED_BY"
+    "$DEPLOYED_BY" \
+    "$DEPLOYED_FROM_HOST" \
+    "$DEPLOYED_FROM_CWD" \
+    "$GIT_BRANCH" \
+    "$GIT_SHA_FULL" \
+    "$GIT_SHA" \
+    "$DEPLOYED_IS_DIRTY" \
+    "v0"
 
 sshpass -p "$DEPLOY_PASS" rsync -a \
     -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
     "$META_LOCAL" \
     "${DEPLOY_USER}@${DEPLOY_HOST}:${RELEASE_DIR}/release-meta.yaml"
 
-echo "  ✓ release-meta.yaml written"
+echo "  ✓ release-meta.yaml (pre-swap) written"
 
 # ── Step 7: Cache clear (fail-loud; aborts BEFORE the swap) ───────────
 echo "→ Step 7/8: Clearing Grav cache in new release..."
@@ -641,11 +669,92 @@ echo "  ✓ Cache cleared in new release"
 # ── Step 8: Atomic ln -sfn swap of <tier> ─────────────────────────────
 echo "→ Step 8/8: Atomic swap of ${DEPLOY_TARGET}..."
 
+# Capture monotonic ms before/after the swap so we can record
+# swap_duration_ms in release-meta.yaml. Falls back to 0 on systems
+# whose `date` doesn't support nanoseconds (some BSDs); we never let a
+# missing value spoil the deploy.
+_now_ms() {
+    local n
+    if n="$(date +%s%N 2>/dev/null)" && [ "$n" != "$(date +%s)N" ] && [ "${n: -9}" != "N" ]; then
+        printf '%s\n' "$(( n / 1000000 ))"
+    else
+        # macOS BSD date — second resolution only.
+        printf '%s000\n' "$(date +%s)"
+    fi
+}
+SWAP_START_MS="$(_now_ms)"
+
 # Single ln -sfn invocation; no rm of the old symlink first (that
 # would open a race window). ln -sfn replaces atomically.
 remote_ssh "ln -sfn ${LAYOUT_NAME}-releases/${RELEASE_ID} ${DEPLOY_TARGET}"
 
-echo "  ✓ ${DEPLOY_TARGET} → ${LAYOUT_NAME}-releases/${RELEASE_ID}"
+SWAP_END_MS="$(_now_ms)"
+SWAP_DURATION_MS=$(( SWAP_END_MS - SWAP_START_MS ))
+[ "$SWAP_DURATION_MS" -lt 0 ] && SWAP_DURATION_MS=0
+SWAPPED_AT_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+echo "  ✓ ${DEPLOY_TARGET} → ${LAYOUT_NAME}-releases/${RELEASE_ID}  (${SWAP_DURATION_MS} ms)"
+
+# ── Step 9 (Sprint 2): Smoke probe — fail-loud, NO auto-rollback ──────
+#
+# Per the source spec's §Deploy command, step 10:
+#   "If the probe fails, do not auto-rollback (operator decision);
+#    print a clear 'rollback command:' hint and exit non-zero."
+#
+# The release stays LIVE on probe failure. Rollback is a deliberate
+# operator decision invoked via `make rollback-<env>`. This is the
+# spec-mandated behavioural contract; do not weaken it.
+PROBE_URL="${BV_SMOKE_PROBE_URL_OVERRIDE:-${ENV_URL}/}"
+PROBE_EXPECTED="$(bv_compute_expected_version_substring "$STAGING_DIR")"
+echo "→ Smoke probe: GET ${PROBE_URL}  (expecting: ${PROBE_EXPECTED})"
+
+PROBE_RESULT="$(bv_smoke_probe "$PROBE_URL" "$PROBE_EXPECTED" || true)"
+PROBE_STATUS="${PROBE_RESULT%%|*}"
+PROBE_MATCHED="${PROBE_RESULT##*|}"
+case "$PROBE_STATUS" in
+    ''|*[!0-9]*) PROBE_STATUS=0 ;;
+esac
+case "$PROBE_MATCHED" in
+    true|false) ;;
+    *) PROBE_MATCHED=false ;;
+esac
+
+# Append the post-swap fields to the local copy of release-meta.yaml,
+# then rsync the updated file up. We deliberately re-rsync the meta
+# file rather than do a live edit on the remote — the local file is
+# the canonical artefact and matching the remote keeps the audit
+# surface single-sourced.
+bv_append_post_swap_meta \
+    "$STAGING_DIR" \
+    "$SWAPPED_AT_ISO" \
+    "$SWAP_DURATION_MS" \
+    "$PROBE_URL" \
+    "$PROBE_STATUS" \
+    "$PROBE_EXPECTED" \
+    "$PROBE_MATCHED"
+
+sshpass -p "$DEPLOY_PASS" rsync -a \
+    -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
+    "$META_LOCAL" \
+    "${DEPLOY_USER}@${DEPLOY_HOST}:${RELEASE_DIR}/release-meta.yaml"
+
+if [ "$PROBE_MATCHED" != "true" ] || [ "$PROBE_STATUS" != "200" ]; then
+    echo "" >&2
+    echo "❌  Smoke probe FAILED for ${PROBE_URL}" >&2
+    echo "    expected: ${PROBE_EXPECTED}" >&2
+    echo "    status:   ${PROBE_STATUS}" >&2
+    echo "    matched:  ${PROBE_MATCHED}" >&2
+    echo "" >&2
+    echo "    The new release IS LIVE — there is NO auto-rollback." >&2
+    echo "    Inspect: ${PROBE_URL}" >&2
+    echo "" >&2
+    echo "    rollback command:  make rollback-${ENV}" >&2
+    echo "    (or:               ./deploy/rollback.sh ${ENV})" >&2
+    echo "" >&2
+    exit 1
+fi
+
+echo "  ✓ Smoke probe matched (status=${PROBE_STATUS})"
 
 # ── Retention pruner ──────────────────────────────────────────────────
 # Keep last N=5 release dirs. Two newest (current + immediate prev)
