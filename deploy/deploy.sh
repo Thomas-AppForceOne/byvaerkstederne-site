@@ -15,11 +15,20 @@ export PATH="/opt/homebrew/bin:$PATH"
 #   staging → staging.hackersbychoice.dk  (folder /staging under apex)
 #   prod    → www.byvaerkstederne.dk      (separate hosting account, gated)
 #
-# All four hackersbychoice.dk surfaces (landing + three Grav installs) live
-# on a single one.com account. one.com maps each subdomain to its matching
-# subfolder, and the apex docroot serves the landing selector page.
-# Production lives elsewhere; do NOT extend this script's hackersbychoice.dk
-# credentials to it.
+# Deploy model:
+#   * Grav tiers (dev, test, staging, prod) — atomic-release model.
+#     Code lives in <tier>-releases/<release-id>/, mutable state lives
+#     in <tier>data/v0/, the docroot is a single <tier> symlink that
+#     swaps atomically via `ln -sfn`. The April 2026 / May 2026 wipe
+#     class is structurally impossible: the rsync target is, by
+#     construction, a fresh empty release dir, and the live state is
+#     never in the rsync's path tree.
+#   * Apex landing — legacy in-place rsync flow. Landing has no
+#     mutable state and no rollback story to preserve, so the atomic-
+#     release machinery is overkill there.
+#
+# All four hackersbychoice.dk surfaces (landing + three Grav installs)
+# live on a single one.com account; production lives elsewhere.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -28,12 +37,12 @@ GRAV_VERSION="1.7.52"
 GRAV_ZIP="$PROJECT_DIR/deploy/grav-admin-v${GRAV_VERSION}.zip"
 GRAV_URL="https://github.com/getgrav/grav/releases/download/${GRAV_VERSION}/grav-admin-v${GRAV_VERSION}.zip"
 
+# shellcheck source=deploy/lib/atomic-release.sh
+. "$SCRIPT_DIR/lib/atomic-release.sh"
+
 # Argument parsing — accept --dry-run as a flag in any position; the
 # remaining positional arg is the env. DEPLOY_DRY_RUN=1 in the
-# environment is also honoured. Dry-run produces all staging-dir
-# artifacts (BUILD, VERSION, version.json, package contents) but skips
-# the rsync/sshpass upload to one.com, so an operator (or test) can
-# verify what *would* be deployed without needing credentials.
+# environment is also honoured.
 DRY_RUN="${DEPLOY_DRY_RUN:-0}"
 POSITIONAL=()
 for arg in "$@"; do
@@ -48,10 +57,24 @@ for arg in "$@"; do
 done
 set -- "${POSITIONAL[@]}"
 
-# Environment selection
-ENV="${1:-landing}"
+# =============================================================================
+# Step 0 — Tier-name validation (closed set, before any path concat)
+# =============================================================================
+#
+# The env arg is the only operator-controlled string that becomes a
+# path component (in DEPLOY_TARGET, in <tier>-releases/, in symlink
+# targets). Validate it against the closed set BEFORE using it
+# anywhere — defence in depth against argument injection / path
+# traversal even if every later quote is correct.
+
+ENV_RAW="${1:-landing}"
+if ! ENV="$(bv_validate_tier_name "$ENV_RAW")"; then
+    echo "    Usage: $0 [landing|dev|test|staging|prod]" >&2
+    exit 1
+fi
+
 case "$ENV" in
-    prod|production)
+    prod)
         ENV_LABEL="Production"
         ENV_SUBFOLDER=""
         ENV_URL="https://www.byvaerkstederne.dk"
@@ -81,30 +104,22 @@ case "$ENV" in
         ENV_URL="https://hackersbychoice.dk"
         ENV_KIND="landing"
         ;;
-    *)
-        echo "❌  Unknown environment: $ENV"
-        echo "    Usage: $0 [landing|dev|test|staging|prod]"
-        exit 1
-        ;;
 esac
 
-# Load credentials. Skipped under --dry-run so artifact production
-# can be verified on hosts that don't hold the deploy secrets (e.g.
-# the GAN evaluator running in a worktree).
+# Load credentials. Skipped under --dry-run.
 ENV_FILE="$PROJECT_DIR/.env.deploy"
 if [ "$DRY_RUN" != "1" ]; then
     if [ ! -f "$ENV_FILE" ]; then
         echo "❌  Missing .env.deploy — copy .env.deploy.example and fill in credentials"
         exit 1
     fi
+    # shellcheck disable=SC1090
     source "$ENV_FILE"
 fi
 
-# Production lives on a separate hosting account from
-# hackersbychoice.dk (which serves landing + staging/test/dev). Gate prod
-# deploys behind its own credential set so a stray `./deploy.sh prod`
-# can't overwrite anything on hackersbychoice.dk.
-if [ "$DRY_RUN" != "1" ] && { [ "$ENV" = "prod" ] || [ "$ENV" = "production" ]; }; then
+# Production lives on a separate hosting account; gate prod behind its
+# own credential set.
+if [ "$DRY_RUN" != "1" ] && [ "$ENV" = "prod" ]; then
     : "${DEPLOY_PROD_HOST:?prod deploy requires DEPLOY_PROD_HOST in .env.deploy — production is on a separate hosting account from staging/test/dev. Populate DEPLOY_PROD_HOST/USER/PASS/PORT/PATH there.}"
     : "${DEPLOY_PROD_USER:?prod deploy requires DEPLOY_PROD_USER in .env.deploy}"
     : "${DEPLOY_PROD_PASS:?prod deploy requires DEPLOY_PROD_PASS in .env.deploy}"
@@ -121,21 +136,6 @@ DEPLOY_TARGET="${DEPLOY_PATH:-}${ENV_SUBFOLDER}"
 # =============================================================================
 # Capture deploy metadata (used for version.json on every tier).
 # =============================================================================
-#
-# Two component-scoped VERSION files now live in the repo:
-#
-#   apex/VERSION         — version of the apex selector page
-#   config/www/VERSION   — version of the Grav site
-#
-# Plus a single auto-generated build number derived from the commit
-# being deployed. The build number is the same for every tier deployed
-# from the same commit (it is a function of the commit, not of the
-# deploy step). It must be computed exactly once per run, before any
-# per-tier branching, so apex and grav-tier deploys of the same commit
-# produce byte-identical BUILD files.
-#
-# `branch` and `sha_short` stay in the manifest for ops debugging —
-# nothing public reads them.
 
 # 1. Verify the working tree is a real git repository.
 if ! git -C "$PROJECT_DIR" rev-parse --git-dir >/dev/null 2>&1; then
@@ -144,40 +144,26 @@ if ! git -C "$PROJECT_DIR" rev-parse --git-dir >/dev/null 2>&1; then
     exit 1
 fi
 
-# 2. Shallow-clone guard. `git rev-list --count HEAD` reports only the
-#    depth the clone has, so a `git fetch --depth 1` checkout would
-#    silently underreport the build number and break the cross-tier
-#    stability contract. Abort with a clear error before computing.
+# 2. Shallow-clone guard.
 IS_SHALLOW="$(git -C "$PROJECT_DIR" rev-parse --is-shallow-repository 2>/dev/null || echo unknown)"
 if [ "$IS_SHALLOW" != "false" ]; then
     echo "❌  Refusing to deploy from a shallow clone." >&2
     echo "    git rev-parse --is-shallow-repository returned: '$IS_SHALLOW'" >&2
-    echo "    The build number is computed via 'git rev-list --count HEAD'," >&2
-    echo "    which underreports on shallow clones and would silently produce" >&2
-    echo "    different build numbers across tiers running the same commit." >&2
     echo "    Re-clone with full history (no --depth) and try again." >&2
     exit 1
 fi
 
-# 3. Compute the build number EXACTLY ONCE. This integer is the bare
-#    output of `git rev-list --count HEAD` — no env vars or
-#    operator-supplied strings are interpolated into it.
+# 3. Compute build number EXACTLY ONCE.
 if ! BUILD="$(git -C "$PROJECT_DIR" rev-list --count HEAD 2>/dev/null)"; then
     echo "❌  git rev-list --count HEAD failed in the project tree." >&2
-    echo "    Cannot compute build number; aborting." >&2
     exit 1
 fi
-# Belt-and-braces validation: BUILD must be a non-empty digit string.
 if ! printf '%s' "$BUILD" | grep -Eq '^[0-9]+$'; then
     echo "❌  git rev-list --count HEAD returned an unexpected value." >&2
-    echo "    Refusing to write a non-integer build number." >&2
     exit 1
 fi
 
-# 4. Pick the component-scoped VERSION file based on env kind. Apex
-#    deploys label themselves with apex/VERSION; Grav-tier deploys
-#    label themselves with config/www/VERSION. The repo-root VERSION
-#    file has been removed.
+# 4. Pick the component-scoped VERSION file based on env kind.
 if [ "$ENV_KIND" = "landing" ]; then
     VERSION_SRC="$PROJECT_DIR/apex/VERSION"
 else
@@ -190,26 +176,30 @@ VERSION="${VERSION:-unknown}"
 GIT_SHA="$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 GIT_BRANCH="$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%MZ)"
+DEPLOYED_AT_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+DEPLOYED_BY="$(git -C "$PROJECT_DIR" config user.email 2>/dev/null || echo unknown)"
 
-# Print a Unicode box that auto-sizes to the longest line. Width is
-# measured with `wc -m` (codepoints) rather than `${#var}` (bytes),
-# so multi-byte characters like 'æ' and the em dash render in the
-# correct column. This replaces an earlier hand-padded banner that
-# couldn't keep its right border aligned across variable-length
-# DEPLOY_TARGET paths.
+# Compute the release id once. It's used as a path component on the
+# remote, so we validate it through the strict regex BEFORE using it.
+RELEASE_ID="$(bv_compute_release_id "$GIT_SHA")"
+# Operator-supplied override (used by the shell-level test fixture to
+# force a collision with a pre-existing release dir).
+if [ -n "${BV_FORCE_RELEASE_ID:-}" ]; then
+    RELEASE_ID="$BV_FORCE_RELEASE_ID"
+fi
+if ! bv_validate_release_id "$RELEASE_ID"; then
+    echo "❌  Refusing to use computed release id '$RELEASE_ID' as a path component." >&2
+    exit 1
+fi
+
 draw_banner() {
     local lines=("$@") line max=0 w pad inner border
-    # `wc -m` only counts codepoints (not bytes) when the current
-    # locale supports multibyte. Make/cron invocations sometimes
-    # strip LANG, leaving wc in C locale where -m falls back to -c
-    # (bytes). With a 2-byte 'æ' and 3-byte '—' that means an
-    # off-by-three on the closing border. Force UTF-8 explicitly.
     _w() { printf '%s' "$1" | LC_ALL=en_US.UTF-8 wc -m | tr -d ' '; }
     for line in "${lines[@]}"; do
         w=$(_w "$line")
         [ "$w" -gt "$max" ] && max="$w"
     done
-    inner=$((max + 4))   # one space padding on each interior side, ×2
+    inner=$((max + 4))
     border=$(printf '═%.0s' $(seq 1 "$inner"))
     echo ""
     echo "  ╔${border}╗"
@@ -225,27 +215,22 @@ draw_banner() {
 draw_banner \
     "Byværkstederne — Deploy" \
     "Environment: ${ENV_LABEL}" \
-    "Target: ${DEPLOY_TARGET}"
+    "Target: ${DEPLOY_TARGET}" \
+    "Release: ${RELEASE_ID}"
 
 # ── Step 1: Build deploy package ────────────────────────────
 if [ "$ENV_KIND" = "grav" ]; then
     if [ "$DRY_RUN" = "1" ]; then
-        echo "→ Step 1/4: (dry-run — skipping Grav core download/extract)"
-        echo "→ Step 2/4: Building deploy package (dry-run, no Grav core)..."
+        echo "→ Step 1/8: (dry-run — skipping Grav core download/extract)"
+        echo "→ Step 2/8: Building deploy package (dry-run, no Grav core)..."
         rm -rf "$STAGING_DIR"
         mkdir -p "$STAGING_DIR"
     else
-        echo "→ Step 1/4: Grav core..."
+        echo "→ Step 1/8: Grav core..."
         if [ -f "$GRAV_ZIP" ]; then
             echo "  ✓ Cached (v${GRAV_VERSION})"
         else
             echo "  Downloading Grav v${GRAV_VERSION}..."
-            # --fail aborts on any 4xx/5xx instead of saving the error page as a "zip".
-            # Tmp file + unzip -tq sanity check + atomic rename so a failed
-            # download never leaves a corrupt cache that the next run mistakes
-            # for a hit. (Pre-fix: getgrav.org returned 404 HTML for a typo'd
-            # GRAV_VERSION, curl -L cheerfully saved it as .zip, unzip 30
-            # seconds later was the first sign of trouble.)
             GRAV_TMP="${GRAV_ZIP}.tmp.$$"
             if ! curl -fL --retry 2 -o "$GRAV_TMP" "$GRAV_URL"; then
                 rm -f "$GRAV_TMP"
@@ -261,62 +246,38 @@ if [ "$ENV_KIND" = "grav" ]; then
             echo "  ✓ Downloaded"
         fi
 
-        echo "→ Step 2/4: Building deploy package..."
+        echo "→ Step 2/8: Building deploy package..."
         rm -rf "$STAGING_DIR"
         mkdir -p "$STAGING_DIR"
 
-        # Extract Grav core
         unzip -q "$GRAV_ZIP" -d "$STAGING_DIR"
         cp -a "$STAGING_DIR"/grav-admin/. "$STAGING_DIR"/
         rm -rf "$STAGING_DIR/grav-admin"
     fi
 
-    # Overlay our custom user directory (executes in both real and
-    # dry-run mode so version-related staging artifacts still see the
-    # right tree; non-version package contents are validated by the
-    # full deploy in production).
     rm -rf "$STAGING_DIR/user/pages" "$STAGING_DIR/user/themes/quark" 2>/dev/null
 
     rsync -a --exclude='.DS_Store' \
         "$PROJECT_DIR/config/www/user/" \
         "$STAGING_DIR/user/"
 
-    # NOTE: no custom_base_url injection here. The dev/ and test/ tiers
-    # ship a custom_base_url override via their env profile's system.yaml
-    # because one.com's subdomain-via-folder mapping confuses Grav's URI
-    # auto-detection. See config/www/user/env/dev.hackersbychoice.dk/config/system.yaml.
-
-    # Create .htaccess (Grav routing + Varnish-aware HTTPS handling)
     cat > "$STAGING_DIR/.htaccess" << 'HTACCESS'
 # Grav CMS .htaccess for one.com shared hosting (Varnish → Apache).
-#
-# one.com terminates TLS at Varnish and forwards to Apache as plain HTTP,
-# so %{HTTPS} is always 'off'. A naive `RewriteCond %{HTTPS} !=on` redirect
-# loops forever (debugged on test.hackersbychoice.dk 2026-04-25). Two fixes:
-#   1. Gate the force-HTTPS rule on X-Forwarded-Proto so it doesn't fire
-#      when the original request was already HTTPS.
-#   2. Synthesise HTTPS=on for any PHP code (Grav core, plugins) that
-#      reads $_SERVER['HTTPS'] to decide URL schemes.
 
-# Make Apache + PHP see the real scheme behind Varnish.
 SetEnvIf X-Forwarded-Proto https HTTPS=on
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Force HTTPS — only when the original request was actually HTTP.
-    # Both conditions must pass: Varnish header AND local HTTPS var.
     RewriteCond %{HTTP:X-Forwarded-Proto} !=https
     RewriteCond %{HTTPS} !=on
     RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
 
-    # Grav routing
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^(.*)$ index.php [QSA,L]
 </IfModule>
 
-# Security headers
 <IfModule mod_headers.c>
     Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
     Header always set X-Content-Type-Options "nosniff"
@@ -324,9 +285,7 @@ SetEnvIf X-Forwarded-Proto https HTTPS=on
     Header always set X-XSS-Protection "1; mode=block"
 HTACCESS
 
-    # Conditional: every non-prod tier opts out of search indexing.
-    # Production does NOT (byvaerkstederne.dk wants to be findable).
-    if [ "$ENV" != "prod" ] && [ "$ENV" != "production" ]; then
+    if [ "$ENV" != "prod" ]; then
         cat >> "$STAGING_DIR/.htaccess" << 'NOINDEX'
     Header always set X-Robots-Tag "noindex, nofollow, noarchive"
 NOINDEX
@@ -335,14 +294,12 @@ NOINDEX
     cat >> "$STAGING_DIR/.htaccess" << 'HTACCESS_REST'
 </IfModule>
 
-# Block access to sensitive files
 <FilesMatch "(^\.git|\.yaml$|\.md$|\.twig$)">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
 </FilesMatch>
 
-# Cache static assets
 <IfModule mod_expires.c>
     ExpiresActive On
     ExpiresByType image/jpeg "access plus 1 month"
@@ -354,21 +311,16 @@ NOINDEX
     ExpiresByType font/woff2 "access plus 1 month"
 </IfModule>
 
-# Gzip compression
 <IfModule mod_deflate.c>
     AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml
 </IfModule>
 
-# Hide the version manifest from public reads — landing page reads it
-# from the local filesystem, not over HTTP.
 <Files "version.json">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
 </Files>
 
-# Non-prod tiers also ship a robots.txt with `Disallow: /` (defence in
-# depth alongside X-Robots-Tag). Production omits both.
 HTACCESS_REST
 
 else
@@ -382,39 +334,17 @@ else
         "$STAGING_DIR/"
 fi
 
-# Non-prod tiers ship a robots.txt with `Disallow: /` for crawlers that
-# don't honour X-Robots-Tag.
-if [ "$ENV" != "prod" ] && [ "$ENV" != "production" ] && [ "$ENV_KIND" = "grav" ]; then
+if [ "$ENV" != "prod" ] && [ "$ENV_KIND" = "grav" ]; then
     cat > "$STAGING_DIR/robots.txt" << 'ROBOTS'
-# Non-production tier — opted out of search indexing.
-# The real public site is www.byvaerkstederne.dk and has its own robots.txt.
 User-agent: *
 Disallow: /
 ROBOTS
 fi
 
-# =============================================================================
 # Stage component-scoped VERSION + BUILD files.
-# =============================================================================
-#
-# - Landing: $STAGING_DIR is the apex docroot, so VERSION + BUILD land
-#   directly at its root. (Rsync copied apex/VERSION already; we
-#   re-write it from the trimmed value to be explicit and to defend
-#   against stray whitespace.)
-# - Grav tiers: $STAGING_DIR is the Grav root, mirroring config/www/
-#   on the remote. Place VERSION + BUILD at its root so the deployed
-#   instance can read config/www/VERSION and config/www/BUILD at
-#   request time (Sprint 2 wires that up).
-#
-# BUILD is the bare integer from `git rev-list --count HEAD`, computed
-# once above. No env vars or operator strings are interpolated.
 printf '%s\n' "$VERSION" > "$STAGING_DIR/VERSION"
 printf '%s\n' "$BUILD"   > "$STAGING_DIR/BUILD"
 
-# Write version manifest. The new schema gains a `build` field
-# alongside `version`. Both mirror the deployed VERSION/BUILD files.
-# `branch` and `sha_short` continue to be written for ops debugging
-# only; nothing public reads them.
 cat > "$STAGING_DIR/version.json" << JSON
 {
     "tier": "${ENV}",
@@ -429,10 +359,87 @@ JSON
 echo "  ✓ Package built ($(du -sh "$STAGING_DIR" | cut -f1))"
 echo "  ✓ Version: ${VERSION} · build ${BUILD}"
 
-# ── Step 3: Upload via rsync ────────────────────────────────
+# =============================================================================
+# Landing branch — legacy in-place rsync flow. Atomic-release machinery
+# is overkill for the apex selector page.
+# =============================================================================
+if [ "$ENV_KIND" = "landing" ]; then
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "→ Step 3/4: (dry-run — skipping upload to ${DEPLOY_HOST:-<unset>}:${DEPLOY_TARGET})"
+        echo "  ✓ Staging dir ready at $STAGING_DIR"
+        echo ""
+        echo "  ✅  Dry-run complete — staging dir produced, no remote upload performed."
+        echo "  📦  Inspect: $STAGING_DIR"
+        echo ""
+        exit 0
+    fi
+
+    echo "→ Step 3/4: Uploading apex (landing) to ${DEPLOY_HOST}:${DEPLOY_TARGET}..."
+
+    sshpass -p "$DEPLOY_PASS" ssh -o StrictHostKeyChecking=no -p "$DEPLOY_PORT" \
+        "${DEPLOY_USER}@${DEPLOY_HOST}" \
+        "mkdir -p ${DEPLOY_TARGET}"
+
+    # Apex docroot has no Grav state to preserve, but we still
+    # exclude sibling-tier subfolders so a landing rsync can never
+    # accidentally clobber the Grav tiers' release dirs / data dirs.
+    # The leading slash pins these to the rsync root.
+    RSYNC_FLAGS=(
+        -avz --delete --max-delete=25
+        --exclude='.DS_Store'
+        --exclude='/dev/'
+        --exclude='/test/'
+        --exclude='/staging/'
+        --exclude='/dev-releases/'
+        --exclude='/test-releases/'
+        --exclude='/staging-releases/'
+        --exclude='/proddata/'
+        --exclude='/devdata/'
+        --exclude='/testdata/'
+        --exclude='/stagingdata/'
+    )
+
+    sshpass -p "$DEPLOY_PASS" rsync "${RSYNC_FLAGS[@]}" \
+        -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
+        "$STAGING_DIR/" \
+        "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_TARGET}/"
+
+    echo "  ✓ Upload complete"
+    echo ""
+    echo "  ✅  Landing deploy complete!"
+    echo "  🌐  ${ENV_URL}"
+    echo ""
+    exit 0
+fi
+
+# =============================================================================
+# Grav-tier branch — atomic-release model.
+# =============================================================================
+#
+# Sequence (mirrors §Deploy command in
+# specifications/atomic_deploy_releases_specification.md):
+#
+#   3. Pre-flight checks (ssh, parent writable, existing <tier>
+#      symlink resolves or absent, <tier>data/v0/ exists or first run)
+#   4. rsync to fresh <tier>-releases/<release-id>/  (--max-delete=0)
+#   5. Wire symlinks per §Symlink contract (relative targets only)
+#   6. Write release-meta.yaml (basic shape; full audit polish
+#      lands Sprint 2)
+#   7. Cache clear in the new release (fail-loud; aborts before swap)
+#   8. Atomic ln -sfn swap of <tier>
+#   (Sprint 2 will add: post-swap smoke probe + rollback hint)
+#   (Sprint 1 ships: retention pruner runs after the swap)
+#
+# Live-state (<tier>data/, accounts/, user/data/, logs/) is NEVER in
+# the rsync source tree, NEVER in the rsync destination tree, NEVER
+# rm-targeted, and NEVER symlink-rewritten. The only writes into
+# <tier>data/ are the bootstrap step's mkdir -p of empty directories
+# the first time we deploy to a fresh tier.
+
 if [ "$DRY_RUN" = "1" ]; then
-    echo "→ Step 3/4: (dry-run — skipping upload to ${DEPLOY_HOST:-<unset>}:${DEPLOY_TARGET})"
+    echo "→ Step 3/8: (dry-run — skipping remote pre-flight)"
     echo "  ✓ Staging dir ready at $STAGING_DIR"
+    echo "  ✓ Release id: $RELEASE_ID"
     echo ""
     echo "  ✅  Dry-run complete — staging dir produced, no remote upload performed."
     echo "  📦  Inspect: $STAGING_DIR"
@@ -440,162 +447,242 @@ if [ "$DRY_RUN" = "1" ]; then
     exit 0
 fi
 
-echo "→ Step 3/4: Uploading to ${DEPLOY_HOST}:${DEPLOY_TARGET}..."
+# Compose tier-scoped paths on the remote. DEPLOY_TARGET is the
+# legacy in-place docroot; for the atomic layout we keep the same
+# docroot path (it becomes a symlink) and place sibling
+# <tier>-releases/ and <tier>data/ next to it.
+#
+# Layout on remote (assuming DEPLOY_TARGET=/dev under DEPLOY_PATH):
+#   <DEPLOY_PATH>/dev                       → symlink → dev-releases/<id>
+#   <DEPLOY_PATH>/dev-releases/<id>/        → real dir (this deploy's release)
+#   <DEPLOY_PATH>/devdata/v0/...            → mutable state, sibling of -releases/
+#
+# For prod, DEPLOY_TARGET is the docroot itself (DEPLOY_PATH/, no
+# subfolder). We synthesise a tier-scoped layout under a sibling
+# `prod-releases/` and `proddata/` of the docroot.
+DEPLOY_DOCROOT_PARENT="$(dirname "$DEPLOY_TARGET")"
+DEPLOY_DOCROOT_NAME="$(basename "$DEPLOY_TARGET")"
+# For prod where ENV_SUBFOLDER is empty, DEPLOY_TARGET == DEPLOY_PATH
+# and the docroot's basename is whatever DEPLOY_PATH ends in. Use
+# "prod" as the layout-name in that case so siblings are consistently
+# named `prod-releases/` and `proddata/`.
+if [ -z "$ENV_SUBFOLDER" ]; then
+    LAYOUT_NAME="$ENV"
+else
+    LAYOUT_NAME="$DEPLOY_DOCROOT_NAME"
+fi
+RELEASES_DIR="${DEPLOY_DOCROOT_PARENT}/${LAYOUT_NAME}-releases"
+DATA_DIR="${DEPLOY_DOCROOT_PARENT}/${LAYOUT_NAME}data"
+RELEASE_DIR="${RELEASES_DIR}/${RELEASE_ID}"
 
-# Ensure target directory exists
-sshpass -p "$DEPLOY_PASS" ssh -o StrictHostKeyChecking=no -p "$DEPLOY_PORT" \
-    "${DEPLOY_USER}@${DEPLOY_HOST}" \
-    "mkdir -p ${DEPLOY_TARGET}"
+# Helper: run a command on the remote with credentials and quoting
+# discipline. All args after $1 are passed to ssh as separate args.
+remote_ssh() {
+    sshpass -p "$DEPLOY_PASS" ssh -o StrictHostKeyChecking=no \
+        -p "$DEPLOY_PORT" "${DEPLOY_USER}@${DEPLOY_HOST}" "$@"
+}
 
-# =============================================================================
-# rsync flag set — used for both the dry-run pre-flight and the real upload.
-# =============================================================================
+# ── Step 3: Pre-flight checks (remote) ────────────────────────────────
+echo "→ Step 3/8: Pre-flight checks on ${DEPLOY_HOST}..."
+
+# 3a. ssh works.
+if ! remote_ssh "true"; then
+    echo "❌  ssh to ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PORT} failed." >&2
+    exit 1
+fi
+
+# 3b. parent of <tier>-releases/ is writable.
+if ! remote_ssh "test -w ${DEPLOY_DOCROOT_PARENT} || mkdir -p ${RELEASES_DIR} ${DATA_DIR}"; then
+    echo "❌  Parent dir ${DEPLOY_DOCROOT_PARENT} not writable on remote." >&2
+    exit 1
+fi
+
+# 3c. release-id collision check. Refuse to overwrite an existing
+# release dir on the remote.
+if remote_ssh "test -e ${RELEASE_DIR}"; then
+    echo "❌  Release dir already exists on remote: ${RELEASE_DIR}" >&2
+    echo "    Refusing to overwrite. Pick a new release id or remove the existing dir." >&2
+    exit 1
+fi
+
+# 3d. existing <tier> symlink resolves, or doesn't exist (first
+# deploy). A bare directory at the docroot location means a tier in
+# the legacy in-place layout — refuse and direct the operator to the
+# migration script (Sprint 3).
+DOCROOT_STATE="$(remote_ssh "if [ -L ${DEPLOY_TARGET} ]; then echo symlink; elif [ -d ${DEPLOY_TARGET} ]; then echo dir; elif [ -e ${DEPLOY_TARGET} ]; then echo other; else echo absent; fi")"
+case "$DOCROOT_STATE" in
+    symlink|absent)
+        : # OK
+        ;;
+    dir)
+        echo "❌  Docroot ${DEPLOY_TARGET} is a real directory, not a symlink." >&2
+        echo "    This tier is still in the legacy in-place layout." >&2
+        echo "    Run deploy/migrate-to-atomic-layout.sh ${ENV} (Sprint 3) first." >&2
+        exit 1
+        ;;
+    *)
+        echo "❌  Docroot ${DEPLOY_TARGET} is in an unexpected state: ${DOCROOT_STATE}" >&2
+        exit 1
+        ;;
+esac
+
+# 3e. bootstrap <tier>data/v0/ on first run.
+remote_ssh "mkdir -p ${DATA_DIR}/v0/user/accounts ${DATA_DIR}/v0/user/data ${DATA_DIR}/v0/user/config ${DATA_DIR}/v0/user/env/${ENV}/config ${DATA_DIR}/logs"
+remote_ssh "if [ ! -e ${DATA_DIR}/current ] || [ -L ${DATA_DIR}/current ]; then ln -sfn v0 ${DATA_DIR}/current; fi"
+
+# 3f. read previous release id (target of existing <tier> symlink), if any.
+PREV_RELEASE_ID=""
+if [ "$DOCROOT_STATE" = "symlink" ]; then
+    PREV_TARGET="$(remote_ssh "readlink ${DEPLOY_TARGET}" 2>/dev/null || echo "")"
+    PREV_RELEASE_ID="$(basename "$PREV_TARGET")"
+    if [ -n "$PREV_RELEASE_ID" ] && ! bv_validate_release_id "$PREV_RELEASE_ID" 2>/dev/null; then
+        echo "  ⚠️  existing <tier> symlink target '${PREV_RELEASE_ID}' is not a valid release id; treating as no-previous." >&2
+        PREV_RELEASE_ID=""
+    fi
+fi
+echo "  ✓ Previous release: ${PREV_RELEASE_ID:-<none>}"
+echo "  ✓ New release: ${RELEASE_ID}"
+
+# ── Step 4: rsync to fresh release dir ────────────────────────────────
+echo "→ Step 4/8: Uploading to ${DEPLOY_HOST}:${RELEASE_DIR}..."
+
+# Make sure the release dir exists and is empty.
+remote_ssh "mkdir -p ${RELEASE_DIR}"
+
+# Atomic-release rsync flag set. Note the differences from the legacy
+# in-place flag set:
 #
-# History the comments below encode (read it before you delete an exclude):
+#   * --max-delete=0   — belt-and-braces; the destination is a fresh
+#                        empty dir, so nothing should ever be deleted.
+#                        If rsync finds anything to delete, the
+#                        destination wasn't actually fresh and we
+#                        bail.
+#   * NO live-state excludes — the live state isn't in the staging
+#                              tree at all. Excluding it here would
+#                              be cargo-cult.
+#   * --exclude='cache/' / 'tmp/' / 'logs/' / 'backup/' / '.DS_Store'
+#     — staging may carry local-dev versions of these. Strip them.
 #
-#   April 2026 — accounts wipe. A deploy without `user/accounts/` in
-#                 the exclude list ran `rsync --delete`; every Grav user
-#                 record on the live tier was destroyed. Recovery: manual
-#                 user re-creation. Lesson: live state must be excluded.
-#   May   2026 — dev re-wipe. The post-incident exclude list shrank back
-#                 to what's above this comment block, and a routine
-#                 `make deploy-dev` deleted user 'bobo' plus the entire
-#                 flex-account index, scheduler queue, feed, notifications.
-#                 Same root cause. This time we wrap with belt-and-braces.
-#
-# Three layers of protection:
-#
-#   Layer 1 — explicit excludes for every known live-state path.
-#             Triple-asterisk (`***`) excludes the directory AND its
-#             contents. Plain `/` or `**` leaves the directory itself
-#             eligible for deletion in some rsync builds.
-#
-#   Layer 2 — `--max-delete=N` hard cap. Normal deploys delete ≤5 files
-#             (stale theme assets, removed pages). 25 leaves headroom for
-#             a legitimate cleanup but rsync will refuse the upload if a
-#             misconfiguration would blow past it.
-#
-#   Layer 3 — pre-flight: run rsync with `-n` (dry-run) first, scan the
-#             "deleting …" lines for anything under a live-state path,
-#             abort BEFORE the real upload if any survive the excludes.
-#             Catches cases where someone edits the exclude list and gets
-#             the pattern wrong (e.g. forgets the `***` suffix), letting
-#             user data through despite our intent.
-#
-# The flags are kept in an array so the dry-run and the real run cannot
-# diverge — both call rsync with exactly the same arg vector.
-RSYNC_FLAGS=(
-    -avz --delete --max-delete=25
-    # ── Live-state paths — NEVER touched by deploy ──
-    --exclude='user/accounts/***'              # Grav login/admin user YAMLs
-    --exclude='user/data/***'                  # flex objects, scheduler queue, feed, notifications
-    --exclude='user/config/security.yaml'      # auto-generated salts (root env)
-    --exclude='user/env/*/config/security.yaml' # auto-generated salts (per-env)
-    # ── Plugin dev-only artefacts — should never reach a live tier ──
-    # feature-flags has only `require-dev` dependencies (phpunit, twig
-    # for tests, etc.) so its vendor/ is dev-only and should never be
-    # on prod/staging/test. Older deploys accidentally shipped a
-    # composer-with-dev install once, leaving thousands of cruft files
-    # on remote tiers; without this exclude rsync's --delete would
-    # try to clean them up and trip the --max-delete cap. Excluding
-    # preserves the cruft (until a separate manual cleanup) and
-    # prevents future re-pollution. Other plugins' vendor dirs (admin,
-    # form, flex-objects, login, email, etc.) are real production
-    # dependencies — they're present locally and ship normally.
-    --exclude='user/plugins/feature-flags/vendor/***'
-    --exclude='user/plugins/feature-flags/tests/***'
-    --exclude='user/plugins/feature-flags/phpunit.xml.dist'
-    # ── Transient/regenerable ──
-    # Triple-asterisk excludes the directory AND its contents from
-    # rsync's deletion bookkeeping. Plain `*` excludes only the
-    # contents, leaving the dir eligible for deletion — but since
-    # the (excluded) files inside still register as "non-empty",
-    # rsync prints "cannot delete non-empty directory: …" and moves
-    # on. Functionally identical, but `***` keeps the deploy log
-    # readable so a real deletion-refusal would actually stand out.
-    # Cache invalidation is handled by `bin/grav cache --all` in
-    # Step 4, which fails loud on error.
-    --exclude='cache/compiled/***'
-    --exclude='cache/twig/***'
-    --exclude='cache/doctrine/***'
-    --exclude='logs/***'
-    --exclude='backup/***'
-    --exclude='tmp/***'
+# RSYNC_FLAGS_ATOMIC is named differently from the landing-branch
+# RSYNC_FLAGS so the two flag sets are visibly distinct in code review.
+RSYNC_FLAGS_ATOMIC=(
+    -avz --max-delete=0
+    --exclude='cache/'
+    --exclude='tmp/'
+    --exclude='backup/'
+    --exclude='logs/'
     --exclude='.DS_Store'
-    # ── Sibling-folder subdomain protection ──
-    # /dev /test /staging live as sibling folders under the same apex
-    # docroot when deploying `landing`. The leading `/` pins them to
-    # the rsync root, so this doesn't accidentally exclude e.g. user/test
-    # or cache/dev. On a dev/test/staging deploy the target is already
-    # inside the matching folder, so these excludes don't apply at all
-    # (rsync evaluates patterns relative to the source root).
-    --exclude='/dev/'
-    --exclude='/test/'
-    --exclude='/staging/'
 )
 
-# Layer 3 — pre-flight dry-run. Refuse to proceed if anything in the
-# live-state denylist would still be deleted. (`grep -E` returns 1 when
-# nothing matches; `|| true` avoids set -e tripping on the no-match case.)
-echo "  Pre-flight delete check..."
-if ! DRY_OUT="$(sshpass -p "$DEPLOY_PASS" rsync -n "${RSYNC_FLAGS[@]}" \
-        -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
-        "$STAGING_DIR/" \
-        "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_TARGET}/" 2>&1)"; then
-    echo "❌  Pre-flight rsync failed:" >&2
-    printf '%s\n' "$DRY_OUT" >&2
-    exit 1
-fi
-SUSPICIOUS="$(printf '%s\n' "$DRY_OUT" \
-    | grep -E '^deleting (user/accounts/|user/data/|.*security\.yaml$)' || true)"
-if [ -n "$SUSPICIOUS" ]; then
-    echo "❌  Pre-flight rsync would delete live-state paths — aborting:" >&2
-    printf '  %s\n' "$SUSPICIOUS" >&2
-    echo "    The LIVE_STATE excludes in $0 must cover all of these." >&2
-    echo "    DO NOT bypass — these are real user accounts / runtime data." >&2
-    exit 1
-fi
-
-# Real upload — same flag vector as the pre-flight.
-sshpass -p "$DEPLOY_PASS" rsync "${RSYNC_FLAGS[@]}" \
+sshpass -p "$DEPLOY_PASS" rsync "${RSYNC_FLAGS_ATOMIC[@]}" \
     -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
     "$STAGING_DIR/" \
-    "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_TARGET}/"
+    "${DEPLOY_USER}@${DEPLOY_HOST}:${RELEASE_DIR}/"
 
 echo "  ✓ Upload complete"
 
-# ── Step 4: Post-deploy ─────────────────────────────────────
-echo "→ Step 4/4: Post-deploy tasks..."
+# ── Step 5: Wire release symlinks ─────────────────────────────────────
+echo "→ Step 5/8: Wiring release symlinks (per §Symlink contract)..."
 
-if [ "$ENV_KIND" = "grav" ]; then
-    # Cache clear must succeed. The rsync block above intentionally
-    # excludes cache/ to avoid uploading dev cache state, which means
-    # the LIVE remote still holds compiled config + twig from the
-    # PREVIOUS deploy after rsync. `bin/grav cache --all` is what
-    # actually invalidates them. If it fails (PHP fatal, permission
-    # glitch, plugin error), the site serves new code against stale
-    # cache — the failure mode that bit before the May 2026 incident.
-    #
-    # Both `|| true` (was swallowing exit code) and `2>/dev/null` (was
-    # discarding stderr) have been removed. Under `set -euo pipefail`
-    # at the top of the script, a non-zero exit here will abort the
-    # deploy with a visible error, which is the correct behaviour.
-    if ! sshpass -p "$DEPLOY_PASS" ssh -o StrictHostKeyChecking=no -p "$DEPLOY_PORT" \
-            "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "cd ${DEPLOY_TARGET} && php bin/grav cache --all"; then
-        echo ""
-        echo "❌  Cache clear failed on ${DEPLOY_HOST}:${DEPLOY_TARGET}." >&2
-        echo "    The new code is uploaded but compiled config + twig are stale." >&2
-        echo "    SSH in and run: cd ${DEPLOY_TARGET} && php bin/grav cache --all" >&2
-        echo "    Then verify the site renders the expected version/build." >&2
-        exit 1
-    fi
-    echo "  ✓ Cache cleared"
-else
-    echo "  ✓ (landing — no Grav cache to clear)"
+# Build the symlink-wiring on the remote side via a tiny inline script.
+# Targets are constructed from validated path components (LAYOUT_NAME
+# and ENV both pass tier-name validation; RELEASE_ID passes the regex)
+# so even though they're interpolated into a remote shell, no
+# operator-controlled metacharacter can land in the command line.
+remote_ssh "set -eu; \
+    rd=${RELEASE_DIR}; ddn=${LAYOUT_NAME}data; e=${ENV}; \
+    mkdir -p \"\$rd/user/config\" \"\$rd/user/env/\$e/config\"; \
+    for p in \"\$rd/user/accounts\" \"\$rd/user/data\" \"\$rd/user/config/security.yaml\" \"\$rd/user/env/\$e/config/security.yaml\" \"\$rd/logs\"; do \
+        if [ -e \"\$p\" ] && [ ! -L \"\$p\" ]; then rm -rf \"\$p\"; fi; \
+    done; \
+    ln -sfn \"../../../\$ddn/v0/user/accounts\" \"\$rd/user/accounts\"; \
+    ln -sfn \"../../../\$ddn/v0/user/data\" \"\$rd/user/data\"; \
+    ln -sfn \"../../../../\$ddn/v0/user/config/security.yaml\" \"\$rd/user/config/security.yaml\"; \
+    ln -sfn \"../../../../../../\$ddn/v0/user/env/\$e/config/security.yaml\" \"\$rd/user/env/\$e/config/security.yaml\"; \
+    ln -sfn \"../../\$ddn/logs\" \"\$rd/logs\""
+
+echo "  ✓ Symlinks wired"
+
+# ── Step 6: Write release-meta.yaml ───────────────────────────────────
+echo "→ Step 6/8: Writing release-meta.yaml..."
+
+# Write the YAML locally to the staging dir, then rsync that single
+# file up. This keeps the YAML-emitter (bv_write_release_meta_yaml) on
+# the local side so it can be unit-tested without ssh.
+META_LOCAL="$STAGING_DIR/release-meta.yaml"
+bv_write_release_meta_yaml \
+    "$STAGING_DIR" \
+    "$RELEASE_ID" \
+    "$PREV_RELEASE_ID" \
+    "$VERSION" \
+    "$BUILD" \
+    "v0" \
+    "$DEPLOYED_AT_ISO" \
+    "$DEPLOYED_BY"
+
+sshpass -p "$DEPLOY_PASS" rsync -a \
+    -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
+    "$META_LOCAL" \
+    "${DEPLOY_USER}@${DEPLOY_HOST}:${RELEASE_DIR}/release-meta.yaml"
+
+echo "  ✓ release-meta.yaml written"
+
+# ── Step 7: Cache clear (fail-loud; aborts BEFORE the swap) ───────────
+echo "→ Step 7/8: Clearing Grav cache in new release..."
+if ! remote_ssh "cd ${RELEASE_DIR} && php bin/grav cache --all"; then
+    echo ""
+    echo "❌  Cache clear failed in ${RELEASE_DIR}." >&2
+    echo "    Aborting BEFORE the docroot swap — the previous release stays live." >&2
+    echo "    Inspect: ssh ${DEPLOY_USER}@${DEPLOY_HOST} 'cd ${RELEASE_DIR} && php bin/grav cache --all'" >&2
+    exit 1
 fi
+echo "  ✓ Cache cleared in new release"
+
+# ── Step 8: Atomic ln -sfn swap of <tier> ─────────────────────────────
+echo "→ Step 8/8: Atomic swap of ${DEPLOY_TARGET}..."
+
+# Single ln -sfn invocation; no rm of the old symlink first (that
+# would open a race window). ln -sfn replaces atomically.
+remote_ssh "ln -sfn ${LAYOUT_NAME}-releases/${RELEASE_ID} ${DEPLOY_TARGET}"
+
+echo "  ✓ ${DEPLOY_TARGET} → ${LAYOUT_NAME}-releases/${RELEASE_ID}"
+
+# ── Retention pruner ──────────────────────────────────────────────────
+# Keep last N=5 release dirs. Two newest (current + immediate prev)
+# never eligible. Inline-on-remote so no list of release ids needs to
+# be shuffled across the wire.
+KEEP_N="${BV_RELEASES_KEEP:-5}"
+remote_ssh "set -eu; \
+    rdir=${RELEASES_DIR}; \
+    cur=${RELEASE_ID}; prev=${PREV_RELEASE_ID:-__none__}; keep=${KEEP_N}; \
+    [ -d \"\$rdir\" ] || exit 0; \
+    cd \"\$rdir\"; \
+    all=\$(ls -1 | sort); \
+    total=\$(printf '%s\n' \"\$all\" | grep -c . || true); \
+    if [ \"\$total\" -le \"\$keep\" ]; then exit 0; fi; \
+    drop=\$((total - keep)); \
+    n=0; \
+    for rid in \$all; do \
+        [ \$n -ge \$drop ] && break; \
+        n=\$((n+1)); \
+        case \"\$rid\" in \
+            \"\$cur\"|\"\$prev\") continue ;; \
+        esac; \
+        case \"\$rid\" in \
+            *..*|*/*|-*) echo \"  skip (suspicious id): \$rid\"; continue ;; \
+        esac; \
+        if printf '%s' \"\$rid\" | grep -Eq '^[0-9]{8}T[0-9]{6}-[0-9a-f]{7,12}\$'; then \
+            rm -rf -- \"\$rid\"; \
+            echo \"  pruned old release: \$rid\"; \
+        else \
+            echo \"  skip (not a release id): \$rid\"; \
+        fi; \
+    done; \
+    echo '  data-version retention deferred to data-versioning spec'"
 
 echo ""
-echo "  ✅  Deploy complete!"
+echo "  ✅  Atomic deploy complete!"
 echo "  🌐  ${ENV_URL}"
+echo "  📦  Release: ${RELEASE_ID}"
+echo "  ↩  Rollback target: ${PREV_RELEASE_ID:-<none — first deploy>}"
 echo ""
