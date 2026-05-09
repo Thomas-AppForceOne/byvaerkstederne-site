@@ -30,9 +30,9 @@ Independently useful even before any later step ships: gives us "undo what happe
 
 **Exit criteria:** `./deploy/backup.sh prod` and `./deploy/restore.sh <tier-or-dir>` are working commands; backups carry a metadata file with code/data versions; retention enforces correctly; tagged backups are immune to retention sweeps.
 
-### 3. Atomic deploy releases — Planned
+### 3. Atomic deploy releases — IMPLEMENTED
 
-**Spec:** [atomic_deploy_releases_specification.md](atomic_deploy_releases_specification.md)
+**Spec:** [archive/atomic_deploy_releases_specification.md](archive/atomic_deploy_releases_specification.md)
 
 Replace the in-place `rsync --delete` model in `deploy/deploy.sh` with an atomic, rollback-able release model. Each tier gets its own versioned release directories (`<tier>-releases/<timestamp>/`) holding immutable code, a sibling per-tier data directory (`<tier>data/v<N>/`) holding all mutable state, and a single symlink at the docroot (`<tier> → <tier>-releases/<current>`) that constitutes the live tier. Deploy is "rsync to a fresh release dir + symlink swap"; rollback is "symlink swap back". The April 2026 accounts wipe and the May 2026 dev re-wipe are structurally impossible under this layout — `<tier>data/` is not in the rsync's path tree at all.
 
