@@ -1,4 +1,4 @@
-.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging deploy-landing backup-prod backup-test test test-headed test-auth test-install test-deploy test-backup-restore
+.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging deploy-landing rollback-dev rollback-test rollback-staging rollback-prod backup-prod backup-test test test-headed test-auth test-install test-deploy test-backup-restore
 
 # Default target
 help: ## Show this help
@@ -91,6 +91,26 @@ deploy-dev: ## Deploy to dev (dev.hackersbychoice.dk)
 deploy-landing: ## Deploy the apex selector page (hackersbychoice.dk)
 	@./deploy/deploy.sh landing
 
+# ── Rollback ───────────────────────────────────────────
+#
+# Rollback is the inverse of deploy. Each target swaps the docroot
+# symlink back to the previous release named in <tier>-releases/
+# <current>/release-meta.yaml's previous_release field. Audit trail:
+# <tier>-releases/rollback-log.yaml. There is no rollback-landing —
+# the apex landing tier has no atomic layout and no rollback story.
+
+rollback-dev: ## Roll back dev to the previous release (audit log: dev-releases/rollback-log.yaml)
+	@./deploy/rollback.sh dev
+
+rollback-test: ## Roll back test to the previous release (audit log: test-releases/rollback-log.yaml)
+	@./deploy/rollback.sh test
+
+rollback-staging: ## Roll back staging to the previous release (audit log: staging-releases/rollback-log.yaml)
+	@./deploy/rollback.sh staging
+
+rollback-prod: ## Roll back prod to the previous release (audit log: prod-releases/rollback-log.yaml)
+	@./deploy/rollback.sh prod
+
 # ── Backup ─────────────────────────────────────────────
 
 backup-prod: ## Backup production data (accounts, flex objects, media)
@@ -154,9 +174,10 @@ test-headed: ## Run tests with browser visible (for debugging)
 	echo "Running tests against http://127.0.0.1:$$PORT (headed)"; \
 	GRAV_PORT=$$PORT npx playwright test tests/anonymous.spec.js --headed
 
-test-deploy: ## Run deploy-script regression tests (atomic-layout invariants + structural live-state isolation)
+test-deploy: ## Run deploy-script regression tests (atomic-layout invariants + structural live-state isolation + rollback)
 	@bash tests/deploy/excludes-preserve-live-state.sh
 	@bash tests/deploy/atomic-layout.sh
+	@bash tests/deploy/rollback.sh
 
 test-backup-restore: ## Run backup/restore tooling tests (bats)
 	@command -v bats >/dev/null 2>&1 || { echo "❌  bats not installed. Run: brew install bats-core"; exit 1; }
