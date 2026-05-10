@@ -51,6 +51,31 @@ The committed test suite (`tests/deploy/backup-restore.bats`) needs
 [`bats-core`](https://github.com/bats-core/bats-core) — `brew install
 bats-core`.
 
+### Atomic-deploy tooling dependencies
+
+`deploy/deploy.sh`, `deploy/rollback.sh`, and
+`deploy/migrate-to-atomic-layout.sh` need everything the backup tooling
+needs **plus** the items below. Each script asserts these at startup
+and fails loud with an install hint if anything is missing.
+
+| Tool | Why |
+|------|-----|
+| `sshpass` | one.com authenticates with a password rather than an SSH key, so the scripts wrap `ssh` and `rsync` in `sshpass -p "$DEPLOY_PASS"`. Install: `brew install esolitos/ipa/sshpass` (it's not in core Homebrew because of upstream's stance on password-passing, but the IPA tap is the standard macOS workaround). |
+| [GNU coreutils](https://www.gnu.org/software/coreutils/) | The scripts measure `swap_duration_ms` for the `release-meta.yaml` audit trail with `date +%s%N` (nanosecond resolution). BSD `date` (macOS default) doesn't support `%N` and would round single-digit-second swaps to 0–999 ms with no useful precision; the startup probe (`bv_require_ms_timing` in `deploy/lib/atomic-release.sh`) refuses to run without GNU `date`. Install: `brew install coreutils`. The scripts prepend `/opt/homebrew/bin` to `$PATH` internally — you do **not** need to add `gnubin` to your shell PATH unless you want GNU semantics in everyday use. |
+| GNU bash 4+ | The atomic-release lib uses constructs (nested `$(...)` with single-quotes inside double-quotes) that bash 3.2's parser fails on. macOS ships bash 3.2 at `/bin/bash`; the deploy scripts shebang `#!/usr/bin/env bash` and add a `BASH_VERSINFO[0]` ≥ 4 assertion at startup so the operator gets a readable diagnostic instead of "syntax error near unexpected token \`('". Install: `brew install bash`, and ensure `/opt/homebrew/bin` precedes `/usr/bin` on your `$PATH`. |
+| `php` (on the **remote**, not the operator host) | Step 7 of the deploy sequence runs `php bin/grav cache --all` against the freshly-rsync'd release dir. Shared-hosting tiers (one.com, chosting.dk) ship PHP — no operator install required. The cache-clear failure path explicitly aborts before the docroot swap. |
+
+The atomic-deploy probes (`tests/deploy/lint-remote-ssh.sh`,
+`unit-remote-run.sh`, `atomic-layout.sh`, `rollback.sh`,
+`migrate.sh`) run locally without any of the above tools touching a
+real remote — the unit test stubs `ssh`/`sshpass` for local execution
+and the rest use `mktemp` fixtures. CI doesn't need `sshpass` to lint
+or test the work; only operator-side real-tier exercise does.
+
+See [ADR-004](decisions/ADR-004-atomic-deploy-fixture-only-testing.md)
+for the rationale behind the local-fixture-first testing posture and
+the operator-supervised real-tier exercise contract.
+
 ### Backup tooling environment variables
 
 Configuration variables for `deploy/backup.sh` and `deploy/restore.sh`.
@@ -62,7 +87,9 @@ The standard ones live in `.env.deploy` (gitignored, see
 | Variable | Purpose |
 |----------|---------|
 | `DEPLOY_PROD_HOST`, `DEPLOY_PROD_USER`, `DEPLOY_PROD_PORT`, `DEPLOY_PROD_PATH` | SSH credentials for the prod tier. |
+| `DEPLOY_PROD_PASS` | Password for the prod tier (used by `deploy.sh` and `rollback.sh` via `sshpass`; not used by `backup.sh` / `restore.sh`, which authenticate with a key). |
 | `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_PATH` | SSH credentials shared across staging / test / dev (see `specifications/archive/prod_backup_restore_specification.md` for the per-tier subpath logic). |
+| `DEPLOY_PASS` | Password shared across staging / test / dev (used by `deploy.sh` and `rollback.sh` via `sshpass`; not used by backup tooling). |
 | `BACKUP_S3_BUCKET`, `BACKUP_S3_ENDPOINT`, `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` | Managed-storage credentials. Either these or `BACKUP_LOCAL_STORE_DIR` must be set. |
 | `BACKUP_LOCAL_STORE_DIR` | Directory acting as managed storage (used for testing and when an S3 bucket is overkill). Mutually exclusive with the S3 backend; if both are set, the local store wins. |
 | `AGE_IDENTITY_FILE` | Absolute path to the operator's age private key (kept in a password manager / hardware key, never committed). Required for any `restore.sh` invocation that decrypts. |
@@ -99,6 +126,12 @@ override. Tests inject metadata by populating
 | [Git LFS](https://git-lfs.com) | 3.0+ | Stores images/videos efficiently |
 
 > `make setup` will check for all dependencies and attempt to install Git LFS if missing.
+
+For deploy / backup / restore tooling, see [Backup tooling
+dependencies](#backup-tooling-dependencies) and [Atomic-deploy tooling
+dependencies](#atomic-deploy-tooling-dependencies) above. Those are
+operator-side requirements only; they do not affect local Docker
+development.
 
 ## Commands
 
