@@ -1,4 +1,4 @@
-.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging deploy-landing rollback-dev rollback-test rollback-staging rollback-prod migrate-atomic-dev migrate-atomic-test migrate-atomic-staging migrate-atomic-prod backup-prod backup-staging backup-test backup-dev restore-scratch restore-dev restore-test restore-staging restore-prod test test-headed test-auth test-install test-deploy test-backup-restore
+.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging deploy-landing rollback-dev rollback-test rollback-staging rollback-prod migrate-atomic-dev migrate-atomic-test migrate-atomic-staging migrate-atomic-prod backup-prod backup-staging backup-test backup-dev list-backups restore-scratch restore-dev restore-test restore-staging restore-prod test test-headed test-auth test-install test-deploy test-backup-restore
 
 # Default target
 help: ## Show this help
@@ -171,6 +171,9 @@ backup-dev: ## Backup dev environment data
 # `restore-prod` refuses by design — invoke the script directly so the
 # safety gates (RESTORE_TO_TIER_ENABLED + --yes-i-mean-it) are
 # impossible to miss.
+
+list-backups: ## List backup ids available for restore (optional TIER=prod|staging|test|dev)
+	@./deploy/list-backups.sh $(TIER)
 
 restore-scratch: ## Restore a backup into a scratch dir for inspection (TO=<dir> [FROM=<id|latest>])
 	@if [ -z "$(TO)" ]; then echo "❌  Usage: make restore-scratch TO=<dir> [FROM=<id>]"; exit 1; fi
