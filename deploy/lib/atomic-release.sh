@@ -22,10 +22,20 @@
 #   bv_check_previous_release_data_symlinks <release-dir>           # rc=0 if accounts/, user/data/, logs/ all resolve; non-zero + diagnostic otherwise
 #   bv_rollback_local             <parent-dir> <env> <docroot-name>  # local-mode rollback (no ssh) — used by tests and rollback.sh's --local mode
 #   bv_append_rollback_log_row    <releases-dir> <rolled-back-at> <rolled-back-by> <from-release> <to-release> <swap-duration-ms> <probe-url> <probe-status> <probe-substring> <probe-matched>
+#   bv_yaml_quote_escape          <value>                                 # escape backslashes and double-quotes for inline-quoted YAML emission
+#   bv_remote_run                 "<bash-body>" KEY=VALUE...              # safe ssh dispatch (see security note below)
 #
 # These run locally (no ssh, no remote) — the deploy script wraps them
 # with sshpass/ssh when invoking against a remote, but the fixture-
 # driven test exercises the same code paths against a mktemp dir.
+#
+# bv_remote_run is the exception: it dispatches a bash body through ssh
+# to the remote configured by the caller's DEPLOY_HOST/USER/PASS/PORT
+# environment. Values are passed via printf %q + remote `export` (never
+# string-interpolated into the body), so the remote shell parses each
+# value as a single quoted token regardless of contained whitespace,
+# globs, or shell metacharacters. Callers reference values inside the
+# body via "$KEY" — the body itself never sees raw values.
 #
 # Security contract:
 #
@@ -878,4 +888,98 @@ bv_read_previous_release_id() {
     fi
 
     printf '%s\n' "$raw"
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# Shared utilities (post-PR-#17 review follow-up).
+# ─────────────────────────────────────────────────────────────────────
+
+# Escape backslashes and double-quotes so a value is safe to embed in an
+# inline-double-quoted YAML scalar. Single source of truth — used by
+# release-meta and rollback-log writers (and by migrate.sh's bootstrap
+# meta emission).
+bv_yaml_quote_escape() {
+    printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
+
+# Dispatch a bash body to the remote configured by the caller's
+# DEPLOY_HOST/USER/PASS/PORT environment. Values are passed as named
+# environment variables on the remote side, NOT interpolated into the
+# script string — every KEY=VALUE pair is `printf %q`-quoted before
+# being emitted as a remote-side `export`, then the body runs with the
+# vars in scope and uses them via "$KEY".
+#
+# Why this exists: the naive `ssh "$host" "test -w $PATH"` pattern
+# concatenates $PATH unquoted into the remote command line. ssh joins
+# its args with spaces and the remote shell re-parses, so a value
+# containing whitespace, a glob, or a shell metacharacter executes
+# uncontrolled code on the remote. This helper closes that surface for
+# every dynamic value — the only thing flowing into the remote shell is
+# the body string itself (caller-controlled, never operator-controlled)
+# and `printf %q`-quoted exports.
+#
+# Usage:
+#   bv_remote_run '
+#       test -w "$PARENT" || mkdir -p "$RELEASES" "$DATA"
+#   ' \
+#       PARENT="$DEPLOY_DOCROOT_PARENT" \
+#       RELEASES="$RELEASES_DIR" \
+#       DATA="$DATA_DIR"
+#
+# Or, to capture remote stdout:
+#   STATE="$(bv_remote_run 'if [ -L "$T" ]; then echo symlink; else echo other; fi' T="$DEPLOY_TARGET")"
+#
+# Reserved keys: SSHPASS, PATH, HOME, USER — the helper refuses these,
+# which would either change the remote shell's lookup behaviour or leak
+# the local password to remote-side processes.
+bv_remote_run() {
+    local body="${1:?body required}"
+    shift
+
+    : "${DEPLOY_HOST:?bv_remote_run requires DEPLOY_HOST}"
+    : "${DEPLOY_USER:?bv_remote_run requires DEPLOY_USER}"
+    : "${DEPLOY_PASS:?bv_remote_run requires DEPLOY_PASS}"
+    : "${DEPLOY_PORT:?bv_remote_run requires DEPLOY_PORT}"
+
+    local script_input
+    script_input="$(
+        local kv k v
+        for kv in "$@"; do
+            # Reject malformed KEY=VALUE shapes early.
+            case "$kv" in
+                *=*) ;;
+                *)
+                    echo "FATAL: bv_remote_run argument '$kv' must be KEY=VALUE" >&2
+                    return 1
+                    ;;
+            esac
+            k="${kv%%=*}"
+            v="${kv#*=}"
+            # Reject reserved / dangerous keys.
+            case "$k" in
+                ''|SSHPASS|PATH|HOME|USER|LD_*|DYLD_*)
+                    echo "FATAL: bv_remote_run refuses to set remote env var '$k'" >&2
+                    return 1
+                    ;;
+            esac
+            # Reject keys that aren't a valid shell identifier.
+            case "$k" in
+                [!A-Za-z_]*|*[!A-Za-z0-9_]*)
+                    echo "FATAL: bv_remote_run refuses key '$k' — not a valid shell identifier" >&2
+                    return 1
+                    ;;
+            esac
+            # printf %q produces a value safe to be eaten by `export KEY=...`
+            # on the remote. The remote shell sees the export as
+            # `export KEY=value` where `value` is whatever quoting form
+            # printf %q chose.
+            printf 'export %s=%q\n' "$k" "$v"
+        done
+        printf 'set -euo pipefail\n'
+        printf '%s\n' "$body"
+    )" || return $?
+
+    sshpass -p "$DEPLOY_PASS" ssh -o StrictHostKeyChecking=no \
+        -p "$DEPLOY_PORT" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+        bash -s <<<"$script_input"
 }

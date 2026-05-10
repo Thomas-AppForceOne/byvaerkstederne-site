@@ -488,31 +488,36 @@ RELEASES_DIR="${DEPLOY_DOCROOT_PARENT}/${LAYOUT_NAME}-releases"
 DATA_DIR="${DEPLOY_DOCROOT_PARENT}/${LAYOUT_NAME}data"
 RELEASE_DIR="${RELEASES_DIR}/${RELEASE_ID}"
 
-# Helper: run a command on the remote with credentials and quoting
-# discipline. All args after $1 are passed to ssh as separate args.
-remote_ssh() {
-    sshpass -p "$DEPLOY_PASS" ssh -o StrictHostKeyChecking=no \
-        -p "$DEPLOY_PORT" "${DEPLOY_USER}@${DEPLOY_HOST}" "$@"
-}
+# Remote dispatch goes through bv_remote_run (defined in
+# deploy/lib/atomic-release.sh) — values flow as printf %q-quoted
+# remote-side env exports, never via direct shell-string interpolation.
+# See the helper's docblock for the security rationale.
 
 # ── Step 3: Pre-flight checks (remote) ────────────────────────────────
 echo "→ Step 3/8: Pre-flight checks on ${DEPLOY_HOST}..."
 
 # 3a. ssh works.
-if ! remote_ssh "true"; then
+if ! bv_remote_run 'true'; then
     echo "❌  ssh to ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PORT} failed." >&2
     exit 1
 fi
 
 # 3b. parent of <tier>-releases/ is writable.
-if ! remote_ssh "test -w ${DEPLOY_DOCROOT_PARENT} || mkdir -p ${RELEASES_DIR} ${DATA_DIR}"; then
+if ! bv_remote_run '
+    test -w "$PARENT" || mkdir -p "$RELEASES" "$DATA"
+' \
+    PARENT="$DEPLOY_DOCROOT_PARENT" \
+    RELEASES="$RELEASES_DIR" \
+    DATA="$DATA_DIR"; then
     echo "❌  Parent dir ${DEPLOY_DOCROOT_PARENT} not writable on remote." >&2
     exit 1
 fi
 
 # 3c. release-id collision check. Refuse to overwrite an existing
 # release dir on the remote.
-if remote_ssh "test -e ${RELEASE_DIR}"; then
+if bv_remote_run '
+    test -e "$RELEASE_DIR"
+' RELEASE_DIR="$RELEASE_DIR"; then
     echo "❌  Release dir already exists on remote: ${RELEASE_DIR}" >&2
     echo "    Refusing to overwrite. Pick a new release id or remove the existing dir." >&2
     exit 1
@@ -522,7 +527,17 @@ fi
 # deploy). A bare directory at the docroot location means a tier in
 # the legacy in-place layout — refuse and direct the operator to the
 # migration script (Sprint 3).
-DOCROOT_STATE="$(remote_ssh "if [ -L ${DEPLOY_TARGET} ]; then echo symlink; elif [ -d ${DEPLOY_TARGET} ]; then echo dir; elif [ -e ${DEPLOY_TARGET} ]; then echo other; else echo absent; fi")"
+DOCROOT_STATE="$(bv_remote_run '
+    if [ -L "$DEPLOY_TARGET" ]; then
+        echo symlink
+    elif [ -d "$DEPLOY_TARGET" ]; then
+        echo dir
+    elif [ -e "$DEPLOY_TARGET" ]; then
+        echo other
+    else
+        echo absent
+    fi
+' DEPLOY_TARGET="$DEPLOY_TARGET")"
 case "$DOCROOT_STATE" in
     symlink|absent)
         : # OK
@@ -540,13 +555,21 @@ case "$DOCROOT_STATE" in
 esac
 
 # 3e. bootstrap <tier>data/v0/ on first run.
-remote_ssh "mkdir -p ${DATA_DIR}/v0/user/accounts ${DATA_DIR}/v0/user/data ${DATA_DIR}/v0/user/config ${DATA_DIR}/v0/user/env/${ENV}/config ${DATA_DIR}/logs"
-remote_ssh "if [ ! -e ${DATA_DIR}/current ] || [ -L ${DATA_DIR}/current ]; then ln -sfn v0 ${DATA_DIR}/current; fi"
+bv_remote_run '
+    mkdir -p "$DATA/v0/user/accounts" \
+             "$DATA/v0/user/data" \
+             "$DATA/v0/user/config" \
+             "$DATA/v0/user/env/$ENV/config" \
+             "$DATA/logs"
+    if [ ! -e "$DATA/current" ] || [ -L "$DATA/current" ]; then
+        ln -sfn v0 "$DATA/current"
+    fi
+' DATA="$DATA_DIR" ENV="$ENV"
 
 # 3f. read previous release id (target of existing <tier> symlink), if any.
 PREV_RELEASE_ID=""
 if [ "$DOCROOT_STATE" = "symlink" ]; then
-    PREV_TARGET="$(remote_ssh "readlink ${DEPLOY_TARGET}" 2>/dev/null || echo "")"
+    PREV_TARGET="$(bv_remote_run 'readlink "$DEPLOY_TARGET"' DEPLOY_TARGET="$DEPLOY_TARGET" 2>/dev/null || echo "")"
     PREV_RELEASE_ID="$(basename "$PREV_TARGET")"
     if [ -n "$PREV_RELEASE_ID" ] && ! bv_validate_release_id "$PREV_RELEASE_ID" 2>/dev/null; then
         echo "  ⚠️  existing <tier> symlink target '${PREV_RELEASE_ID}' is not a valid release id; treating as no-previous." >&2
@@ -560,7 +583,7 @@ echo "  ✓ New release: ${RELEASE_ID}"
 echo "→ Step 4/8: Uploading to ${DEPLOY_HOST}:${RELEASE_DIR}..."
 
 # Make sure the release dir exists and is empty.
-remote_ssh "mkdir -p ${RELEASE_DIR}"
+bv_remote_run 'mkdir -p "$RELEASE_DIR"' RELEASE_DIR="$RELEASE_DIR"
 
 # Atomic-release rsync flag set. Note the differences from the legacy
 # in-place flag set:
@@ -597,22 +620,24 @@ echo "  ✓ Upload complete"
 # ── Step 5: Wire release symlinks ─────────────────────────────────────
 echo "→ Step 5/8: Wiring release symlinks (per §Symlink contract)..."
 
-# Build the symlink-wiring on the remote side via a tiny inline script.
-# Targets are constructed from validated path components (LAYOUT_NAME
-# and ENV both pass tier-name validation; RELEASE_ID passes the regex)
-# so even though they're interpolated into a remote shell, no
-# operator-controlled metacharacter can land in the command line.
-remote_ssh "set -eu; \
-    rd=${RELEASE_DIR}; ddn=${LAYOUT_NAME}data; e=${ENV}; \
-    mkdir -p \"\$rd/user/config\" \"\$rd/user/env/\$e/config\"; \
-    for p in \"\$rd/user/accounts\" \"\$rd/user/data\" \"\$rd/user/config/security.yaml\" \"\$rd/user/env/\$e/config/security.yaml\" \"\$rd/logs\"; do \
-        if [ -e \"\$p\" ] && [ ! -L \"\$p\" ]; then rm -rf \"\$p\"; fi; \
-    done; \
-    ln -sfn \"../../../\$ddn/v0/user/accounts\" \"\$rd/user/accounts\"; \
-    ln -sfn \"../../../\$ddn/v0/user/data\" \"\$rd/user/data\"; \
-    ln -sfn \"../../../../\$ddn/v0/user/config/security.yaml\" \"\$rd/user/config/security.yaml\"; \
-    ln -sfn \"../../../../../../\$ddn/v0/user/env/\$e/config/security.yaml\" \"\$rd/user/env/\$e/config/security.yaml\"; \
-    ln -sfn \"../../\$ddn/logs\" \"\$rd/logs\""
+# Symlink-wiring on the remote side. Values flow as printf %q-quoted
+# remote-side env exports (rd, ddn, e); the body uses them via "$rd"
+# etc. so no operator-controlled metacharacter can land in the command
+# line.
+bv_remote_run '
+    mkdir -p "$rd/user/config" "$rd/user/env/$e/config"
+    for p in "$rd/user/accounts" "$rd/user/data" "$rd/user/config/security.yaml" "$rd/user/env/$e/config/security.yaml" "$rd/logs"; do
+        if [ -e "$p" ] && [ ! -L "$p" ]; then rm -rf "$p"; fi
+    done
+    ln -sfn "../../../$ddn/v0/user/accounts"                       "$rd/user/accounts"
+    ln -sfn "../../../$ddn/v0/user/data"                           "$rd/user/data"
+    ln -sfn "../../../../$ddn/v0/user/config/security.yaml"        "$rd/user/config/security.yaml"
+    ln -sfn "../../../../../../$ddn/v0/user/env/$e/config/security.yaml" "$rd/user/env/$e/config/security.yaml"
+    ln -sfn "../../$ddn/logs"                                      "$rd/logs"
+' \
+    rd="$RELEASE_DIR" \
+    ddn="${LAYOUT_NAME}data" \
+    e="$ENV"
 
 echo "  ✓ Symlinks wired"
 
@@ -657,7 +682,9 @@ echo "  ✓ release-meta.yaml (pre-swap) written"
 
 # ── Step 7: Cache clear (fail-loud; aborts BEFORE the swap) ───────────
 echo "→ Step 7/8: Clearing Grav cache in new release..."
-if ! remote_ssh "cd ${RELEASE_DIR} && php bin/grav cache --all"; then
+if ! bv_remote_run '
+    cd "$RELEASE_DIR" && php bin/grav cache --all
+' RELEASE_DIR="$RELEASE_DIR"; then
     echo ""
     echo "❌  Cache clear failed in ${RELEASE_DIR}." >&2
     echo "    Aborting BEFORE the docroot swap — the previous release stays live." >&2
@@ -686,7 +713,9 @@ SWAP_START_MS="$(_now_ms)"
 
 # Single ln -sfn invocation; no rm of the old symlink first (that
 # would open a race window). ln -sfn replaces atomically.
-remote_ssh "ln -sfn ${LAYOUT_NAME}-releases/${RELEASE_ID} ${DEPLOY_TARGET}"
+bv_remote_run 'ln -sfn "$TARGET_REL" "$DEPLOY_TARGET"' \
+    TARGET_REL="${LAYOUT_NAME}-releases/${RELEASE_ID}" \
+    DEPLOY_TARGET="$DEPLOY_TARGET"
 
 SWAP_END_MS="$(_now_ms)"
 SWAP_DURATION_MS=$(( SWAP_END_MS - SWAP_START_MS ))
@@ -761,33 +790,44 @@ echo "  ✓ Smoke probe matched (status=${PROBE_STATUS})"
 # never eligible. Inline-on-remote so no list of release ids needs to
 # be shuffled across the wire.
 KEEP_N="${BV_RELEASES_KEEP:-5}"
-remote_ssh "set -eu; \
-    rdir=${RELEASES_DIR}; \
-    cur=${RELEASE_ID}; prev=${PREV_RELEASE_ID:-__none__}; keep=${KEEP_N}; \
-    [ -d \"\$rdir\" ] || exit 0; \
-    cd \"\$rdir\"; \
-    all=\$(ls -1 | sort); \
-    total=\$(printf '%s\n' \"\$all\" | grep -c . || true); \
-    if [ \"\$total\" -le \"\$keep\" ]; then exit 0; fi; \
-    drop=\$((total - keep)); \
-    n=0; \
-    for rid in \$all; do \
-        [ \$n -ge \$drop ] && break; \
-        n=\$((n+1)); \
-        case \"\$rid\" in \
-            \"\$cur\"|\"\$prev\") continue ;; \
-        esac; \
-        case \"\$rid\" in \
-            *..*|*/*|-*) echo \"  skip (suspicious id): \$rid\"; continue ;; \
-        esac; \
-        if printf '%s' \"\$rid\" | grep -Eq '^[0-9]{8}T[0-9]{6}-[0-9a-f]{7,12}\$'; then \
-            rm -rf -- \"\$rid\"; \
-            echo \"  pruned old release: \$rid\"; \
-        else \
-            echo \"  skip (not a release id): \$rid\"; \
-        fi; \
-    done; \
-    echo '  data-version retention deferred to data-versioning spec'"
+bv_remote_run '
+    [ -d "$rdir" ] || exit 0
+    cd "$rdir"
+    all=$(ls -1 | sort)
+    total=$(printf "%s\n" "$all" | grep -c . || true)
+    if [ "$total" -le "$keep" ]; then exit 0; fi
+    drop=$((total - keep))
+    n=0
+    for rid in $all; do
+        [ "$n" -ge "$drop" ] && break
+        n=$((n+1))
+        case "$rid" in
+            "$cur"|"$prev") continue ;;
+        esac
+        case "$rid" in
+            migrate-bootstrap-*)
+                # Bootstrap dirs from migrate-to-atomic-layout.sh
+                # are intentionally outside the standard release-id
+                # regex; skip silently rather than warn on every prune.
+                continue
+                ;;
+        esac
+        case "$rid" in
+            *..*|*/*|-*) echo "  skip (suspicious id): $rid"; continue ;;
+        esac
+        if printf "%s" "$rid" | grep -Eq "^[0-9]{8}T[0-9]{6}-[0-9a-f]{7,12}$"; then
+            rm -rf -- "$rid"
+            echo "  pruned old release: $rid"
+        else
+            echo "  skip (not a release id): $rid"
+        fi
+    done
+    echo "  data-version retention deferred to data-versioning spec"
+' \
+    rdir="$RELEASES_DIR" \
+    cur="$RELEASE_ID" \
+    prev="${PREV_RELEASE_ID:-__none__}" \
+    keep="$KEEP_N"
 
 echo ""
 echo "  ✅  Atomic deploy complete!"

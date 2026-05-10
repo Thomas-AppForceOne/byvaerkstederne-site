@@ -177,13 +177,11 @@ fi
 
 RELEASES_DIR="${DEPLOY_DOCROOT_PARENT}/${LAYOUT_NAME}-releases"
 
-# Wrappers around remote vs local execution. Both honour the same
-# argument-quoting discipline: all variables are passed as separate,
-# double-quoted args; no eval.
-remote_ssh() {
-    sshpass -p "$DEPLOY_PASS" ssh -o StrictHostKeyChecking=no \
-        -p "$DEPLOY_PORT" "${DEPLOY_USER}@${DEPLOY_HOST}" "$@"
-}
+# Wrappers around remote vs local execution. The remote case dispatches
+# through bv_remote_run (in deploy/lib/atomic-release.sh) — values flow
+# as printf %q-quoted remote-side env exports, never via direct shell-
+# string interpolation. See the helper's docblock for the security
+# rationale.
 
 # read_remote_file <remote-path>  → echoes contents on stdout
 read_remote_file() {
@@ -191,7 +189,7 @@ read_remote_file() {
     if [ "$LOCAL_MODE" = "1" ]; then
         cat "$p"
     else
-        remote_ssh "cat ${p}"
+        bv_remote_run 'cat "$P"' P="$p"
     fi
 }
 
@@ -201,7 +199,7 @@ remote_test_d() {
     if [ "$LOCAL_MODE" = "1" ]; then
         [ -d "$p" ]
     else
-        remote_ssh "test -d ${p}"
+        bv_remote_run 'test -d "$P"' P="$p"
     fi
 }
 
@@ -211,7 +209,7 @@ remote_readlink_basename() {
     if [ "$LOCAL_MODE" = "1" ]; then
         basename "$(readlink "$p")"
     else
-        remote_ssh "basename \"\$(readlink ${p})\""
+        bv_remote_run 'basename "$(readlink "$P")"' P="$p"
     fi
 }
 
@@ -223,7 +221,9 @@ remote_atomic_swap() {
     if [ "$LOCAL_MODE" = "1" ]; then
         ln -sfn "${LAYOUT_NAME}-releases/${target_release_id}" "$DEPLOY_TARGET"
     else
-        remote_ssh "ln -sfn ${LAYOUT_NAME}-releases/${target_release_id} ${DEPLOY_TARGET}"
+        bv_remote_run 'ln -sfn "$TARGET_REL" "$DEPLOY_TARGET"' \
+            TARGET_REL="${LAYOUT_NAME}-releases/${target_release_id}" \
+            DEPLOY_TARGET="$DEPLOY_TARGET"
     fi
 }
 
@@ -272,7 +272,15 @@ if [ "$LOCAL_MODE" = "1" ]; then
         exit 1
     fi
 else
-    DOCROOT_KIND="$(remote_ssh "if [ -L ${DEPLOY_TARGET} ]; then echo symlink; elif [ -e ${DEPLOY_TARGET} ]; then echo other; else echo absent; fi")"
+    DOCROOT_KIND="$(bv_remote_run '
+        if [ -L "$DEPLOY_TARGET" ]; then
+            echo symlink
+        elif [ -e "$DEPLOY_TARGET" ]; then
+            echo other
+        else
+            echo absent
+        fi
+    ' DEPLOY_TARGET="$DEPLOY_TARGET")"
     if [ "$DOCROOT_KIND" != "symlink" ]; then
         echo "❌  Docroot ${DEPLOY_TARGET} is not a symlink (state: $DOCROOT_KIND)." >&2
         echo "    Tier is not in atomic layout. Migrate first (Sprint 3)." >&2
@@ -320,7 +328,7 @@ if [ "$LOCAL_MODE" = "1" ]; then
     fi
     cp "$CURRENT_META_PATH" "$META_TMP"
 else
-    if ! remote_ssh "test -f ${CURRENT_META_PATH}"; then
+    if ! bv_remote_run 'test -f "$P"' P="$CURRENT_META_PATH"; then
         echo "❌  release-meta.yaml not found at ${CURRENT_META_PATH}" >&2
         exit 1
     fi
@@ -391,14 +399,14 @@ if [ "$LOCAL_MODE" = "1" ]; then
 else
     # Remote mode: probe the three symlinks via ssh. Each `test -e`
     # follows the symlink, so a dangling target returns non-zero.
-    REMOTE_SYM_CHECK="$(remote_ssh "set -eu; \
-        rd=${PREV_RELEASE_DIR}; \
-        bad=''; \
-        for s in user/accounts user/data logs; do \
-            if [ ! -L \"\$rd/\$s\" ]; then bad=\"\$bad missing-link:\$s\"; continue; fi; \
-            if [ ! -e \"\$rd/\$s\" ]; then bad=\"\$bad dangling:\$s\"; fi; \
-        done; \
-        printf '%s' \"\$bad\"")"
+    REMOTE_SYM_CHECK="$(bv_remote_run '
+        bad=""
+        for s in user/accounts user/data logs; do
+            if [ ! -L "$rd/$s" ]; then bad="$bad missing-link:$s"; continue; fi
+            if [ ! -e "$rd/$s" ]; then bad="$bad dangling:$s"; fi
+        done
+        printf "%s" "$bad"
+    ' rd="$PREV_RELEASE_DIR")"
     if [ -n "$REMOTE_SYM_CHECK" ]; then
         echo "" >&2
         echo "❌  Previous release '${PREV_RELEASE_ID}' has dangling data symlinks:${REMOTE_SYM_CHECK}" >&2
@@ -460,8 +468,8 @@ else
     PROBE_TMP="$(mktemp -d)"
     # shellcheck disable=SC2064
     trap "rm -rf \"$PROBE_TMP\"" EXIT
-    if ! remote_ssh "cat ${PREV_RELEASE_DIR}/VERSION" > "$PROBE_TMP/VERSION" 2>/dev/null \
-       || ! remote_ssh "cat ${PREV_RELEASE_DIR}/BUILD" > "$PROBE_TMP/BUILD" 2>/dev/null; then
+    if ! bv_remote_run 'cat "$rd/VERSION"' rd="$PREV_RELEASE_DIR" > "$PROBE_TMP/VERSION" 2>/dev/null \
+       || ! bv_remote_run 'cat "$rd/BUILD"'   rd="$PREV_RELEASE_DIR" > "$PROBE_TMP/BUILD"   2>/dev/null; then
         echo "  ⚠️  Could not read VERSION/BUILD from previous release on remote — skipping probe." >&2
         PROBE_EXPECTED=""
     else
