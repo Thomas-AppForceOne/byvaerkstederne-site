@@ -28,6 +28,15 @@ export PATH="/opt/homebrew/bin:$PATH"
 # rolled-back release stays LIVE. The operator's next move is to roll
 # forward again, fix the bug, redeploy.
 #
+# Concurrency: SINGLE-OPERATOR ONLY. The rollback-log.yaml append is
+# unguarded — two simultaneous `rollback.sh <env>` invocations against
+# the same tier could interleave their audit rows, and (worse) the
+# `ln -sfn` swap is not serialised between operators. If the project
+# ever grows automated/scheduled rollbacks, wire `flock(1)` around the
+# log append AND a per-tier lockfile around the swap. Until then, the
+# operator-supervised contract (one human running one make-target at a
+# time) is the synchronisation primitive.
+#
 # Local-fixture mode (used by tests/deploy/rollback.sh):
 #   * BV_ROLLBACK_LOCAL_PARENT=<dir>  — operate against a local parent
 #                                       dir instead of an ssh remote.
@@ -59,6 +68,11 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 . "$SCRIPT_DIR/lib/atomic-release.sh"
 # shellcheck source=deploy/lib/banner.sh
 . "$SCRIPT_DIR/lib/banner.sh"
+
+# Require GNU coreutils for ms-resolution swap_duration_ms timing in
+# the rollback audit row. Fail loud BEFORE we touch any path. macOS
+# needs `brew install coreutils`.
+bv_require_ms_timing
 
 # =============================================================================
 # Step 0 — Closed-set env validation BEFORE any path concat
@@ -422,21 +436,13 @@ echo "  ✓ Previous release dir present, data symlinks resolve"
 
 echo "→ Step 4/5: Atomic swap of ${DEPLOY_TARGET} → ${LAYOUT_NAME}-releases/${PREV_RELEASE_ID}..."
 
-_now_ms() {
-    local n
-    if n="$(date +%s%N 2>/dev/null)" && [ "$n" != "$(date +%s)N" ] && [ "${n: -9}" != "N" ]; then
-        printf '%s\n' "$(( n / 1000000 ))"
-    else
-        printf '%s000\n' "$(date +%s)"
-    fi
-}
-SWAP_START_MS="$(_now_ms)"
+SWAP_START_MS="$(bv_now_ms)"
 
 # Single ln -sfn — no pre-rm of the docroot symlink. PREV_RELEASE_ID
 # has been regex-validated; LAYOUT_NAME is a fixed string per env.
 remote_atomic_swap "$PREV_RELEASE_ID"
 
-SWAP_END_MS="$(_now_ms)"
+SWAP_END_MS="$(bv_now_ms)"
 SWAP_DURATION_MS=$(( SWAP_END_MS - SWAP_START_MS ))
 [ "$SWAP_DURATION_MS" -lt 0 ] && SWAP_DURATION_MS=0
 ROLLED_BACK_AT_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

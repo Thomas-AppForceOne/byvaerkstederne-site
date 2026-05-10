@@ -62,8 +62,13 @@
 
 # shellcheck shell=bash
 
+# Single source of truth for the release-id regex. Consumed by
+# bv_validate_release_id and by inline-on-remote regex literals in
+# the deploy script (where bash variable expansion is awkward, the
+# hard-coded literal must match this exactly — keep them in sync).
+_BV_RELEASE_ID_REGEX_BARE='^[0-9]{8}T[0-9]{6}-[0-9a-f]{7,12}$'
 bv_release_id_regex() {
-    printf '^[0-9]{8}T[0-9]{6}-[0-9a-f]{7,12}$\n'
+    printf '%s\n' "$_BV_RELEASE_ID_REGEX_BARE"
 }
 
 # Closed-set check for the env arg. Returns 0 if valid, non-zero
@@ -99,7 +104,7 @@ bv_validate_release_id() {
             return 1
             ;;
     esac
-    if ! printf '%s' "$rid" | grep -Eq '^[0-9]{8}T[0-9]{6}-[0-9a-f]{7,12}$'; then
+    if ! printf '%s' "$rid" | grep -Eq "$_BV_RELEASE_ID_REGEX_BARE"; then
         echo "FATAL: release id '$rid' does not match expected shape <UTC-timestamp>-<git-sha-short>" >&2
         return 1
     fi
@@ -265,11 +270,13 @@ bv_wire_release_symlinks() {
         return 1
     fi
 
-    # The data dir's basename is <tier>data; the release dir's parent
-    # basename is <tier>-releases. Both live under the same parent.
-    local data_dir_name release_parent_name
+    # The data dir's basename is <tier>data; that's the only name we
+    # need for the relative-target construction below. (Earlier drafts
+    # also computed the release-parent basename as a sanity-check
+    # target, but it was never actually consumed — removed per PR-#17
+    # review finding 9.)
+    local data_dir_name
     data_dir_name="$(basename "$data_dir")"
-    release_parent_name="$(basename "$(dirname "$release_dir")")"
 
     # The five symlinks. Targets are written relative to the symlink's
     # *containing directory*, not the release-dir root.
@@ -319,12 +326,6 @@ bv_wire_release_symlinks() {
         "$release_dir/user/env/$env/config/security.yaml"
     ln -sfn "../../$data_dir_name/logs" \
         "$release_dir/logs"
-
-    # Suppress "release_parent_name unused" warning — it's there as a
-    # sanity assertion target for callers that want to verify the
-    # release dir is one below <tier>-releases/. Not strictly needed
-    # at runtime.
-    : "$release_parent_name"
 }
 
 # Write the basic-shape release-meta.yaml. Sprint 2 extends this to
@@ -523,32 +524,27 @@ bv_write_release_meta_yaml_full() {
     fi
 
     local meta="$release_dir/release-meta.yaml"
-    # _esc: escape backslashes and double-quotes so we can wrap a value
-    # in "..." safely without a YAML library.
-    _bv_yaml_quote_escape() {
-        printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
-    }
 
     {
         printf 'release_id: %s\n' "$release_id"
-        printf 'deployed_at: "%s"\n' "$(_bv_yaml_quote_escape "$deployed_at")"
-        printf 'deployed_by: "%s"\n' "$(_bv_yaml_quote_escape "$deployed_by")"
+        printf 'deployed_at: "%s"\n' "$(bv_yaml_quote_escape "$deployed_at")"
+        printf 'deployed_by: "%s"\n' "$(bv_yaml_quote_escape "$deployed_by")"
         printf 'deployed_from:\n'
-        printf '  host: "%s"\n'   "$(_bv_yaml_quote_escape "$host")"
-        printf '  cwd: "%s"\n'    "$(_bv_yaml_quote_escape "$cwd")"
-        printf '  branch: "%s"\n' "$(_bv_yaml_quote_escape "$branch")"
-        printf '  sha: "%s"\n'    "$(_bv_yaml_quote_escape "$sha")"
-        printf '  sha_short: "%s"\n' "$(_bv_yaml_quote_escape "$sha_short")"
+        printf '  host: "%s"\n'   "$(bv_yaml_quote_escape "$host")"
+        printf '  cwd: "%s"\n'    "$(bv_yaml_quote_escape "$cwd")"
+        printf '  branch: "%s"\n' "$(bv_yaml_quote_escape "$branch")"
+        printf '  sha: "%s"\n'    "$(bv_yaml_quote_escape "$sha")"
+        printf '  sha_short: "%s"\n' "$(bv_yaml_quote_escape "$sha_short")"
         printf '  is_dirty: %s\n' "$is_dirty"
-        printf 'code_version: "%s"\n' "$(_bv_yaml_quote_escape "$code_version")"
-        printf 'build: "%s"\n' "$(_bv_yaml_quote_escape "$build")"
-        printf 'data_version: "%s"\n' "$(_bv_yaml_quote_escape "$data_version")"
+        printf 'code_version: "%s"\n' "$(bv_yaml_quote_escape "$code_version")"
+        printf 'build: "%s"\n' "$(bv_yaml_quote_escape "$build")"
+        printf 'data_version: "%s"\n' "$(bv_yaml_quote_escape "$data_version")"
         if [ -n "$prev_release_id" ]; then
             printf 'previous_release: %s\n' "$prev_release_id"
         else
             printf 'previous_release: ""\n'
         fi
-        printf 'previous_data_version: "%s"\n' "$(_bv_yaml_quote_escape "$previous_data_version")"
+        printf 'previous_data_version: "%s"\n' "$(bv_yaml_quote_escape "$previous_data_version")"
     } > "$meta"
 }
 
@@ -596,17 +592,13 @@ bv_append_post_swap_meta() {
         return 1
     fi
 
-    _bv_yaml_quote_escape() {
-        printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
-    }
-
     {
-        printf 'swapped_at: "%s"\n' "$(_bv_yaml_quote_escape "$swapped_at")"
+        printf 'swapped_at: "%s"\n' "$(bv_yaml_quote_escape "$swapped_at")"
         printf 'swap_duration_ms: %s\n' "$swap_duration_ms"
         printf 'smoke_probe:\n'
-        printf '  url: "%s"\n' "$(_bv_yaml_quote_escape "$probe_url")"
+        printf '  url: "%s"\n' "$(bv_yaml_quote_escape "$probe_url")"
         printf '  status: %s\n' "$probe_status"
-        printf '  expected_version_substring: "%s"\n' "$(_bv_yaml_quote_escape "$probe_substring")"
+        printf '  expected_version_substring: "%s"\n' "$(bv_yaml_quote_escape "$probe_substring")"
         printf '  matched: %s\n' "$probe_matched"
     } >> "$meta"
 }
@@ -808,9 +800,6 @@ bv_append_rollback_log_row() {
     fi
 
     local log="$releases_dir/rollback-log.yaml"
-    _bv_yaml_quote_escape() {
-        printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
-    }
 
     # Header on first write, comment-only — no list start needed; YAML
     # accepts a stream of `- key:` rows directly.
@@ -823,15 +812,15 @@ bv_append_rollback_log_row() {
     fi
 
     {
-        printf -- '- rolled_back_at: "%s"\n' "$(_bv_yaml_quote_escape "$rolled_back_at")"
-        printf '  rolled_back_by: "%s"\n' "$(_bv_yaml_quote_escape "$rolled_back_by")"
+        printf -- '- rolled_back_at: "%s"\n' "$(bv_yaml_quote_escape "$rolled_back_at")"
+        printf '  rolled_back_by: "%s"\n' "$(bv_yaml_quote_escape "$rolled_back_by")"
         printf '  from_release: %s\n' "$from_release"
         printf '  to_release: %s\n' "$to_release"
         printf '  swap_duration_ms: %s\n' "$swap_duration_ms"
         printf '  smoke_probe:\n'
-        printf '    url: "%s"\n' "$(_bv_yaml_quote_escape "$probe_url")"
+        printf '    url: "%s"\n' "$(bv_yaml_quote_escape "$probe_url")"
         printf '    status: %s\n' "$probe_status"
-        printf '    expected_version_substring: "%s"\n' "$(_bv_yaml_quote_escape "$probe_substring")"
+        printf '    expected_version_substring: "%s"\n' "$(bv_yaml_quote_escape "$probe_substring")"
         printf '    matched: %s\n' "$probe_matched"
     } >> "$log"
 }
@@ -900,6 +889,34 @@ bv_read_previous_release_id() {
 # meta emission).
 bv_yaml_quote_escape() {
     printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
+
+# Probe for GNU coreutils' `date +%s%N` (ms resolution). Apple BSD
+# `date` only gives seconds — without coreutils a single-digit-second
+# swap would round to 0-999 ms with no useful precision, defeating the
+# purpose of swap_duration_ms in release-meta.yaml.
+#
+# Caller invokes this once at script top; if it exits non-zero we
+# abort BEFORE any state mutation. macOS needs `brew install coreutils`
+# (which installs gdate plus a `date` shim under /opt/homebrew/bin).
+bv_require_ms_timing() {
+    local probe
+    probe="$(date +%s%N 2>/dev/null || true)"
+    if [ -z "$probe" ] || [ "${probe: -1}" = "N" ]; then
+        echo "❌  ms-resolution timing requires GNU coreutils." >&2
+        echo "    On macOS:    brew install coreutils  (then re-run)" >&2
+        echo "    On Linux:    your packaged \`date\` already supports %N — check PATH." >&2
+        return 1
+    fi
+    return 0
+}
+
+# Echo current monotonic-ish time in milliseconds (epoch-based; not
+# strictly monotonic but good enough for swap_duration_ms accounting
+# over a single ln-sfn invocation). Trusts the caller has already run
+# bv_require_ms_timing and the probe succeeded.
+bv_now_ms() {
+    printf '%s\n' "$(( $(date +%s%N) / 1000000 ))"
 }
 
 # Dispatch a bash body to the remote configured by the caller's

@@ -40,6 +40,12 @@ GRAV_URL="https://github.com/getgrav/grav/releases/download/${GRAV_VERSION}/grav
 # shellcheck source=deploy/lib/atomic-release.sh
 . "$SCRIPT_DIR/lib/atomic-release.sh"
 
+# Require GNU coreutils for ms-resolution swap_duration_ms timing.
+# Fail loud BEFORE we touch any path or read .env.deploy. macOS needs
+# `brew install coreutils` (the script's PATH prepend brings in
+# /opt/homebrew/bin where it lives).
+bv_require_ms_timing
+
 # Argument parsing — accept --dry-run as a flag in any position; the
 # remaining positional arg is the env. DEPLOY_DRY_RUN=1 in the
 # environment is also honoured.
@@ -601,14 +607,18 @@ bv_remote_run 'mkdir -p "$RELEASE_DIR"' RELEASE_DIR="$RELEASE_DIR"
 #
 # RSYNC_FLAGS_ATOMIC is named differently from the landing-branch
 # RSYNC_FLAGS so the two flag sets are visibly distinct in code review.
+# The exclude list comes from bv_atomic_release_excludes (the lib's
+# single source of truth) so deploy.sh and the test fixture cannot
+# drift on what gets stripped.
 RSYNC_FLAGS_ATOMIC=(
     -avz --max-delete=0
-    --exclude='cache/'
-    --exclude='tmp/'
-    --exclude='backup/'
-    --exclude='logs/'
-    --exclude='.DS_Store'
 )
+# Extend with the lib's exclude list (single source of truth — see
+# bv_atomic_release_excludes in deploy/lib/atomic-release.sh).
+while IFS= read -r _excl_line; do
+    [ -n "$_excl_line" ] && RSYNC_FLAGS_ATOMIC+=("$_excl_line")
+done < <(bv_atomic_release_excludes)
+unset _excl_line
 
 sshpass -p "$DEPLOY_PASS" rsync "${RSYNC_FLAGS_ATOMIC[@]}" \
     -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
@@ -700,16 +710,7 @@ echo "→ Step 8/8: Atomic swap of ${DEPLOY_TARGET}..."
 # swap_duration_ms in release-meta.yaml. Falls back to 0 on systems
 # whose `date` doesn't support nanoseconds (some BSDs); we never let a
 # missing value spoil the deploy.
-_now_ms() {
-    local n
-    if n="$(date +%s%N 2>/dev/null)" && [ "$n" != "$(date +%s)N" ] && [ "${n: -9}" != "N" ]; then
-        printf '%s\n' "$(( n / 1000000 ))"
-    else
-        # macOS BSD date — second resolution only.
-        printf '%s000\n' "$(date +%s)"
-    fi
-}
-SWAP_START_MS="$(_now_ms)"
+SWAP_START_MS="$(bv_now_ms)"
 
 # Single ln -sfn invocation; no rm of the old symlink first (that
 # would open a race window). ln -sfn replaces atomically.
@@ -717,7 +718,7 @@ bv_remote_run 'ln -sfn "$TARGET_REL" "$DEPLOY_TARGET"' \
     TARGET_REL="${LAYOUT_NAME}-releases/${RELEASE_ID}" \
     DEPLOY_TARGET="$DEPLOY_TARGET"
 
-SWAP_END_MS="$(_now_ms)"
+SWAP_END_MS="$(bv_now_ms)"
 SWAP_DURATION_MS=$(( SWAP_END_MS - SWAP_START_MS ))
 [ "$SWAP_DURATION_MS" -lt 0 ] && SWAP_DURATION_MS=0
 SWAPPED_AT_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

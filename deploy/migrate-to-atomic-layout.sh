@@ -147,6 +147,13 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 # shellcheck source=deploy/lib/banner.sh
 . "$SCRIPT_DIR/lib/banner.sh"
 
+# Step-6 offline-window measurement requires GNU coreutils for
+# ms-resolution; the lib's bv_require_ms_timing fails loud here if it's
+# absent. Migration runs MUST have it: an unmeasured offline window
+# means the operator can't tell whether step 6 stayed inside the spec's
+# "single-digit-second" budget on the live tier.
+bv_require_ms_timing
+
 # =============================================================================
 # --help — operator-readable usage. Exits 0; writes to stdout.
 # =============================================================================
@@ -224,7 +231,7 @@ ENV_RAW="${1:-}"
 shift || true
 
 I_MEAN_IT=0
-EXTRA_REJECT=""
+EXTRA_REJECTS=()
 while [ $# -gt 0 ]; do
     case "$1" in
         --i-mean-it)
@@ -232,9 +239,11 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         *)
-            # Reject any other positional/flag value so an operator
-            # can't slip a path-traversal value past the parser.
-            EXTRA_REJECT="$1"
+            # Collect ALL unexpected positional/flag values (PR-#17
+            # review finding 6: report every offender, not just the
+            # last one). An operator who passes `dev foo bar` should
+            # see both `foo` and `bar` in the diagnostic.
+            EXTRA_REJECTS+=("$1")
             shift
             ;;
     esac
@@ -246,8 +255,11 @@ if [ -z "$ENV_RAW" ]; then
     exit 1
 fi
 
-if [ -n "$EXTRA_REJECT" ]; then
-    echo "❌  Unexpected argument: $(printf %q "$EXTRA_REJECT")" >&2
+if [ "${#EXTRA_REJECTS[@]}" -gt 0 ]; then
+    echo "❌  Unexpected argument(s):" >&2
+    for _r in "${EXTRA_REJECTS[@]}"; do
+        echo "      $(printf %q "$_r")" >&2
+    done
     echo "    Usage: $(basename "$0") <dev|test|staging|prod> [--i-mean-it]" >&2
     exit 1
 fi
@@ -701,24 +713,20 @@ fi
 # shape. Emit the meta inline using the same field set, in the same
 # order, with the same quoting discipline. Keep this in lock-step
 # with bv_write_release_meta_yaml_full's output.
-_yaml_quote() {
-    printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
-}
-
 META="$BOOTSTRAP_DIR/release-meta.yaml"
 {
     printf 'release_id: %s\n' "$BOOTSTRAP_ID"
-    printf 'deployed_at: "%s"\n' "$(_yaml_quote "$DEPLOYED_AT_ISO")"
-    printf 'deployed_by: "%s"\n' "$(_yaml_quote "$DEPLOYED_BY")"
+    printf 'deployed_at: "%s"\n' "$(bvbv_yaml_quote_escape_escape "$DEPLOYED_AT_ISO")"
+    printf 'deployed_by: "%s"\n' "$(bvbv_yaml_quote_escape_escape "$DEPLOYED_BY")"
     printf 'deployed_from:\n'
-    printf '  host: "%s"\n' "$(_yaml_quote "$HOST_NAME")"
-    printf '  cwd: "%s"\n' "$(_yaml_quote "$CWD_VAL")"
-    printf '  branch: "%s"\n' "$(_yaml_quote "$GIT_BRANCH")"
-    printf '  sha: "%s"\n' "$(_yaml_quote "$GIT_SHA")"
-    printf '  sha_short: "%s"\n' "$(_yaml_quote "$GIT_SHA_SHORT")"
+    printf '  host: "%s"\n' "$(bvbv_yaml_quote_escape_escape "$HOST_NAME")"
+    printf '  cwd: "%s"\n' "$(bvbv_yaml_quote_escape_escape "$CWD_VAL")"
+    printf '  branch: "%s"\n' "$(bvbv_yaml_quote_escape_escape "$GIT_BRANCH")"
+    printf '  sha: "%s"\n' "$(bvbv_yaml_quote_escape_escape "$GIT_SHA")"
+    printf '  sha_short: "%s"\n' "$(bvbv_yaml_quote_escape_escape "$GIT_SHA_SHORT")"
     printf '  is_dirty: %s\n' "$IS_DIRTY"
-    printf 'code_version: "%s"\n' "$(_yaml_quote "$CODE_VERSION")"
-    printf 'build: "%s"\n' "$(_yaml_quote "$CODE_BUILD")"
+    printf 'code_version: "%s"\n' "$(bvbv_yaml_quote_escape_escape "$CODE_VERSION")"
+    printf 'build: "%s"\n' "$(bvbv_yaml_quote_escape_escape "$CODE_BUILD")"
     printf 'data_version: "%s"\n' "v0"
     # Bootstrap release has no predecessor — both empty per contract.
     printf 'previous_release: ""\n'
@@ -746,16 +754,9 @@ echo "  ✓ release-meta.yaml written at ${META}."
 echo "→ Step 6/7: Replacing ${DOCROOT}/ with a symlink (offline window — single rmdir + ln -sfn)..."
 
 # Step-6 timing markers — the test fixture grep's these to bound the
-# offline window.
-_now_ms() {
-    local n
-    if n="$(date +%s%N 2>/dev/null)" && [ "$n" != "$(date +%s)N" ] && [ "${n: -9}" != "N" ]; then
-        printf '%s\n' "$(( n / 1000000 ))"
-    else
-        printf '%s000\n' "$(date +%s)"
-    fi
-}
-STEP6_START_MS="$(_now_ms)"
+# offline window. The shared lib helper bv_now_ms trusts the caller has
+# already passed bv_require_ms_timing (above).
+STEP6_START_MS="$(bv_now_ms)"
 echo "  ⏱  step 6 start: ${STEP6_START_MS} ms (epoch)"
 if [ -n "${BV_MIGRATE_STEP_6_TIMESTAMP_FILE:-}" ]; then
     printf 'start %s\n' "$STEP6_START_MS" > "$BV_MIGRATE_STEP_6_TIMESTAMP_FILE"
@@ -779,7 +780,7 @@ fi
 # docroot stays portable.
 bv_atomic_swap_symlink "$BOOTSTRAP_DIR" "$DOCROOT"
 
-STEP6_END_MS="$(_now_ms)"
+STEP6_END_MS="$(bv_now_ms)"
 STEP6_DURATION_MS=$(( STEP6_END_MS - STEP6_START_MS ))
 [ "$STEP6_DURATION_MS" -lt 0 ] && STEP6_DURATION_MS=0
 
@@ -849,9 +850,9 @@ fi
     printf 'swapped_at: "%s"\n' "$SWAPPED_AT_ISO"
     printf 'swap_duration_ms: %s\n' "$STEP6_DURATION_MS"
     printf 'smoke_probe:\n'
-    printf '  url: "%s"\n' "$(_yaml_quote "$PROBE_URL")"
+    printf '  url: "%s"\n' "$(bv_yaml_quote_escape "$PROBE_URL")"
     printf '  status: %s\n' "$PROBE_STATUS"
-    printf '  expected_version_substring: "%s"\n' "$(_yaml_quote "$PROBE_EXPECTED")"
+    printf '  expected_version_substring: "%s"\n' "$(bv_yaml_quote_escape "$PROBE_EXPECTED")"
     printf '  matched: %s\n' "$PROBE_MATCHED"
 } >> "$META"
 
