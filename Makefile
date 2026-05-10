@@ -208,7 +208,8 @@ test-headed: ## Run tests with browser visible (for debugging)
 	echo "Running tests against http://127.0.0.1:$$PORT (headed)"; \
 	GRAV_PORT=$$PORT npx playwright test tests/anonymous.spec.js --headed
 
-test-deploy: ## Run deploy-script regression tests (atomic-layout + rollback + migration probes)
+test-deploy: ## Run deploy-script regression tests (atomic-layout + rollback + migration probes + remote_ssh lint)
+	@bash tests/deploy/lint-remote-ssh.sh
 	@bash tests/deploy/excludes-preserve-live-state.sh
 	@bash tests/deploy/atomic-layout.sh
 	@bash tests/deploy/rollback.sh

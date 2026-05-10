@@ -156,10 +156,13 @@ else
     check "deploy.sh calls bv_validate_release_id" fail
 fi
 # The atomic swap is implemented as a single ln -sfn; no pre-rm of
-# the old symlink (that would open a race window).
+# the old symlink (that would open a race window). Several historical
+# forms are accepted — the property under test is "ln -sfn for the
+# swap", not the exact string the deploy script uses to write it.
 if grep -q "ln -sfn ${LAYOUT_NAME:-\$LAYOUT_NAME}-releases/" "$DEPLOY_SH" \
    || grep -Eq 'ln -sfn[[:space:]]+\$\{?LAYOUT_NAME\}?-releases/\$\{?RELEASE_ID' "$DEPLOY_SH" \
-   || grep -q 'ln -sfn ${LAYOUT_NAME}-releases/${RELEASE_ID} ${DEPLOY_TARGET}' "$DEPLOY_SH"; then
+   || grep -q 'ln -sfn ${LAYOUT_NAME}-releases/${RELEASE_ID} ${DEPLOY_TARGET}' "$DEPLOY_SH" \
+   || grep -Eq 'ln -sfn[[:space:]]+"\$TARGET_REL"[[:space:]]+"\$DEPLOY_TARGET"' "$DEPLOY_SH"; then
     check "deploy.sh swap uses ln -sfn (atomic)" ok
 else
     check "deploy.sh swap uses ln -sfn (atomic)" fail
@@ -571,13 +574,17 @@ fi
 # Verify deploy.sh implements the abort-before-swap discipline at
 # source level: the cache-clear `exit 1` must come BEFORE the line
 # that performs the ln -sfn swap of the docroot.
-swap_ln_line="$(grep -n 'ln -sfn ${LAYOUT_NAME}-releases/${RELEASE_ID} ${DEPLOY_TARGET}' "$DEPLOY_SH" | head -1 | cut -d: -f1)"
+swap_ln_line="$(grep -n 'ln -sfn ${LAYOUT_NAME}-releases/${RELEASE_ID} ${DEPLOY_TARGET}\|ln -sfn "\$TARGET_REL" "\$DEPLOY_TARGET"' "$DEPLOY_SH" | head -1 | cut -d: -f1)"
 cache_exit_line="$(awk '/Cache clear failed/,/exit 1/' "$DEPLOY_SH" | grep -n 'exit 1' | head -1 | cut -d: -f1)"
 # We can't directly compare the two greps' line numbers (different
-# bases), so use a single-pass awk to find both labels.
+# bases), so use a single-pass awk to find both labels. Accept either
+# the original literal-interpolation form OR the post-PR-#17 review
+# bv_remote_run form (template-with-quoted-vars). Property under test
+# is "ln -sfn for the swap"; the exact source line is not.
 read -r CACHE_LINE SWAP_LINE < <(awk '
     /Cache clear failed/ && !c { c=NR }
     /ln -sfn \$\{LAYOUT_NAME\}-releases\/\$\{RELEASE_ID\} \$\{DEPLOY_TARGET\}/ && !s { s=NR }
+    /ln -sfn "\$TARGET_REL" "\$DEPLOY_TARGET"/ && !s { s=NR }
     END { print c, s }
 ' "$DEPLOY_SH")
 if [ -n "$CACHE_LINE" ] && [ -n "$SWAP_LINE" ] && [ "$CACHE_LINE" -lt "$SWAP_LINE" ]; then

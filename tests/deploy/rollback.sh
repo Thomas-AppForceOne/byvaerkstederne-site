@@ -890,6 +890,7 @@ fi
 # line and compare ordering.
 read -r SWAP_LINE PROBE_EXIT_LINE < <(awk '
     /ln -sfn \$\{LAYOUT_NAME\}-releases\/\$\{RELEASE_ID\} \$\{DEPLOY_TARGET\}/ && !s { s=NR }
+    /ln -sfn "\$TARGET_REL" "\$DEPLOY_TARGET"/ && !s { s=NR }
     /Smoke probe FAILED/ && !p { p=NR }
     END { print s, p }
 ' "$DEPLOY_SH")
@@ -903,6 +904,7 @@ fi
 read -r CACHE_LINE SWAP_LINE2 < <(awk '
     /Cache clear failed/ && !c { c=NR }
     /ln -sfn \$\{LAYOUT_NAME\}-releases\/\$\{RELEASE_ID\} \$\{DEPLOY_TARGET\}/ && !s { s=NR }
+    /ln -sfn "\$TARGET_REL" "\$DEPLOY_TARGET"/ && !s { s=NR }
     END { print c, s }
 ' "$DEPLOY_SH")
 if [ -n "$CACHE_LINE" ] && [ -n "$SWAP_LINE2" ] && [ "$CACHE_LINE" -lt "$SWAP_LINE2" ]; then
