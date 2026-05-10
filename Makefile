@@ -208,10 +208,26 @@ test-headed: ## Run tests with browser visible (for debugging)
 	echo "Running tests against http://127.0.0.1:$$PORT (headed)"; \
 	GRAV_PORT=$$PORT npx playwright test tests/anonymous.spec.js --headed
 
+add-age-key: ## Generate an age keypair, store private in Keychain, append public to deploy/age-recipients.txt (NAME=<label>)
+	@if [ -z "$(NAME)" ]; then echo "❌  Usage: make add-age-key NAME=<label>"; exit 1; fi
+	@./deploy/manage-age-keys.sh generate $(NAME)
+
+list-age-keys: ## Show recipients in deploy/age-recipients.txt + which ones have a private key in your local Keychain
+	@./deploy/manage-age-keys.sh list
+
+retire-age-key: ## Remove an age key from deploy/age-recipients.txt (NAME=<label> [DELETE_KEYCHAIN=1])
+	@if [ -z "$(NAME)" ]; then echo "❌  Usage: make retire-age-key NAME=<label> [DELETE_KEYCHAIN=1]"; exit 1; fi
+	@if [ "$(DELETE_KEYCHAIN)" = "1" ]; then \
+		./deploy/manage-age-keys.sh retire $(NAME) --delete-keychain; \
+	else \
+		./deploy/manage-age-keys.sh retire $(NAME); \
+	fi
+
 test-deploy: ## Run deploy-script regression tests (lint + unit + atomic-layout + rollback + migration probes)
 	@bash tests/deploy/lint-remote-ssh.sh
 	@bash tests/deploy/unit-remote-run.sh
 	@bash tests/deploy/unit-ssh-auth.sh
+	@bash tests/deploy/unit-age-keychain.sh
 	@bash tests/deploy/excludes-preserve-live-state.sh
 	@bash tests/deploy/atomic-layout.sh
 	@bash tests/deploy/rollback.sh

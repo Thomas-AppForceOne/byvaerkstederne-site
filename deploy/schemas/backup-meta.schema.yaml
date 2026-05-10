@@ -61,3 +61,16 @@ properties:
     type: "string"
     description: "Optional --tag label, when present."
     pattern: "^[A-Za-z0-9._-]{1,64}$"
+  encrypted_to:
+    type: "array"
+    description: >
+      List of age public keys (recipients) that this archive was
+      encrypted to. Restore.sh reads this before attempting decrypt so
+      the operator can cross-reference against `manage-age-keys.sh
+      list` and identify which Keychain item would unlock the archive.
+      Cap of 5 enforced by deploy/backup.sh at backup time.
+    minItems: 1
+    maxItems: 5
+    items:
+      type: "string"
+      pattern: "^age1[a-z0-9]+$"

@@ -123,6 +123,57 @@ env var is unset, so a one-off CI override via `DEPLOY_PASS=...` still
 takes precedence. The unit test
 (`tests/deploy/unit-ssh-auth.sh`) covers both code paths.
 
+### Age key management — backup encryption / decryption
+
+Backups are encrypted with [`age`](https://age-encryption.org). The
+project uses a multi-recipient model:
+
+- **Public keys** live in `deploy/age-recipients.txt`, committed to
+  the repo. Anyone can read them; reviewers gate "who is allowed to
+  decrypt our backups" via PR review.
+- **Private keys** live in each operator's macOS Keychain as items
+  named `bv-age-identity-<label>`. `restore.sh` walks every such item
+  at decrypt time and tries each as the identity. The first match
+  wins. If none decrypt, falls back to `AGE_IDENTITY_FILE` env var.
+- **Cap of 5 active recipients** enforced by `backup.sh` and the
+  `manage-age-keys.sh generate` command.
+- **Per-backup audit trail**: `backup-meta.yaml` records
+  `encrypted_to: [<pubkey-1>, <pubkey-2>, ...]` listing every
+  recipient at backup time. `restore.sh` reads this before decrypt to
+  tell the operator which keys would work.
+
+Operator setup (once per machine):
+
+```bash
+# Generate your first age keypair, store private in Keychain,
+# append public to deploy/age-recipients.txt. Pick any label
+# unique to you (your first name works).
+make add-age-key NAME=thomas
+
+# Or directly:
+./deploy/manage-age-keys.sh generate thomas
+```
+
+The command:
+1. Generates a fresh keypair via `age-keygen`.
+2. Stores the **identity file** (public + private) in macOS Keychain
+   as `bv-age-identity-thomas`. The identity never touches disk.
+3. Appends the public key + a `# bv-age-identity-thomas (added …)`
+   marker line to `deploy/age-recipients.txt` for review and commit.
+
+Inspect / manage:
+
+```bash
+make list-age-keys           # show recipients; mark which ones YOU hold
+make retire-age-key NAME=alice                # remove from age-recipients.txt
+make retire-age-key NAME=alice DELETE_KEYCHAIN=1   # also remove from Keychain
+```
+
+A retired key remains decryptable for old backups as long as the
+private key is still held by some operator. Truly destroying the
+ability to decrypt requires every holder to also `retire` with
+`DELETE_KEYCHAIN=1`.
+
 ### Backup tooling environment variables
 
 Configuration variables for `deploy/backup.sh` and `deploy/restore.sh`.
@@ -141,7 +192,7 @@ The standard ones live in `.env.deploy` (gitignored, see
 | `DEPLOY_PASS_KEYCHAIN` | macOS Keychain item name for the staging/test/dev password. Same shape as `DEPLOY_PROD_PASS_KEYCHAIN`. |
 | `BACKUP_S3_BUCKET`, `BACKUP_S3_ENDPOINT`, `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` | Managed-storage credentials. Either these or `BACKUP_LOCAL_STORE_DIR` must be set. |
 | `BACKUP_LOCAL_STORE_DIR` | Directory acting as managed storage (used for testing and when an S3 bucket is overkill). Mutually exclusive with the S3 backend; if both are set, the local store wins. |
-| `AGE_IDENTITY_FILE` | Absolute path to the operator's age private key (kept in a password manager / hardware key, never committed). Required for any `restore.sh` invocation that decrypts. |
+| `AGE_IDENTITY_FILE` | Absolute path to the operator's age private key. **Optional** — by default, `restore.sh` walks every `bv-age-identity-*` item in your macOS Keychain and tries each as the decrypt identity. Set this env-var only as a fallback for CI / Linux operators / one-off overrides. See "Age key management" below for the recommended Keychain workflow. |
 
 **Disaster-recovery gates** (`deploy/restore.sh` only):
 

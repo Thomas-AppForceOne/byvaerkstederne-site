@@ -185,6 +185,12 @@ fi
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$REPO_ROOT/deploy/lib/ssh-auth.sh"
 
+# age-identity helpers — looks up Keychain items bv-age-identity-*
+# at decrypt time. Falls back to AGE_IDENTITY_FILE if no Keychain
+# item decrypts.
+# shellcheck source=deploy/lib/age-keychain.sh
+. "$REPO_ROOT/deploy/lib/age-keychain.sh"
+
 # ──────────────────────────────────────────────────────────────────────
 # Storage layer abstraction. Same shape as backup.sh: prefer
 # BACKUP_LOCAL_STORE_DIR, then S3, otherwise fall back to local
@@ -324,17 +330,39 @@ decrypt_and_unpack() {
     tmp_tar="$tmp_dir/archive.tar.gz"
     trap 'rm -rf "$tmp_dir"' RETURN
 
-    if [ -n "$identity" ] && [ -f "$identity" ]; then
+    # Decryption strategy:
+    #   1. macOS Keychain: walk every bv-age-identity-* item and try
+    #      each as the identity. First one that decrypts wins. This
+    #      is the default operator path.
+    #   2. AGE_IDENTITY_FILE env-var: fall back to a file-based key
+    #      for CI / Linux operators / one-off overrides.
+    # If neither path produces plaintext, fail loud with a diagnostic
+    # naming the recipients in backup-meta.yaml (which the operator
+    # can cross-reference against `manage-age-keys.sh list` to find
+    # which key would have worked).
+    if bv_age_keychain_try_decrypt "$enc_archive" "$tmp_tar" 2>/dev/null; then
+        :   # decrypted via Keychain identity
+    elif [ -n "$identity" ] && [ -f "$identity" ]; then
         age -d -i "$identity" -o "$tmp_tar" "$enc_archive" \
             || die "age decryption failed (identity: $identity)" 3
     else
-        # Without an identity file, age will prompt — which violates
-        # our non-interactive contract. We fail loud instead, with a
-        # specific message.
-        if [ -z "${AGE_IDENTITY_FILE:-}" ]; then
-            die "AGE_IDENTITY_FILE not set (decryption needs the operator's age private key)" 1
+        # Diagnose. If recipients file is readable and we can
+        # extract its `age1...` lines, surface them so the operator
+        # can compare against their Keychain inventory.
+        local recipients_hint=""
+        local rf
+        rf="$(bv_age_recipients_file 2>/dev/null || true)"
+        if [ -f "$rf" ]; then
+            local first_pubkey
+            first_pubkey="$(grep -E '^age1[a-z0-9]+$' "$rf" | head -1 || true)"
+            if [ -n "$first_pubkey" ]; then
+                recipients_hint=" (the archive was encrypted to recipients in $rf — run \`./deploy/manage-age-keys.sh list\` to see which keys you hold)"
+            fi
         fi
-        die "age identity file not found: $identity" 1
+        if [ -z "${AGE_IDENTITY_FILE:-}" ]; then
+            die "No matching age identity available — neither macOS Keychain (bv-age-identity-*) nor AGE_IDENTITY_FILE.${recipients_hint}" 1
+        fi
+        die "age identity file not found: $identity${recipients_hint}" 1
     fi
 
     tar -xzf "$tmp_tar" -C "$target" \

@@ -159,6 +159,20 @@ if ! grep -E '^age1[0-9a-z]+$' "$RECIPIENTS_FILE" >/dev/null 2>&1; then
     die "No valid age recipient (line starting with age1...) in $RECIPIENTS_FILE" 1
 fi
 
+# Enforce the cap: 1..BV_AGE_RECIPIENTS_CAP active recipients.
+# Source the helper just for BV_AGE_RECIPIENTS_CAP and the count fn;
+# helper is also used by restore.sh for Keychain identities.
+# shellcheck source=deploy/lib/age-keychain.sh
+. "$SCRIPT_DIR/lib/age-keychain.sh"
+BV_AGE_RECIPIENTS_FILE="$RECIPIENTS_FILE"   # tell the helper which file
+RECIPIENT_COUNT="$(bv_age_recipients_count)"
+if [ "$RECIPIENT_COUNT" -lt 1 ]; then
+    die "No active recipients in $RECIPIENTS_FILE (need at least 1)" 1
+fi
+if [ "$RECIPIENT_COUNT" -gt "$BV_AGE_RECIPIENTS_CAP" ]; then
+    die "Recipients file has $RECIPIENT_COUNT keys (cap: $BV_AGE_RECIPIENTS_CAP). Retire one with \`./deploy/manage-age-keys.sh retire <label>\`." 1
+fi
+
 # ──────────────────────────────────────────────────────────────────────
 # Source environment file (gitignored). Only sourced if it exists —
 # unit tests run without it and inject env vars directly. We avoid
@@ -562,6 +576,14 @@ META_FILE="$STAGE_DIR/backup-meta.yaml"
     if [ -n "$TAG" ]; then
         printf 'tag: "%s"\n' "$TAG"
     fi
+    # encrypted_to: list every age public-key recipient at backup
+    # time. Restore.sh reads this BEFORE decrypt so the operator can
+    # cross-reference against `manage-age-keys.sh list` to find
+    # which Keychain item would unlock the archive.
+    printf 'encrypted_to:\n'
+    grep -E '^age1[a-z0-9]+$' "$RECIPIENTS_FILE" | while IFS= read -r _pk; do
+        printf '  - "%s"\n' "$_pk"
+    done
 } > "$META_FILE"
 
 # ──────────────────────────────────────────────────────────────────────
