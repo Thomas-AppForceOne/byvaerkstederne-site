@@ -84,15 +84,38 @@ bv_age_keychain_known_labels() {
 # bv-age-identity-<label>. Echoes the multi-line content on stdout.
 # Returns 0 on success; non-zero (and empty stdout) if the item is
 # not present.
+#
+# macOS quirk: when the stored password contains non-printable
+# bytes (e.g. embedded newlines, which an age identity file has),
+# `security -w` returns the content as a HEX STRING instead of raw
+# text. Detect that case and decode via `xxd -r -p`. Without this
+# decode, every read of a multi-line identity would surface as a
+# blob of hex digits, which broke `manage-age-keys.sh list` and
+# `restore.sh`'s Keychain-walk path against real macOS Keychains
+# (the bug surfaced during PR #17 Tier 4a real-tier exercise; the
+# unit test stub didn't replicate the hex-encoding quirk so the
+# bug landed on the real macOS path only).
 bv_age_keychain_get_identity() {
     local label="$1"
     [ -n "$label" ] || { echo "FATAL: bv_age_keychain_get_identity requires a label" >&2; return 1; }
     bv_age_keychain_available || return 1
-    security find-generic-password \
-        -a "${USER:-}" \
-        -s "${BV_AGE_KEYCHAIN_PREFIX}${label}" \
-        -w \
-        2>/dev/null
+    local raw
+    raw="$(security find-generic-password \
+                  -a "${USER:-}" \
+                  -s "${BV_AGE_KEYCHAIN_PREFIX}${label}" \
+                  -w \
+                  2>/dev/null)" || return 1
+    [ -n "$raw" ] || return 1
+    # Hex detection: even-length string of [0-9a-fA-F] only.
+    # Real age-identity content always contains spaces, '#', ':',
+    # and dashes — never all-hex. So an all-hex output IS macOS's
+    # encoded form and must be decoded.
+    if [ $((${#raw} % 2)) -eq 0 ] && \
+       [[ "$raw" =~ ^[0-9a-fA-F]+$ ]]; then
+        printf '%s' "$raw" | xxd -r -p
+    else
+        printf '%s' "$raw"
+    fi
 }
 
 # Extract the public-key line (`age1...`) from a Keychain item's

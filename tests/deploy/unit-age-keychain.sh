@@ -91,7 +91,23 @@ case "$mode" in
             exit 44
         fi
         b64="${line#*	}"
-        printf '%s' "$b64" | base64 -d 2>/dev/null
+        # Real macOS `security -w` outputs HEX when the stored value
+        # contains non-printable bytes (notably newlines). Mirror
+        # that quirk so the unit test surfaces decoding bugs that
+        # would only show up against a real Keychain otherwise. The
+        # PR-#17 Tier 4a real-tier exercise found a hex-decode bug
+        # that the previous (raw-output) stub failed to catch.
+        decoded="$(printf '%s' "$b64" | base64 -d 2>/dev/null)"
+        case "$decoded" in
+            *$'\n'*|*$'\t'*)
+                # Multi-line / non-printable: emit hex.
+                printf '%s' "$decoded" | xxd -p | tr -d '\n'
+                ;;
+            *)
+                # Single-line printable: emit raw (real macOS does too).
+                printf '%s' "$decoded"
+                ;;
+        esac
         exit 0
         ;;
     delete-generic-password)

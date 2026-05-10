@@ -100,10 +100,13 @@ cmd_generate() {
 
     # Generate keypair into a tempfile, then store in Keychain. We
     # never write the identity to a persistent file on disk — it goes
-    # straight from age-keygen to Keychain.
+    # straight from age-keygen to Keychain. Use a function-scope
+    # RETURN trap (NOT script-scope EXIT) so cleanup fires while
+    # tmp_dir is still in scope under set -u.
     local tmp_dir tmp_identity
     tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/bv-age-gen.XXXXXXXX")"
-    trap 'rm -rf "$tmp_dir"' EXIT
+    # shellcheck disable=SC2064
+    trap "rm -rf '$tmp_dir' 2>/dev/null || true" RETURN
     tmp_identity="$tmp_dir/identity.txt"
 
     age-keygen -o "$tmp_identity" 2>"$tmp_dir/keygen.stderr"

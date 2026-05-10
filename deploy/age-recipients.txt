@@ -1,25 +1,6 @@
-# deploy/age-recipients.txt
+# Byværkstederne age recipients — committed; per-operator
+# private keys live in macOS Keychain.
 #
-# Public keys that can decrypt backups produced by deploy/backup.sh.
-# One age recipient per line. Lines starting with `#` and blank lines
-# are ignored.
-#
-# Recipient rotation is a reviewable PR — adding or removing a line
-# here is the one place that controls who can read backups.
-#
-# Decryption keys live in the operator's password manager / hardware
-# key, NEVER in this repo.
-#
-# To generate a keypair:
-#   age-keygen -o ~/.config/age/byvaerksted.key
-#   # The public key prints to stderr — paste it below.
-#
-# Replace the placeholder below with at least one real recipient
-# before producing a real backup. The placeholder key below is a
-# well-known test recipient (its private key is also published with
-# the age project for documentation purposes); rotate it out on the
-# first real run. The script refuses to run unless at least one
-# non-comment age1... line is present.
 
-# operator: thomas@appforceone.dk (placeholder — rotate before first prod backup)
-age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
+# bv-age-identity-thomas   (added 2026-05-10T14:37Z by taa@AppForceOne-Macbook-Pro)
+age19qqsf6gkq8a6nckr268043avsdvry6qewrqdavs89ezq50lw4vzq6kcmwd
