@@ -178,6 +178,19 @@ if [ "$LOCAL_MODE" = "0" ]; then
     # shellcheck disable=SC1090
     source "$ENV_FILE"
 
+    # Resolve the SSH password via env-var or macOS Keychain
+    # (DEPLOY_PASS_KEYCHAIN / DEPLOY_PROD_PASS_KEYCHAIN). Same shape
+    # as deploy.sh — keeps bv_remote_run's DEPLOY_PASS check happy
+    # without forcing the operator to leave plaintext in .env.deploy.
+    # shellcheck source=deploy/lib/ssh-auth.sh
+    . "$SCRIPT_DIR/lib/ssh-auth.sh"
+    TIER="$ENV"
+    if [ "$ENV" = "prod" ]; then
+        DEPLOY_PROD_PASS="$(bv_resolve_ssh_password)"
+    else
+        DEPLOY_PASS="$(bv_resolve_ssh_password)"
+    fi
+
     if [ "$ENV" = "prod" ]; then
         : "${DEPLOY_PROD_HOST:?prod rollback requires DEPLOY_PROD_HOST in .env.deploy}"
         : "${DEPLOY_PROD_USER:?prod rollback requires DEPLOY_PROD_USER in .env.deploy}"

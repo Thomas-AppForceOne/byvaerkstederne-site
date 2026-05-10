@@ -135,6 +135,22 @@ if [ "$DRY_RUN" != "1" ]; then
     fi
     # shellcheck disable=SC1090
     source "$ENV_FILE"
+
+    # Resolve the SSH password — env var DEPLOY_PASS (or DEPLOY_PROD_PASS
+    # for prod), or DEPLOY_PASS_KEYCHAIN / DEPLOY_PROD_PASS_KEYCHAIN
+    # holding the macOS Keychain item name. backup.sh and restore.sh
+    # already go through bv_ssh_cmd (lib/ssh-auth.sh) which supports
+    # Keychain; bv_remote_run (lib/atomic-release.sh) reads DEPLOY_PASS
+    # directly. Resolve once here into the legacy env var so both code
+    # paths see a populated value.
+    # shellcheck source=deploy/lib/ssh-auth.sh
+    . "$SCRIPT_DIR/lib/ssh-auth.sh"
+    TIER="$ENV"
+    if [ "$ENV" = "prod" ]; then
+        DEPLOY_PROD_PASS="$(bv_resolve_ssh_password)"
+    else
+        DEPLOY_PASS="$(bv_resolve_ssh_password)"
+    fi
 fi
 
 # Production lives on a separate hosting account; gate prod behind its
@@ -142,7 +158,7 @@ fi
 if [ "$DRY_RUN" != "1" ] && [ "$ENV" = "prod" ]; then
     : "${DEPLOY_PROD_HOST:?prod deploy requires DEPLOY_PROD_HOST in .env.deploy — production is on a separate hosting account from staging/test/dev. Populate DEPLOY_PROD_HOST/USER/PASS/PORT/PATH there.}"
     : "${DEPLOY_PROD_USER:?prod deploy requires DEPLOY_PROD_USER in .env.deploy}"
-    : "${DEPLOY_PROD_PASS:?prod deploy requires DEPLOY_PROD_PASS in .env.deploy}"
+    : "${DEPLOY_PROD_PASS:?prod deploy requires DEPLOY_PROD_PASS in .env.deploy or DEPLOY_PROD_PASS_KEYCHAIN naming the Keychain item}"
     : "${DEPLOY_PROD_PATH:?prod deploy requires DEPLOY_PROD_PATH in .env.deploy}"
     DEPLOY_HOST="$DEPLOY_PROD_HOST"
     DEPLOY_USER="$DEPLOY_PROD_USER"
@@ -575,16 +591,19 @@ case "$DOCROOT_STATE" in
 esac
 
 # 3e. bootstrap <tier>data/v0/ on first run.
+# Remote env var is named DEPLOY_ENV, not ENV — bv_remote_run's denylist
+# forbids ENV (POSIX bash reads its rc from $ENV; setting it on the
+# remote side is a footgun).
 bv_remote_run '
     mkdir -p "$DATA/v0/user/accounts" \
              "$DATA/v0/user/data" \
              "$DATA/v0/user/config" \
-             "$DATA/v0/user/env/$ENV/config" \
+             "$DATA/v0/user/env/$DEPLOY_ENV/config" \
              "$DATA/logs"
     if [ ! -e "$DATA/current" ] || [ -L "$DATA/current" ]; then
         ln -sfn v0 "$DATA/current"
     fi
-' DATA="$DATA_DIR" ENV="$ENV"
+' DATA="$DATA_DIR" DEPLOY_ENV="$ENV"
 
 # 3f. read previous release id (target of existing <tier> symlink), if any.
 PREV_RELEASE_ID=""
@@ -640,6 +659,20 @@ sshpass -p "$DEPLOY_PASS" rsync "${RSYNC_FLAGS_ATOMIC[@]}" \
     "${DEPLOY_USER}@${DEPLOY_HOST}:${RELEASE_DIR}/"
 
 echo "  ✓ Upload complete"
+
+# Create empty runtime dirs that bv_atomic_release_excludes() strips
+# from the rsync source. Grav's startup-checker (Problems plugin)
+# requires `cache/`, `tmp/`, and `backup/` to exist + be writable in
+# the docroot, otherwise it returns HTTP 500 for every page. These
+# are per-release dirs (Grav writes into them at runtime); creating
+# them empty here is sufficient. The migrate-bootstrap release had
+# them by accident (carried from the legacy in-place tier); fresh
+# atomic releases don't, so we materialise them explicitly.
+bv_remote_run '
+    mkdir -p "$RELEASE_DIR/cache" \
+             "$RELEASE_DIR/tmp" \
+             "$RELEASE_DIR/backup"
+' RELEASE_DIR="$RELEASE_DIR"
 
 # ── Step 5: Wire release symlinks ─────────────────────────────────────
 echo "→ Step 5/8: Wiring release symlinks (per §Symlink contract)..."
@@ -707,12 +740,12 @@ echo "  ✓ release-meta.yaml (pre-swap) written"
 # ── Step 7: Cache clear (fail-loud; aborts BEFORE the swap) ───────────
 echo "→ Step 7/8: Clearing Grav cache in new release..."
 if ! bv_remote_run '
-    cd "$RELEASE_DIR" && php bin/grav cache --all
+    cd "$RELEASE_DIR" && php bin/grav clearcache
 ' RELEASE_DIR="$RELEASE_DIR"; then
     echo ""
     echo "❌  Cache clear failed in ${RELEASE_DIR}." >&2
     echo "    Aborting BEFORE the docroot swap — the previous release stays live." >&2
-    echo "    Inspect: ssh ${DEPLOY_USER}@${DEPLOY_HOST} 'cd ${RELEASE_DIR} && php bin/grav cache --all'" >&2
+    echo "    Inspect: ssh ${DEPLOY_USER}@${DEPLOY_HOST} 'cd ${RELEASE_DIR} && php bin/grav clearcache'" >&2
     exit 1
 fi
 echo "  ✓ Cache cleared in new release"

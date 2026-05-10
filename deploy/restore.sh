@@ -565,10 +565,13 @@ if [ -n "${RESTORE_LOCAL_TIER_DIR:-}" ]; then
 
     # Clear caches if a Grav binary is present at the target. The
     # spec-mandated command is `bin/grav clearcache` (no hyphen).
+    # Invoke via `php bin/grav` so the shebang's +x bit isn't required —
+    # one.com shared hosting strips +x on rsync upload, so a bare
+    # `bin/grav` invocation fails with "Permission denied" there.
     grav_bin="$RESTORE_LOCAL_TIER_DIR/bin/grav"
     if [ -x "$grav_bin" ] || [ -f "$grav_bin" ]; then
-        log_op "running bin/grav clearcache from $RESTORE_LOCAL_TIER_DIR"
-        if ( cd "$RESTORE_LOCAL_TIER_DIR" && bin/grav clearcache ) >>"$LOG_FILE" 2>&1; then
+        log_op "running php bin/grav clearcache from $RESTORE_LOCAL_TIER_DIR"
+        if ( cd "$RESTORE_LOCAL_TIER_DIR" && php bin/grav clearcache ) >>"$LOG_FILE" 2>&1; then
             log_op "clearcache complete"
         else
             warn "bin/grav clearcache returned non-zero (continuing)"
@@ -660,7 +663,7 @@ done
 # clearcache` (no hyphen).
 log_op "clearing Grav caches on ${SSH_HOST}"
 bv_ssh_cmd -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" \
-    "cd $(printf %q "$SSH_PATH") && bin/grav clearcache" \
+    "cd $(printf %q "$SSH_PATH") && php bin/grav clearcache" \
     >>"$LOG_FILE" 2>&1 \
     || warn "bin/grav clearcache returned non-zero (continuing)"
 

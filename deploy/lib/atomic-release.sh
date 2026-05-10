@@ -135,11 +135,19 @@ bv_compute_release_id() {
 # the staging tree to begin with — but excluding them cleans the
 # release-dir contents.
 bv_atomic_release_excludes() {
+    # Anchor path-based excludes with a leading slash so they only
+    # match the Grav runtime dirs at the release root — NOT nested
+    # dirs of the same name elsewhere in the tree (notably
+    # vendor/doctrine/cache, which is a real PHP library that Grav
+    # depends on; an unanchored `cache/` exclude would skip it and
+    # break `php bin/grav clearcache` with
+    # "Class Doctrine\\Common\\Cache\\FilesystemCache not found").
+    # `.DS_Store` stays unanchored — those can land at any depth.
     cat <<'EOF'
---exclude=cache/
---exclude=tmp/
---exclude=backup/
---exclude=logs/
+--exclude=/cache/
+--exclude=/tmp/
+--exclude=/backup/
+--exclude=/logs/
 --exclude=.DS_Store
 EOF
 }
