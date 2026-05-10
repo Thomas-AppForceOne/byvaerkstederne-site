@@ -728,17 +728,17 @@ fi
 META="$BOOTSTRAP_DIR/release-meta.yaml"
 {
     printf 'release_id: %s\n' "$BOOTSTRAP_ID"
-    printf 'deployed_at: "%s"\n' "$(bvbv_yaml_quote_escape_escape "$DEPLOYED_AT_ISO")"
-    printf 'deployed_by: "%s"\n' "$(bvbv_yaml_quote_escape_escape "$DEPLOYED_BY")"
+    printf 'deployed_at: "%s"\n' "$(bv_yaml_quote_escape "$DEPLOYED_AT_ISO")"
+    printf 'deployed_by: "%s"\n' "$(bv_yaml_quote_escape "$DEPLOYED_BY")"
     printf 'deployed_from:\n'
-    printf '  host: "%s"\n' "$(bvbv_yaml_quote_escape_escape "$HOST_NAME")"
-    printf '  cwd: "%s"\n' "$(bvbv_yaml_quote_escape_escape "$CWD_VAL")"
-    printf '  branch: "%s"\n' "$(bvbv_yaml_quote_escape_escape "$GIT_BRANCH")"
-    printf '  sha: "%s"\n' "$(bvbv_yaml_quote_escape_escape "$GIT_SHA")"
-    printf '  sha_short: "%s"\n' "$(bvbv_yaml_quote_escape_escape "$GIT_SHA_SHORT")"
+    printf '  host: "%s"\n' "$(bv_yaml_quote_escape "$HOST_NAME")"
+    printf '  cwd: "%s"\n' "$(bv_yaml_quote_escape "$CWD_VAL")"
+    printf '  branch: "%s"\n' "$(bv_yaml_quote_escape "$GIT_BRANCH")"
+    printf '  sha: "%s"\n' "$(bv_yaml_quote_escape "$GIT_SHA")"
+    printf '  sha_short: "%s"\n' "$(bv_yaml_quote_escape "$GIT_SHA_SHORT")"
     printf '  is_dirty: %s\n' "$IS_DIRTY"
-    printf 'code_version: "%s"\n' "$(bvbv_yaml_quote_escape_escape "$CODE_VERSION")"
-    printf 'build: "%s"\n' "$(bvbv_yaml_quote_escape_escape "$CODE_BUILD")"
+    printf 'code_version: "%s"\n' "$(bv_yaml_quote_escape "$CODE_VERSION")"
+    printf 'build: "%s"\n' "$(bv_yaml_quote_escape "$CODE_BUILD")"
     printf 'data_version: "%s"\n' "v0"
     # Bootstrap release has no predecessor — both empty per contract.
     printf 'previous_release: ""\n'

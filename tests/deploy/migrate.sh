@@ -758,6 +758,34 @@ for field in release_id deployed_at deployed_by code_version build data_version 
         check "release-meta has $field" fail
     fi
 done
+
+# Value assertion for fields that should NOT be empty post-migration.
+# (Test gap from earlier: a corrupted bv_yaml_quote_escape call would
+# silently produce 'deployed_by: ""' and only the key-presence check
+# above would fire ok — landed as `bvbv_yaml_quote_escape_escape: command
+# not found` in production output. Now we assert non-empty values.)
+for field in deployed_at deployed_by code_version build swapped_at; do
+    val="$(awk -F': ' -v f="^$field:" '$0 ~ f {sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "$META")"
+    # strip surrounding double-quotes if present
+    val="${val#\"}"
+    val="${val%\"}"
+    if [ -n "$val" ]; then
+        check "release-meta $field has a non-empty value (got: '$val')" ok
+    else
+        check "release-meta $field is empty — quoting helper may be broken" fail
+    fi
+done
+# deployed_from sub-fields (host/cwd/branch/sha/sha_short) likewise.
+for sub_field in host cwd branch sha sha_short; do
+    val="$(awk -F': ' -v f="^  $sub_field:" '$0 ~ f {sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' "$META")"
+    val="${val#\"}"
+    val="${val%\"}"
+    if [ -n "$val" ]; then
+        check "release-meta deployed_from.$sub_field has a non-empty value" ok
+    else
+        check "release-meta deployed_from.$sub_field is empty — quoting helper may be broken" fail
+    fi
+done
 for sub in "  host:" "  cwd:" "  branch:" "  sha:" "  sha_short:" "  is_dirty:"; do
     if grep -q "^$sub" "$META"; then
         check "release-meta has deployed_from.$(echo "$sub" | tr -d ' :')" ok
