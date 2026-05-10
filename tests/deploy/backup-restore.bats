@@ -114,31 +114,28 @@ EOF
     export XDG_CONFIG_HOME="$TMP/xdg-config"
     mkdir -p "$XDG_CONFIG_HOME"
 
-    # The backup script's local-keep dir is fixed at $REPO_ROOT/backups,
-    # which we don't want to pollute. Tests that exercise --keep-local
-    # set HOME-style isolation by running with a different REPO_ROOT
-    # via wrapping; for simplicity we accept the side effect and clean
-    # up in teardown.
-    KEEP_LOCAL_DIR="$REPO_ROOT/backups"
-    KEEP_LOCAL_SNAPSHOT="$TMP/keep-local-snapshot"
-    if [ -d "$KEEP_LOCAL_DIR" ]; then
-        cp -R "$KEEP_LOCAL_DIR" "$KEEP_LOCAL_SNAPSHOT"
-    fi
+    # The backup script's local-keep dir is now machine-wide (under
+    # ~/.byvaerkstederne/backups by default; the path that survives
+    # across worktrees so `tmutil addexclusion` is a once-per-machine
+    # operation). Tests override it with a per-test temp dir via
+    # BV_KEEP_LOCAL_DIR so we never touch the operator's real path.
+    export BV_KEEP_LOCAL_DIR="$TMP/keep-local"
+    mkdir -p "$BV_KEEP_LOCAL_DIR"
+
+    # Test isolation: stop backup.sh / restore.sh from sourcing the
+    # operator's real .env.deploy. backup.sh skips sourcing when
+    # BACKUP_FIXTURE_DIR is set (already exported above), but
+    # restore.sh has no fixture-awareness — it sources .env.deploy
+    # unconditionally and would override BACKUP_LOCAL_STORE_DIR with
+    # whatever the operator put there. Pointing BACKUP_ENV_FILE at a
+    # non-existent path makes both scripts' `if [ -f $f ]` skip the
+    # source. Belt-and-braces against test/operator collision.
+    export BACKUP_ENV_FILE="$TMP/no-such-env-file"
 }
 
 teardown() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
-    fi
-    # Restore $REPO_ROOT/backups if we touched it.
-    if [ -d "$KEEP_LOCAL_SNAPSHOT" ]; then
-        rm -rf "$KEEP_LOCAL_DIR"
-        mv "$KEEP_LOCAL_SNAPSHOT" "$KEEP_LOCAL_DIR"
-    elif [ -d "$KEEP_LOCAL_DIR" ] && [ ! -e "$KEEP_LOCAL_SNAPSHOT" ]; then
-        # Tests created ./backups/ where there was none. Remove it
-        # if it's empty; otherwise leave content alone — the gitignore
-        # handles it.
-        rmdir "$KEEP_LOCAL_DIR" 2>/dev/null || true
     fi
 }
 
@@ -520,7 +517,12 @@ teardown() {
     # Persistent path: ./backups/ — must be named verbatim with the
     # exclusion command, since this is the only path the script
     # always writes to.
-    [[ "$stderr" == *"tmutil addexclusion ./backups"* ]]
+    # Banner names the keep-local path explicitly. After the
+    # machine-wide-keep-local refactor, this is whatever
+    # BV_KEEP_LOCAL_DIR resolves to (the test sets it to
+    # $TMP/keep-local in setup); the banner is no longer the literal
+    # `./backups` it was before.
+    [[ "$stderr" == *"tmutil addexclusion $BV_KEEP_LOCAL_DIR"* ]]
     # Operator-chosen paths (`--to <dir>` / `RESTORE_LOCAL_TIER_DIR`):
     # the banner mentions them by env-var name rather than listing
     # made-up `./deploy/staging-stage/` and `./deploy/prod-stage/`
@@ -584,7 +586,12 @@ teardown() {
     # is named with its `tmutil` command, the operator-chosen paths
     # are referenced by their env-var/flag names rather than by
     # made-up directory names.
-    [[ "$stderr" == *"tmutil addexclusion ./backups"* ]]
+    # Banner names the keep-local path explicitly. After the
+    # machine-wide-keep-local refactor, this is whatever
+    # BV_KEEP_LOCAL_DIR resolves to (the test sets it to
+    # $TMP/keep-local in setup); the banner is no longer the literal
+    # `./backups` it was before.
+    [[ "$stderr" == *"tmutil addexclusion $BV_KEEP_LOCAL_DIR"* ]]
     [[ "$stderr" == *"--to <dir>"* ]]
     [[ "$stderr" == *"RESTORE_LOCAL_TIER_DIR"* ]]
 

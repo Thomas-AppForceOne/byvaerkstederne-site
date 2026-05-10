@@ -19,21 +19,28 @@ This will check dependencies, pull LFS files, start Docker, and prompt you to cr
 
 `deploy/backup.sh` and `deploy/restore.sh` write encrypted archives and
 unpacked PII (member emails, bcrypt hashes, bug-report screenshots)
-into three local paths. Time Machine, Spotlight, and cloud-sync tools
-will silently capture that data unless you exclude them. Once per
+into local paths. Time Machine, Spotlight, and cloud-sync tools will
+silently capture that data unless you exclude the path. Once per
 machine, after first checkout, run:
 
 ```bash
-tmutil addexclusion ./backups
+tmutil addexclusion ~/.byvaerkstederne/backups
 tmutil addexclusion ./deploy/staging-stage
 tmutil addexclusion ./deploy/prod-stage
 ```
 
+The first path is **machine-wide** — every checkout (main repo +
+worktrees + per-`/gan`-run worktrees) shares
+`~/.byvaerkstederne/backups`, so the exclusion is once-per-machine,
+not once-per-worktree. Override the location via `BV_KEEP_LOCAL_DIR`
+in `.env.deploy` if you want a different path; just exclude whichever
+path you pick.
+
 Also, do **not** keep this checkout inside a Dropbox / iCloud Drive /
 Google Drive synced root.
 
-`./backups/`, `./deploy/staging-stage/`, and `./deploy/prod-stage/`
-are already covered by `.gitignore`. `restore.sh` writes
+`~/.byvaerkstederne/backups/`, `./deploy/staging-stage/`, and
+`./deploy/prod-stage/` are private. `restore.sh` writes
 `.metadata_never_index` (Spotlight exclusion marker) into any scratch
 directory it creates.
 

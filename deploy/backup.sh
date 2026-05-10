@@ -53,7 +53,14 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 readonly SCRIPT_DIR REPO_ROOT
 readonly PATHS_FILE="${BACKUP_PATHS_FILE:-$SCRIPT_DIR/backup-paths.txt}"
 readonly RECIPIENTS_FILE="${BACKUP_RECIPIENTS_FILE:-$SCRIPT_DIR/age-recipients.txt}"
-readonly LOCAL_BACKUP_DIR="$REPO_ROOT/backups"
+# Local-keep dir for archived backups + upload-fallback copies.
+# Machine-wide by default so all worktrees + GAN run worktrees share
+# one location — that way `tmutil addexclusion` is a once-per-machine
+# operation, not once-per-worktree (the prior <repo>/backups/ default
+# accumulated a separate dir in every worktree, each needing its own
+# exclusion). Override via BV_KEEP_LOCAL_DIR env var (in .env.deploy
+# or per-invocation).
+readonly LOCAL_BACKUP_DIR="${BV_KEEP_LOCAL_DIR:-$HOME/.byvaerkstederne/backups}"
 readonly DENY_PATTERNS=(
     "cache"
     "logs"

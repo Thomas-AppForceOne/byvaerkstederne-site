@@ -48,7 +48,10 @@ readonly RESTORE_SCRIPT_VERSION="0.1.0"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 readonly SCRIPT_DIR REPO_ROOT
-readonly LOCAL_BACKUP_DIR="$REPO_ROOT/backups"
+# Local-keep dir — must match backup.sh's resolution (machine-wide by
+# default, override via BV_KEEP_LOCAL_DIR). This is where restore.sh
+# looks first when --from <id> doesn't resolve in managed storage.
+readonly LOCAL_BACKUP_DIR="${BV_KEEP_LOCAL_DIR:-$HOME/.byvaerkstederne/backups}"
 readonly RESTORE_LOG_DIR="$REPO_ROOT/logs"
 readonly PATHS_FILE="$SCRIPT_DIR/backup-paths.txt"
 
