@@ -333,9 +333,16 @@ trim_line() {
 # In fixture mode the source is a local directory; in SSH mode we
 # round-trip a `cat` over ssh.
 source_read_first_line() {
-    local rel="$1"   # path relative to <source-root>/config/www, e.g. "VERSION"
+    local rel="$1"   # path relative to the Grav root, e.g. "VERSION"
+    # NOTE: deploy.sh ships the contents of <repo>/config/www/* as the
+    # tier root on the remote — i.e. <SSH_PATH>/index.php exists, NOT
+    # <SSH_PATH>/config/www/index.php. Both fixture and SSH paths
+    # therefore look at the Grav root directly, never with a config/www/
+    # prefix. (Earlier versions had a `config/www/` segment here that
+    # made backup.sh fail against real one.com tiers; the bats fixture
+    # masked it because it built `<fixture>/config/www/` to match.)
     if [ "$USE_FIXTURE" = "1" ]; then
-        local f="$BACKUP_FIXTURE_DIR/config/www/$rel"
+        local f="$BACKUP_FIXTURE_DIR/$rel"
         if [ -f "$f" ]; then
             head -n 1 "$f"
         fi
@@ -347,7 +354,7 @@ source_read_first_line() {
     # empty stdout as "missing".
     bv_ssh_cmd -n -p "$SSH_PORT" \
         "${SSH_USER}@${SSH_HOST}" \
-        "test -f $(printf %q "$SSH_PATH/config/www/$rel") && head -n 1 $(printf %q "$SSH_PATH/config/www/$rel")" \
+        "test -f $(printf %q "$SSH_PATH/$rel") && head -n 1 $(printf %q "$SSH_PATH/$rel")" \
         2>/dev/null || true
 }
 
@@ -374,9 +381,12 @@ extract_yaml_version_field() {
 }
 
 # Read raw data-version.yaml content from source (empty if missing).
+# Same path-shape note as source_read_first_line: source root IS the
+# Grav root, so the file lives at `<root>/user/data-version.yaml` —
+# never `<root>/config/www/user/data-version.yaml`.
 source_read_data_version_yaml() {
     if [ "$USE_FIXTURE" = "1" ]; then
-        local f="$BACKUP_FIXTURE_DIR/config/www/user/data-version.yaml"
+        local f="$BACKUP_FIXTURE_DIR/user/data-version.yaml"
         if [ -f "$f" ]; then
             cat "$f"
         fi
@@ -384,7 +394,7 @@ source_read_data_version_yaml() {
     fi
     bv_ssh_cmd -n -p "$SSH_PORT" \
         "${SSH_USER}@${SSH_HOST}" \
-        "test -f $(printf %q "$SSH_PATH/config/www/user/data-version.yaml") && cat $(printf %q "$SSH_PATH/config/www/user/data-version.yaml")" \
+        "test -f $(printf %q "$SSH_PATH/user/data-version.yaml") && cat $(printf %q "$SSH_PATH/user/data-version.yaml")" \
         2>/dev/null || true
 }
 

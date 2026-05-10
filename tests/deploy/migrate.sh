@@ -971,17 +971,17 @@ echo ""
 echo "Test 10: real-mode backup.sh produces schema-valid backup-meta.yaml"
 
 T_BAK_REAL="$WORK/t-bak-real"
-mkdir -p "$T_BAK_REAL/source/config/www/user/accounts" \
-         "$T_BAK_REAL/source/config/www/user/data/flex-objects" \
-         "$T_BAK_REAL/source/config/www/user/config" \
+mkdir -p "$T_BAK_REAL/source/user/accounts" \
+         "$T_BAK_REAL/source/user/data/flex-objects" \
+         "$T_BAK_REAL/source/user/config" \
          "$T_BAK_REAL/store"
-echo '0.1.0' > "$T_BAK_REAL/source/config/www/VERSION"
-echo '247'   > "$T_BAK_REAL/source/config/www/BUILD"
-cat > "$T_BAK_REAL/source/config/www/user/config/data-version.yaml" <<'YAML'
+echo '0.1.0' > "$T_BAK_REAL/source/VERSION"
+echo '247'   > "$T_BAK_REAL/source/BUILD"
+cat > "$T_BAK_REAL/source/user/config/data-version.yaml" <<'YAML'
 data_version: "0.1.0"
 YAML
-echo "alice" > "$T_BAK_REAL/source/config/www/user/accounts/alice.yaml"
-echo '{"votes":1}' > "$T_BAK_REAL/source/config/www/user/data/flex-objects/feature-1.json"
+echo "alice" > "$T_BAK_REAL/source/user/accounts/alice.yaml"
+echo '{"votes":1}' > "$T_BAK_REAL/source/user/data/flex-objects/feature-1.json"
 
 # Generate a one-shot age recipient pair so backup.sh's encryption
 # step works. Test the public key only — private key is created and

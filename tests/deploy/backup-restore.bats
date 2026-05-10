@@ -53,14 +53,21 @@ setup() {
     echo 'should-not-ship'  > "$FIXTURE/user/logs/access.log"
     echo 'tmpdata'          > "$FIXTURE/user/some.tmp"
 
-    # Plant the live-tier metadata markers that backup.sh now reads
+    # Plant the live-tier metadata markers that backup.sh reads
     # directly from the source (instead of from the operator's repo).
-    # Tests that need different values either override BACKUP_FAKE_*
-    # or rewrite these files before invoking backup.sh.
-    mkdir -p "$FIXTURE/config/www/user"
-    echo '0.1.0' > "$FIXTURE/config/www/VERSION"
-    echo '247'   > "$FIXTURE/config/www/BUILD"
-    cat > "$FIXTURE/config/www/user/data-version.yaml" <<'EOF'
+    # Tests that need different values rewrite these files before
+    # invoking backup.sh.
+    #
+    # IMPORTANT: paths are relative to the FIXTURE root — i.e. the
+    # Grav root, NOT <fixture>/config/www/. deploy.sh ships the
+    # contents of <repo>/config/www/* directly into the tier root on
+    # the remote, so backup.sh reads from <SSH_PATH>/VERSION etc. —
+    # never <SSH_PATH>/config/www/VERSION. The fixture mirrors the
+    # remote shape (matching the Grav root layout) since 819ffa6.
+    mkdir -p "$FIXTURE/user"
+    echo '0.1.0' > "$FIXTURE/VERSION"
+    echo '247'   > "$FIXTURE/BUILD"
+    cat > "$FIXTURE/user/data-version.yaml" <<'EOF'
 version: "0.1.0"
 EOF
 
@@ -92,8 +99,9 @@ EOF
     # convenience. They were removed because their presence skipped
     # the source-fetch code path — every test that ran with them set
     # was bypassing the very behaviour the contract asks us to
-    # exercise. The fixture's `config/www/{VERSION,BUILD,user/data-version.yaml}`
-    # files (planted above) ARE the metadata source now, just routed
+    # exercise. The fixture's `{VERSION,BUILD,user/data-version.yaml}`
+    # files (planted above at the FIXTURE root, matching the deployed
+    # Grav root layout) ARE the metadata source now, just routed
     # through the same code path an operator run uses.
     export AGE_IDENTITY_FILE="$KEYDIR/identity.txt"
     # Stable backup time (2026-04-29T12:34:00Z UTC) for filename
@@ -611,7 +619,7 @@ teardown() {
 @test "code_version comes from fixture VERSION (not from \$REPO_ROOT)" {
     # Plant a fixture VERSION distinct from the orchestrating repo's
     # VERSION (currently 0.2.0 on this branch).
-    echo '9.9.9' > "$FIXTURE/config/www/VERSION"
+    echo '9.9.9' > "$FIXTURE/VERSION"
     # Disable the BACKUP_FAKE_* overrides so the source-read path runs.
     unset BACKUP_FAKE_CODE_VERSION
     unset BACKUP_FAKE_DATA_VERSION
@@ -631,7 +639,7 @@ teardown() {
 }
 
 @test "code_build comes from fixture BUILD (not from \$REPO_ROOT)" {
-    echo '424242' > "$FIXTURE/config/www/BUILD"
+    echo '424242' > "$FIXTURE/BUILD"
     unset BACKUP_FAKE_CODE_BUILD
     unset BACKUP_FAKE_DATA_VERSION
 
@@ -644,7 +652,7 @@ teardown() {
 }
 
 @test "data_version comes from fixture data-version.yaml version: field" {
-    cat > "$FIXTURE/config/www/user/data-version.yaml" <<'EOF'
+    cat > "$FIXTURE/user/data-version.yaml" <<'EOF'
 # This data version applies to the live tier's flex objects schema.
 version: "3.4.5"
 EOF
@@ -660,10 +668,10 @@ EOF
 }
 
 @test "data_version defaults to 0.0.0 (NOT code_version) when fixture missing data-version.yaml" {
-    rm -f "$FIXTURE/config/www/user/data-version.yaml"
+    rm -f "$FIXTURE/user/data-version.yaml"
     # Use distinctive code_version to ensure the fallback isn't
     # silently inheriting it.
-    echo '1.2.3' > "$FIXTURE/config/www/VERSION"
+    echo '1.2.3' > "$FIXTURE/VERSION"
 
     run --separate-stderr "$BACKUP_SH" prod
     [ "$status" -eq 0 ]
@@ -686,7 +694,7 @@ EOF
     # produce metadata claiming version 0.0.0, which downstream
     # migration tooling would trust and apply migrations against.
     # The fix: treat malformed-but-present as a hard error (exit 3).
-    cat > "$FIXTURE/config/www/user/data-version.yaml" <<'EOF'
+    cat > "$FIXTURE/user/data-version.yaml" <<'EOF'
 # This file exists but has no parseable version: field.
 something_else: "value"
 EOF
@@ -700,7 +708,7 @@ EOF
 }
 
 @test "missing fixture VERSION → hard fail (exit 3) naming the file" {
-    rm -f "$FIXTURE/config/www/VERSION"
+    rm -f "$FIXTURE/VERSION"
 
     run "$BACKUP_SH" prod
     [ "$status" -eq 3 ]
@@ -710,7 +718,7 @@ EOF
 }
 
 @test "missing fixture BUILD → hard fail (exit 3) naming the file" {
-    rm -f "$FIXTURE/config/www/BUILD"
+    rm -f "$FIXTURE/BUILD"
 
     run "$BACKUP_SH" prod
     [ "$status" -eq 3 ]
@@ -732,10 +740,17 @@ EOF
     # SSH_PATH) inject shell metacharacters into the remote command.
     # This is the cheapest way to catch a regression in command
     # construction without a real SSH daemon.
-    grep -q "printf %q \"\$SSH_PATH/config/www/\$rel\"" \
+    #
+    # NOTE: paths intentionally have NO `config/www/` prefix — the
+    # remote tier root IS the Grav root (deploy.sh ships the contents
+    # of <repo>/config/www/* there). An earlier version of this test
+    # asserted the wrong shape and masked the bug fixed by 819ffa6.
+    grep -q "printf %q \"\$SSH_PATH/\$rel\"" \
          "$REPO_ROOT/deploy/backup.sh"
-    grep -q "printf %q \"\$SSH_PATH/config/www/user/data-version.yaml\"" \
+    grep -q "printf %q \"\$SSH_PATH/user/data-version.yaml\"" \
          "$REPO_ROOT/deploy/backup.sh"
+    # Belt-and-braces: explicitly assert the bogus shape is GONE.
+    ! grep -q "SSH_PATH/config/www" "$REPO_ROOT/deploy/backup.sh"
 }
 
 @test "SSH-mode metadata fetch: end-to-end via fake-ssh shim, asserts correct values land in meta" {
@@ -752,12 +767,15 @@ EOF
     #     metadata code path completed successfully over (fake) SSH.
     unset BACKUP_FIXTURE_DIR
 
-    # Build a "remote" tree at a path the shim can serve.
+    # Build a "remote" tree at a path the shim can serve. Layout
+    # mirrors what deploy.sh actually ships: the Grav root IS the
+    # tier root — `<SSH_PATH>/VERSION`, `<SSH_PATH>/user/...` —
+    # never `<SSH_PATH>/config/www/...`.
     REMOTE_ROOT="$TMP/remote-tier"
-    mkdir -p "$REMOTE_ROOT/config/www/user"
-    echo '7.7.7' > "$REMOTE_ROOT/config/www/VERSION"
-    echo '999'   > "$REMOTE_ROOT/config/www/BUILD"
-    cat > "$REMOTE_ROOT/config/www/user/data-version.yaml" <<'EOF'
+    mkdir -p "$REMOTE_ROOT/user"
+    echo '7.7.7' > "$REMOTE_ROOT/VERSION"
+    echo '999'   > "$REMOTE_ROOT/BUILD"
+    cat > "$REMOTE_ROOT/user/data-version.yaml" <<'EOF'
 version: "5.5.5"
 EOF
 
@@ -820,12 +838,17 @@ EOF
     [[ "$output" != *"source tier missing config/www/BUILD"* ]]
 
     # Trace assertion: the shim should have seen exactly the three
-    # expected fetch shapes plus the connectivity probe.
+    # expected fetch shapes plus the connectivity probe. Path shapes
+    # match the deployed Grav-root layout (NO config/www/ prefix —
+    # see source_read_first_line / source_read_data_version_yaml in
+    # backup.sh, fixed in 819ffa6).
     [ -f "$SHIM_TRACE" ]
     grep -q "true" "$SHIM_TRACE"
-    grep -q "test -f .*config/www/VERSION.* && head -n 1" "$SHIM_TRACE"
-    grep -q "test -f .*config/www/BUILD.* && head -n 1" "$SHIM_TRACE"
-    grep -q "test -f .*config/www/user/data-version.yaml.* && cat" "$SHIM_TRACE"
+    grep -q "test -f .*VERSION.* && head -n 1" "$SHIM_TRACE"
+    grep -q "test -f .*BUILD.* && head -n 1" "$SHIM_TRACE"
+    grep -q "test -f .*user/data-version.yaml.* && cat" "$SHIM_TRACE"
+    # Belt-and-braces — should NOT see the bogus `config/www/` shape.
+    ! grep -q "config/www/VERSION" "$SHIM_TRACE"
 }
 
 @test "SSH-mode metadata fetch: missing VERSION on remote → exit 3 with naming error" {
@@ -835,10 +858,10 @@ EOF
     unset BACKUP_FIXTURE_DIR
 
     REMOTE_ROOT="$TMP/remote-tier-no-version"
-    mkdir -p "$REMOTE_ROOT/config/www/user"
-    echo '999' > "$REMOTE_ROOT/config/www/BUILD"
+    mkdir -p "$REMOTE_ROOT/user"
+    echo '999' > "$REMOTE_ROOT/BUILD"
     # Deliberately no VERSION.
-    cat > "$REMOTE_ROOT/config/www/user/data-version.yaml" <<'EOF'
+    cat > "$REMOTE_ROOT/user/data-version.yaml" <<'EOF'
 version: "0.1.0"
 EOF
 
