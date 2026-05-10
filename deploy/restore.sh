@@ -314,9 +314,15 @@ decrypt_and_unpack() {
     # Spotlight never-index marker (operator privacy hygiene).
     : > "$target/.metadata_never_index"
 
-    local tmp_tar
-    tmp_tar="$(mktemp "${TMPDIR:-/tmp}/bv-restore.XXXXXXXX.tar.gz")"
-    trap 'rm -f "$tmp_tar"' RETURN
+    # mktemp template: BSD mktemp (macOS) only substitutes TRAILING
+    # X's; an X-block in the middle of the filename (.../bv-restore.
+    # XXXXXXXX.tar.gz) gets treated as a literal name and any second
+    # run hits "File exists". Allocate a tempdir, then name the file
+    # inside it instead — works on both BSD and GNU.
+    local tmp_dir tmp_tar
+    tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/bv-restore.XXXXXXXX")"
+    tmp_tar="$tmp_dir/archive.tar.gz"
+    trap 'rm -rf "$tmp_dir"' RETURN
 
     if [ -n "$identity" ] && [ -f "$identity" ]; then
         age -d -i "$identity" -o "$tmp_tar" "$enc_archive" \
@@ -361,8 +367,13 @@ if [ "$MODE" = "scratch" ]; then
     # the hygiene banner before we materialise PII on disk.
     bv_show_first_write_banner_if_needed
     log "Restoring '$ARCHIVE_NAME' → $TO_DIR"
-    tmp_archive="$(mktemp "${TMPDIR:-/tmp}/bv-restore.XXXXXXXX.age")"
-    trap 'rm -f "$tmp_archive"' EXIT
+    # Same BSD-mktemp-trailing-X-only constraint as decrypt_and_unpack:
+    # allocate a tempdir, name the file inside it. Avoids the "File
+    # exists" failure mode when a stale .age file sits at a literal
+    # XXXXXXXX-bearing path from a prior run.
+    tmp_archive_dir="$(mktemp -d "${TMPDIR:-/tmp}/bv-restore.XXXXXXXX")"
+    tmp_archive="$tmp_archive_dir/archive.age"
+    trap 'rm -rf "$tmp_archive_dir"' EXIT
     download_archive "$ARCHIVE_NAME" "$tmp_archive"
     decrypt_and_unpack "$tmp_archive" "$TO_DIR"
     log "Scratch restore complete: $TO_DIR"

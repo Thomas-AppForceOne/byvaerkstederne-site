@@ -190,6 +190,25 @@ for base in backup.sh restore.sh; do
     fi
 done
 
+# 6b. mktemp templates: BSD mktemp (macOS /usr/bin/mktemp) only
+#     substitutes TRAILING X's in the path. A template like
+#     `bv-restore.XXXXXXXX.tar.gz` (X-block in the MIDDLE of the
+#     basename) gets treated as a literal name on BSD; any second run
+#     trips "File exists" because the prior literal file is still on
+#     disk. The convention here: X's at the end of the basename, with
+#     no trailing extension. If a typed extension is needed, allocate
+#     a tempdir and name the file inside it (see decrypt_and_unpack
+#     in restore.sh).
+mktemp_middle_x="$(grep -rnE 'mktemp[^"]*"[^"]*X{4,}[^/"]*\.[^"]+"' "$DEPLOY_DIR" 2>/dev/null \
+                   | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' \
+                   || true)"
+if [ -z "$mktemp_middle_x" ]; then
+    check "no mktemp template with X's in the middle of a path (BSD mktemp safety)" ok
+else
+    check "mktemp template has X's in the middle (BSD mktemp will fail)" fail
+    printf '%s\n' "$mktemp_middle_x" | sed 's/^/      /' >&2
+fi
+
 # 7. ssh-auth.sh helper has the load-bearing properties we depend on.
 SSH_AUTH="$DEPLOY_DIR/lib/ssh-auth.sh"
 if [ -f "$SSH_AUTH" ]; then
