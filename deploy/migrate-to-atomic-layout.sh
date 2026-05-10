@@ -386,6 +386,14 @@ if [ "$LOCAL_MODE" = "0" ]; then
     # or bare ssh+key based on which env vars are set for this tier.
     # shellcheck source=deploy/lib/ssh-auth.sh
     . "$SCRIPT_DIR/lib/ssh-auth.sh"
+
+    # bv_resolve_ssh_password keys off $TIER to pick DEPLOY_PASS vs
+    # DEPLOY_PROD_PASS. The migration script uses $ENV throughout for
+    # historical reasons; export TIER=$ENV here so the password
+    # resolver picks the right env var (without TIER, the resolver
+    # returns empty and bv_ssh_cmd falls through to key-auth, which
+    # one.com shared hosting does not accept → "Permission denied").
+    export TIER="$ENV"
 fi
 
 RELEASES_DIR="$DOCROOT_PARENT/${LAYOUT_NAME}-releases"
