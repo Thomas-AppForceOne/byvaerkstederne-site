@@ -974,6 +974,23 @@ bv_now_ms() {
 # caller might plausibly pick that ARE reserved. Adding to it is
 # cheap; the caller-side cost of a false positive is "rename your
 # variable to something that isn't a documented shell-internal name".
+#
+# Remote-side shell discipline (load-bearing for body authors):
+# The body always runs under `set -euo pipefail` — the helper prepends
+# it before the body. Three implications:
+#   * An unset variable is a fatal error on the remote even if local
+#     callers are lax about defaults. Use "${X:-fallback}" inside the
+#     body if a value might legitimately be empty.
+#   * Pipelines fail if ANY stage exits non-zero. Patterns like
+#     `grep -c something` (returns 1 on no-match) or `cmd | head`
+#     (SIGPIPE on upstream) need explicit `|| true` if the non-zero
+#     exit is tolerated. The retention pruner's
+#     `grep -c . || true` is the canonical example.
+#   * `set -e` aborts on the first non-zero exit. Wrap test commands
+#     in `if`, guard `while read` against empty streams, etc.
+# This is a deliberate hardening choice — the alternative (permissive
+# remote shell) means a remote-side failure can go undetected until
+# the deploy completes badly.
 bv_remote_run() {
     # Explicit input validation via `return 1` (NOT `${var:?msg}`) so
     # callers can gracefully `if bv_remote_run ...; then ... fi` against
@@ -1021,9 +1038,12 @@ bv_remote_run() {
             # `[A-Z_]` for the first char, `[A-Z0-9_]*` for the rest —
             # POSIX-portable case-glob shape that excludes lower-case,
             # numeric-prefix, and any character outside the alphabet.
+            # `_` alone is also rejected — it's the conventional
+            # "throwaway / unused" name and would be a smell as a
+            # remote env var.
             case "$k" in
-                ''|[!A-Z_]*|*[!A-Z0-9_]*)
-                    echo "FATAL: bv_remote_run refuses key '$k' — must match [A-Z_][A-Z0-9_]* (upper-case shell identifier)" >&2
+                ''|_|[!A-Z_]*|*[!A-Z0-9_]*)
+                    echo "FATAL: bv_remote_run refuses key '$k' — must match [A-Z_][A-Z0-9_]* (upper-case shell identifier; bare '_' rejected)" >&2
                     return 1
                     ;;
             esac

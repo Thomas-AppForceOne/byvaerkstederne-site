@@ -48,8 +48,19 @@ echo "---"
 # ─────────────────────────────────────────────────────────────────────
 # Set up stub PATH so bv_remote_run's `sshpass -p ... ssh ... bash -s`
 # resolves to local-only execution.
+#
+# Stub dirs use a recognizable prefix so a SIGKILL-leaked dir from a
+# prior run can be cleaned up at startup. EXIT trap covers normal exit;
+# the prefix-sweep below covers the SIGKILL / Ctrl-C-during-trap case.
 # ─────────────────────────────────────────────────────────────────────
-STUB_DIR="$(mktemp -d)"
+STUB_PREFIX="bv-unit-remote-run."
+# Best-effort cleanup of stale stub-dirs from prior crashed runs.
+# Older than 1 hour to avoid stomping on a parallel test run that's
+# happening right now.
+find "${TMPDIR:-/tmp}" -maxdepth 1 -type d -name "${STUB_PREFIX}*" -mmin +60 \
+    -exec rm -rf {} + 2>/dev/null || true
+
+STUB_DIR="$(mktemp -d -t "${STUB_PREFIX}XXXXXX")"
 trap 'rm -rf "$STUB_DIR"' EXIT
 
 cat > "$STUB_DIR/sshpass" <<'EOF'
@@ -181,26 +192,41 @@ fi
 echo ""
 echo "B. failure paths"
 
-# B.1 — empty body is rejected (the ${1:?body required} guard).
-if bv_remote_run "" 2>/dev/null; then
-    check "empty body rejected" fail
-else
-    check "empty body rejected" ok
-fi
+# Helper: assert that a rejection path returns non-zero AND prints a
+# specific substring to stderr. Catches refactors that drop the
+# diagnostic text (silent rejections are bad operator UX).
+check_reject_with_msg() {
+    local name="$1" expected_substring="$2"; shift 2
+    local err rc=0
+    err="$(bv_remote_run "$@" 2>&1 >/dev/null)" || rc=$?
+    if [ "$rc" = 0 ]; then
+        check "$name (returned 0; expected non-zero)" fail
+        return
+    fi
+    case "$err" in
+        *"$expected_substring"*)
+            check "$name" ok
+            ;;
+        *)
+            check "$name (no '$expected_substring' in stderr)" fail
+            ;;
+    esac
+}
 
-# B.2 — argument missing the '=' is rejected.
-if bv_remote_run 'true' "MALFORMED_NO_EQUALS" 2>/dev/null; then
-    check "malformed KEY=VALUE (no '=') rejected" fail
-else
-    check "malformed KEY=VALUE (no '=') rejected" ok
-fi
+# B.1 — empty body is rejected with a specific diagnostic.
+check_reject_with_msg "empty body rejected (with diagnostic)" \
+    "requires a body argument" \
+    ""
 
-# B.3 — lower-case key is rejected by the allowlist.
-if bv_remote_run 'true' "lowercase=value" 2>/dev/null; then
-    check "lower-case key rejected (allowlist enforces UPPER_CASE)" fail
-else
-    check "lower-case key rejected (allowlist enforces UPPER_CASE)" ok
-fi
+# B.2 — argument missing the '=' is rejected with a specific diagnostic.
+check_reject_with_msg "malformed KEY=VALUE (no '=') rejected (with diagnostic)" \
+    "must be KEY=VALUE" \
+    'true' "MALFORMED_NO_EQUALS"
+
+# B.3 — lower-case key is rejected by the allowlist with a specific diagnostic.
+check_reject_with_msg "lower-case key rejected (with diagnostic)" \
+    "must match [A-Z_][A-Z0-9_]*" \
+    'true' "lowercase=value"
 
 # B.4 — mixed-case key is rejected.
 if bv_remote_run 'true' "MixedCase=value" 2>/dev/null; then
@@ -216,6 +242,11 @@ else
     check "leading-digit key rejected (not a valid identifier)" ok
 fi
 
+# B.5b — bare underscore key is rejected (the throwaway-name convention).
+check_reject_with_msg "bare underscore '_' key rejected (with diagnostic)" \
+    "bare '_' rejected" \
+    'true' "_=value"
+
 # B.6 — key containing a dash / dot / space is rejected.
 for bad_key in "FOO-BAR" "FOO.BAR" "FOO BAR"; do
     if bv_remote_run 'true' "${bad_key}=value" 2>/dev/null; then
@@ -225,8 +256,21 @@ for bad_key in "FOO-BAR" "FOO.BAR" "FOO BAR"; do
     fi
 done
 
-# B.7 — every reserved key is rejected, individually.
-for reserved in SSHPASS PATH HOME USER SHELL SHELLOPTS BASHOPTS IFS \
+# B.7 — every reserved key is rejected, individually. The first three
+# additionally assert the specific "reserved / dangerous" diagnostic so
+# a refactor that swaps the denylist branch for a generic message gets
+# caught.
+check_reject_with_msg "reserved key 'SSHPASS' rejected (with diagnostic)" \
+    "reserved / dangerous" \
+    'true' "SSHPASS=value"
+check_reject_with_msg "reserved key 'PATH' rejected (with diagnostic)" \
+    "reserved / dangerous" \
+    'true' "PATH=value"
+check_reject_with_msg "reserved key 'IFS' rejected (with diagnostic)" \
+    "reserved / dangerous" \
+    'true' "IFS=value"
+
+for reserved in HOME USER SHELL SHELLOPTS BASHOPTS \
                 BASH_ENV PROMPT_COMMAND PS1 PS2 PS3 PS4 CDPATH ENV \
                 LD_LIBRARY_PATH LD_PRELOAD DYLD_INSERT_LIBRARIES \
                 BASH_FUNC_X; do
