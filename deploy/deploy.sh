@@ -1,6 +1,20 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Resolve a PATH-driven bash so /opt/homebrew/bin (Homebrew bash 5+)
+# is picked up. /bin/bash on macOS is bash 3.2, which fails to parse
+# nested-quoting inside $(...) constructs that the lib uses.
 set -euo pipefail
 export PATH="/opt/homebrew/bin:$PATH"
+
+# Hard requirement: bash 4+. The atomic-release lib uses constructs
+# (nested $(...) with single-quotes inside double-quotes) that bash 3.2
+# fails to parse. Surface this as a readable diagnostic rather than a
+# cryptic "syntax error near unexpected token `('".
+if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
+    echo "❌  bash 4+ required (this is bash ${BASH_VERSION:-?}). On macOS:" >&2
+    echo "      brew install bash" >&2
+    echo "    Then ensure /opt/homebrew/bin is on PATH ahead of /usr/bin." >&2
+    exit 1
+fi
 
 # =============================================================================
 # Byværkstederne — Deploy to one.com shared hosting

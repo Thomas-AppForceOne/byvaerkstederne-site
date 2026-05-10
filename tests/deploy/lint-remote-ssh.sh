@@ -128,6 +128,26 @@ else
     check "bv_remote_run body must emit values via printf %q" fail
 fi
 
+# 5. Shebang regression guard: deploy.sh / rollback.sh /
+#    migrate-to-atomic-layout.sh must use `#!/usr/bin/env bash` so a
+#    Homebrew bash 5+ on PATH is picked up. /bin/bash on macOS is bash
+#    3.2, which fails to parse the lib's nested $(...) constructs with
+#    a cryptic syntax error.
+for script in "$DEPLOY_DIR/deploy.sh" "$DEPLOY_DIR/rollback.sh" "$DEPLOY_DIR/migrate-to-atomic-layout.sh"; do
+    base="$(basename "$script")"
+    if [ "$(head -n 1 "$script")" = "#!/usr/bin/env bash" ]; then
+        check "$base uses #!/usr/bin/env bash (bash 5+ resolution)" ok
+    else
+        check "$base must shebang #!/usr/bin/env bash, not /bin/bash (got: $(head -n 1 "$script"))" fail
+    fi
+    # And: each must check BASH_VERSINFO[0] >= 4 before sourcing the lib.
+    if grep -q 'BASH_VERSINFO\[0\]' "$script"; then
+        check "$base checks BASH_VERSINFO[0] before sourcing lib" ok
+    else
+        check "$base must assert bash 4+ before sourcing lib" fail
+    fi
+done
+
 echo ""
 echo "─────────────────────────────────────"
 echo "  Pass: $PASS    Fail: $FAIL"

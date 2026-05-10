@@ -139,6 +139,18 @@
 set -euo pipefail
 export PATH="/opt/homebrew/bin:$PATH"
 
+# Hard requirement: bash 4+. The atomic-release lib uses constructs
+# (nested $(...) with single-quotes inside double-quotes) that bash 3.2
+# (macOS Intel /bin/bash and Apple-shipped /usr/bin/bash) fails to parse.
+# Without this check the operator sees a cryptic "syntax error near
+# unexpected token `('" instead of a useful instruction.
+if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
+    echo "❌  bash 4+ required (this is bash ${BASH_VERSION:-?}). On macOS:" >&2
+    echo "      brew install bash" >&2
+    echo "    Then ensure /opt/homebrew/bin is on PATH ahead of /usr/bin." >&2
+    exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
