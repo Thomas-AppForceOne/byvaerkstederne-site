@@ -37,12 +37,75 @@
 # Resolve the tier-specific SSH password. Returns the empty string if
 # no password is configured for the active tier (caller falls back to
 # key-auth).
+#
+# Resolution order, per tier:
+#   1. Direct env var (DEPLOY_PASS / DEPLOY_PROD_PASS) — caller-
+#      controlled. Wins if set, even to empty? No — only wins if
+#      non-empty. Allows tests and one-off overrides without touching
+#      Keychain or .env.deploy.
+#   2. macOS Keychain via the `security` CLI, when DEPLOY_PASS_KEYCHAIN
+#      / DEPLOY_PROD_PASS_KEYCHAIN names the Keychain item. The
+#      operator stores the password once with `security
+#      add-generic-password -a "$USER" -s "<item>" -w "<password>"`;
+#      the script fetches it at runtime. macOS prompts on first access
+#      ("Always Allow" unblocks subsequent runs in the same Keychain
+#      unlock window).
+#   3. Empty string — caller's fallback path is bare-ssh + BatchMode=yes
+#      (key-auth). When no auth is configured at all and the host
+#      requires a password, the SSH connection fails fast.
 bv_resolve_ssh_password() {
+    local env_var keychain_var pw kc_item
+
     case "${TIER:-}" in
-        prod)              printf '%s' "${DEPLOY_PROD_PASS:-}" ;;
-        staging|test|dev)  printf '%s' "${DEPLOY_PASS:-}" ;;
-        *)                 printf '' ;;
+        prod)
+            env_var="DEPLOY_PROD_PASS"
+            keychain_var="DEPLOY_PROD_PASS_KEYCHAIN"
+            ;;
+        staging|test|dev)
+            env_var="DEPLOY_PASS"
+            keychain_var="DEPLOY_PASS_KEYCHAIN"
+            ;;
+        *)
+            printf ''
+            return 0
+            ;;
     esac
+
+    # 1. Direct env-var override.
+    pw="$(eval "printf '%s' \"\${$env_var:-}\"")"
+    if [ -n "$pw" ]; then
+        printf '%s' "$pw"
+        return 0
+    fi
+
+    # 2. macOS Keychain lookup, when configured.
+    kc_item="$(eval "printf '%s' \"\${$keychain_var:-}\"")"
+    if [ -n "$kc_item" ]; then
+        if ! command -v security >/dev/null 2>&1; then
+            # Surface the misconfiguration loudly. macOS-only — Linux
+            # operators can populate the env var directly or use a
+            # secret manager that exports to env.
+            echo "⚠️  $keychain_var is set ('$kc_item') but the 'security' CLI is not on PATH." >&2
+            echo "    macOS Keychain integration only works on macOS. Either set $env_var directly," >&2
+            echo "    or unset $keychain_var to fall back to key-auth." >&2
+            printf ''
+            return 0
+        fi
+        if pw="$(security find-generic-password -a "${USER:-}" -s "$kc_item" -w 2>/dev/null)"; then
+            printf '%s' "$pw"
+            return 0
+        else
+            echo "⚠️  Keychain item '$kc_item' (account='$USER') not found." >&2
+            echo "    Add it once with:" >&2
+            echo "      security add-generic-password -a \"\$USER\" -s \"$kc_item\" -w" >&2
+            echo "    (the -w with no value will prompt for the password without echoing)." >&2
+            printf ''
+            return 0
+        fi
+    fi
+
+    # 3. Nothing configured — key-auth fallback.
+    printf ''
 }
 
 # Run an SSH command. Args after $@ are forwarded to ssh verbatim

@@ -72,6 +72,41 @@ exit 0
 EOF
 chmod +x "$STUB_DIR/rsync"
 
+# security (Keychain) stub. Emulates `security find-generic-password
+# -a <user> -s <item> -w`. Reads a fake-keychain file at
+# $BV_TEST_KEYCHAIN_FILE (lines of "<item>\t<password>"); missing
+# items exit 44 like the real CLI.
+cat > "$STUB_DIR/security" <<'EOF'
+#!/usr/bin/env bash
+mode="$1"; shift
+case "$mode" in
+    find-generic-password)
+        item=""
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                -a) shift 2 ;;
+                -s) item="$2"; shift 2 ;;
+                -w) shift ;;
+                *)  shift ;;
+            esac
+        done
+        kc="${BV_TEST_KEYCHAIN_FILE:-/dev/null}"
+        if [ -f "$kc" ]; then
+            while IFS=$'\t' read -r kc_item kc_pw; do
+                if [ "$kc_item" = "$item" ]; then
+                    printf '%s' "$kc_pw"
+                    exit 0
+                fi
+            done < "$kc"
+        fi
+        echo "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain." >&2
+        exit 44
+        ;;
+    *) exit 1 ;;
+esac
+EOF
+chmod +x "$STUB_DIR/security"
+
 PATH="$STUB_DIR:$PATH"
 export PATH
 
@@ -112,6 +147,74 @@ out="$(bv_resolve_ssh_password)"
     || check "tier=junk returns empty (got '$out')" fail
 
 unset TIER DEPLOY_PASS DEPLOY_PROD_PASS
+
+# ─────────────────────────────────────────────────────────────────────
+# Test group A2: Keychain fallback for password resolution
+# ─────────────────────────────────────────────────────────────────────
+echo ""
+echo "A2. Keychain fallback (macOS security CLI stub)"
+
+# Set up a fake keychain file with two items.
+KC_FILE="$STUB_DIR/keychain.tsv"
+{
+    printf 'bv-deploy-pass-dev\tkeychain-dev-secret\n'
+    printf 'bv-deploy-pass-prod\tkeychain-prod-secret\n'
+} > "$KC_FILE"
+export BV_TEST_KEYCHAIN_FILE="$KC_FILE"
+
+# A2.1 — env var unset, keychain var points at a real item: returns it
+unset DEPLOY_PASS
+TIER=dev DEPLOY_PASS_KEYCHAIN="bv-deploy-pass-dev"
+out="$(bv_resolve_ssh_password 2>/dev/null)"
+[ "$out" = "keychain-dev-secret" ] && check "DEPLOY_PASS empty + DEPLOY_PASS_KEYCHAIN set: returns Keychain value" ok \
+    || check "Keychain lookup (got '$out')" fail
+
+# A2.2 — direct env var wins over Keychain (precedence test)
+TIER=dev DEPLOY_PASS="env-wins" DEPLOY_PASS_KEYCHAIN="bv-deploy-pass-dev"
+out="$(bv_resolve_ssh_password 2>/dev/null)"
+[ "$out" = "env-wins" ] && check "direct env var takes precedence over DEPLOY_PASS_KEYCHAIN" ok \
+    || check "env-var precedence (got '$out')" fail
+
+# A2.3 — prod uses DEPLOY_PROD_PASS_KEYCHAIN, NOT DEPLOY_PASS_KEYCHAIN
+unset DEPLOY_PASS DEPLOY_PROD_PASS
+TIER=prod DEPLOY_PROD_PASS_KEYCHAIN="bv-deploy-pass-prod" DEPLOY_PASS_KEYCHAIN="bv-deploy-pass-dev"
+out="$(bv_resolve_ssh_password 2>/dev/null)"
+[ "$out" = "keychain-prod-secret" ] && check "tier=prod uses DEPLOY_PROD_PASS_KEYCHAIN, not DEPLOY_PASS_KEYCHAIN" ok \
+    || check "prod Keychain isolation (got '$out')" fail
+
+# A2.4 — Keychain item missing: empty result + readable diagnostic
+unset DEPLOY_PASS DEPLOY_PROD_PASS DEPLOY_PROD_PASS_KEYCHAIN
+TIER=dev DEPLOY_PASS_KEYCHAIN="never-stored-in-keychain"
+err="$(bv_resolve_ssh_password 2>&1 >/dev/null)"
+out="$(bv_resolve_ssh_password 2>/dev/null)"
+[ -z "$out" ] && check "missing Keychain item: returns empty (caller falls back to key-auth)" ok \
+    || check "missing Keychain item should return empty (got '$out')" fail
+case "$err" in
+    *"not found"*"add-generic-password"*) check "missing Keychain item: diagnostic explains how to add it" ok ;;
+    *) check "missing Keychain diagnostic (got: '$err')" fail ;;
+esac
+
+# A2.5 — security CLI not on PATH: warning + empty (graceful fallback).
+# Use a PATH that contains ONLY the test stub dir (with stub `ssh`,
+# `sshpass`, `rsync` — but NO `security`); macOS's real /usr/bin/security
+# would otherwise satisfy command -v lookup.
+TIER=dev DEPLOY_PASS_KEYCHAIN="bv-deploy-pass-dev"
+PATH_BACKUP="$PATH"
+NO_SEC_DIR="$(mktemp -d -t "${STUB_PREFIX}nosec.XXXXXX")"
+cp "$STUB_DIR/ssh" "$STUB_DIR/sshpass" "$STUB_DIR/rsync" "$NO_SEC_DIR/"
+PATH="$NO_SEC_DIR"
+err="$(bv_resolve_ssh_password 2>&1 >/dev/null)"
+out="$(bv_resolve_ssh_password 2>/dev/null)"
+PATH="$PATH_BACKUP"
+rm -rf "$NO_SEC_DIR"
+[ -z "$out" ] && check "security CLI missing: returns empty (falls back to key-auth)" ok \
+    || check "security CLI missing: should be empty (got '$out')" fail
+case "$err" in
+    *"security"*"not on PATH"*"macOS"*) check "security CLI missing: diagnostic mentions macOS-only" ok ;;
+    *) check "security CLI missing diagnostic (got: '$err')" fail ;;
+esac
+
+unset TIER DEPLOY_PASS DEPLOY_PROD_PASS DEPLOY_PASS_KEYCHAIN DEPLOY_PROD_PASS_KEYCHAIN
 
 # ─────────────────────────────────────────────────────────────────────
 # Test group B: bv_ssh_cmd dispatch

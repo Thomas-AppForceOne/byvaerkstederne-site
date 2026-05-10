@@ -77,6 +77,45 @@ See [ADR-004](decisions/ADR-004-atomic-deploy-fixture-only-testing.md)
 for the rationale behind the local-fixture-first testing posture and
 the operator-supervised real-tier exercise contract.
 
+#### Storing the SSH password in macOS Keychain (recommended)
+
+Plain-text passwords in `.env.deploy` are fine for solo-operator
+machines with FileVault on, but Keychain integration is one shell
+command away and noticeably better:
+
+- The password never appears in `.env.deploy` — only the Keychain
+  *item name* does. `.env.deploy` becomes safe to share between
+  operator machines, since the secret is per-machine.
+- macOS prompts for unlock on first access; "Always Allow" caches
+  the decision for the duration of the Keychain unlock window
+  (typically the login session).
+- Revocation is `security delete-generic-password ...` — instant
+  and obvious.
+
+**One-time setup per tier:**
+
+```sh
+# staging / test / dev share one password on the hackersbychoice.dk
+# one.com account; store it once under any item name you like.
+security add-generic-password -a "$USER" -s bv-deploy-pass-hackersbychoice -w
+# (the -w with no value prompts for the password without echoing)
+
+# prod hosting account (separate; populate when chosting.dk creds exist):
+security add-generic-password -a "$USER" -s bv-deploy-pass-prod -w
+```
+
+Then in `.env.deploy`, **replace** `DEPLOY_PASS=...` with:
+
+```sh
+DEPLOY_PASS_KEYCHAIN=bv-deploy-pass-hackersbychoice
+DEPLOY_PROD_PASS_KEYCHAIN=bv-deploy-pass-prod   # commented until prod is provisioned
+```
+
+`deploy/lib/ssh-auth.sh` consults the Keychain only when the direct
+env var is unset, so a one-off CI override via `DEPLOY_PASS=...` still
+takes precedence. The unit test
+(`tests/deploy/unit-ssh-auth.sh`) covers both code paths.
+
 ### Backup tooling environment variables
 
 Configuration variables for `deploy/backup.sh` and `deploy/restore.sh`.
@@ -88,9 +127,11 @@ The standard ones live in `.env.deploy` (gitignored, see
 | Variable | Purpose |
 |----------|---------|
 | `DEPLOY_PROD_HOST`, `DEPLOY_PROD_USER`, `DEPLOY_PROD_PORT`, `DEPLOY_PROD_PATH` | SSH credentials for the prod tier. |
-| `DEPLOY_PROD_PASS` | Password for the prod tier (used by `deploy.sh` and `rollback.sh` via `sshpass`; not used by `backup.sh` / `restore.sh`, which authenticate with a key). |
+| `DEPLOY_PROD_PASS` | Password for the prod tier. Plain-text alternative; prefer `DEPLOY_PROD_PASS_KEYCHAIN` below. |
+| `DEPLOY_PROD_PASS_KEYCHAIN` | Name of a macOS Keychain generic-password item that holds the prod password. When set (and `DEPLOY_PROD_PASS` is unset), `deploy/lib/ssh-auth.sh` fetches the password at runtime via `security find-generic-password -a "$USER" -s "<item>" -w`. The plaintext password lives only in the Keychain, never in `.env.deploy`. |
 | `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_PATH` | SSH credentials shared across staging / test / dev (see `specifications/archive/prod_backup_restore_specification.md` for the per-tier subpath logic). |
-| `DEPLOY_PASS` | Password shared across staging / test / dev (used by `deploy.sh` and `rollback.sh` via `sshpass`; not used by backup tooling). |
+| `DEPLOY_PASS` | Password shared across staging / test / dev. Plain-text alternative; prefer `DEPLOY_PASS_KEYCHAIN`. |
+| `DEPLOY_PASS_KEYCHAIN` | macOS Keychain item name for the staging/test/dev password. Same shape as `DEPLOY_PROD_PASS_KEYCHAIN`. |
 | `BACKUP_S3_BUCKET`, `BACKUP_S3_ENDPOINT`, `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` | Managed-storage credentials. Either these or `BACKUP_LOCAL_STORE_DIR` must be set. |
 | `BACKUP_LOCAL_STORE_DIR` | Directory acting as managed storage (used for testing and when an S3 bucket is overkill). Mutually exclusive with the S3 backend; if both are set, the local store wins. |
 | `AGE_IDENTITY_FILE` | Absolute path to the operator's age private key (kept in a password manager / hardware key, never committed). Required for any `restore.sh` invocation that decrypts. |
