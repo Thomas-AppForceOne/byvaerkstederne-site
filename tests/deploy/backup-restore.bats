@@ -771,8 +771,17 @@ EOF
     # mirrors what deploy.sh actually ships: the Grav root IS the
     # tier root — `<SSH_PATH>/VERSION`, `<SSH_PATH>/user/...` —
     # never `<SSH_PATH>/config/www/...`.
+    #
+    # Allow-list dirs (per deploy/backup-paths.txt: user/accounts,
+    # user/data, user/pages, user/uploads) must exist for the new
+    # existence-probe to find them; without them backup.sh would
+    # skip every rsync silently and the rsync-failure assertion
+    # below would never fire.
     REMOTE_ROOT="$TMP/remote-tier"
-    mkdir -p "$REMOTE_ROOT/user"
+    mkdir -p "$REMOTE_ROOT/user/accounts" \
+             "$REMOTE_ROOT/user/data" \
+             "$REMOTE_ROOT/user/pages" \
+             "$REMOTE_ROOT/user/uploads"
     echo '7.7.7' > "$REMOTE_ROOT/VERSION"
     echo '999'   > "$REMOTE_ROOT/BUILD"
     cat > "$REMOTE_ROOT/user/data-version.yaml" <<'EOF'
@@ -792,6 +801,14 @@ case "\$cmd" in
     true)
         # Bare connectivity probe.
         exit 0
+        ;;
+    "test -e "*)
+        # Existence probe per allow-list entry (added in the
+        # missing-allow-list-path-skips-gracefully fix). Pass-through
+        # to local fs — "remote" paths are local in the shim, so
+        # test -e returns the right thing.
+        eval "\$cmd"
+        exit \$?
         ;;
     "test -f "*" && head -n 1 "*|"test -f "*" && cat "*)
         # Metadata-fetch shapes (head -n 1 for VERSION/BUILD,
@@ -887,6 +904,75 @@ EOF
     [ "$status" -eq 3 ]
     [[ "$output" == *"VERSION"* ]]
     [[ "$output" == *"source tier"* ]]
+}
+
+@test "SSH-mode: missing allow-list path on remote skips with WARN, does not abort backup" {
+    # Regression test for the user/uploads scenario hit during PR #17
+    # Tier 4a real-tier exercise: a fresh dev tier with no
+    # `user/uploads/` dir caused backup.sh to abort with rsync
+    # exit 23. The fix probes existence per allow-list entry and
+    # skips missing ones with a WARN — matching fixture mode's
+    # `[ -e $src ]` gate. This test asserts that behaviour.
+    unset BACKUP_FIXTURE_DIR
+
+    # Custom allow-list with the MISSING path FIRST. Otherwise the
+    # script would rsync (and fail in the shim) for an earlier path
+    # before reaching the missing one.
+    PATHS_FILE="$TMP/test-allow-list.txt"
+    cat > "$PATHS_FILE" <<EOF
+user/uploads
+user/accounts
+EOF
+    export BACKUP_PATHS_FILE="$PATHS_FILE"
+
+    # Build a "remote" tree with the metadata files AND user/accounts,
+    # but DELIBERATELY OMIT user/uploads/.
+    REMOTE_ROOT="$TMP/remote-tier-no-uploads"
+    mkdir -p "$REMOTE_ROOT/user/accounts"
+    # Note: NO user/uploads/.
+    echo 'alice'   > "$REMOTE_ROOT/user/accounts/alice.yaml"
+    echo '0.2.0' > "$REMOTE_ROOT/VERSION"
+    echo '247'   > "$REMOTE_ROOT/BUILD"
+    cat > "$REMOTE_ROOT/user/data-version.yaml" <<'EOF'
+version: "0.1.0"
+EOF
+
+    # Shim: handle test -e (existence probe), the metadata-fetch
+    # shapes (test -f && head/cat), and the connectivity probe
+    # (true). Anything else (including rsync transport) returns 255
+    # so backup.sh aborts there — we only need to assert the WARN
+    # for user/uploads fired, not that the subsequent backup
+    # completed.
+    SHIM_BIN="$TMP/shim-skip"
+    mkdir -p "$SHIM_BIN"
+    cat > "$SHIM_BIN/ssh" <<'EOF'
+#!/usr/bin/env bash
+cmd="${!#}"
+case "$cmd" in
+    "true")                                                  exit 0 ;;
+    "test -e "*)                                             eval "$cmd"; exit $? ;;
+    "test -f "*" && head -n 1 "*|"test -f "*" && cat "*)     eval "$cmd"; exit $? ;;
+    *)                                                       exit 255 ;;
+esac
+EOF
+    chmod +x "$SHIM_BIN/ssh"
+
+    export DEPLOY_PROD_HOST=fake.host
+    export DEPLOY_PROD_USER=fake
+    export DEPLOY_PROD_PORT=22
+    export DEPLOY_PROD_PATH="$REMOTE_ROOT"
+
+    PATH="$SHIM_BIN:$PATH" run --separate-stderr "$BACKUP_SH" prod
+    # The load-bearing assertion: user/uploads (the only allow-list
+    # path NOT planted on the remote) was skipped with the documented
+    # WARN — proving the loop continued instead of aborting on the
+    # missing dir.
+    [[ "$stderr" == *"WARN: allow-list path not present on remote, skipping: user/uploads"* ]]
+    # And: the existence probe was run for user/uploads (so we know
+    # the shape of the bv_ssh_cmd test is correct).
+    # backup.sh will eventually fail (rsync of EXISTING dirs trips the
+    # shim's catch-all), but that's downstream of what we're testing.
+    [ "$status" -ne 0 ]
 }
 
 # ─── restore-to-tier (local-tier mode) ───────────────────────────────

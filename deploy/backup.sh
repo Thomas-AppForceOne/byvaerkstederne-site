@@ -402,14 +402,14 @@ source_read_data_version_yaml() {
 raw="$(source_read_first_line VERSION)"
 CODE_VERSION="$(trim_line "$raw")"
 if [ -z "$CODE_VERSION" ]; then
-    die "source tier missing config/www/VERSION (cannot stamp backup metadata)" 3
+    die "source tier missing VERSION (cannot stamp backup metadata)" 3
 fi
 
 # CODE_BUILD ------------------------------------------------------------
 raw="$(source_read_first_line BUILD)"
 CODE_BUILD="$(trim_line "$raw")"
 if [ -z "$CODE_BUILD" ]; then
-    die "source tier missing config/www/BUILD (cannot stamp backup metadata)" 3
+    die "source tier missing BUILD (cannot stamp backup metadata)" 3
 fi
 
 # DATA_VERSION ----------------------------------------------------------
@@ -423,7 +423,7 @@ fi
 dv_raw="$(source_read_data_version_yaml)"
 if [ -z "$dv_raw" ]; then
     # File-not-present: spec-defined fallback to "0.0.0".
-    warn "source tier has no config/www/user/data-version.yaml — defaulting data_version to 0.0.0"
+    warn "source tier has no user/data-version.yaml — defaulting data_version to 0.0.0"
     DATA_VERSION="0.0.0"
 else
     DATA_VERSION="$(extract_yaml_version_field "$dv_raw")"
@@ -437,7 +437,7 @@ else
         # destructive results. Refusing to back up is the safe
         # response — the operator can fix or remove the file and
         # retry.
-        die "source tier config/www/user/data-version.yaml exists but has no parseable 'version:' field; refusing to stamp metadata" 3
+        die "source tier user/data-version.yaml exists but has no parseable 'version:' field; refusing to stamp metadata" 3
     fi
 fi
 
@@ -481,27 +481,48 @@ else
     log "Pulling source from ${SSH_USER}@${SSH_HOST}:${SSH_PORT} (${SSH_PATH})"
     # SSH reachability was already probed up front in the credentials
     # block; if we got here, the connection is alive.
+    #
+    # Pre-rsync existence probe per allow-list entry. rsync of a
+    # missing source aborts the whole backup; missing user-content
+    # paths (e.g. user/uploads on a fresh dev tier) are legitimately
+    # absent, so we skip them with a WARN — same shape as fixture
+    # mode. Tier:reldir collisions in the deny-list still apply
+    # (the rsync --exclude handling below).
+    rsync_e="$(bv_rsync_ssh_e "$SSH_PORT")" \
+        || die "could not build rsync ssh-cmd (sshpass missing?)" 2
+    rsync_excludes=()
+    for pat in "${DENY_PATTERNS[@]}"; do
+        rsync_excludes+=(--exclude="$pat")
+    done
+    SKIPPED_PATHS=()
     for rel in "${INCLUDE_PATHS[@]}"; do
+        # Probe the allow-list entry's existence on the remote.
+        # Skip-on-missing matches fixture mode's `[ -e $src ]` gate
+        # below, so backup behaviour is consistent across both
+        # modes. The skip is logged loudly so an operator can spot
+        # an unexpectedly-shrunken backup.
+        if ! bv_ssh_cmd -n -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" \
+            "test -e $(printf %q "$SSH_PATH/$rel")" >/dev/null 2>&1; then
+            warn "allow-list path not present on remote, skipping: $rel"
+            SKIPPED_PATHS+=("$rel")
+            continue
+        fi
+
         mkdir -p "$STAGE_DIR/$(dirname "$rel")"
         # Use rsync without --delete; we're rsyncing INTO an empty
         # tempdir, so deletion is meaningless and the confinement hook
         # blocks --delete anyway.
-        # Construct exclude args from DENY_PATTERNS.
-        rsync_excludes=()
-        for pat in "${DENY_PATTERNS[@]}"; do
-            rsync_excludes+=(--exclude="$pat")
-        done
         # bv_rsync_via_ssh exports SSHPASS for rsync's child process
-        # when password-auth is configured; bv_rsync_ssh_e returns the
-        # appropriate `-e` value (sshpass-wrapped or bare).
-        rsync_e="$(bv_rsync_ssh_e "$SSH_PORT")" \
-            || die "could not build rsync ssh-cmd (sshpass missing?)" 2
+        # when password-auth is configured.
         bv_rsync_via_ssh -az -e "$rsync_e" \
               "${rsync_excludes[@]}" \
               "${SSH_USER}@${SSH_HOST}:${SSH_PATH}/${rel}/" \
               "$STAGE_DIR/${rel}/" \
               || die "rsync failed for ${rel} from ${SSH_HOST}" 2
     done
+    if [ "${#SKIPPED_PATHS[@]}" -gt 0 ]; then
+        log "  (note: ${#SKIPPED_PATHS[@]} allow-list path(s) skipped — see warnings above)"
+    fi
 fi
 
 # Apply deny-list locally as a belt-and-braces measure (in case the
