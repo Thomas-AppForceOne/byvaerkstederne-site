@@ -333,44 +333,59 @@ if [ -n "${BV_MIGRATE_LOCAL_PARENT:-}" ]; then
 fi
 
 if [ "$LOCAL_MODE" = "0" ]; then
-    # Real-remote mode is intentionally NOT exercised by the GAN run
-    # (CLAUDE.md confinement: no real remote, no credentials). The
-    # operator runs this on a checkout with .env.deploy populated.
+    # Real-remote mode. The operator runs this from a checkout with
+    # .env.deploy populated. The destructive operations (steps 1, 3,
+    # 4, 5, 6) are dispatched as a single self-contained shell snippet
+    # piped through ssh — see deploy/lib/migrate-remote-steps.sh.
+    # Step 2 (backup) and step 7 (smoke probe) run from the operator's
+    # laptop unchanged.
     ENV_FILE="$PROJECT_DIR/.env.deploy"
     if [ ! -f "$ENV_FILE" ]; then
         echo "❌  Missing .env.deploy — copy .env.deploy.example and fill in credentials" >&2
         echo "    Or set BV_MIGRATE_LOCAL_PARENT for fixture-mode testing." >&2
         exit 1
     fi
+    set -a
     # shellcheck disable=SC1090
     source "$ENV_FILE"
+    set +a
 
     case "$ENV" in
         prod)
             : "${DEPLOY_PROD_PATH:?prod migration requires DEPLOY_PROD_PATH in .env.deploy}"
+            : "${DEPLOY_PROD_HOST:?prod migration requires DEPLOY_PROD_HOST in .env.deploy}"
+            : "${DEPLOY_PROD_USER:?prod migration requires DEPLOY_PROD_USER in .env.deploy}"
             DOCROOT="$DEPLOY_PROD_PATH"
+            REMOTE_HOST="$DEPLOY_PROD_HOST"
+            REMOTE_USER="$DEPLOY_PROD_USER"
+            REMOTE_PORT="${DEPLOY_PROD_PORT:-22}"
             ;;
         staging)
+            : "${DEPLOY_HOST:?staging migration requires DEPLOY_HOST in .env.deploy}"
+            : "${DEPLOY_USER:?staging migration requires DEPLOY_USER in .env.deploy}"
             DOCROOT="${DEPLOY_PATH:-}"
+            REMOTE_HOST="$DEPLOY_HOST"; REMOTE_USER="$DEPLOY_USER"; REMOTE_PORT="${DEPLOY_PORT:-22}"
             ;;
         test)
+            : "${DEPLOY_HOST:?test migration requires DEPLOY_HOST in .env.deploy}"
+            : "${DEPLOY_USER:?test migration requires DEPLOY_USER in .env.deploy}"
             DOCROOT="${DEPLOY_PATH:-}/test"
+            REMOTE_HOST="$DEPLOY_HOST"; REMOTE_USER="$DEPLOY_USER"; REMOTE_PORT="${DEPLOY_PORT:-22}"
             ;;
         dev)
+            : "${DEPLOY_HOST:?dev migration requires DEPLOY_HOST in .env.deploy}"
+            : "${DEPLOY_USER:?dev migration requires DEPLOY_USER in .env.deploy}"
             DOCROOT="${DEPLOY_PATH:-}/dev"
+            REMOTE_HOST="$DEPLOY_HOST"; REMOTE_USER="$DEPLOY_USER"; REMOTE_PORT="${DEPLOY_PORT:-22}"
             ;;
     esac
     DOCROOT_PARENT="$(dirname "$DOCROOT")"
     LAYOUT_NAME="$(basename "$DOCROOT")"
 
-    # Real-remote migration would require ssh wrappers around every
-    # mv/ln/mkdir below — this is intentionally NOT plumbed end-to-end
-    # in this sprint. The script header documents fixture mode as the
-    # tested path; the real-remote runbook lands in a follow-up commit.
-    echo "❌  Real-remote migration mode is not enabled in this build." >&2
-    echo "    Run with BV_MIGRATE_LOCAL_PARENT=<dir> against a fixture, or" >&2
-    echo "    extend this script's remote-mode wrappers in a follow-up." >&2
-    exit 1
+    # SSH-auth helpers — dispatch via sshpass (DEPLOY_PASS / DEPLOY_PROD_PASS)
+    # or bare ssh+key based on which env vars are set for this tier.
+    # shellcheck source=deploy/lib/ssh-auth.sh
+    . "$SCRIPT_DIR/lib/ssh-auth.sh"
 fi
 
 RELEASES_DIR="$DOCROOT_PARENT/${LAYOUT_NAME}-releases"
@@ -413,6 +428,7 @@ draw_banner \
 # real <tier>/ dir but <tier>data/v0/ already exists, etc.) gets a
 # distinct diagnostic so the operator notices the inconsistency.
 
+if [ "$LOCAL_MODE" = "1" ]; then
 echo "→ Step 1/7: Sanity check — refuse if already atomic..."
 
 DOCROOT_IS_SYMLINK=0
@@ -469,6 +485,7 @@ if [ -L "$DOCROOT" ]; then
 fi
 
 echo "  ✓ Tier is in legacy layout — proceeding to backup."
+fi   # end LOCAL_MODE step 1 wrap
 
 # =============================================================================
 # Step 2 — PRE-FLIGHT BACKUP
@@ -548,6 +565,183 @@ fi
 
 BOOTSTRAP_DIR="${RELEASES_DIR}/${BOOTSTRAP_ID}"
 echo "  ℹ️  Bootstrap release id: ${BOOTSTRAP_ID}"
+
+# =============================================================================
+# Remote-mode dispatch — short-circuit steps 3-6 + 7 here, then exit.
+# =============================================================================
+#
+# In remote mode, the destructive operations (steps 1, 3, 4, 5, 6) run
+# on the tier host as one self-contained shell snippet piped through
+# ssh. After the snippet returns, we write release-meta.yaml locally
+# (using the operator's git context — same as local mode) and rsync it
+# into the bootstrap dir. Step 7 (smoke probe) is HTTP-from-laptop, so
+# it runs unchanged.
+#
+# Step-6 timing: shared-host date(1) lacks ms resolution, so we measure
+# the full ssh round-trip duration on the operator's clock as an upper
+# bound. Real swap window is the rmdir+ln_sfn pair at the end of the
+# snippet (single-digit ms typically).
+
+if [ "$LOCAL_MODE" = "0" ]; then
+    REMOTE_STEPS_FILE="$SCRIPT_DIR/lib/migrate-remote-steps.sh"
+    if [ ! -f "$REMOTE_STEPS_FILE" ]; then
+        echo "❌  Missing remote-steps script: $REMOTE_STEPS_FILE" >&2
+        exit 1
+    fi
+
+    if [ "${BV_MIGRATE_REMOTE_DRY_RUN:-0}" = "1" ]; then
+        echo ""
+        echo "  ℹ️  BV_MIGRATE_REMOTE_DRY_RUN=1 — printing what would be sent, NOT executing."
+        echo ""
+        echo "  ssh ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_PORT} bash -s -- \\"
+        echo "      '${DOCROOT}' \\"
+        echo "      '${DATA_DIR}' \\"
+        echo "      '${RELEASES_DIR}' \\"
+        echo "      '${BOOTSTRAP_ID}' \\"
+        echo "      '${ENV}' \\"
+        echo "      < ${REMOTE_STEPS_FILE}"
+        echo ""
+        echo "  (dry-run complete — no remote mutation performed)"
+        exit 0
+    fi
+
+    # Pre-flight backup already taken in step 2.
+    #
+    # Pipe the remote snippet via stdin to ssh's bash. Args after
+    # `bash -s --` flow into $1..$5 inside the snippet. bv_ssh_cmd
+    # dispatches via sshpass+password if DEPLOY_PASS is set, else
+    # bare ssh+key. Capture exit status to drive the recovery hint.
+    echo "→ Steps 3-6 [remote]: dispatching destructive sequence to ${REMOTE_HOST} via ssh..."
+
+    STEP_REMOTE_START_MS="$(bv_now_ms)"
+    set +e
+    bv_ssh_cmd -p "$REMOTE_PORT" "${REMOTE_USER}@${REMOTE_HOST}" \
+        bash -s -- \
+            "$DOCROOT" \
+            "$DATA_DIR" \
+            "$RELEASES_DIR" \
+            "$BOOTSTRAP_ID" \
+            "$ENV" \
+        < "$REMOTE_STEPS_FILE"
+    REMOTE_RC=$?
+    set -e
+    STEP_REMOTE_END_MS="$(bv_now_ms)"
+    REMOTE_DURATION_MS=$(( STEP_REMOTE_END_MS - STEP_REMOTE_START_MS ))
+    [ "$REMOTE_DURATION_MS" -lt 0 ] && REMOTE_DURATION_MS=0
+
+    if [ "$REMOTE_RC" -ne 0 ]; then
+        echo "" >&2
+        echo "❌  Remote-side migration FAILED (ssh exit ${REMOTE_RC})." >&2
+        echo "    See messages above for the failing step." >&2
+        echo "" >&2
+        echo "    Recovery: restore the pre-flight backup taken in step 2." >&2
+        echo "    Run \`make list-backups TIER=${ENV}\` to find the id, then" >&2
+        echo "    RESTORE_TO_TIER_ENABLED=1 make restore-${ENV} FROM=<id>" >&2
+        echo "    (the tier may be in mid-migration state — inspect by hand" >&2
+        echo "     before wiping)." >&2
+        echo "" >&2
+        exit 1
+    fi
+
+    echo "  ✓ Remote destructive sequence complete (duration: ${REMOTE_DURATION_MS} ms)."
+
+    # Build release-meta.yaml locally — same field set as the local-mode
+    # path. Quoting via bv_yaml_quote_escape (sourced from atomic-release.sh).
+    SWAPPED_AT_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    DEPLOYED_BY="${BV_MIGRATE_DEPLOYED_BY:-$(git -C "$PROJECT_DIR" config user.email 2>/dev/null || echo "unknown")}"
+    DEPLOYED_AT_ISO="$SWAPPED_AT_ISO"
+    HOST_NAME="${BV_MIGRATE_HOST:-$(hostname 2>/dev/null || echo "unknown")}"
+    CWD_VAL="${BV_MIGRATE_CWD:-$PWD}"
+    GIT_BRANCH="${BV_MIGRATE_BRANCH:-$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")}"
+    GIT_SHA="${BV_MIGRATE_SHA:-$(git -C "$PROJECT_DIR" rev-parse HEAD 2>/dev/null || echo "unknown")}"
+    GIT_SHA_SHORT="${BV_MIGRATE_SHA_SHORT:-$(git -C "$PROJECT_DIR" rev-parse --short=7 HEAD 2>/dev/null || echo "unknown")}"
+    IS_DIRTY="false"
+    if ! git -C "$PROJECT_DIR" diff --quiet HEAD 2>/dev/null \
+       || ! git -C "$PROJECT_DIR" diff --cached --quiet HEAD 2>/dev/null; then
+        IS_DIRTY="true"
+    fi
+
+    # Run the smoke probe NOW (before writing meta) so we can record
+    # its outcome in the same yaml — matches local-mode behaviour.
+    PROBE_URL_REMOTE="${BV_SMOKE_PROBE_URL_OVERRIDE:-${ENV_URL:-http://127.0.0.1/}}"
+    case "$ENV" in
+        dev)     PROBE_URL_REMOTE="${BV_SMOKE_PROBE_URL_OVERRIDE:-https://dev.hackersbychoice.dk/}" ;;
+        test)    PROBE_URL_REMOTE="${BV_SMOKE_PROBE_URL_OVERRIDE:-https://test.hackersbychoice.dk/}" ;;
+        staging) PROBE_URL_REMOTE="${BV_SMOKE_PROBE_URL_OVERRIDE:-https://staging.hackersbychoice.dk/}" ;;
+        prod)    PROBE_URL_REMOTE="${BV_SMOKE_PROBE_URL_OVERRIDE:-https://www.byvaerkstederne.dk/}" ;;
+    esac
+
+    echo "→ Step 7 [remote]: Post-swap smoke probe → ${PROBE_URL_REMOTE} ..."
+    PROBE_STATUS_REMOTE=0
+    PROBE_MATCHED_REMOTE=false
+
+    # No VERSION/BUILD on the bootstrap release of a legacy-migrated
+    # tier — skip substring match, just confirm the docroot serves
+    # something with </html>.
+    PROBE_RESULT_REMOTE="$(bv_smoke_probe "$PROBE_URL_REMOTE" "</html>" 2>/dev/null || true)"
+    PROBE_STATUS_REMOTE="${PROBE_RESULT_REMOTE%%|*}"
+    case "$PROBE_STATUS_REMOTE" in
+        ''|*[!0-9]*) PROBE_STATUS_REMOTE=0 ;;
+    esac
+    if [ "$PROBE_STATUS_REMOTE" = "200" ]; then
+        PROBE_MATCHED_REMOTE=true
+    fi
+
+    # Write release-meta.yaml to a local tempfile, then rsync it up
+    # into the bootstrap dir on the remote.
+    META_LOCAL="$(mktemp -d "${TMPDIR:-/tmp}/bv-migrate-meta.XXXXXXXX")/release-meta.yaml"
+    {
+        printf 'release_id: %s\n' "$BOOTSTRAP_ID"
+        printf 'deployed_at: "%s"\n' "$(bv_yaml_quote_escape "$DEPLOYED_AT_ISO")"
+        printf 'deployed_by: "%s"\n' "$(bv_yaml_quote_escape "$DEPLOYED_BY")"
+        printf 'deployed_from:\n'
+        printf '  host: "%s"\n' "$(bv_yaml_quote_escape "$HOST_NAME")"
+        printf '  cwd: "%s"\n' "$(bv_yaml_quote_escape "$CWD_VAL")"
+        printf '  branch: "%s"\n' "$(bv_yaml_quote_escape "$GIT_BRANCH")"
+        printf '  sha: "%s"\n' "$(bv_yaml_quote_escape "$GIT_SHA")"
+        printf '  sha_short: "%s"\n' "$(bv_yaml_quote_escape "$GIT_SHA_SHORT")"
+        printf '  is_dirty: %s\n' "$IS_DIRTY"
+        printf 'code_version: "0.0.0"\n'
+        printf 'build: "0"\n'
+        printf 'data_version: "v0"\n'
+        printf 'previous_release: ""\n'
+        printf 'previous_data_version: ""\n'
+        printf 'swapped_at: "%s"\n' "$(bv_yaml_quote_escape "$SWAPPED_AT_ISO")"
+        printf 'swap_duration_ms: %s\n' "$REMOTE_DURATION_MS"
+        printf 'smoke_probe:\n'
+        printf '  url: "%s"\n' "$(bv_yaml_quote_escape "$PROBE_URL_REMOTE")"
+        printf '  status: %s\n' "$PROBE_STATUS_REMOTE"
+        printf '  expected_version_substring: "</html>"\n'
+        printf '  matched: %s\n' "$PROBE_MATCHED_REMOTE"
+    } > "$META_LOCAL"
+
+    # Upload via rsync (auth via ssh-auth.sh's bv_rsync_via_ssh).
+    rsync_e="$(bv_rsync_ssh_e "$REMOTE_PORT")" \
+        || { echo "❌  could not build rsync ssh-cmd (sshpass missing?)" >&2; exit 1; }
+    bv_rsync_via_ssh -a -e "$rsync_e" \
+        "$META_LOCAL" \
+        "${REMOTE_USER}@${REMOTE_HOST}:${BOOTSTRAP_DIR}/release-meta.yaml" \
+        || { echo "❌  failed to upload release-meta.yaml to ${BOOTSTRAP_DIR}" >&2; exit 1; }
+    rm -rf "$(dirname "$META_LOCAL")"
+
+    if [ "$PROBE_MATCHED_REMOTE" != "true" ]; then
+        echo "" >&2
+        echo "❌  Post-swap smoke probe FAILED (status: ${PROBE_STATUS_REMOTE})." >&2
+        echo "    The migrated layout IS LIVE — no auto-rollback." >&2
+        echo "    Recovery: restore step-2 backup via" >&2
+        echo "      RESTORE_TO_TIER_ENABLED=1 make restore-${ENV} FROM=<id>" >&2
+        exit 1
+    fi
+
+    echo "  ✓ Smoke probe matched (status 200, body contains </html>)."
+    echo ""
+    echo "  ✅  Migration complete (remote)."
+    echo "  📦  ${DOCROOT} → ${BOOTSTRAP_ID}"
+    echo "  📜  Bootstrap meta uploaded: ${BOOTSTRAP_DIR}/release-meta.yaml"
+    echo "  ⏱  Remote dispatch wall-clock: ${REMOTE_DURATION_MS} ms"
+    echo ""
+    exit 0
+fi
 
 # =============================================================================
 # Step 3 — CREATE <tier>data/v0/ AND MOVE STATE SUBTREES IN
