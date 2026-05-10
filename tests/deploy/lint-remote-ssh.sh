@@ -19,15 +19,39 @@
 # This lint asserts:
 #   1. No `remote_ssh "<...>"` string-built calls remain in deploy/.
 #      The helper itself is retired in favour of bv_remote_run.
-#   2. Every `bv_remote_run` call passes its body as a quoted string
-#      whose interior references values via "$KEY" — never via direct
-#      ${VARIABLE} interpolation of a local-shell variable.
+#   2. Every `bv_remote_run` call passes its body as a single-quoted
+#      string (forces "$KEY" form on the remote), not a double-quoted
+#      string that would defeat the helper's protection by
+#      interpolating local-shell ${X} into the body before dispatch.
 #   3. The body of bv_remote_run itself stays in the lib (single source
 #      of truth); the lint cross-checks that other shell scripts do not
 #      reimplement it.
+#   4. The helper's body still uses printf %q for value emission —
+#      removing that primitive silently re-opens the argument-injection
+#      surface, so the lint locks it in.
 #
 # Wired into Makefile's `test-deploy` target so the regression cannot
 # silently land.
+#
+# KNOWN LIMITATIONS — what this lint does NOT catch:
+#   * Local-shell pre-build of the body string. Example:
+#       local body="test -e ${X}"   # interpolates ${X} HERE
+#       bv_remote_run "$body"       # body is now a literal command
+#     The lint sees `bv_remote_run "$body"` (a double-quoted variable,
+#     not a string) and would fail check 2 — so this particular
+#     pattern IS caught. But a more elaborate pattern that pre-builds
+#     via printf into a single-quoted-looking shape (e.g. `body="$(
+#     printf '%s' "test -e \"\$X\"")"`) could in principle slip past.
+#   * Body strings that legitimately need to embed a ${...} for some
+#     remote-only purpose. The lint refuses any ${...} but offers no
+#     escape hatch; if a real need arises, refine check 2's grep.
+#   * Bodies that call out to shell helpers defined locally and not
+#     re-defined remotely. The lint can't detect missing remote-side
+#     definitions; that's a runtime failure, not a static one.
+#
+# These are documented gaps, not bugs. Code review of changes that
+# touch deploy/lib/atomic-release.sh's bv_remote_run, or that add
+# new call sites, must look at the full pattern, not just lint output.
 
 set -euo pipefail
 
@@ -57,7 +81,7 @@ echo "---"
 # We deliberately exclude this lint file's own description of the
 # pattern (which contains the string in comments and example code).
 HITS="$(grep -rn 'remote_ssh "[^"]' "$DEPLOY_DIR" 2>/dev/null \
-        | grep -v '^[^:]*:[[:space:]]*#' \
+        | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' \
         || true)"
 if [ -z "$HITS" ]; then
     check "deploy/ contains no remote_ssh \"<string>\" call sites" ok
@@ -77,7 +101,7 @@ fi
 # common-case regression (someone writes `bv_remote_run "test -e ${X}"`
 # where the body is double-quoted, defeating the helper's protection).
 DOUBLE_QUOTED_BODIES="$(grep -rn 'bv_remote_run "' "$DEPLOY_DIR" 2>/dev/null \
-                        | grep -v '^[^:]*:[[:space:]]*#' \
+                        | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' \
                         || true)"
 if [ -z "$DOUBLE_QUOTED_BODIES" ]; then
     check "every bv_remote_run body is single-quoted (forces \"\$KEY\" form)" ok

@@ -416,11 +416,11 @@ else
     REMOTE_SYM_CHECK="$(bv_remote_run '
         bad=""
         for s in user/accounts user/data logs; do
-            if [ ! -L "$rd/$s" ]; then bad="$bad missing-link:$s"; continue; fi
-            if [ ! -e "$rd/$s" ]; then bad="$bad dangling:$s"; fi
+            if [ ! -L "$RD/$s" ]; then bad="$bad missing-link:$s"; continue; fi
+            if [ ! -e "$RD/$s" ]; then bad="$bad dangling:$s"; fi
         done
         printf "%s" "$bad"
-    ' rd="$PREV_RELEASE_DIR")"
+    ' RD="$PREV_RELEASE_DIR")"
     if [ -n "$REMOTE_SYM_CHECK" ]; then
         echo "" >&2
         echo "❌  Previous release '${PREV_RELEASE_ID}' has dangling data symlinks:${REMOTE_SYM_CHECK}" >&2
@@ -474,8 +474,8 @@ else
     PROBE_TMP="$(mktemp -d)"
     # shellcheck disable=SC2064
     trap "rm -rf \"$PROBE_TMP\"" EXIT
-    if ! bv_remote_run 'cat "$rd/VERSION"' rd="$PREV_RELEASE_DIR" > "$PROBE_TMP/VERSION" 2>/dev/null \
-       || ! bv_remote_run 'cat "$rd/BUILD"'   rd="$PREV_RELEASE_DIR" > "$PROBE_TMP/BUILD"   2>/dev/null; then
+    if ! bv_remote_run 'cat "$RD/VERSION"' RD="$PREV_RELEASE_DIR" > "$PROBE_TMP/VERSION" 2>/dev/null \
+       || ! bv_remote_run 'cat "$RD/BUILD"'   RD="$PREV_RELEASE_DIR" > "$PROBE_TMP/BUILD"   2>/dev/null; then
         echo "  ⚠️  Could not read VERSION/BUILD from previous release on remote — skipping probe." >&2
         PROBE_EXPECTED=""
     else

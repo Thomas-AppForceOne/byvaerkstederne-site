@@ -902,12 +902,19 @@ bv_yaml_quote_escape() {
 bv_require_ms_timing() {
     local probe
     probe="$(date +%s%N 2>/dev/null || true)"
-    if [ -z "$probe" ] || [ "${probe: -1}" = "N" ]; then
-        echo "❌  ms-resolution timing requires GNU coreutils." >&2
-        echo "    On macOS:    brew install coreutils  (then re-run)" >&2
-        echo "    On Linux:    your packaged \`date\` already supports %N — check PATH." >&2
-        return 1
-    fi
+    # POSIX case glob — works on bash 3.2 (macOS Intel default) without
+    # the bash-4-only ${probe: -1} negative-substring syntax we shipped
+    # in the first follow-up. The regression mode under bash 3.2 was a
+    # parse error inside [ ], silent exit 0 — strictly worse than the
+    # diagnostic this branch produces.
+    case "$probe" in
+        ''|*N)
+            echo "❌  ms-resolution timing requires GNU coreutils." >&2
+            echo "    On macOS:    brew install coreutils  (then re-run)" >&2
+            echo "    On Linux:    your packaged \`date\` already supports %N — check PATH." >&2
+            return 1
+            ;;
+    esac
     return 0
 }
 
@@ -946,17 +953,55 @@ bv_now_ms() {
 # Or, to capture remote stdout:
 #   STATE="$(bv_remote_run 'if [ -L "$T" ]; then echo symlink; else echo other; fi' T="$DEPLOY_TARGET")"
 #
-# Reserved keys: SSHPASS, PATH, HOME, USER — the helper refuses these,
-# which would either change the remote shell's lookup behaviour or leak
-# the local password to remote-side processes.
+# Allowed keys: caller-defined upper-case identifiers matching
+# `[A-Z_][A-Z0-9_]*`. Lower-case identifiers, mixed-case identifiers,
+# numeric prefixes, and known-dangerous environment names are all
+# rejected. The allowlist shape is the principled choice — it makes
+# adding a new call site noisier on purpose, since the convention is
+# "if it goes through bv_remote_run, the key is UPPER_CASE".
+#
+# Why an allowlist and not a denylist: shell environments inherit
+# behaviour from a long tail of variables (IFS, BASH_ENV, PROMPT_COMMAND,
+# PS4, SHELL, SHELLOPTS, BASHOPTS, CDPATH, ENV, BASH_FUNC_*, plus the
+# original SSHPASS/PATH/HOME/USER/LD_*/DYLD_* set). Enumerating them
+# all is a maintenance trap; requiring upper-case identifiers is a
+# single rule that excludes every reserved name (which by convention
+# is also upper-case but typically named distinctively, e.g. PATH not
+# PARENT — and our explicit denylist below catches the remaining
+# overlap) while keeping caller-side intent obvious.
+#
+# The explicit denylist below covers the upper-case identifiers a
+# caller might plausibly pick that ARE reserved. Adding to it is
+# cheap; the caller-side cost of a false positive is "rename your
+# variable to something that isn't a documented shell-internal name".
 bv_remote_run() {
-    local body="${1:?body required}"
+    # Explicit input validation via `return 1` (NOT `${var:?msg}`) so
+    # callers can gracefully `if bv_remote_run ...; then ... fi` against
+    # rejection paths. The `:?` form exits the entire shell, which makes
+    # the rejection paths impossible to test in a fixture.
+    if [ -z "${1:-}" ]; then
+        echo "FATAL: bv_remote_run requires a body argument" >&2
+        return 1
+    fi
+    local body="$1"
     shift
 
-    : "${DEPLOY_HOST:?bv_remote_run requires DEPLOY_HOST}"
-    : "${DEPLOY_USER:?bv_remote_run requires DEPLOY_USER}"
-    : "${DEPLOY_PASS:?bv_remote_run requires DEPLOY_PASS}"
-    : "${DEPLOY_PORT:?bv_remote_run requires DEPLOY_PORT}"
+    if [ -z "${DEPLOY_HOST:-}" ]; then
+        echo "FATAL: bv_remote_run requires DEPLOY_HOST" >&2
+        return 1
+    fi
+    if [ -z "${DEPLOY_USER:-}" ]; then
+        echo "FATAL: bv_remote_run requires DEPLOY_USER" >&2
+        return 1
+    fi
+    if [ -z "${DEPLOY_PASS:-}" ]; then
+        echo "FATAL: bv_remote_run requires DEPLOY_PASS" >&2
+        return 1
+    fi
+    if [ -z "${DEPLOY_PORT:-}" ]; then
+        echo "FATAL: bv_remote_run requires DEPLOY_PORT" >&2
+        return 1
+    fi
 
     local script_input
     script_input="$(
@@ -972,17 +1017,24 @@ bv_remote_run() {
             esac
             k="${kv%%=*}"
             v="${kv#*=}"
-            # Reject reserved / dangerous keys.
+            # ALLOWLIST: upper-case shell identifiers only.
+            # `[A-Z_]` for the first char, `[A-Z0-9_]*` for the rest —
+            # POSIX-portable case-glob shape that excludes lower-case,
+            # numeric-prefix, and any character outside the alphabet.
             case "$k" in
-                ''|SSHPASS|PATH|HOME|USER|LD_*|DYLD_*)
-                    echo "FATAL: bv_remote_run refuses to set remote env var '$k'" >&2
+                ''|[!A-Z_]*|*[!A-Z0-9_]*)
+                    echo "FATAL: bv_remote_run refuses key '$k' — must match [A-Z_][A-Z0-9_]* (upper-case shell identifier)" >&2
                     return 1
                     ;;
             esac
-            # Reject keys that aren't a valid shell identifier.
+            # DENYLIST (defence in depth): even within the upper-case
+            # shape, certain identifiers change shell behaviour or leak
+            # secrets and must never be set by callers.
             case "$k" in
-                [!A-Za-z_]*|*[!A-Za-z0-9_]*)
-                    echo "FATAL: bv_remote_run refuses key '$k' — not a valid shell identifier" >&2
+                SSHPASS|PATH|HOME|USER|SHELL|SHELLOPTS|BASHOPTS|IFS|\
+                BASH_ENV|PROMPT_COMMAND|PS1|PS2|PS3|PS4|CDPATH|ENV|\
+                LD_*|DYLD_*|BASH_FUNC_*)
+                    echo "FATAL: bv_remote_run refuses to set remote env var '$k' (reserved / dangerous)" >&2
                     return 1
                     ;;
             esac

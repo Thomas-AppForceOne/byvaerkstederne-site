@@ -635,19 +635,19 @@ echo "→ Step 5/8: Wiring release symlinks (per §Symlink contract)..."
 # etc. so no operator-controlled metacharacter can land in the command
 # line.
 bv_remote_run '
-    mkdir -p "$rd/user/config" "$rd/user/env/$e/config"
-    for p in "$rd/user/accounts" "$rd/user/data" "$rd/user/config/security.yaml" "$rd/user/env/$e/config/security.yaml" "$rd/logs"; do
+    mkdir -p "$RD/user/config" "$RD/user/env/$E/config"
+    for p in "$RD/user/accounts" "$RD/user/data" "$RD/user/config/security.yaml" "$RD/user/env/$E/config/security.yaml" "$RD/logs"; do
         if [ -e "$p" ] && [ ! -L "$p" ]; then rm -rf "$p"; fi
     done
-    ln -sfn "../../../$ddn/v0/user/accounts"                       "$rd/user/accounts"
-    ln -sfn "../../../$ddn/v0/user/data"                           "$rd/user/data"
-    ln -sfn "../../../../$ddn/v0/user/config/security.yaml"        "$rd/user/config/security.yaml"
-    ln -sfn "../../../../../../$ddn/v0/user/env/$e/config/security.yaml" "$rd/user/env/$e/config/security.yaml"
-    ln -sfn "../../$ddn/logs"                                      "$rd/logs"
+    ln -sfn "../../../$DDN/v0/user/accounts"                              "$RD/user/accounts"
+    ln -sfn "../../../$DDN/v0/user/data"                                  "$RD/user/data"
+    ln -sfn "../../../../$DDN/v0/user/config/security.yaml"               "$RD/user/config/security.yaml"
+    ln -sfn "../../../../../../$DDN/v0/user/env/$E/config/security.yaml"  "$RD/user/env/$E/config/security.yaml"
+    ln -sfn "../../$DDN/logs"                                             "$RD/logs"
 ' \
-    rd="$RELEASE_DIR" \
-    ddn="${LAYOUT_NAME}data" \
-    e="$ENV"
+    RD="$RELEASE_DIR" \
+    DDN="${LAYOUT_NAME}data" \
+    E="$ENV"
 
 echo "  ✓ Symlinks wired"
 
@@ -792,18 +792,18 @@ echo "  ✓ Smoke probe matched (status=${PROBE_STATUS})"
 # be shuffled across the wire.
 KEEP_N="${BV_RELEASES_KEEP:-5}"
 bv_remote_run '
-    [ -d "$rdir" ] || exit 0
-    cd "$rdir"
+    [ -d "$RDIR" ] || exit 0
+    cd "$RDIR"
     all=$(ls -1 | sort)
     total=$(printf "%s\n" "$all" | grep -c . || true)
-    if [ "$total" -le "$keep" ]; then exit 0; fi
-    drop=$((total - keep))
+    if [ "$total" -le "$KEEP" ]; then exit 0; fi
+    drop=$((total - KEEP))
     n=0
     for rid in $all; do
         [ "$n" -ge "$drop" ] && break
         n=$((n+1))
         case "$rid" in
-            "$cur"|"$prev") continue ;;
+            "$CUR"|"$PREV") continue ;;
         esac
         case "$rid" in
             migrate-bootstrap-*)
@@ -825,10 +825,10 @@ bv_remote_run '
     done
     echo "  data-version retention deferred to data-versioning spec"
 ' \
-    rdir="$RELEASES_DIR" \
-    cur="$RELEASE_ID" \
-    prev="${PREV_RELEASE_ID:-__none__}" \
-    keep="$KEEP_N"
+    RDIR="$RELEASES_DIR" \
+    CUR="$RELEASE_ID" \
+    PREV="${PREV_RELEASE_ID:-__none__}" \
+    KEEP="$KEEP_N"
 
 echo ""
 echo "  ✅  Atomic deploy complete!"
