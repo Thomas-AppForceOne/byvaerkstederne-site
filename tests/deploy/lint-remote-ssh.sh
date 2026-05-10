@@ -148,6 +148,63 @@ for script in "$DEPLOY_DIR/deploy.sh" "$DEPLOY_DIR/rollback.sh" "$DEPLOY_DIR/mig
     fi
 done
 
+# 6. backup.sh and restore.sh must dispatch SSH and rsync through
+#    bv_ssh_cmd / bv_rsync_via_ssh / bv_rsync_ssh_e — never bare
+#    `ssh -o BatchMode=yes` or `rsync -e "ssh ..."`. The helpers pick
+#    between sshpass-password-auth and key-auth based on whether
+#    DEPLOY_PASS / DEPLOY_PROD_PASS is set; reintroducing bare ssh
+#    silently breaks password-auth hosts (e.g. one.com).
+for base in backup.sh restore.sh; do
+    script="$DEPLOY_DIR/$base"
+    [ -f "$script" ] || { check "$base exists" fail; continue; }
+
+    # The helper file must be sourced.
+    if grep -q 'lib/ssh-auth.sh' "$script"; then
+        check "$base sources deploy/lib/ssh-auth.sh" ok
+    else
+        check "$base must source deploy/lib/ssh-auth.sh" fail
+    fi
+
+    # No bare `ssh -o BatchMode=yes` (the original key-only pattern).
+    # Comments are skipped via the same regex shape as check 1/2.
+    bare_ssh="$(grep -nE 'ssh -o BatchMode=yes' "$script" 2>/dev/null \
+                | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' \
+                || true)"
+    if [ -z "$bare_ssh" ]; then
+        check "$base does not invoke bare \`ssh -o BatchMode=yes\` (use bv_ssh_cmd)" ok
+    else
+        check "$base must use bv_ssh_cmd, not bare ssh+BatchMode" fail
+        printf '%s\n' "$bare_ssh" | sed 's/^/      /' >&2
+    fi
+
+    # No bare `rsync -e "ssh ..."` — must go through bv_rsync_ssh_e
+    # (which returns a sshpass-aware -e value).
+    bare_rsync="$(grep -nE 'rsync.*-e[[:space:]]+"ssh ' "$script" 2>/dev/null \
+                  | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' \
+                  || true)"
+    if [ -z "$bare_rsync" ]; then
+        check "$base does not hardcode \`-e \"ssh ...\"\` (use bv_rsync_ssh_e)" ok
+    else
+        check "$base must use bv_rsync_ssh_e for rsync's -e value" fail
+        printf '%s\n' "$bare_rsync" | sed 's/^/      /' >&2
+    fi
+done
+
+# 7. ssh-auth.sh helper has the load-bearing properties we depend on.
+SSH_AUTH="$DEPLOY_DIR/lib/ssh-auth.sh"
+if [ -f "$SSH_AUTH" ]; then
+    if grep -q 'sshpass -e' "$SSH_AUTH"; then
+        check "ssh-auth.sh uses 'sshpass -e' (password via env, not command line)" ok
+    else
+        check "ssh-auth.sh must use 'sshpass -e' (NOT 'sshpass -p')" fail
+    fi
+    if grep -q 'BatchMode=yes' "$SSH_AUTH"; then
+        check "ssh-auth.sh's key-auth path includes BatchMode=yes (fail-fast on missing key)" ok
+    else
+        check "ssh-auth.sh's key-auth path must include BatchMode=yes" fail
+    fi
+fi
+
 echo ""
 echo "─────────────────────────────────────"
 echo "  Pass: $PASS    Fail: $FAIL"

@@ -176,6 +176,12 @@ if [ -f "$ENV_FILE" ]; then
     set +a
 fi
 
+# SSH-auth helpers — same pattern as backup.sh. Picks between sshpass
+# password-auth (DEPLOY_PASS / DEPLOY_PROD_PASS) and bare-ssh+key-auth
+# based on which env vars are set for the active tier.
+# shellcheck source=deploy/lib/ssh-auth.sh
+. "$REPO_ROOT/deploy/lib/ssh-auth.sh"
+
 # ──────────────────────────────────────────────────────────────────────
 # Storage layer abstraction. Same shape as backup.sh: prefer
 # BACKUP_LOCAL_STORE_DIR, then S3, otherwise fall back to local
@@ -595,11 +601,15 @@ done < "$PATHS_FILE"
 # Wipe + replace each allow-listed path. This is the call the
 # confinement hook would block — it's only reachable when
 # RESTORE_TO_TIER_ENABLED=1 is set explicitly on a real operator run.
+# bv_rsync_via_ssh + bv_rsync_ssh_e dispatch via sshpass when
+# DEPLOY_PASS / DEPLOY_PROD_PASS is configured for the tier.
+rsync_e="$(bv_rsync_ssh_e "$SSH_PORT")" \
+    || die "could not build rsync ssh-cmd (sshpass missing?)" 5
 for rel in "${INCLUDE_PATHS[@]}"; do
     src="$SCRATCH/unpacked/$rel/"
     [ -d "$src" ] || { log_op "skip $rel (not in archive)"; continue; }
     log_op "rsync --delete to ${SSH_USER}@${SSH_HOST}:${SSH_PATH}/$rel"
-    rsync -az --delete -e "ssh -p ${SSH_PORT}" \
+    bv_rsync_via_ssh -az --delete -e "$rsync_e" \
           "$src" "${SSH_USER}@${SSH_HOST}:${SSH_PATH}/${rel}/" \
           || die "rsync to ${SSH_HOST}:${SSH_PATH}/$rel failed (log: $LOG_FILE)" 5
 done
@@ -607,7 +617,7 @@ done
 # Clear caches afterwards. We use the spec-mandated `bin/grav
 # clearcache` (no hyphen).
 log_op "clearing Grav caches on ${SSH_HOST}"
-ssh -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" \
+bv_ssh_cmd -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" \
     "cd $(printf %q "$SSH_PATH") && bin/grav clearcache" \
     >>"$LOG_FILE" 2>&1 \
     || warn "bin/grav clearcache returned non-zero (continuing)"

@@ -45,6 +45,7 @@ directory it creates.
 |------|-----|
 | [`age`](https://age-encryption.org) | Encrypts/decrypts the archive (`brew install age`). |
 | `tar`, `rsync`, `ssh` | Standard on macOS / Linux. |
+| `sshpass` | Same reason as the atomic-deploy section: password-auth shared hosting (one.com, chosting.dk) requires it. backup.sh / restore.sh dispatch through `deploy/lib/ssh-auth.sh` which picks between sshpass+`DEPLOY_PASS` and bare-ssh+key-auth based on whether the password is set for the active tier. Install: `brew install esolitos/ipa/sshpass`. |
 | (optional) `aws` CLI | Only when uploading to S3-compatible managed storage. |
 
 The committed test suite (`tests/deploy/backup-restore.bats`) needs

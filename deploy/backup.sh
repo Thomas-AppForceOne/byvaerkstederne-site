@@ -169,6 +169,14 @@ if [ -f "$ENV_FILE" ] && [ -z "${BACKUP_FIXTURE_DIR:-}" ]; then
     set +a
 fi
 
+# SSH-auth helpers (bv_ssh_cmd, bv_rsync_ssh_e, bv_rsync_via_ssh,
+# bv_resolve_ssh_password). These pick between sshpass+password and
+# bare ssh+key-auth based on whether DEPLOY_PASS / DEPLOY_PROD_PASS is
+# set for the active tier. Source unconditionally — fixture mode never
+# calls them, real-host mode does.
+# shellcheck source=deploy/lib/ssh-auth.sh
+. "$REPO_ROOT/deploy/lib/ssh-auth.sh"
+
 # ──────────────────────────────────────────────────────────────────────
 # Resolve source: either a remote SSH host (production path) or a
 # local fixture directory (test path). The fixture path is the
@@ -224,8 +232,11 @@ if [ "$USE_FIXTURE" = "0" ]; then
     # over a dead connection. Without this probe, an unreachable host
     # would surface as "source tier missing config/www/VERSION" — a
     # misleading message that hides the real failure mode (network).
-    if ! ssh -o BatchMode=yes -o ConnectTimeout=10 -p "$SSH_PORT" \
-             "${SSH_USER}@${SSH_HOST}" true 2>/dev/null; then
+    #
+    # bv_ssh_cmd dispatches to sshpass+password OR bare ssh+BatchMode
+    # depending on whether DEPLOY_PASS / DEPLOY_PROD_PASS is set for
+    # this tier (see deploy/lib/ssh-auth.sh).
+    if ! bv_ssh_cmd -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" true 2>/dev/null; then
         die "ssh to ${SSH_HOST}:${SSH_PORT} failed" 2
     fi
 fi
@@ -334,7 +345,7 @@ source_read_first_line() {
     # isn't consumed. We swallow stderr to keep "no such file" from
     # leaking into our parsed value; the calling site interprets the
     # empty stdout as "missing".
-    ssh -n -o BatchMode=yes -o ConnectTimeout=10 -p "$SSH_PORT" \
+    bv_ssh_cmd -n -p "$SSH_PORT" \
         "${SSH_USER}@${SSH_HOST}" \
         "test -f $(printf %q "$SSH_PATH/config/www/$rel") && head -n 1 $(printf %q "$SSH_PATH/config/www/$rel")" \
         2>/dev/null || true
@@ -371,7 +382,7 @@ source_read_data_version_yaml() {
         fi
         return 0
     fi
-    ssh -n -o BatchMode=yes -o ConnectTimeout=10 -p "$SSH_PORT" \
+    bv_ssh_cmd -n -p "$SSH_PORT" \
         "${SSH_USER}@${SSH_HOST}" \
         "test -f $(printf %q "$SSH_PATH/config/www/user/data-version.yaml") && cat $(printf %q "$SSH_PATH/config/www/user/data-version.yaml")" \
         2>/dev/null || true
@@ -470,7 +481,12 @@ else
         for pat in "${DENY_PATTERNS[@]}"; do
             rsync_excludes+=(--exclude="$pat")
         done
-        rsync -az -e "ssh -p ${SSH_PORT}" \
+        # bv_rsync_via_ssh exports SSHPASS for rsync's child process
+        # when password-auth is configured; bv_rsync_ssh_e returns the
+        # appropriate `-e` value (sshpass-wrapped or bare).
+        rsync_e="$(bv_rsync_ssh_e "$SSH_PORT")" \
+            || die "could not build rsync ssh-cmd (sshpass missing?)" 2
+        bv_rsync_via_ssh -az -e "$rsync_e" \
               "${rsync_excludes[@]}" \
               "${SSH_USER}@${SSH_HOST}:${SSH_PATH}/${rel}/" \
               "$STAGE_DIR/${rel}/" \
