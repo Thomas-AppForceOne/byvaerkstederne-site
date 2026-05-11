@@ -434,7 +434,8 @@ if [ "$ENV_KIND" = "landing" ]; then
     # accidentally clobber the Grav tiers' release dirs / data dirs.
     # The leading slash pins these to the rsync root.
     RSYNC_FLAGS=(
-        -avz --delete --max-delete=25
+        -az --delete --max-delete=25
+        --info=progress2,stats0
         --exclude='.DS_Store'
         --exclude='/dev/'
         --exclude='/test/'
@@ -644,7 +645,8 @@ bv_remote_run 'mkdir -p "$RELEASE_DIR"' RELEASE_DIR="$RELEASE_DIR"
 # single source of truth) so deploy.sh and the test fixture cannot
 # drift on what gets stripped.
 RSYNC_FLAGS_ATOMIC=(
-    -avz --max-delete=0
+    -az --max-delete=0
+    --info=progress2,stats0
 )
 # Extend with the lib's exclude list (single source of truth — see
 # bv_atomic_release_excludes in deploy/lib/atomic-release.sh).
