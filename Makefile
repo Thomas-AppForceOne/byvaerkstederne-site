@@ -145,12 +145,13 @@ backup: ## Backup a tier's data (tier=dev|test|staging|prod)
 list-backups: ## List backup ids available for restore (optional tier=dev|test|staging|prod)
 	@./deploy/list-backups.sh $(tier)
 
-restore: ## Restore a tier from a backup (tier=<env> from=<id>; set RESTORE_TO_TIER_ENABLED=1 to actually wipe; prod refused)
-	@t="$(tier)"; f="$(from)"; \
+restore: ## Restore a tier from a backup (tier=<env> from=<id> [allow_cross_tier=1]; RESTORE_TO_TIER_ENABLED=1 to actually wipe; prod refused)
+	@t="$(tier)"; f="$(from)"; xt="$(allow_cross_tier)"; \
+	xt_flag=""; [ "$$xt" = "1" ] && xt_flag="--allow-cross-tier"; \
 	case "$$t" in \
 	  dev|test|staging) \
-	    if [ -z "$$f" ]; then echo "❌  Usage: make restore tier=$$t from=<id>"; exit 1; fi; \
-	    ./deploy/restore.sh "$$t" --from "$$f" ;; \
+	    if [ -z "$$f" ]; then echo "❌  Usage: make restore tier=$$t from=<id> [allow_cross_tier=1]"; exit 1; fi; \
+	    ./deploy/restore.sh "$$t" --from "$$f" $$xt_flag ;; \
 	  prod) \
 	    echo ""; \
 	    echo "❌  'make restore tier=prod' is intentionally refused."; \

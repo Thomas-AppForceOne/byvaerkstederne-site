@@ -71,9 +71,13 @@ usage() {
     cat <<'EOF' >&2
 Usage:
   ./deploy/restore.sh --to <dir> [--from <id>]
-  ./deploy/restore.sh <tier> --from <id> [--yes-i-mean-it]
+  ./deploy/restore.sh <tier> --from <id> [--allow-cross-tier] [--yes-i-mean-it]
 
   <tier> ∈ {prod, staging, test, dev}
+
+  --allow-cross-tier: accept an archive whose name prefixes a different
+  tier (e.g. restore a dev-* backup into the test tier). Required because
+  the source-tier prefix is normally enforced as a guardrail.
 EOF
 }
 
@@ -123,6 +127,7 @@ TIER=""
 TO_DIR=""
 FROM_ID=""
 YES_FLAG=0
+ALLOW_CROSS_TIER=0  # accept archives whose tier-prefix differs from the target tier
 
 if [ $# -eq 0 ]; then usage; exit 1; fi
 
@@ -153,6 +158,9 @@ while [ $# -gt 0 ]; do
         --yes-i-mean-it)
             YES_FLAG=1; shift
             ;;
+        --allow-cross-tier)
+            ALLOW_CROSS_TIER=1; shift
+            ;;
         --help|-h) usage; exit 0 ;;
         *) die "Unknown option: $(printf %q "$1")" 1 ;;
     esac
@@ -165,7 +173,7 @@ if [ "$MODE" = "tier" ] && [ -z "$FROM_ID" ]; then
     die "--from <id> is required for restore-to-tier" 1
 fi
 
-readonly MODE TIER TO_DIR FROM_ID YES_FLAG
+readonly MODE TIER TO_DIR FROM_ID YES_FLAG ALLOW_CROSS_TIER
 
 # ──────────────────────────────────────────────────────────────────────
 # Source environment file (if present).
@@ -261,7 +269,7 @@ resolve_archive() {
         if [ -n "$tier_filter" ]; then
             case "$fname" in
                 "${tier_filter}-"*) ;;
-                *) die "Archive '$fname' is not for tier '$tier_filter'" 1 ;;
+                *) die "Archive '$fname' is not for tier '$tier_filter' (pass --allow-cross-tier to override)" 1 ;;
             esac
         fi
         printf '%s\n' "$fname"
@@ -383,7 +391,24 @@ if [ "$MODE" = "scratch" ]; then
         ARCHIVE_NAME="$(resolve_archive "latest" "")"
     fi
 else
-    ARCHIVE_NAME="$(resolve_archive "$FROM_ID" "$TIER")"
+    # tier mode. When --allow-cross-tier is set, skip the tier-prefix
+    # check inside resolve_archive (pass empty filter) and warn loudly
+    # so the cross-application is visible in the run log.
+    if [ "$ALLOW_CROSS_TIER" = "1" ]; then
+        ARCHIVE_NAME="$(resolve_archive "$FROM_ID" "")"
+        case "$ARCHIVE_NAME" in
+            "${TIER}-"*)
+                # archive prefix matches the target tier — flag is a no-op
+                ;;
+            *)
+                src_tier="${ARCHIVE_NAME%%-*}"
+                warn "cross-tier restore: applying ${src_tier}-tier archive '$ARCHIVE_NAME' to ${TIER} tier"
+                warn "  (the source tier's accounts / data / pages will replace the target tier's)"
+                ;;
+        esac
+    else
+        ARCHIVE_NAME="$(resolve_archive "$FROM_ID" "$TIER")"
+    fi
 fi
 
 # ──────────────────────────────────────────────────────────────────────

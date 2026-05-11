@@ -380,6 +380,51 @@ teardown() {
     [[ "$output" == *"Unknown tier"* ]]
 }
 
+@test "restore.sh refuses cross-tier archive without --allow-cross-tier" {
+    # Take a backup so something exists in managed storage, then try
+    # to restore it into a different tier than the archive's prefix.
+    run "$BACKUP_SH" prod
+    [ "$status" -eq 0 ]
+    archive="$(ls "$BACKUP_LOCAL_STORE_DIR"/prod-*.tar.gz.age | head -n1)"
+    id="$(basename "$archive" .tar.gz.age)"
+
+    # Try to restore the prod-* archive into the dev tier — should refuse.
+    run "$RESTORE_SH" dev --from "$id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"is not for tier 'dev'"* ]]
+    [[ "$output" == *"--allow-cross-tier"* ]]
+}
+
+@test "restore.sh accepts cross-tier archive with --allow-cross-tier and warns" {
+    run "$BACKUP_SH" prod
+    [ "$status" -eq 0 ]
+    archive="$(ls "$BACKUP_LOCAL_STORE_DIR"/prod-*.tar.gz.age | head -n1)"
+    id="$(basename "$archive" .tar.gz.age)"
+
+    # The flag bypasses the tier-prefix gate. Dev tier doesn't require
+    # --yes-i-mean-it, so the script should reach the log-write path
+    # (in tier-stand-in mode without RESTORE_TO_TIER_ENABLED=1).
+    run "$RESTORE_SH" dev --from "$id" --allow-cross-tier
+    [ "$status" -eq 0 ]
+    # The cross-tier warning fired.
+    [[ "$output" == *"cross-tier restore"* ]]
+    [[ "$output" == *"prod"* ]]
+    [[ "$output" == *"dev"* ]]
+}
+
+@test "restore.sh: --allow-cross-tier with same-tier archive is a no-op (no warning)" {
+    run "$BACKUP_SH" prod
+    [ "$status" -eq 0 ]
+    archive="$(ls "$BACKUP_LOCAL_STORE_DIR"/prod-*.tar.gz.age | head -n1)"
+    id="$(basename "$archive" .tar.gz.age)"
+
+    # Cross-tier flag set, but archive's tier already matches target.
+    # Cross-tier warning must NOT fire.
+    run "$RESTORE_SH" prod --from "$id" --yes-i-mean-it --allow-cross-tier
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"cross-tier restore"* ]]
+}
+
 # ─── failure modes (subset of the contract's failure_modes criterion) ─
 
 @test "missing recipients file → specific error, non-zero exit" {
