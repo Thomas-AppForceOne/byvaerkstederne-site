@@ -443,8 +443,8 @@ fi
 # trust a metadata field that came from corrupted state.
 dv_raw="$(source_read_data_version_yaml)"
 if [ -z "$dv_raw" ]; then
-    # File-not-present: spec-defined fallback to "0.0.0".
-    warn "source tier has no user/data-version.yaml — defaulting data_version to 0.0.0"
+    # File-not-present: fallback to "0.0.0". data-version.yaml is reserved
+    # for a future data-versioning feature that has not yet shipped.
     DATA_VERSION="0.0.0"
 else
     DATA_VERSION="$(extract_yaml_version_field "$dv_raw")"
