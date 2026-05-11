@@ -363,7 +363,7 @@ if [ "$LOCAL_MODE" = "0" ]; then
         staging)
             : "${DEPLOY_HOST:?staging migration requires DEPLOY_HOST in .env.deploy}"
             : "${DEPLOY_USER:?staging migration requires DEPLOY_USER in .env.deploy}"
-            DOCROOT="${DEPLOY_PATH:-}"
+            DOCROOT="${DEPLOY_PATH:-}/staging"
             REMOTE_HOST="$DEPLOY_HOST"; REMOTE_USER="$DEPLOY_USER"; REMOTE_PORT="${DEPLOY_PORT:-22}"
             ;;
         test)

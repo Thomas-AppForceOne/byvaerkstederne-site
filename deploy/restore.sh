@@ -634,7 +634,7 @@ case "$TIER" in
         SSH_PORT="${DEPLOY_PORT:-22}"
         base_path="${DEPLOY_PATH:-}"
         case "$TIER" in
-            staging) SSH_PATH="$base_path" ;;
+            staging) SSH_PATH="$base_path/staging" ;;
             test)    SSH_PATH="$base_path/test" ;;
             dev)     SSH_PATH="$base_path/dev" ;;
         esac
