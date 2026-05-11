@@ -812,6 +812,71 @@ else
     check "bv_smoke_probe rejects non-http URL" fail
 fi
 
+# bv_diagnose_probe_failure: pure-logic fingerprinting of common failure modes.
+# Each case: feed it status + final_url + body + expected, assert the right hint.
+DIAG_BODY="$WORK/t8-diag-body"
+EXPECTED_FULL="Version 0.8.0 · build 700"
+
+# 1. status=0 → connection failure
+DIAG="$(bv_diagnose_probe_failure 0 "" "" "$EXPECTED_FULL")"
+case "$DIAG" in
+    *"could not connect"*) check "diagnose: status=0 → connection failure" ok ;;
+    *) check "diagnose: status=0 (got: $DIAG)" fail ;;
+esac
+
+# 2. status=500 → Grav crashed
+DIAG="$(bv_diagnose_probe_failure 500 "https://x/" "" "$EXPECTED_FULL")"
+case "$DIAG" in
+    *"Grav returned HTTP 500"*) check "diagnose: status=500 → Grav crashed" ok ;;
+    *) check "diagnose: status=500 (got: $DIAG)" fail ;;
+esac
+
+# 3. Final URL ends in /admin → setup wizard / no admin user
+DIAG="$(bv_diagnose_probe_failure 200 "https://test.example.com/admin" "" "$EXPECTED_FULL")"
+case "$DIAG" in
+    *"redirected to"*"admin"*"no admin account"*) check "diagnose: redirect /admin → no admin account" ok ;;
+    *) check "diagnose: redirect /admin (got: $DIAG)" fail ;;
+esac
+
+# 3b. Final URL ending /admin/ (trailing slash variant)
+DIAG="$(bv_diagnose_probe_failure 200 "https://test.example.com/admin/" "" "$EXPECTED_FULL")"
+case "$DIAG" in
+    *"no admin account"*) check "diagnose: redirect /admin/ (trailing slash)" ok ;;
+    *) check "diagnose: redirect /admin/ (got: $DIAG)" fail ;;
+esac
+
+# 4. status=200, version prefix present but build mismatch → stale cache
+echo "<html><body>Version 0.8.0 · build 699</body></html>" > "$DIAG_BODY"
+DIAG="$(bv_diagnose_probe_failure 200 "https://x/" "$DIAG_BODY" "$EXPECTED_FULL")"
+case "$DIAG" in
+    *"upstream cache"*"older release"*) check "diagnose: 200 + stale cache → upstream cache" ok ;;
+    *) check "diagnose: stale cache (got: $DIAG)" fail ;;
+esac
+
+# 5. status=200, no version prefix anywhere → template / wrong page
+echo "<html><body>unrelated content</body></html>" > "$DIAG_BODY"
+DIAG="$(bv_diagnose_probe_failure 200 "https://x/" "$DIAG_BODY" "$EXPECTED_FULL")"
+case "$DIAG" in
+    *"version banner is absent"*) check "diagnose: 200 + no version prefix → banner absent" ok ;;
+    *) check "diagnose: banner absent (got: $DIAG)" fail ;;
+esac
+
+# 6. status=403 → auth / route issue
+DIAG="$(bv_diagnose_probe_failure 403 "https://x/" "" "$EXPECTED_FULL")"
+case "$DIAG" in
+    *"HTTP 403"*) check "diagnose: status=403 → auth/route" ok ;;
+    *) check "diagnose: status=403 (got: $DIAG)" fail ;;
+esac
+
+# 7. status=999 (unknown) → unknown failure mode
+DIAG="$(bv_diagnose_probe_failure 999 "https://x/" "" "$EXPECTED_FULL")"
+case "$DIAG" in
+    *"Unknown failure mode"*) check "diagnose: status=999 → unknown" ok ;;
+    *) check "diagnose: status=999 (got: $DIAG)" fail ;;
+esac
+
+rm -f "$DIAG_BODY"
+
 # ─────────────────────────────────────────────────────────────────────
 # Test 9: Makefile rollback aliases.
 # ─────────────────────────────────────────────────────────────────────

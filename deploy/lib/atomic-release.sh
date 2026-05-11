@@ -19,6 +19,7 @@
 #   bv_prune_old_releases         <releases-dir> <current-release-id> <prev-release-id> [keep-N=5]
 #   bv_compute_expected_version_substring <release-dir>             # echoes "Version <X> · build <N>"
 #   bv_smoke_probe                <url> <expected-substring>        # echoes "<status>|<matched>"; rc=0 on match, non-zero otherwise
+#   bv_diagnose_probe_failure     <status> <final-url> <body-file> <expected>   # echoes a "Likely cause: ..." diagnostic to stdout; pure logic, no curl
 #   bv_check_previous_release_data_symlinks <release-dir>           # rc=0 if accounts/, user/data/, logs/ all resolve; non-zero + diagnostic otherwise
 #   bv_rollback_local             <parent-dir> <env> <docroot-name>  # local-mode rollback (no ssh) — used by tests and rollback.sh's --local mode
 #   bv_append_rollback_log_row    <releases-dir> <rolled-back-at> <rolled-back-by> <from-release> <to-release> <swap-duration-ms> <probe-url> <probe-status> <probe-substring> <probe-matched>
@@ -712,6 +713,82 @@ bv_smoke_probe() {
         return 0
     fi
     return 1
+}
+
+# Diagnose a failed smoke probe and emit a human-readable hint.
+#
+# Pure logic — no network calls. The caller is expected to capture the
+# raw signals (status code, final URL after redirects, body file path,
+# expected substring) and pass them in. Keeps the helper trivially
+# unit-testable.
+#
+# Recognised failure modes:
+#   - status=0                       → connection / DNS / TLS failure
+#   - status in 500..599             → Grav crashed (or webserver error)
+#   - final URL ends with /admin     → Grav setup wizard (no admin user)
+#   - 200, version prefix in body    → upstream cache serving stale release
+#   - 200, version prefix absent     → template not rendering / wrong page
+#   - status in 400..499             → auth/route/path issue
+#   - anything else                  → unknown
+#
+# Echoes one or two lines starting with "Likely cause:" / "Fix:" to
+# stdout. Always returns 0; the caller decides exit behaviour.
+bv_diagnose_probe_failure() {
+    local status="${1:-0}"
+    local final_url="${2:-}"
+    local body_file="${3:-}"
+    local expected="${4:-}"
+
+    # status=0 means curl never got a response (connection failure)
+    if [ "$status" = "0" ]; then
+        printf '%s\n' "Likely cause: could not connect — check DNS, network, or TLS certificate."
+        return 0
+    fi
+
+    # 5xx — Grav (or the webserver) crashed
+    if [ "$status" -ge 500 ] 2>/dev/null && [ "$status" -lt 600 ] 2>/dev/null; then
+        printf '%s\n' "Likely cause: Grav returned HTTP ${status}."
+        printf '%s\n' "Fix: inspect the remote logs under <datadir>/logs/ for the stack trace."
+        return 0
+    fi
+
+    # Grav setup-wizard redirect (no admin user → Grav redirects to /admin)
+    case "$final_url" in
+        */admin|*/admin/|*/admin\?*|*/admin/\?*)
+            printf '%s\n' "Likely cause: Grav redirected to ${final_url} — no admin account exists on this tier."
+            printf '%s\n' "Fix: restore a backup ('make restore tier=<env> from=<id>') or seed an admin account."
+            return 0
+            ;;
+    esac
+
+    if [ "$status" = "200" ]; then
+        # Strip the build suffix from the expected string (e.g.
+        # "Version 0.2.0 · build 131" → "Version 0.2.0"). If the
+        # prefix is on the page but the full string isn't, the
+        # version number drifted — Varnish or browser cache is the
+        # most common cause on this hosting.
+        local ver_prefix="${expected%% · build*}"
+        if [ -n "$ver_prefix" ] \
+           && [ -f "$body_file" ] \
+           && grep -F -q -- "$ver_prefix" "$body_file" 2>/dev/null; then
+            printf '%s\n' "Likely cause: the page is being served from an upstream cache (Varnish or browser) showing an older release."
+            printf '%s\n' "Fix: wait ~30s for upstream cache expiry and re-check ${final_url:-the URL}, or invalidate the cache."
+            return 0
+        fi
+        printf '%s\n' "Likely cause: 200 OK but the version banner is absent from the body."
+        printf '%s\n' "Fix: check the page template rendered, and that ${final_url:-the URL} is the homepage (not a redirected admin/setup page)."
+        return 0
+    fi
+
+    # 4xx — auth, route, path
+    if [ "$status" -ge 400 ] 2>/dev/null && [ "$status" -lt 500 ] 2>/dev/null; then
+        printf '%s\n' "Likely cause: HTTP ${status} from ${final_url:-the URL}."
+        printf '%s\n' "Fix: confirm the URL path is correct and reachable without authentication."
+        return 0
+    fi
+
+    printf '%s\n' "Unknown failure mode (status=${status}); inspect ${final_url:-the URL} manually."
+    return 0
 }
 
 # Verify the previous release dir's data symlinks resolve.

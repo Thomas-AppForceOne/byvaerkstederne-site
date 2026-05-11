@@ -842,11 +842,32 @@ sshpass -p "$DEPLOY_PASS" rsync -a \
     "${DEPLOY_USER}@${DEPLOY_HOST}:${RELEASE_DIR}/release-meta.yaml"
 
 if [ "$PROBE_MATCHED" != "true" ] || [ "$PROBE_STATUS" != "200" ]; then
+    # Re-fetch to capture the redirected URL + body so the diagnostic
+    # helper can fingerprint the failure mode. bv_smoke_probe doesn't
+    # expose these signals — cheap to do a second curl, the site is
+    # reachable enough to talk to.
+    PROBE_DIAG_BODY="$(mktemp)"
+    PROBE_FINAL_URL="$(curl -sSL --max-time 15 \
+        -o "$PROBE_DIAG_BODY" \
+        -w '%{url_effective}' \
+        "$PROBE_URL" 2>/dev/null || echo '')"
+
     echo "" >&2
     echo "❌  Smoke probe FAILED for ${PROBE_URL}" >&2
-    echo "    expected: ${PROBE_EXPECTED}" >&2
-    echo "    status:   ${PROBE_STATUS}" >&2
-    echo "    matched:  ${PROBE_MATCHED}" >&2
+    echo "    expected:  ${PROBE_EXPECTED}" >&2
+    echo "    status:    ${PROBE_STATUS}" >&2
+    echo "    matched:   ${PROBE_MATCHED}" >&2
+    if [ -n "$PROBE_FINAL_URL" ] && [ "$PROBE_FINAL_URL" != "$PROBE_URL" ]; then
+        echo "    final URL: ${PROBE_FINAL_URL}" >&2
+    fi
+    echo "" >&2
+    bv_diagnose_probe_failure \
+        "$PROBE_STATUS" \
+        "$PROBE_FINAL_URL" \
+        "$PROBE_DIAG_BODY" \
+        "$PROBE_EXPECTED" \
+        | sed 's/^/    /' >&2
+    rm -f "$PROBE_DIAG_BODY"
     echo "" >&2
     echo "    The new release IS LIVE — there is NO auto-rollback." >&2
     echo "    Inspect: ${PROBE_URL}" >&2
