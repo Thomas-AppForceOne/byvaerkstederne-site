@@ -1,4 +1,4 @@
-.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging deploy-landing rollback-dev rollback-test rollback-staging rollback-prod migrate-atomic-dev migrate-atomic-test migrate-atomic-staging migrate-atomic-prod backup-prod backup-staging backup-test backup-dev list-backups restore-scratch restore-dev restore-test restore-staging restore-prod test test-headed test-auth test-install test-deploy test-backup-restore
+.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy rollback migrate-atomic backup list-backups restore restore-scratch test test-headed test-auth test-install test-deploy test-backup-restore add-age-key list-age-keys retire-age-key
 
 # Default target
 help: ## Show this help
@@ -80,141 +80,100 @@ status: ## Show container status
 		echo "(no Grav container registered for this checkout — run: scripts/grav-up.sh . [port])"; \
 	fi
 
-# ── Deploy ─────────────────────────────────────────────
-
-deploy: deploy-prod ## Alias for deploy-prod
-
-deploy-prod: ## Deploy to production (www.byvaerkstederne.dk — separate hosting)
-	@./deploy/deploy.sh prod
-
-deploy-staging: ## Deploy to staging (staging.hackersbychoice.dk)
-	@./deploy/deploy.sh staging
-
-deploy-test: ## Deploy to test (test.hackersbychoice.dk)
-	@./deploy/deploy.sh test
-
-deploy-dev: ## Deploy to dev (dev.hackersbychoice.dk)
-	@./deploy/deploy.sh dev
-
-deploy-landing: ## Deploy the apex selector page (hackersbychoice.dk)
-	@./deploy/deploy.sh landing
-
-# ── Rollback ───────────────────────────────────────────
+# ── Tier-parameterised commands ────────────────────────
 #
-# Rollback is the inverse of deploy. Each target swaps the docroot
-# symlink back to the previous release named in <tier>-releases/
-# <current>/release-meta.yaml's previous_release field. Audit trail:
-# <tier>-releases/rollback-log.yaml. There is no rollback-landing —
-# the apex landing tier has no atomic layout and no rollback story.
-
-rollback-dev: ## Roll back dev to the previous release (audit log: dev-releases/rollback-log.yaml)
-	@./deploy/rollback.sh dev
-
-rollback-test: ## Roll back test to the previous release (audit log: test-releases/rollback-log.yaml)
-	@./deploy/rollback.sh test
-
-rollback-staging: ## Roll back staging to the previous release (audit log: staging-releases/rollback-log.yaml)
-	@./deploy/rollback.sh staging
-
-rollback-prod: ## Roll back prod to the previous release (audit log: prod-releases/rollback-log.yaml)
-	@./deploy/rollback.sh prod
-
-# ── Migrate to atomic layout (one-time, supervised operation) ───────
+# Tier is passed as a Make variable: `tier=<env>`. Each target validates
+# the value against the closed set before invoking the script, so a
+# typo can never reach the live remote. Restoring prod is intentionally
+# refused at the Make layer — the operator must invoke the script
+# directly so the RESTORE_TO_TIER_ENABLED + --yes-i-mean-it gates are
+# impossible to miss. Same posture for migrate-atomic on prod.
 #
-# Each target invokes ./deploy/migrate-to-atomic-layout.sh with the
-# env literal hard-coded — no recursive expansion of an unvalidated
-# input. The prod target refuses with a hard-coded directive: the
-# operator must invoke the script directly with --i-mean-it, so an
-# accidental `make migrate-atomic-prod` cannot proceed under any
-# circumstance. This is documented in deploy/migrate-to-atomic-layout.sh
-# --help.
+# Examples:
+#   make deploy tier=dev
+#   make rollback tier=test
+#   make migrate-atomic tier=staging
+#   make backup tier=prod
+#   make restore tier=dev from=<id>   # add RESTORE_TO_TIER_ENABLED=1 to actually wipe
 
-migrate-atomic-dev: ## Migrate dev to atomic layout (this is a one-time, supervised operation)
-	@./deploy/migrate-to-atomic-layout.sh dev
+deploy: ## Atomic deploy (tier=dev|test|staging|prod|landing)
+	@t="$(tier)"; \
+	case "$$t" in \
+	  dev|test|staging|prod|landing) ./deploy/deploy.sh "$$t" ;; \
+	  "") echo "❌  Usage: make deploy tier=<dev|test|staging|prod|landing>"; exit 1 ;; \
+	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging|prod|landing)"; exit 1 ;; \
+	esac
 
-migrate-atomic-test: ## Migrate test to atomic layout (this is a one-time, supervised operation)
-	@./deploy/migrate-to-atomic-layout.sh test
+rollback: ## Roll back a tier to its previous release (tier=dev|test|staging|prod)
+	@t="$(tier)"; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/rollback.sh "$$t" ;; \
+	  "") echo "❌  Usage: make rollback tier=<dev|test|staging|prod>"; exit 1 ;; \
+	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
 
-migrate-atomic-staging: ## Migrate staging to atomic layout (this is a one-time, supervised operation)
-	@./deploy/migrate-to-atomic-layout.sh staging
+migrate-atomic: ## Migrate a tier to atomic layout — one-time supervised (tier=dev|test|staging; prod refused)
+	@t="$(tier)"; \
+	case "$$t" in \
+	  dev|test|staging) ./deploy/migrate-to-atomic-layout.sh "$$t" ;; \
+	  prod) \
+	    echo ""; \
+	    echo "❌  'make migrate-atomic tier=prod' is intentionally refused."; \
+	    echo ""; \
+	    echo "    Prod migration is a one-time, operator-supervised, irreversible-"; \
+	    echo "    without-restore operation. Invoke the script directly with the"; \
+	    echo "    --i-mean-it flag so the gate is impossible to miss:"; \
+	    echo ""; \
+	    echo "        ./deploy/migrate-to-atomic-layout.sh prod --i-mean-it"; \
+	    echo ""; \
+	    echo "    See ./deploy/migrate-to-atomic-layout.sh --help for the seven-step"; \
+	    echo "    sequence and the recovery path on failure."; \
+	    echo ""; \
+	    exit 1 ;; \
+	  "") echo "❌  Usage: make migrate-atomic tier=<dev|test|staging>"; exit 1 ;; \
+	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging; prod refused)"; exit 1 ;; \
+	esac
 
-migrate-atomic-prod: ## Migrate prod to atomic layout (this is a one-time, supervised operation — must be invoked directly)
-	@echo ""
-	@echo "❌  'make migrate-atomic-prod' is intentionally refused."
-	@echo ""
-	@echo "    Prod migration is a one-time, operator-supervised, irreversible-"
-	@echo "    without-restore operation. Invoke the script directly with the"
-	@echo "    --i-mean-it flag so the gate is impossible to miss:"
-	@echo ""
-	@echo "        ./deploy/migrate-to-atomic-layout.sh prod --i-mean-it"
-	@echo ""
-	@echo "    See ./deploy/migrate-to-atomic-layout.sh --help for the seven-step"
-	@echo "    sequence and the recovery path on failure."
-	@echo ""
-	@exit 1
+backup: ## Backup a tier's data (tier=dev|test|staging|prod)
+	@t="$(tier)"; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/backup.sh "$$t" ;; \
+	  "") echo "❌  Usage: make backup tier=<dev|test|staging|prod>"; exit 1 ;; \
+	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
 
-# ── Backup ─────────────────────────────────────────────
+list-backups: ## List backup ids available for restore (optional tier=dev|test|staging|prod)
+	@./deploy/list-backups.sh $(tier)
 
-backup-prod: ## Backup production data (accounts, flex objects, media)
-	@./deploy/backup.sh prod
+restore: ## Restore a tier from a backup (tier=<env> from=<id>; set RESTORE_TO_TIER_ENABLED=1 to actually wipe; prod refused)
+	@t="$(tier)"; f="$(from)"; \
+	case "$$t" in \
+	  dev|test|staging) \
+	    if [ -z "$$f" ]; then echo "❌  Usage: make restore tier=$$t from=<id>"; exit 1; fi; \
+	    ./deploy/restore.sh "$$t" --from "$$f" ;; \
+	  prod) \
+	    echo ""; \
+	    echo "❌  'make restore tier=prod' is intentionally refused."; \
+	    echo ""; \
+	    echo "    Restoring prod is a destructive, operator-supervised operation."; \
+	    echo "    Invoke the script directly so the safety gates are impossible"; \
+	    echo "    to miss:"; \
+	    echo ""; \
+	    echo "        RESTORE_TO_TIER_ENABLED=1 ./deploy/restore.sh prod \\"; \
+	    echo "          --from <id> --yes-i-mean-it"; \
+	    echo ""; \
+	    exit 1 ;; \
+	  "") echo "❌  Usage: make restore tier=<dev|test|staging> from=<id>"; exit 1 ;; \
+	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging; prod refused)"; exit 1 ;; \
+	esac
 
-backup-staging: ## Backup staging environment data
-	@./deploy/backup.sh staging
-
-backup-test: ## Backup test environment data
-	@./deploy/backup.sh test
-
-backup-dev: ## Backup dev environment data
-	@./deploy/backup.sh dev
-
-# ── Restore ────────────────────────────────────────────
-#
-# Tier restores are gated by RESTORE_TO_TIER_ENABLED=1 in the script
-# itself; without that env var the script logs the operation but does
-# NOT wipe the live tier. Make targets do not pre-set the gate — the
-# operator opts in explicitly:
-#
-#   RESTORE_TO_TIER_ENABLED=1 make restore-dev FROM=<id>
-#
-# `restore-prod` refuses by design — invoke the script directly so the
-# safety gates (RESTORE_TO_TIER_ENABLED + --yes-i-mean-it) are
-# impossible to miss.
-
-list-backups: ## List backup ids available for restore (optional TIER=prod|staging|test|dev)
-	@./deploy/list-backups.sh $(TIER)
-
-restore-scratch: ## Restore a backup into a scratch dir for inspection (TO=<dir> [FROM=<id|latest>])
-	@if [ -z "$(TO)" ]; then echo "❌  Usage: make restore-scratch TO=<dir> [FROM=<id>]"; exit 1; fi
-	@if [ -n "$(FROM)" ]; then \
-		./deploy/restore.sh --to $(TO) --from $(FROM); \
+restore-scratch: ## Restore a backup into a scratch dir for inspection (to=<dir> [from=<id|latest>])
+	@if [ -z "$(to)" ]; then echo "❌  Usage: make restore-scratch to=<dir> [from=<id>]"; exit 1; fi
+	@if [ -n "$(from)" ]; then \
+		./deploy/restore.sh --to $(to) --from $(from); \
 	else \
-		./deploy/restore.sh --to $(TO); \
+		./deploy/restore.sh --to $(to); \
 	fi
-
-restore-dev: ## Restore dev tier (FROM=<id>; set RESTORE_TO_TIER_ENABLED=1 to actually wipe)
-	@if [ -z "$(FROM)" ]; then echo "❌  Usage: make restore-dev FROM=<id>"; exit 1; fi
-	@./deploy/restore.sh dev --from $(FROM)
-
-restore-test: ## Restore test tier (FROM=<id>; set RESTORE_TO_TIER_ENABLED=1 to actually wipe)
-	@if [ -z "$(FROM)" ]; then echo "❌  Usage: make restore-test FROM=<id>"; exit 1; fi
-	@./deploy/restore.sh test --from $(FROM)
-
-restore-staging: ## Restore staging tier (FROM=<id>; set RESTORE_TO_TIER_ENABLED=1 to actually wipe)
-	@if [ -z "$(FROM)" ]; then echo "❌  Usage: make restore-staging FROM=<id>"; exit 1; fi
-	@./deploy/restore.sh staging --from $(FROM)
-
-restore-prod: ## Restore prod tier — refused by design; invoke script directly
-	@echo ""
-	@echo "❌  'make restore-prod' is intentionally refused."
-	@echo ""
-	@echo "    Restoring prod is a destructive, operator-supervised operation."
-	@echo "    Invoke the script directly so the safety gates are impossible"
-	@echo "    to miss:"
-	@echo ""
-	@echo "        RESTORE_TO_TIER_ENABLED=1 ./deploy/restore.sh prod \\"
-	@echo "          --from <id> --yes-i-mean-it"
-	@echo ""
-	@exit 1
 
 # ── Utilities ──────────────────────────────────────────
 
