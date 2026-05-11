@@ -60,6 +60,17 @@ GRAV_URL="https://github.com/getgrav/grav/releases/download/${GRAV_VERSION}/grav
 # /opt/homebrew/bin where it lives).
 bv_require_ms_timing
 
+# Detect rsync flavour to pick the right progress flag.
+#   - GNU rsync (3.1+) supports --info=progress2 → single-line live progress.
+#   - openrsync (ships with macOS Monterey+) only supports --progress, which
+#     still prints per-file. Fall back to silent (no progress flag) on
+#     openrsync — operator can still see exit code on failure.
+bv_rsync_progress_flag() {
+    if rsync --info=help >/dev/null 2>&1; then
+        printf '%s\n' '--info=progress2,stats0'
+    fi
+}
+
 # Argument parsing — accept --dry-run as a flag in any position; the
 # remaining positional arg is the env. DEPLOY_DRY_RUN=1 in the
 # environment is also honoured.
@@ -435,7 +446,11 @@ if [ "$ENV_KIND" = "landing" ]; then
     # The leading slash pins these to the rsync root.
     RSYNC_FLAGS=(
         -az --delete --max-delete=25
-        --info=progress2,stats0
+    )
+    _progress_flag="$(bv_rsync_progress_flag)"
+    [ -n "$_progress_flag" ] && RSYNC_FLAGS+=("$_progress_flag")
+    unset _progress_flag
+    RSYNC_FLAGS+=(
         --exclude='.DS_Store'
         --exclude='/dev/'
         --exclude='/test/'
@@ -646,8 +661,10 @@ bv_remote_run 'mkdir -p "$RELEASE_DIR"' RELEASE_DIR="$RELEASE_DIR"
 # drift on what gets stripped.
 RSYNC_FLAGS_ATOMIC=(
     -az --max-delete=0
-    --info=progress2,stats0
 )
+_progress_flag="$(bv_rsync_progress_flag)"
+[ -n "$_progress_flag" ] && RSYNC_FLAGS_ATOMIC+=("$_progress_flag")
+unset _progress_flag
 # Extend with the lib's exclude list (single source of truth — see
 # bv_atomic_release_excludes in deploy/lib/atomic-release.sh).
 while IFS= read -r _excl_line; do
