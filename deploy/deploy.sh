@@ -674,6 +674,30 @@ bv_remote_run '
              "$RELEASE_DIR/backup"
 ' RELEASE_DIR="$RELEASE_DIR"
 
+# First-deploy bootstrap of §Symlink-contract files. The rsynced
+# release carries default copies of `user/config/security.yaml` and
+# `user/env/<env>/config/security.yaml` (Grav defaults). The symlink-
+# wiring step about to run will REPLACE those files with symlinks
+# pointing at `<datadir>/v0/...`. On a fresh tier (after `rm -rf
+# devdata/` disaster recovery) those data-dir copies don't exist yet,
+# so the symlinks dangle and `bin/grav clearcache` fails:
+#     Failed to save file .../user/config/security.yaml
+# Move the rsynced defaults into the data dir so the symlinks have
+# valid targets. `mv` (not `cp`) so the source goes away cleanly —
+# bv_wire_release_symlinks then sees the path absent and creates the
+# symlink without needing to rm anything. Idempotent on second
+# deploy: the `! -f $DD/...` guard skips if data-dir already holds
+# the live operator-modified copy.
+bv_remote_run '
+    if [ -f "$RD/user/config/security.yaml" ] && [ ! -f "$DD/v0/user/config/security.yaml" ]; then
+        mv "$RD/user/config/security.yaml" "$DD/v0/user/config/security.yaml"
+    fi
+    if [ -f "$RD/user/env/$DEPLOY_ENV/config/security.yaml" ] && [ ! -f "$DD/v0/user/env/$DEPLOY_ENV/config/security.yaml" ]; then
+        mkdir -p "$DD/v0/user/env/$DEPLOY_ENV/config"
+        mv "$RD/user/env/$DEPLOY_ENV/config/security.yaml" "$DD/v0/user/env/$DEPLOY_ENV/config/security.yaml"
+    fi
+' RD="$RELEASE_DIR" DD="$DATA_DIR" DEPLOY_ENV="$ENV"
+
 # ── Step 5: Wire release symlinks ─────────────────────────────────────
 echo "→ Step 5/8: Wiring release symlinks (per §Symlink contract)..."
 
