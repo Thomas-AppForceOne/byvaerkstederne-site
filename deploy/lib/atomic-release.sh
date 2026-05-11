@@ -20,6 +20,7 @@
 #   bv_compute_expected_version_substring <release-dir>             # echoes "Version <X> · build <N>"
 #   bv_smoke_probe                <url> <expected-substring>        # echoes "<status>|<matched>"; rc=0 on match, non-zero otherwise
 #   bv_diagnose_probe_failure     <status> <final-url> <body-file> <expected>   # echoes a "Likely cause: ..." diagnostic to stdout; pure logic, no curl
+#   bv_spinner_while              <pid> <label>                                  # animates a braille spinner + elapsed time on stderr while <pid> is alive
 #   bv_check_previous_release_data_symlinks <release-dir>           # rc=0 if accounts/, user/data/, logs/ all resolve; non-zero + diagnostic otherwise
 #   bv_rollback_local             <parent-dir> <env> <docroot-name>  # local-mode rollback (no ssh) — used by tests and rollback.sh's --local mode
 #   bv_append_rollback_log_row    <releases-dir> <rolled-back-at> <rolled-back-by> <from-release> <to-release> <swap-duration-ms> <probe-url> <probe-status> <probe-substring> <probe-matched>
@@ -788,6 +789,55 @@ bv_diagnose_probe_failure() {
     fi
 
     printf '%s\n' "Unknown failure mode (status=${status}); inspect ${final_url:-the URL} manually."
+    return 0
+}
+
+# Animate a braille spinner on stderr while a background pid is running.
+#
+# Usage:
+#   long_running_cmd &
+#   bv_spinner_while $! "Uploading"
+#   wait $!
+#
+# Renders a single overwriting line on stderr: `  ⠋ Uploading… 12s`
+# When the watched pid exits, the line is cleared. The function itself
+# never returns non-zero (the caller is responsible for `wait`-ing on
+# the child and checking its exit code).
+#
+# Non-TTY stderr (CI, pipes) short-circuits to a no-op so log files
+# don't fill with control codes.
+bv_spinner_while() {
+    local pid="${1:?pid required}"
+    local label="${2:-Working}"
+
+    # Skip animation when stderr is not a terminal.
+    if [ ! -t 2 ]; then
+        wait "$pid" 2>/dev/null
+        return 0
+    fi
+
+    # Braille glyph cycle — each element is a single multi-byte char.
+    local glyphs=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+    local n_glyphs=${#glyphs[@]}
+    local start_ts
+    start_ts="$(date +%s)"
+    local i=0
+
+    # Hide cursor; ensure it's restored even if the caller is killed.
+    printf '\033[?25l' >&2
+    # shellcheck disable=SC2064
+    trap "printf '\\033[?25h\\r\\033[K' >&2" RETURN
+
+    while kill -0 "$pid" 2>/dev/null; do
+        local glyph="${glyphs[$((i % n_glyphs))]}"
+        local elapsed=$(( $(date +%s) - start_ts ))
+        printf '\r  %s %s… %ds   ' "$glyph" "$label" "$elapsed" >&2
+        sleep 0.15
+        i=$((i + 1))
+    done
+
+    printf '\033[?25h\r\033[K' >&2
+    trap - RETURN
     return 0
 }
 

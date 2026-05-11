@@ -877,6 +877,22 @@ esac
 
 rm -f "$DIAG_BODY"
 
+# bv_spinner_while: non-TTY short-circuit must just wait + return 0.
+# Tests run non-interactively so stderr is not a TTY; the function
+# should detect that and skip animation cleanly.
+( sleep 0.3 ) &
+SPINNER_PID=$!
+set +e
+bv_spinner_while "$SPINNER_PID" "Test" 2>/dev/null
+SPINNER_RC=$?
+wait "$SPINNER_PID" 2>/dev/null
+set -e
+if [ "$SPINNER_RC" -eq 0 ]; then
+    check "bv_spinner_while non-TTY: returns 0" ok
+else
+    check "bv_spinner_while non-TTY (got rc=$SPINNER_RC)" fail
+fi
+
 # ─────────────────────────────────────────────────────────────────────
 # Test 9: Makefile rollback aliases.
 # ─────────────────────────────────────────────────────────────────────

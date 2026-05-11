@@ -449,7 +449,6 @@ if [ "$ENV_KIND" = "landing" ]; then
     )
     _progress_flag="$(bv_rsync_progress_flag)"
     [ -n "$_progress_flag" ] && RSYNC_FLAGS+=("$_progress_flag")
-    unset _progress_flag
     RSYNC_FLAGS+=(
         --exclude='.DS_Store'
         --exclude='/dev/'
@@ -464,10 +463,30 @@ if [ "$ENV_KIND" = "landing" ]; then
         --exclude='/stagingdata/'
     )
 
-    sshpass -p "$DEPLOY_PASS" rsync "${RSYNC_FLAGS[@]}" \
-        -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
-        "$STAGING_DIR/" \
-        "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_TARGET}/"
+    # Spinner only when rsync has no native progress (openrsync).
+    if [ -n "$_progress_flag" ]; then
+        sshpass -p "$DEPLOY_PASS" rsync "${RSYNC_FLAGS[@]}" \
+            -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
+            "$STAGING_DIR/" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_TARGET}/"
+    else
+        _rsync_err="$(mktemp)"
+        sshpass -p "$DEPLOY_PASS" rsync "${RSYNC_FLAGS[@]}" \
+            -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
+            "$STAGING_DIR/" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_TARGET}/" \
+            2>"$_rsync_err" &
+        _rsync_pid=$!
+        bv_spinner_while "$_rsync_pid" "Uploading"
+        if ! wait "$_rsync_pid"; then
+            cat "$_rsync_err" >&2
+            rm -f "$_rsync_err"
+            exit 2
+        fi
+        rm -f "$_rsync_err"
+        unset _rsync_err _rsync_pid
+    fi
+    unset _progress_flag
 
     echo "  ✓ Upload complete"
     echo ""
@@ -664,7 +683,6 @@ RSYNC_FLAGS_ATOMIC=(
 )
 _progress_flag="$(bv_rsync_progress_flag)"
 [ -n "$_progress_flag" ] && RSYNC_FLAGS_ATOMIC+=("$_progress_flag")
-unset _progress_flag
 # Extend with the lib's exclude list (single source of truth — see
 # bv_atomic_release_excludes in deploy/lib/atomic-release.sh).
 while IFS= read -r _excl_line; do
@@ -672,10 +690,33 @@ while IFS= read -r _excl_line; do
 done < <(bv_atomic_release_excludes)
 unset _excl_line
 
-sshpass -p "$DEPLOY_PASS" rsync "${RSYNC_FLAGS_ATOMIC[@]}" \
-    -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
-    "$STAGING_DIR/" \
-    "${DEPLOY_USER}@${DEPLOY_HOST}:${RELEASE_DIR}/"
+# When rsync has its own live progress display (GNU --info=progress2),
+# let it own stdout. Otherwise (openrsync on macOS) the long upload
+# looks like a stall — run the rsync in the background and animate a
+# spinner so the operator sees the deploy is alive.
+if [ -n "$_progress_flag" ]; then
+    sshpass -p "$DEPLOY_PASS" rsync "${RSYNC_FLAGS_ATOMIC[@]}" \
+        -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
+        "$STAGING_DIR/" \
+        "${DEPLOY_USER}@${DEPLOY_HOST}:${RELEASE_DIR}/"
+else
+    _rsync_err="$(mktemp)"
+    sshpass -p "$DEPLOY_PASS" rsync "${RSYNC_FLAGS_ATOMIC[@]}" \
+        -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
+        "$STAGING_DIR/" \
+        "${DEPLOY_USER}@${DEPLOY_HOST}:${RELEASE_DIR}/" \
+        2>"$_rsync_err" &
+    _rsync_pid=$!
+    bv_spinner_while "$_rsync_pid" "Uploading"
+    if ! wait "$_rsync_pid"; then
+        cat "$_rsync_err" >&2
+        rm -f "$_rsync_err"
+        exit 2
+    fi
+    rm -f "$_rsync_err"
+    unset _rsync_err _rsync_pid
+fi
+unset _progress_flag
 
 echo "  ✓ Upload complete"
 
