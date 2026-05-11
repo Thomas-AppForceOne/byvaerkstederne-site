@@ -519,12 +519,12 @@ else
     for rel in "${INCLUDE_PATHS[@]}"; do
         # Probe the allow-list entry's existence on the remote.
         # Skip-on-missing matches fixture mode's `[ -e $src ]` gate
-        # below, so backup behaviour is consistent across both
-        # modes. The skip is logged loudly so an operator can spot
-        # an unexpectedly-shrunken backup.
+        # below, so backup behaviour is consistent across both modes.
+        # Missing paths are silently skipped — allow-list entries like
+        # user/uploads are legitimately absent on tiers that have never
+        # had file uploads.
         if ! bv_ssh_cmd -n -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" \
             "test -e $(printf %q "$SSH_PATH/$rel")" >/dev/null 2>&1; then
-            warn "allow-list path not present on remote, skipping: $rel"
             SKIPPED_PATHS+=("$rel")
             continue
         fi
@@ -541,9 +541,7 @@ else
               "$STAGE_DIR/${rel}/" \
               || die "rsync failed for ${rel} from ${SSH_HOST}" 2
     done
-    if [ "${#SKIPPED_PATHS[@]}" -gt 0 ]; then
-        log "  (note: ${#SKIPPED_PATHS[@]} allow-list path(s) skipped — see warnings above)"
-    fi
+    true
 fi
 
 # Apply deny-list locally as a belt-and-braces measure (in case the
