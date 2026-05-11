@@ -247,12 +247,16 @@ Run `make help` to see all available commands:
 | `make open` | Open site in browser |
 | `make admin` | Open admin panel |
 | `make status` | Show container status |
-| `make deploy-prod` | Deploy to production |
-| `make deploy-test` | Deploy to test environment |
-| `make deploy-dev` | Deploy to dev environment |
-| `make deploy-staging` | Deploy to staging (prod data) |
-| `make backup-prod` | Backup production data |
-| `make backup-test` | Backup test environment data |
+| `make deploy tier=prod` | Deploy to production |
+| `make deploy tier=test` | Deploy to test environment |
+| `make deploy tier=dev` | Deploy to dev environment |
+| `make deploy tier=staging` | Deploy to staging (prod data) |
+| `make backup tier=prod` | Backup production data |
+| `make backup tier=test` | Backup test environment data |
+| `make list-backups [tier=<env>]` | List available backup ids |
+| `make restore tier=<env> from=<id>` | Restore a tier (add `RESTORE_TO_TIER_ENABLED=1` to actually wipe; prod refused) |
+| `make rollback tier=<env>` | Roll back a tier to its previous release |
+| `make migrate-atomic tier=<env>` | One-time migration to atomic-release layout (prod refused) |
 | `make cache-clear` | Clear Grav cache |
 | `make reset-users` | Delete all user accounts (except admin) |
 | `make reset-admin` | Reset admin account (delete and recreate) |
@@ -373,18 +377,18 @@ PRs from feature branches always target `develop`. `main` is updated only via a 
 | Action | Commands |
 |--------|---------|
 | Start new feature | `git checkout -b feature/my-feature develop` |
-| Deploy feature to dev | `make deploy-dev` |
-| Merge to test | `git checkout develop && git merge feature/my-feature` then `make deploy-test` |
-| Release to production | `git checkout main && git merge develop` then `make deploy-prod` |
+| Deploy feature to dev | `make deploy tier=dev` |
+| Merge to test | `git checkout develop && git merge feature/my-feature` then `make deploy tier=test` |
+| Release to production | `git checkout main && git merge develop` then `make deploy tier=prod` |
 
 ## Environments
 
 | Environment | URL | Deploy command | Branch |
 |------------|-----|---------------|--------|
-| **Production** | hackersbychoice.dk | `make deploy-prod` | `main` |
-| **Test** | hackersbychoice.dk/test | `make deploy-test` | `develop` |
-| **Dev** | hackersbychoice.dk/dev | `make deploy-dev` | `feature/*` |
-| **Staging** | hackersbychoice.dk/staging | `make deploy-staging` | `main` + prod data |
+| **Production** | hackersbychoice.dk | `make deploy tier=prod` | `main` |
+| **Test** | hackersbychoice.dk/test | `make deploy tier=test` | `develop` |
+| **Dev** | hackersbychoice.dk/dev | `make deploy tier=dev` | `feature/*` |
+| **Staging** | hackersbychoice.dk/staging | `make deploy tier=staging` | `main` + prod data |
 | **Local** | localhost:8080 | `make start` | any branch |
 
 Credentials are in `.env.deploy` (git-ignored). Copy `.env.deploy.example` to get started.
@@ -392,8 +396,10 @@ Credentials are in `.env.deploy` (git-ignored). Copy `.env.deploy.example` to ge
 ## Backup
 
 ```bash
-make backup-prod    # Backup production data (accounts, flex objects, pages, media)
-make backup-test    # Backup test environment data
+make backup tier=prod    # Backup production data (accounts, flex objects, pages, media)
+make backup tier=test    # Backup test environment data
+make list-backups        # See available backup ids
+make restore tier=<env> from=<id>   # Restore a tier (RESTORE_TO_TIER_ENABLED=1 to actually wipe)
 ```
 
 Backups are stored locally in `backups/` (git-ignored) as timestamped snapshots. Last 30 backups are kept, older ones are pruned automatically. Ready to sync to NAS or cloud storage.

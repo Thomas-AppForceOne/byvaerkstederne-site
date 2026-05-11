@@ -803,7 +803,7 @@ echo "  ✓ ${DEPLOY_TARGET} → ${LAYOUT_NAME}-releases/${RELEASE_ID}  (${SWAP_
 #    print a clear 'rollback command:' hint and exit non-zero."
 #
 # The release stays LIVE on probe failure. Rollback is a deliberate
-# operator decision invoked via `make rollback-<env>`. This is the
+# operator decision invoked via `make rollback tier=<env>`. This is the
 # spec-mandated behavioural contract; do not weaken it.
 PROBE_URL="${BV_SMOKE_PROBE_URL_OVERRIDE:-${ENV_URL}/}"
 PROBE_EXPECTED="$(bv_compute_expected_version_substring "$STAGING_DIR")"
@@ -849,7 +849,7 @@ if [ "$PROBE_MATCHED" != "true" ] || [ "$PROBE_STATUS" != "200" ]; then
     echo "    The new release IS LIVE — there is NO auto-rollback." >&2
     echo "    Inspect: ${PROBE_URL}" >&2
     echo "" >&2
-    echo "    rollback command:  make rollback-${ENV}" >&2
+    echo "    rollback command:  make rollback tier=${ENV}" >&2
     echo "    (or:               ./deploy/rollback.sh ${ENV})" >&2
     echo "" >&2
     exit 1

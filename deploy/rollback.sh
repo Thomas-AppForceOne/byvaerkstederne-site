@@ -110,7 +110,7 @@ if [ "$ENV" = "landing" ]; then
     echo "❌  No rollback for the apex landing tier." >&2
     echo "    Landing has no mutable state and no atomic layout — there" >&2
     echo "    is nothing to swap back to. Re-deploy the previous commit" >&2
-    echo "    via 'make deploy-landing' instead." >&2
+    echo "    via 'make deploy tier=landing' instead." >&2
     exit 1
 fi
 

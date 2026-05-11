@@ -182,7 +182,7 @@ Usage:
   --i-mean-it      REQUIRED for env=prod. No effect on dev/test/staging.
                    This is a one-time, supervised, irreversible-without-
                    restore operation; the flag prevents an accidental
-                   `make migrate-atomic-prod`.
+                   `make migrate-atomic tier=prod`.
 
 What this script does — the seven-step §One-time migration sequence:
 
@@ -300,7 +300,7 @@ if [ "$ENV" = "prod" ] && [ "$I_MEAN_IT" != "1" ]; then
     echo "" >&2
     echo "    Why: this is a one-time, operator-supervised, irreversible-" >&2
     echo "    without-restore operation against the production tier. The" >&2
-    echo "    flag exists so an accidental 'make migrate-atomic-prod' can" >&2
+    echo "    flag exists so an accidental 'make migrate-atomic tier=prod' can" >&2
     echo "    never proceed." >&2
     echo "" >&2
     echo "    Re-run with the flag, supervised:" >&2
@@ -644,7 +644,7 @@ if [ "$LOCAL_MODE" = "0" ]; then
         echo "" >&2
         echo "    Recovery: restore the pre-flight backup taken in step 2." >&2
         echo "    Run \`make list-backups TIER=${ENV}\` to find the id, then" >&2
-        echo "    RESTORE_TO_TIER_ENABLED=1 make restore-${ENV} FROM=<id>" >&2
+        echo "    RESTORE_TO_TIER_ENABLED=1 make restore tier=${ENV} from=<id>" >&2
         echo "    (the tier may be in mid-migration state — inspect by hand" >&2
         echo "     before wiping)." >&2
         echo "" >&2
@@ -737,7 +737,7 @@ if [ "$LOCAL_MODE" = "0" ]; then
         echo "❌  Post-swap smoke probe FAILED (status: ${PROBE_STATUS_REMOTE})." >&2
         echo "    The migrated layout IS LIVE — no auto-rollback." >&2
         echo "    Recovery: restore step-2 backup via" >&2
-        echo "      RESTORE_TO_TIER_ENABLED=1 make restore-${ENV} FROM=<id>" >&2
+        echo "      RESTORE_TO_TIER_ENABLED=1 make restore tier=${ENV} from=<id>" >&2
         exit 1
     fi
 

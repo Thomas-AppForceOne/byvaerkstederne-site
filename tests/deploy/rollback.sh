@@ -819,41 +819,51 @@ echo ""
 echo "Test 9: Makefile rollback-* targets"
 
 MK="$REPO_ROOT/Makefile"
+# Single parameterised `rollback` target with a case statement that
+# validates tier against the closed {dev,test,staging,prod} set and
+# rejects landing (no atomic layout). Replaces the four per-tier
+# targets after the Makefile refactor.
+if grep -Eq "^rollback:" "$MK"; then
+    check "Makefile defines parameterised rollback target" ok
+else
+    check "Makefile defines parameterised rollback target" fail
+fi
+rollback_body="$(awk '/^rollback:/ {flag=1; next} flag && /^[a-zA-Z_-]+:/ {flag=0} flag {print}' "$MK")"
+if printf '%s' "$rollback_body" | grep -q 'deploy/rollback.sh "$$t"'; then
+    check "rollback body invokes deploy/rollback.sh with validated tier" ok
+else
+    check "rollback body invokes deploy/rollback.sh (body: $rollback_body)" fail
+fi
+# Body restricts tier to the closed {dev,test,staging,prod} set —
+# landing not allowed, prod not refused (rollback is allowed on prod).
 for env in dev test staging prod; do
-    if grep -Eq "^rollback-${env}:" "$MK"; then
-        check "Makefile defines rollback-$env target" ok
-    else
-        check "Makefile defines rollback-$env target" fail
-    fi
-    # Body invokes deploy/rollback.sh with the literal env as a quoted positional.
-    body="$(awk -v t="rollback-$env:" '$0 ~ "^"t {flag=1; next} flag && /^[a-zA-Z_-]+:/ {flag=0} flag {print}' "$MK")"
-    if printf '%s' "$body" | grep -q "deploy/rollback.sh $env"; then
-        check "rollback-$env body invokes deploy/rollback.sh $env" ok
-    else
-        check "rollback-$env body invokes deploy/rollback.sh $env (body: $body)" fail
+    if printf '%s' "$rollback_body" | grep -qE "dev\|test\|staging\|prod"; then
+        : # The case branch lists all four; one assertion covers it.
+        break
     fi
 done
-# make help mentions the rollback targets.
+if printf '%s' "$rollback_body" | grep -qE 'dev\|test\|staging\|prod'; then
+    check "rollback body's case covers {dev,test,staging,prod}" ok
+else
+    check "rollback body's case covers {dev,test,staging,prod}" fail
+fi
+# make help mentions the parameterised rollback target and tier set.
 HELP_OUT="$(cd "$REPO_ROOT" && make help 2>&1 || true)"
-mentions_all=1
-for env in dev test staging prod; do
-    if ! printf '%s' "$HELP_OUT" | grep -q "rollback-$env"; then
-        mentions_all=0
-    fi
-done
-if [ "$mentions_all" = "1" ]; then
-    check "make help documents all four rollback targets" ok
+if printf '%s' "$HELP_OUT" | grep -qE 'rollback.*tier=.*(dev|test|staging|prod)'; then
+    check "make help documents 'rollback tier=<env>' usage" ok
 else
-    check "make help documents all four rollback targets" fail
+    check "make help documents 'rollback tier=<env>' usage" fail
 fi
-# make -n rollback-dev prints the rollback.sh invocation.
-DRY_OUT="$(cd "$REPO_ROOT" && make -n rollback-dev 2>&1 || true)"
-if printf '%s' "$DRY_OUT" | grep -q "deploy/rollback.sh dev"; then
-    check "make -n rollback-dev shows rollback.sh invocation" ok
+# make -n rollback tier=dev shows the rollback.sh invocation in the recipe.
+DRY_OUT="$(cd "$REPO_ROOT" && make -n rollback tier=dev 2>&1 || true)"
+if printf '%s' "$DRY_OUT" | grep -q 'deploy/rollback.sh "$t"'; then
+    check "make -n rollback tier=dev shows rollback.sh invocation" ok
 else
-    check "make -n rollback-dev shows rollback.sh invocation" fail
+    check "make -n rollback tier=dev shows rollback.sh invocation" fail
 fi
-# No rollback-landing target (apex has no rollback story).
+# No `rollback-landing` standalone target; rollback's case rejects landing.
+# (Landing has no atomic layout and no rollback story — rollback.sh itself
+# also refuses tier=landing with a clear diagnostic.)
 if grep -Eq "^rollback-landing:" "$MK"; then
     check "no rollback-landing target (apex has no rollback)" fail
 else
@@ -875,7 +885,7 @@ echo "Test 10: smoke-probe failure on deploy: no auto-rollback, hint printed"
 # Static check: deploy.sh contains the rollback-command hint AND the
 # "do NOT auto-rollback" copy on the smoke-probe failure path.
 if grep -q 'rollback command:' "$DEPLOY_SH" \
-   && grep -q 'make rollback-' "$DEPLOY_SH"; then
+   && grep -q 'make rollback tier=' "$DEPLOY_SH"; then
     check "deploy.sh prints 'rollback command:' hint on probe failure" ok
 else
     check "deploy.sh prints 'rollback command:' hint on probe failure" fail

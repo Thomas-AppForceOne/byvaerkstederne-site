@@ -44,5 +44,5 @@ This is a documented procedure, not a hidden gap. A future ADR-NNN may supersede
 
 - **Positive:** the safety properties of the atomic-deploy work (the April/May 2026 wipe class becoming structurally impossible) are testable and tested. PR review of any change to deploy/rollback/migrate has a precise structural bar to clear.
 - **Constraint:** any future change to `bv_remote_run` or to remote-mode code paths must be paired with either (a) an extension to `tests/deploy/lint-remote-ssh.sh`, (b) a manual test plan run against dev, or (c) an ADR explaining why the change is safe to land without the above.
-- **Constraint:** the migration script is operator-only by design. Adding a `make migrate-atomic-prod` Make target that runs without operator interaction is a regression of this decision and must be rejected at PR review.
+- **Constraint:** the migration script is operator-only by design. Removing the `tier=prod` refusal in `make migrate-atomic`, or adding any Make target that lets the prod migration run without operator interaction, is a regression of this decision and must be rejected at PR review.
 - **Constraint:** any spec that ships real-remote testing infrastructure (vault, throwaway tier, etc.) supersedes this ADR's "fixture-only" stance and should be recorded as ADR-NNN with a `Status: Superseded by ADR-NNN` link added here.

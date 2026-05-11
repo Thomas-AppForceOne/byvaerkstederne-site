@@ -487,48 +487,60 @@ fi
 
 # ═════════════════════════════════════════════════════════════════════
 # Test 4: Make-target prod refusal (the wrapper itself).
-# `make migrate-atomic-prod` must refuse with a directive naming the
-# direct invocation. (We pin option (b) — the Make target refuses
+# `make migrate-atomic tier=prod` must refuse with a directive naming
+# the direct invocation. (We pin option (b) — the Make target refuses
 # entirely.)
 # ═════════════════════════════════════════════════════════════════════
 echo ""
-echo "Test 4: make migrate-atomic-prod refuses with directive"
+echo "Test 4: make migrate-atomic tier=prod refuses with directive"
 
 MAKE_OUT="$WORK/t-make.out"
-if (cd "$REPO_ROOT" && make -s migrate-atomic-prod) >"$MAKE_OUT" 2>&1; then
-    check "make migrate-atomic-prod returns non-zero" fail
+if (cd "$REPO_ROOT" && make -s migrate-atomic tier=prod) >"$MAKE_OUT" 2>&1; then
+    check "make migrate-atomic tier=prod returns non-zero" fail
 else
-    check "make migrate-atomic-prod returns non-zero" ok
+    check "make migrate-atomic tier=prod returns non-zero" ok
 fi
 if grep -q -- "--i-mean-it" "$MAKE_OUT"; then
-    check "make migrate-atomic-prod directive names --i-mean-it" ok
+    check "make migrate-atomic tier=prod directive names --i-mean-it" ok
 else
-    check "make migrate-atomic-prod directive names --i-mean-it" fail
+    check "make migrate-atomic tier=prod directive names --i-mean-it" fail
 fi
 if grep -q "deploy/migrate-to-atomic-layout.sh prod" "$MAKE_OUT"; then
-    check "make migrate-atomic-prod directive shows direct invocation" ok
+    check "make migrate-atomic tier=prod directive shows direct invocation" ok
 else
-    check "make migrate-atomic-prod directive shows direct invocation" fail
+    check "make migrate-atomic tier=prod directive shows direct invocation" fail
 fi
-# make -n on the dev target prints the script invocation (dry-run).
-DRY_OUT="$(cd "$REPO_ROOT" && make -n migrate-atomic-dev)"
-if printf '%s' "$DRY_OUT" | grep -q "deploy/migrate-to-atomic-layout.sh dev"; then
-    check "make -n migrate-atomic-dev prints script invocation with hardcoded env" ok
+# make -n on the dev parameterised target prints the script invocation
+# (dry-run). Because the recipe is a case statement, `make -n` prints
+# the whole recipe text rather than executing — confirm the dev branch
+# of the case appears.
+DRY_OUT="$(cd "$REPO_ROOT" && make -n migrate-atomic tier=dev)"
+if printf '%s' "$DRY_OUT" | grep -q 'deploy/migrate-to-atomic-layout.sh "$t"'; then
+    check "make -n migrate-atomic tier=dev prints script invocation with validated env" ok
 else
-    check "make -n migrate-atomic-dev prints script invocation" fail
+    check "make -n migrate-atomic tier=dev prints script invocation" fail
 fi
 
-# `make help` mentions the migrate targets and the one-time note.
+# `make help` mentions the parameterised migrate target, the tier set,
+# the prod refusal, and the one-time note.
 HELP_OUT="$(cd "$REPO_ROOT" && make help)"
-for t in migrate-atomic-dev migrate-atomic-test migrate-atomic-staging migrate-atomic-prod; do
-    if printf '%s' "$HELP_OUT" | grep -q "$t"; then
-        check "make help lists $t" ok
-    else
-        check "make help lists $t" fail
-    fi
-done
+if printf '%s' "$HELP_OUT" | grep -q 'migrate-atomic'; then
+    check "make help lists migrate-atomic target" ok
+else
+    check "make help lists migrate-atomic target" fail
+fi
+if printf '%s' "$HELP_OUT" | grep -qE 'tier=.*(dev|test|staging)'; then
+    check "make help shows tier=<env> usage for migrate-atomic" ok
+else
+    check "make help shows tier=<env> usage" fail
+fi
+if printf '%s' "$HELP_OUT" | grep -qi 'prod.*refused'; then
+    check "make help notes prod refusal for migrate-atomic" ok
+else
+    check "make help notes prod refusal" fail
+fi
 if printf '%s' "$HELP_OUT" | grep -qi "one-time"; then
-    check "make help mentions 'one-time' note for migrate targets" ok
+    check "make help mentions 'one-time' note for migrate target" ok
 else
     check "make help mentions 'one-time' note" fail
 fi
