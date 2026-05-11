@@ -531,17 +531,49 @@ fi
 # part of the trail.
 ROLLED_BACK_BY="${BV_ROLLBACK_DEPLOYED_BY:-$(git -C "$PROJECT_DIR" config user.email 2>/dev/null || echo "unknown")}"
 
-bv_append_rollback_log_row \
-    "$RELEASES_DIR" \
-    "$ROLLED_BACK_AT_ISO" \
-    "$ROLLED_BACK_BY" \
-    "$CURRENT_RELEASE_ID" \
-    "$PREV_RELEASE_ID" \
-    "$SWAP_DURATION_MS" \
-    "$PROBE_URL" \
-    "$PROBE_STATUS" \
-    "$PROBE_EXPECTED" \
-    "$PROBE_MATCHED"
+if [ "$LOCAL_MODE" = "1" ]; then
+    bv_append_rollback_log_row \
+        "$RELEASES_DIR" \
+        "$ROLLED_BACK_AT_ISO" \
+        "$ROLLED_BACK_BY" \
+        "$CURRENT_RELEASE_ID" \
+        "$PREV_RELEASE_ID" \
+        "$SWAP_DURATION_MS" \
+        "$PROBE_URL" \
+        "$PROBE_STATUS" \
+        "$PROBE_EXPECTED" \
+        "$PROBE_MATCHED"
+else
+    # Remote mode: bv_append_rollback_log_row writes via local FS ops
+    # and would fail because RELEASES_DIR is a remote path. Build the
+    # audit row locally and ssh-append it to the remote log file.
+    # Stream the row via stdin so no shell-meta lands on the cmd line.
+    AUDIT_ROW="$(
+        printf -- '- rolled_back_at: "%s"\n' "$(bv_yaml_quote_escape "$ROLLED_BACK_AT_ISO")"
+        printf '  rolled_back_by: "%s"\n' "$(bv_yaml_quote_escape "$ROLLED_BACK_BY")"
+        printf '  from_release: %s\n' "$CURRENT_RELEASE_ID"
+        printf '  to_release: %s\n' "$PREV_RELEASE_ID"
+        printf '  swap_duration_ms: %s\n' "$SWAP_DURATION_MS"
+        printf '  smoke_probe:\n'
+        printf '    url: "%s"\n' "$(bv_yaml_quote_escape "$PROBE_URL")"
+        printf '    status: %s\n' "$PROBE_STATUS"
+        printf '    expected_version_substring: "%s"\n' "$(bv_yaml_quote_escape "$PROBE_EXPECTED")"
+        printf '    matched: %s\n' "$PROBE_MATCHED"
+    )"
+    # Use bv_remote_run; row flows through ROW=... so no quoting concerns.
+    # Initialise the log file with the standard header on first write.
+    bv_remote_run '
+        log_file="$RELEASES_DIR/rollback-log.yaml"
+        if [ ! -f "$log_file" ]; then
+            {
+                printf "# rollback-log.yaml — append-only audit log of rollback invocations\n"
+                printf "# Each row records: rolled_back_at, rolled_back_by, from_release,\n"
+                printf "#                   to_release, swap_duration_ms, smoke_probe.{url,status,expected_version_substring,matched}\n"
+            } > "$log_file"
+        fi
+        printf "%s\n" "$ROW" >> "$log_file"
+    ' RELEASES_DIR="$RELEASES_DIR" ROW="$AUDIT_ROW"
+fi
 
 echo "  ✓ Audit row appended to ${RELEASES_DIR}/rollback-log.yaml"
 

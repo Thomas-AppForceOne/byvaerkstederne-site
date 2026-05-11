@@ -61,7 +61,10 @@ bv_resolve_ssh_password() {
             env_var="DEPLOY_PROD_PASS"
             keychain_var="DEPLOY_PROD_PASS_KEYCHAIN"
             ;;
-        staging|test|dev)
+        landing|staging|test|dev)
+            # landing is the apex selector page on the same hosting
+            # account as staging/test/dev (hackersbychoice.dk) — shares
+            # the same DEPLOY_PASS / DEPLOY_PASS_KEYCHAIN credentials.
             env_var="DEPLOY_PASS"
             keychain_var="DEPLOY_PASS_KEYCHAIN"
             ;;

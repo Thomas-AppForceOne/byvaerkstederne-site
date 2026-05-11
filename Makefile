@@ -47,7 +47,7 @@ check-deps: ## Verify all required tools are installed
 	@command -v git >/dev/null 2>&1 || { echo "❌  Git is not installed."; exit 1; }
 	@echo "  ✓ Git"
 	@command -v git-lfs >/dev/null 2>&1 || { echo "⚠️  Git LFS not found. Installing..."; brew install git-lfs 2>/dev/null || { echo "❌  Could not install Git LFS. Install manually: https://git-lfs.com"; exit 1; }; }
-	@git lfs install --skip-smudge >/dev/null 2>&1
+	@git lfs install --skip-smudge --force >/dev/null 2>&1 || true
 	@echo "  ✓ Git LFS"
 	@echo "All dependencies OK ✓"
 
@@ -67,10 +67,18 @@ stop: ## Stop the site
 restart: stop start ## Restart the site
 
 logs: ## Tail container logs
-	@docker compose logs -f --tail=50
+	@CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(1) }' 2>/dev/null) || { \
+		echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
+	}; \
+	docker logs -f --tail=50 "$$CONTAINER"
 
 status: ## Show container status
-	@docker compose ps
+	@CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(0) }' 2>/dev/null); \
+	if [ -n "$$CONTAINER" ]; then \
+		docker ps --filter "name=^$$CONTAINER$$" --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'; \
+	else \
+		echo "(no Grav container registered for this checkout — run: scripts/grav-up.sh . [port])"; \
+	fi
 
 # ── Deploy ─────────────────────────────────────────────
 
@@ -217,8 +225,16 @@ admin: ## Open the admin panel in default browser
 	@open http://localhost:8080/admin 2>/dev/null || xdg-open http://localhost:8080/admin 2>/dev/null || echo "Open http://localhost:8080/admin in your browser"
 
 clean: ## Remove Docker volumes and cache (keeps content)
-	@docker compose down -v
-	@echo "Containers and volumes removed."
+	@CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(0) }' 2>/dev/null); \
+	if [ -n "$$CONTAINER" ]; then \
+		scripts/grav-down.sh . >/dev/null 2>&1 || true; \
+		docker rm -f "$$CONTAINER" >/dev/null 2>&1 || true; \
+		docker volume ls -q --filter "label=com.docker.compose.project=$$CONTAINER" | xargs -r docker volume rm >/dev/null 2>&1 || true; \
+		rm -f .gan/port-registry.json; \
+		echo "Container $$CONTAINER + per-checkout volumes removed."; \
+	else \
+		echo "(no Grav container registered for this checkout — nothing to clean)"; \
+	fi
 
 cache-clear: ## Clear Grav cache
 	@CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(1) }' 2>/dev/null) || { \
