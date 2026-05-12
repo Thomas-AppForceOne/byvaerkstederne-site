@@ -192,6 +192,64 @@ fi
 rm -rf "$DATA" "$BAD_MIG" "$log"
 
 # =============================================================================
+# Test 4 — remote-mode (production code path) refuses schema bump
+# =============================================================================
+#
+# In production, deploy.sh invokes bv_remote_run_migration_step WITHOUT
+# setting BV_MIGRATE_LOCAL_MODE. The helper's remote-mode SSH branch
+# (cp -a + migrate.sh over SSH) is deliberately not yet implemented;
+# until it ships, the helper MUST return non-zero on any schema bump
+# so deploy.sh aborts BEFORE the atomic symlink swap. Silently
+# returning 0 here would re-introduce exactly the "code advanced
+# while data stayed on old schema" failure class this spec was
+# written to prevent.
+#
+# This test simulates the prod call site:
+#   - LOCAL_MODE is explicitly unset (matches deploy.sh's environment).
+#   - bv_remote_run is mocked so we don't need a live SSH session.
+#   - The mock returns "0.1.0" for the live-version read.
+#   - We then ask for a bump to 0.2.0 and assert the helper refuses.
+echo "→ test: remote-mode refuses schema-bump (no LOCAL_MODE → no silent success)"
+mock_log="$(mktemp)"
+(
+    # Subshell so the function override and unset don't leak out.
+    # Disable `set -e` inside this subshell because the call we make
+    # is EXPECTED to return non-zero — if we didn't disable it, the
+    # subshell would exit immediately on the refusal and the parent
+    # test script (also under set -e) would inherit that exit, killing
+    # the whole suite.
+    set +e
+    unset BV_MIGRATE_LOCAL_MODE
+    bv_remote_run() {
+        # When bv_remote_read_data_version invokes us in remote mode,
+        # the contract we mock here is: the helper reads the live
+        # data_version off the remote tier. We pretend it's 0.1.0.
+        printf '0.1.0\n'
+        return 0
+    }
+    bv_remote_run_migration_step "0.2.0" "/tmp/fake-remote-data-dir" >"$mock_log" 2>&1
+    echo "RC=$?" >>"$mock_log"
+) || true
+if grep -q '^RC=0$' "$mock_log"; then
+    echo "  --- log ---" >&2
+    cat "$mock_log" >&2
+    report_fail "remote-mode: helper returned 0 on a schema bump (would advance prod silently)"
+elif grep -q 'schema-bump deploys against a real SSH tier are not yet wired' "$mock_log"; then
+    if grep -q 'Refusing to advance' "$mock_log"; then
+        report_pass "remote-mode: helper refused with a recognisable error message"
+    else
+        echo "  --- log ---" >&2
+        cat "$mock_log" >&2
+        report_fail "remote-mode: refusal message missing 'Refusing to advance' phrase"
+    fi
+else
+    echo "  --- log ---" >&2
+    cat "$mock_log" >&2
+    report_fail "remote-mode: refused but the placeholder banner is missing"
+fi
+rm -f "$mock_log"
+
+# =============================================================================
 # Summary
 # =============================================================================
 echo ""

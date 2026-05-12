@@ -856,21 +856,33 @@ echo "  ✓ Cache cleared in new release"
 # runner is documented to be a no-op; the helper short-circuits with
 # a "no schema bump" diagnostic and returns 0.
 echo "→ Step 7.5/8: Data-schema migration runner..."
-BUNDLE_DATA_VERSION="$(awk '
-    /^[[:space:]]*#/ { next }
-    /^data_version:[[:space:]]*/ {
-        v = $0
-        sub(/^data_version:[[:space:]]*/, "", v)
-        gsub(/^["'\'']|["'\'']$/, "", v)
-        sub(/[[:space:]]+#.*$/, "", v)
-        gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
-        print v
-        exit
-    }
-' "$STAGING_DIR/user/data-version.yaml" 2>/dev/null || true)"
-if [ -z "$BUNDLE_DATA_VERSION" ]; then
-    echo "  ⚠️  bundle has no data-version.yaml; skipping migration step"
+# Distinguish apex deploys (no Grav state, no migration step) from
+# Grav deploys (must carry a data-version.yaml). Apex staging dirs
+# have no user/ subdir; Grav staging dirs do. A Grav-staging dir
+# that is missing data-version.yaml is a regression, not a quiet
+# skip — refuse the deploy rather than ship code against unstamped
+# data.
+if [ ! -d "$STAGING_DIR/user" ]; then
+    echo "  ✓ apex deploy: no user/ in staging; migration step does not apply"
 else
+    BUNDLE_DATA_VERSION="$(awk '
+        /^[[:space:]]*#/ { next }
+        /^data_version:[[:space:]]*/ {
+            v = $0
+            sub(/^data_version:[[:space:]]*/, "", v)
+            gsub(/^["'\'']|["'\'']$/, "", v)
+            sub(/[[:space:]]+#.*$/, "", v)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+            print v
+            exit
+        }
+    ' "$STAGING_DIR/user/data-version.yaml" 2>/dev/null || true)"
+    if [ -z "$BUNDLE_DATA_VERSION" ]; then
+        echo "❌  Grav staging dir at $STAGING_DIR/user has no data-version.yaml — refusing to deploy." >&2
+        echo "    The deploy bundle must carry config/www/user/data-version.yaml so the migration step can compare schema versions." >&2
+        echo "    If you are deploying intentionally-stateless content, route it through the apex deploy target instead." >&2
+        exit 1
+    fi
     if ! bv_remote_run_migration_step "$BUNDLE_DATA_VERSION" "$DATA_DIR"; then
         echo "❌  Migration step failed — aborting BEFORE the docroot swap." >&2
         echo "    The previous release stays live; <tier>data/current is unchanged." >&2

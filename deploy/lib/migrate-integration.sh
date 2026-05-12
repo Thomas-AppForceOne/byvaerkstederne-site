@@ -170,15 +170,21 @@ bv_remote_run_migration_step() {
     fi
 
     # Remote-mode placeholder: production-grade remote integration
-    # will go through bv_remote_run with a similar cp-a + migrate
-    # sequence. For Sprint 1 the deploy.sh wiring uses local-mode in
-    # the test harness; the spec acceptance for "migrate.sh is invoked
-    # by deploy.sh on a schema bump and aborts the deploy on failure"
-    # is established by exercising bv_remote_run_migration_step
-    # against a local fixture (see tests/deploy/migrate-integration.sh).
-    # Wiring this against the real SSH'd tier is its own sprint and
-    # requires composer install on the remote — out of scope here.
-    echo "  ⚠️  schema-bump deploys against a real SSH tier are not yet wired (see deploy/lib/migrate-integration.sh)." >&2
-    echo "      To unblock, run migrate.sh against an unpacked tier snapshot locally and push the result." >&2
-    return 0
+    # (SSH-invoked cp -a + migrate.sh against the remote tier) is its
+    # own sprint and requires composer install on the remote. Until
+    # that lands we MUST refuse a schema-bump deploy — silently
+    # advancing the docroot symlink while data stays on the old
+    # schema is exactly the failure class this spec was written to
+    # prevent. The no-op case (live version == bundle version) was
+    # already short-circuited above with return 0; reaching this
+    # point means a real schema bump is requested.
+    echo "❌  schema-bump deploys against a real SSH tier are not yet wired." >&2
+    echo "    Refusing to advance the docroot symlink against unmigrated data." >&2
+    echo "    Workaround until the SSH branch ships:" >&2
+    echo "      1. Take a fresh backup of the live tier via deploy/backup.sh." >&2
+    echo "      2. Restore it locally and run deploy/migrate.sh --to ${bundle_data_version} against the snapshot." >&2
+    echo "      3. Push the migrated snapshot to the live tier's <tier>data/$(bv_version_to_dirname "$bundle_data_version")/ dir by hand and repoint <tier>data/current at it." >&2
+    echo "      4. Re-run this deploy; the no-op branch will then proceed." >&2
+    echo "    (Tracking: deploy_sh_invokes_migration_runner_on_schema_bump — remote-mode follow-up.)" >&2
+    return 1
 }
