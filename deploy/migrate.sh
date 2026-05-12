@@ -24,7 +24,9 @@
 # (or its archived form once shipped) for the authoritative contract.
 # =============================================================================
 set -euo pipefail
-export PATH="/opt/homebrew/bin:$PATH"
+# macOS dev convenience: surface Homebrew binaries when present. The
+# directory is absent on the linux prod tier so this is a no-op there.
+[ -d /opt/homebrew/bin ] && export PATH="/opt/homebrew/bin:$PATH"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -124,6 +126,30 @@ fi
 # realpath is the cheap way to get one and dereferences symlinks
 # consistently with `cd`).
 DATA_DIR_ABS="$(cd "$DATA_DIR" && pwd)"
+
+# Runtime PHP-version guard. migrations/composer.json requires PHP
+# >= 8.1 (Symfony YAML 6.x). On a tier whose runtime is older the
+# autoload would throw a Composer "platform requirements" error
+# mid-migration; we'd rather refuse up-front with a clear message
+# than corrupt the data dir partway through.
+#
+# Only enforce when we have a directly-callable PHP (not the Docker
+# fallback — `php:8.3-cli` already satisfies the floor). Skipped for
+# Docker mode because BV_USE_DOCKER_PHP=1 means we control the
+# image.
+if [ "${BV_USE_DOCKER_PHP:-0}" != "1" ]; then
+    if ! "${BV_MIGRATE_PHP_CMD[@]}" -r '
+        if (PHP_VERSION_ID < 80100) {
+            fwrite(STDERR, sprintf("FATAL: migrate.sh requires PHP >= 8.1; found %s\n", PHP_VERSION));
+            exit(1);
+        }
+    ' 2>/dev/null; then
+        actual_version="$("${BV_MIGRATE_PHP_CMD[@]}" -r 'echo PHP_VERSION;' 2>/dev/null || echo 'unknown')"
+        echo "❌  deploy/migrate.sh requires PHP >= 8.1 (migrations/composer.json platform floor); found ${actual_version}." >&2
+        echo "    Either install a newer PHP on the host, or set BV_MIGRATE_PHP to a known-good binary." >&2
+        exit 9
+    fi
+fi
 
 # Lazy-init the Docker invocation now that we have $DATA_DIR_ABS.
 # We mount $PROJECT_DIR (covers $BOOTSTRAP_DIR/vendor for autoload),

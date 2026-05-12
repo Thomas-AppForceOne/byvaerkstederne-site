@@ -28,7 +28,8 @@
 # to point at the runner-installed PHP.
 # =============================================================================
 set -euo pipefail
-export PATH="/opt/homebrew/bin:$PATH"
+# macOS dev convenience; no-op on linux CI runners.
+[ -d /opt/homebrew/bin ] && export PATH="/opt/homebrew/bin:$PATH"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -445,6 +446,66 @@ else
     report_fail "pre-spec-convention: runner exited non-zero on missing marker"
 fi
 rm -rf "$prespec_tmp" "$prespec_log"
+
+# =============================================================================
+# Test class 5f — Forward-only refusal: from > to is rejected
+# =============================================================================
+echo "→ test: forward-only — runner refuses when from-version is ahead of target"
+fwd_tmp="$(mktemp -d)"
+mkdir -p "$fwd_tmp/config/www/user"
+printf 'data_version: "0.5.0"\n' > "$fwd_tmp/config/www/user/data-version.yaml"
+fwd_log="$(mktemp)"
+set +e
+BV_MIGRATIONS_DIR="$MIGRATIONS_DIR" bash "$MIGRATE_SH" "$fwd_tmp" --to 0.2.0 >"$fwd_log" 2>&1
+fwd_rc=$?
+set -e
+if [ "$fwd_rc" -eq 0 ]; then
+    cat "$fwd_log" >&2
+    report_fail "forward-only: runner exited 0 unexpectedly (from=0.5.0 to=0.2.0)"
+elif grep -q "forward-only" "$fwd_log"; then
+    report_pass "forward-only: runner refused with 'forward-only' diagnostic"
+else
+    echo "  --- runner output ---" >&2
+    cat "$fwd_log" >&2
+    report_fail "forward-only: refused but the 'forward-only' phrase is missing"
+fi
+rm -rf "$fwd_tmp" "$fwd_log"
+
+# =============================================================================
+# Test class 5g — Post-condition mismatch: migration writes the wrong version
+# =============================================================================
+echo "→ test: post-condition — migration that writes the wrong data_version is rejected"
+post_tmp="$(mktemp -d)"
+post_migrations="$(mktemp -d)"
+mkdir -p "$post_tmp/config/www/user"
+printf 'data_version: "0.1.0"\n' > "$post_tmp/config/www/user/data-version.yaml"
+# Migration claims to target 0.2.0 but writes 0.99.0 — the runner
+# verifies the post-condition and must refuse.
+cat > "$post_migrations/0.2.0_liar.php" <<'PHP'
+<?php
+return function (string $dataDir): void {
+    file_put_contents(
+        $dataDir . '/config/www/user/data-version.yaml',
+        "data_version: \"0.99.0\"\n"
+    );
+};
+PHP
+post_log="$(mktemp)"
+set +e
+BV_MIGRATIONS_DIR="$post_migrations" bash "$MIGRATE_SH" "$post_tmp" --to 0.2.0 >"$post_log" 2>&1
+post_rc=$?
+set -e
+if [ "$post_rc" -eq 0 ]; then
+    cat "$post_log" >&2
+    report_fail "post-condition: runner exited 0 against a mismatch"
+elif grep -q "wrote data_version=0.99.0" "$post_log" || grep -q "expected 0.2.0" "$post_log"; then
+    report_pass "post-condition: runner refused with the mismatch diagnostic"
+else
+    echo "  --- runner output ---" >&2
+    cat "$post_log" >&2
+    report_fail "post-condition: refused but without the expected mismatch message"
+fi
+rm -rf "$post_tmp" "$post_migrations" "$post_log"
 
 # =============================================================================
 # Summary

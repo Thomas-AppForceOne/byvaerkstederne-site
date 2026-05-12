@@ -10,6 +10,10 @@ on:
       - 'config/www/user/data-version.yaml'
       - 'config/www/user/data-version.yaml.example'
       - 'deploy/migrate.sh'
+      - 'deploy/deploy.sh'
+      - 'deploy/lib/migrate-integration.sh'
+      - 'deploy/lib/atomic-release.sh'
+      - 'tests/deploy/migrate-integration.sh'
       - '.github/workflows/migrations.yml'
 
 # Concurrency: cancel superseded runs on the same PR head.
@@ -60,3 +64,8 @@ jobs:
           # its Docker-fallback resolution.
           BV_MIGRATE_PHP: php
         run: bash migrations/run-tests.sh
+
+      - name: Run deploy.sh ↔ migrate.sh integration tests
+        env:
+          BV_MIGRATE_PHP: php
+        run: bash tests/deploy/migrate-integration.sh
