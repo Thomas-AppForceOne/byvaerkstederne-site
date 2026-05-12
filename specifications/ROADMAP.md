@@ -42,9 +42,9 @@ The apex `landing` deploy is unchanged — it has no mutable state and no rollba
 
 **Exit criteria:** docroot is a symlink resolving to a release dir; `<tier>data/` is a sibling of every release dir and untouched by deploys; user state is bit-identical across deploys with no data version change; rollback to the previous release works via a single command; `release-meta.yaml` audit trail is present in every release; one-time migration script promotes existing tiers from the current in-place layout to the new one without data loss.
 
-### 4. Data versioning and migration runner — Planned
+### 4. Data versioning and migration runner — IMPLEMENTED
 
-**Spec:** [data_versioning_and_migrations_specification.md](data_versioning_and_migrations_specification.md)
+**Spec:** [archive/data_versioning_and_migrations_specification.md](archive/data_versioning_and_migrations_specification.md)
 
 Stamp the site's data with a SemVer schema version (independent of the code version), define a hand-written-PHP-script format for migrations (`migrations/<target_version>_<slug>.php`, idempotent, pure file transformation), and build a runner (`./bin/migrate <data-dir>`) that applies the right set of migrations to bring a snapshot from one schema version to another. CI runs each migration's fixture-based test on every PR that touches `migrations/`.
 
