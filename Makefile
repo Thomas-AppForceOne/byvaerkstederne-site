@@ -1,4 +1,4 @@
-.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging deploy-landing backup-prod backup-test test test-headed test-auth test-install test-deploy test-backup-restore
+.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy rollback migrate-atomic backup list-backups restore restore-scratch test test-headed test-auth test-install test-deploy test-backup-restore add-age-key list-age-keys retire-age-key
 
 # Default target
 help: ## Show this help
@@ -47,7 +47,7 @@ check-deps: ## Verify all required tools are installed
 	@command -v git >/dev/null 2>&1 || { echo "❌  Git is not installed."; exit 1; }
 	@echo "  ✓ Git"
 	@command -v git-lfs >/dev/null 2>&1 || { echo "⚠️  Git LFS not found. Installing..."; brew install git-lfs 2>/dev/null || { echo "❌  Could not install Git LFS. Install manually: https://git-lfs.com"; exit 1; }; }
-	@git lfs install --skip-smudge >/dev/null 2>&1
+	@git lfs install --skip-smudge --force >/dev/null 2>&1 || true
 	@echo "  ✓ Git LFS"
 	@echo "All dependencies OK ✓"
 
@@ -67,37 +67,114 @@ stop: ## Stop the site
 restart: stop start ## Restart the site
 
 logs: ## Tail container logs
-	@docker compose logs -f --tail=50
+	@CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(1) }' 2>/dev/null) || { \
+		echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
+	}; \
+	docker logs -f --tail=50 "$$CONTAINER"
 
 status: ## Show container status
-	@docker compose ps
+	@CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(0) }' 2>/dev/null); \
+	if [ -n "$$CONTAINER" ]; then \
+		docker ps --filter "name=^$$CONTAINER$$" --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'; \
+	else \
+		echo "(no Grav container registered for this checkout — run: scripts/grav-up.sh . [port])"; \
+	fi
 
-# ── Deploy ─────────────────────────────────────────────
+# ── Tier-parameterised commands ────────────────────────
+#
+# Tier is passed as a Make variable: `tier=<env>`. Each target validates
+# the value against the closed set before invoking the script, so a
+# typo can never reach the live remote. Restoring prod is intentionally
+# refused at the Make layer — the operator must invoke the script
+# directly so the RESTORE_TO_TIER_ENABLED + --yes-i-mean-it gates are
+# impossible to miss. Same posture for migrate-atomic on prod.
+#
+# Examples:
+#   make deploy tier=dev
+#   make rollback tier=test
+#   make migrate-atomic tier=staging
+#   make backup tier=prod
+#   make restore tier=dev from=<id>   # add RESTORE_TO_TIER_ENABLED=1 to actually wipe
 
-deploy: deploy-prod ## Alias for deploy-prod
+deploy: ## Atomic deploy (tier=dev|test|staging|prod|landing)
+	@t="$(tier)"; \
+	case "$$t" in \
+	  dev|test|staging|prod|landing) ./deploy/deploy.sh "$$t" ;; \
+	  "") echo "❌  Usage: make deploy tier=<dev|test|staging|prod|landing>"; exit 1 ;; \
+	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging|prod|landing)"; exit 1 ;; \
+	esac
 
-deploy-prod: ## Deploy to production (www.byvaerkstederne.dk — separate hosting)
-	@./deploy/deploy.sh prod
+rollback: ## Roll back a tier to its previous release (tier=dev|test|staging|prod)
+	@t="$(tier)"; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/rollback.sh "$$t" ;; \
+	  "") echo "❌  Usage: make rollback tier=<dev|test|staging|prod>"; exit 1 ;; \
+	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
 
-deploy-staging: ## Deploy to staging (staging.hackersbychoice.dk)
-	@./deploy/deploy.sh staging
+migrate-atomic: ## Migrate a tier to atomic layout — one-time supervised (tier=dev|test|staging; prod refused)
+	@t="$(tier)"; \
+	case "$$t" in \
+	  dev|test|staging) ./deploy/migrate-to-atomic-layout.sh "$$t" ;; \
+	  prod) \
+	    echo ""; \
+	    echo "❌  'make migrate-atomic tier=prod' is intentionally refused."; \
+	    echo ""; \
+	    echo "    Prod migration is a one-time, operator-supervised, irreversible-"; \
+	    echo "    without-restore operation. Invoke the script directly with the"; \
+	    echo "    --i-mean-it flag so the gate is impossible to miss:"; \
+	    echo ""; \
+	    echo "        ./deploy/migrate-to-atomic-layout.sh prod --i-mean-it"; \
+	    echo ""; \
+	    echo "    See ./deploy/migrate-to-atomic-layout.sh --help for the seven-step"; \
+	    echo "    sequence and the recovery path on failure."; \
+	    echo ""; \
+	    exit 1 ;; \
+	  "") echo "❌  Usage: make migrate-atomic tier=<dev|test|staging>"; exit 1 ;; \
+	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging; prod refused)"; exit 1 ;; \
+	esac
 
-deploy-test: ## Deploy to test (test.hackersbychoice.dk)
-	@./deploy/deploy.sh test
+backup: ## Backup a tier's data (tier=dev|test|staging|prod)
+	@t="$(tier)"; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/backup.sh "$$t" ;; \
+	  "") echo "❌  Usage: make backup tier=<dev|test|staging|prod>"; exit 1 ;; \
+	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
 
-deploy-dev: ## Deploy to dev (dev.hackersbychoice.dk)
-	@./deploy/deploy.sh dev
+list-backups: ## List backup ids available for restore (optional tier=dev|test|staging|prod)
+	@./deploy/list-backups.sh $(tier)
 
-deploy-landing: ## Deploy the apex selector page (hackersbychoice.dk)
-	@./deploy/deploy.sh landing
+restore: ## Restore a tier from a backup (tier=<env> from=<id> [allow_cross_tier=1]; RESTORE_TO_TIER_ENABLED=1 to actually wipe; prod refused)
+	@t="$(tier)"; f="$(from)"; xt="$(allow_cross_tier)"; \
+	xt_flag=""; [ "$$xt" = "1" ] && xt_flag="--allow-cross-tier"; \
+	case "$$t" in \
+	  dev|test|staging) \
+	    if [ -z "$$f" ]; then echo "❌  Usage: make restore tier=$$t from=<id> [allow_cross_tier=1]"; exit 1; fi; \
+	    ./deploy/restore.sh "$$t" --from "$$f" $$xt_flag ;; \
+	  prod) \
+	    echo ""; \
+	    echo "❌  'make restore tier=prod' is intentionally refused."; \
+	    echo ""; \
+	    echo "    Restoring prod is a destructive, operator-supervised operation."; \
+	    echo "    Invoke the script directly so the safety gates are impossible"; \
+	    echo "    to miss:"; \
+	    echo ""; \
+	    echo "        RESTORE_TO_TIER_ENABLED=1 ./deploy/restore.sh prod \\"; \
+	    echo "          --from <id> --yes-i-mean-it"; \
+	    echo ""; \
+	    exit 1 ;; \
+	  "") echo "❌  Usage: make restore tier=<dev|test|staging> from=<id>"; exit 1 ;; \
+	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging; prod refused)"; exit 1 ;; \
+	esac
 
-# ── Backup ─────────────────────────────────────────────
-
-backup-prod: ## Backup production data (accounts, flex objects, media)
-	@./deploy/backup.sh prod
-
-backup-test: ## Backup test environment data
-	@./deploy/backup.sh test
+restore-scratch: ## Restore a backup into a scratch dir for inspection (to=<dir> [from=<id|latest>])
+	@if [ -z "$(to)" ]; then echo "❌  Usage: make restore-scratch to=<dir> [from=<id>]"; exit 1; fi
+	@if [ -n "$(from)" ]; then \
+		./deploy/restore.sh --to $(to) --from $(from); \
+	else \
+		./deploy/restore.sh --to $(to); \
+	fi
 
 # ── Utilities ──────────────────────────────────────────
 
@@ -108,8 +185,16 @@ admin: ## Open the admin panel in default browser
 	@open http://localhost:8080/admin 2>/dev/null || xdg-open http://localhost:8080/admin 2>/dev/null || echo "Open http://localhost:8080/admin in your browser"
 
 clean: ## Remove Docker volumes and cache (keeps content)
-	@docker compose down -v
-	@echo "Containers and volumes removed."
+	@CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(0) }' 2>/dev/null); \
+	if [ -n "$$CONTAINER" ]; then \
+		scripts/grav-down.sh . >/dev/null 2>&1 || true; \
+		docker rm -f "$$CONTAINER" >/dev/null 2>&1 || true; \
+		docker volume ls -q --filter "label=com.docker.compose.project=$$CONTAINER" | xargs -r docker volume rm >/dev/null 2>&1 || true; \
+		rm -f .gan/port-registry.json; \
+		echo "Container $$CONTAINER + per-checkout volumes removed."; \
+	else \
+		echo "(no Grav container registered for this checkout — nothing to clean)"; \
+	fi
 
 cache-clear: ## Clear Grav cache
 	@CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(1) }' 2>/dev/null) || { \
@@ -154,8 +239,30 @@ test-headed: ## Run tests with browser visible (for debugging)
 	echo "Running tests against http://127.0.0.1:$$PORT (headed)"; \
 	GRAV_PORT=$$PORT npx playwright test tests/anonymous.spec.js --headed
 
-test-deploy: ## Run deploy-script regression tests (rsync excludes preserve live state)
+add-age-key: ## Generate an age keypair, store private in Keychain, append public to deploy/age-recipients.txt (NAME=<label>)
+	@if [ -z "$(NAME)" ]; then echo "❌  Usage: make add-age-key NAME=<label>"; exit 1; fi
+	@./deploy/manage-age-keys.sh generate $(NAME)
+
+list-age-keys: ## Show recipients in deploy/age-recipients.txt + which ones have a private key in your local Keychain
+	@./deploy/manage-age-keys.sh list
+
+retire-age-key: ## Remove an age key from deploy/age-recipients.txt (NAME=<label> [DELETE_KEYCHAIN=1])
+	@if [ -z "$(NAME)" ]; then echo "❌  Usage: make retire-age-key NAME=<label> [DELETE_KEYCHAIN=1]"; exit 1; fi
+	@if [ "$(DELETE_KEYCHAIN)" = "1" ]; then \
+		./deploy/manage-age-keys.sh retire $(NAME) --delete-keychain; \
+	else \
+		./deploy/manage-age-keys.sh retire $(NAME); \
+	fi
+
+test-deploy: ## Run deploy-script regression tests (lint + unit + atomic-layout + rollback + migration probes)
+	@bash tests/deploy/lint-remote-ssh.sh
+	@bash tests/deploy/unit-remote-run.sh
+	@bash tests/deploy/unit-ssh-auth.sh
+	@bash tests/deploy/unit-age-keychain.sh
 	@bash tests/deploy/excludes-preserve-live-state.sh
+	@bash tests/deploy/atomic-layout.sh
+	@bash tests/deploy/rollback.sh
+	@bash tests/deploy/migrate.sh
 
 test-backup-restore: ## Run backup/restore tooling tests (bats)
 	@command -v bats >/dev/null 2>&1 || { echo "❌  bats not installed. Run: brew install bats-core"; exit 1; }

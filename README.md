@@ -19,21 +19,28 @@ This will check dependencies, pull LFS files, start Docker, and prompt you to cr
 
 `deploy/backup.sh` and `deploy/restore.sh` write encrypted archives and
 unpacked PII (member emails, bcrypt hashes, bug-report screenshots)
-into three local paths. Time Machine, Spotlight, and cloud-sync tools
-will silently capture that data unless you exclude them. Once per
+into local paths. Time Machine, Spotlight, and cloud-sync tools will
+silently capture that data unless you exclude the path. Once per
 machine, after first checkout, run:
 
 ```bash
-tmutil addexclusion ./backups
+tmutil addexclusion ~/.byvaerkstederne/backups
 tmutil addexclusion ./deploy/staging-stage
 tmutil addexclusion ./deploy/prod-stage
 ```
 
+The first path is **machine-wide** — every checkout (main repo +
+worktrees + per-`/gan`-run worktrees) shares
+`~/.byvaerkstederne/backups`, so the exclusion is once-per-machine,
+not once-per-worktree. Override the location via `BV_KEEP_LOCAL_DIR`
+in `.env.deploy` if you want a different path; just exclude whichever
+path you pick.
+
 Also, do **not** keep this checkout inside a Dropbox / iCloud Drive /
 Google Drive synced root.
 
-`./backups/`, `./deploy/staging-stage/`, and `./deploy/prod-stage/`
-are already covered by `.gitignore`. `restore.sh` writes
+`~/.byvaerkstederne/backups/`, `./deploy/staging-stage/`, and
+`./deploy/prod-stage/` are private. `restore.sh` writes
 `.metadata_never_index` (Spotlight exclusion marker) into any scratch
 directory it creates.
 
@@ -45,11 +52,127 @@ directory it creates.
 |------|-----|
 | [`age`](https://age-encryption.org) | Encrypts/decrypts the archive (`brew install age`). |
 | `tar`, `rsync`, `ssh` | Standard on macOS / Linux. |
+| `sshpass` | Same reason as the atomic-deploy section: password-auth shared hosting (one.com, chosting.dk) requires it. backup.sh / restore.sh dispatch through `deploy/lib/ssh-auth.sh` which picks between sshpass+`DEPLOY_PASS` and bare-ssh+key-auth based on whether the password is set for the active tier. Install: `brew install esolitos/ipa/sshpass`. |
 | (optional) `aws` CLI | Only when uploading to S3-compatible managed storage. |
 
 The committed test suite (`tests/deploy/backup-restore.bats`) needs
 [`bats-core`](https://github.com/bats-core/bats-core) — `brew install
 bats-core`.
+
+### Atomic-deploy tooling dependencies
+
+`deploy/deploy.sh`, `deploy/rollback.sh`, and
+`deploy/migrate-to-atomic-layout.sh` need everything the backup tooling
+needs **plus** the items below. Each script asserts these at startup
+and fails loud with an install hint if anything is missing.
+
+| Tool | Why |
+|------|-----|
+| `sshpass` | one.com authenticates with a password rather than an SSH key, so the scripts wrap `ssh` and `rsync` in `sshpass -p "$DEPLOY_PASS"`. Install: `brew install esolitos/ipa/sshpass` (it's not in core Homebrew because of upstream's stance on password-passing, but the IPA tap is the standard macOS workaround). |
+| [GNU coreutils](https://www.gnu.org/software/coreutils/) | The scripts measure `swap_duration_ms` for the `release-meta.yaml` audit trail with `date +%s%N` (nanosecond resolution). BSD `date` (macOS default) doesn't support `%N` and would round single-digit-second swaps to 0–999 ms with no useful precision; the startup probe (`bv_require_ms_timing` in `deploy/lib/atomic-release.sh`) refuses to run without GNU `date`. Install: `brew install coreutils`. The scripts prepend `/opt/homebrew/bin` to `$PATH` internally — you do **not** need to add `gnubin` to your shell PATH unless you want GNU semantics in everyday use. |
+| GNU bash 4+ | The atomic-release lib uses constructs (nested `$(...)` with single-quotes inside double-quotes) that bash 3.2's parser fails on. macOS ships bash 3.2 at `/bin/bash`; the deploy scripts shebang `#!/usr/bin/env bash` and add a `BASH_VERSINFO[0]` ≥ 4 assertion at startup so the operator gets a readable diagnostic instead of "syntax error near unexpected token \`('". Install: `brew install bash`, and ensure `/opt/homebrew/bin` precedes `/usr/bin` on your `$PATH`. |
+| `php` (on the **remote**, not the operator host) | Step 7 of the deploy sequence runs `php bin/grav cache --all` against the freshly-rsync'd release dir. Shared-hosting tiers (one.com, chosting.dk) ship PHP — no operator install required. The cache-clear failure path explicitly aborts before the docroot swap. |
+
+The atomic-deploy probes (`tests/deploy/lint-remote-ssh.sh`,
+`unit-remote-run.sh`, `atomic-layout.sh`, `rollback.sh`,
+`migrate.sh`) run locally without any of the above tools touching a
+real remote — the unit test stubs `ssh`/`sshpass` for local execution
+and the rest use `mktemp` fixtures. CI doesn't need `sshpass` to lint
+or test the work; only operator-side real-tier exercise does.
+
+See [ADR-004](decisions/ADR-004-atomic-deploy-fixture-only-testing.md)
+for the rationale behind the local-fixture-first testing posture and
+the operator-supervised real-tier exercise contract.
+
+#### Storing the SSH password in macOS Keychain (recommended)
+
+Plain-text passwords in `.env.deploy` are fine for solo-operator
+machines with FileVault on, but Keychain integration is one shell
+command away and noticeably better:
+
+- The password never appears in `.env.deploy` — only the Keychain
+  *item name* does. `.env.deploy` becomes safe to share between
+  operator machines, since the secret is per-machine.
+- macOS prompts for unlock on first access; "Always Allow" caches
+  the decision for the duration of the Keychain unlock window
+  (typically the login session).
+- Revocation is `security delete-generic-password ...` — instant
+  and obvious.
+
+**One-time setup per tier:**
+
+```sh
+# staging / test / dev share one password on the hackersbychoice.dk
+# one.com account; store it once under any item name you like.
+security add-generic-password -a "$USER" -s bv-deploy-pass-hackersbychoice -w
+# (the -w with no value prompts for the password without echoing)
+
+# prod hosting account (separate; populate when chosting.dk creds exist):
+security add-generic-password -a "$USER" -s bv-deploy-pass-prod -w
+```
+
+Then in `.env.deploy`, **replace** `DEPLOY_PASS=...` with:
+
+```sh
+DEPLOY_PASS_KEYCHAIN=bv-deploy-pass-hackersbychoice
+DEPLOY_PROD_PASS_KEYCHAIN=bv-deploy-pass-prod   # commented until prod is provisioned
+```
+
+`deploy/lib/ssh-auth.sh` consults the Keychain only when the direct
+env var is unset, so a one-off CI override via `DEPLOY_PASS=...` still
+takes precedence. The unit test
+(`tests/deploy/unit-ssh-auth.sh`) covers both code paths.
+
+### Age key management — backup encryption / decryption
+
+Backups are encrypted with [`age`](https://age-encryption.org). The
+project uses a multi-recipient model:
+
+- **Public keys** live in `deploy/age-recipients.txt`, committed to
+  the repo. Anyone can read them; reviewers gate "who is allowed to
+  decrypt our backups" via PR review.
+- **Private keys** live in each operator's macOS Keychain as items
+  named `bv-age-identity-<label>`. `restore.sh` walks every such item
+  at decrypt time and tries each as the identity. The first match
+  wins. If none decrypt, falls back to `AGE_IDENTITY_FILE` env var.
+- **Cap of 5 active recipients** enforced by `backup.sh` and the
+  `manage-age-keys.sh generate` command.
+- **Per-backup audit trail**: `backup-meta.yaml` records
+  `encrypted_to: [<pubkey-1>, <pubkey-2>, ...]` listing every
+  recipient at backup time. `restore.sh` reads this before decrypt to
+  tell the operator which keys would work.
+
+Operator setup (once per machine):
+
+```bash
+# Generate your first age keypair, store private in Keychain,
+# append public to deploy/age-recipients.txt. Pick any label
+# unique to you (your first name works).
+make add-age-key NAME=thomas
+
+# Or directly:
+./deploy/manage-age-keys.sh generate thomas
+```
+
+The command:
+1. Generates a fresh keypair via `age-keygen`.
+2. Stores the **identity file** (public + private) in macOS Keychain
+   as `bv-age-identity-thomas`. The identity never touches disk.
+3. Appends the public key + a `# bv-age-identity-thomas (added …)`
+   marker line to `deploy/age-recipients.txt` for review and commit.
+
+Inspect / manage:
+
+```bash
+make list-age-keys           # show recipients; mark which ones YOU hold
+make retire-age-key NAME=alice                # remove from age-recipients.txt
+make retire-age-key NAME=alice DELETE_KEYCHAIN=1   # also remove from Keychain
+```
+
+A retired key remains decryptable for old backups as long as the
+private key is still held by some operator. Truly destroying the
+ability to decrypt requires every holder to also `retire` with
+`DELETE_KEYCHAIN=1`.
 
 ### Backup tooling environment variables
 
@@ -62,10 +185,14 @@ The standard ones live in `.env.deploy` (gitignored, see
 | Variable | Purpose |
 |----------|---------|
 | `DEPLOY_PROD_HOST`, `DEPLOY_PROD_USER`, `DEPLOY_PROD_PORT`, `DEPLOY_PROD_PATH` | SSH credentials for the prod tier. |
+| `DEPLOY_PROD_PASS` | Password for the prod tier. Plain-text alternative; prefer `DEPLOY_PROD_PASS_KEYCHAIN` below. |
+| `DEPLOY_PROD_PASS_KEYCHAIN` | Name of a macOS Keychain generic-password item that holds the prod password. When set (and `DEPLOY_PROD_PASS` is unset), `deploy/lib/ssh-auth.sh` fetches the password at runtime via `security find-generic-password -a "$USER" -s "<item>" -w`. The plaintext password lives only in the Keychain, never in `.env.deploy`. |
 | `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_PATH` | SSH credentials shared across staging / test / dev (see `specifications/archive/prod_backup_restore_specification.md` for the per-tier subpath logic). |
+| `DEPLOY_PASS` | Password shared across staging / test / dev. Plain-text alternative; prefer `DEPLOY_PASS_KEYCHAIN`. |
+| `DEPLOY_PASS_KEYCHAIN` | macOS Keychain item name for the staging/test/dev password. Same shape as `DEPLOY_PROD_PASS_KEYCHAIN`. |
 | `BACKUP_S3_BUCKET`, `BACKUP_S3_ENDPOINT`, `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` | Managed-storage credentials. Either these or `BACKUP_LOCAL_STORE_DIR` must be set. |
 | `BACKUP_LOCAL_STORE_DIR` | Directory acting as managed storage (used for testing and when an S3 bucket is overkill). Mutually exclusive with the S3 backend; if both are set, the local store wins. |
-| `AGE_IDENTITY_FILE` | Absolute path to the operator's age private key (kept in a password manager / hardware key, never committed). Required for any `restore.sh` invocation that decrypts. |
+| `AGE_IDENTITY_FILE` | Absolute path to the operator's age private key. **Optional** — by default, `restore.sh` walks every `bv-age-identity-*` item in your macOS Keychain and tries each as the decrypt identity. Set this env-var only as a fallback for CI / Linux operators / one-off overrides. See "Age key management" below for the recommended Keychain workflow. |
 
 **Disaster-recovery gates** (`deploy/restore.sh` only):
 
@@ -100,6 +227,12 @@ override. Tests inject metadata by populating
 
 > `make setup` will check for all dependencies and attempt to install Git LFS if missing.
 
+For deploy / backup / restore tooling, see [Backup tooling
+dependencies](#backup-tooling-dependencies) and [Atomic-deploy tooling
+dependencies](#atomic-deploy-tooling-dependencies) above. Those are
+operator-side requirements only; they do not affect local Docker
+development.
+
 ## Commands
 
 Run `make help` to see all available commands:
@@ -114,12 +247,16 @@ Run `make help` to see all available commands:
 | `make open` | Open site in browser |
 | `make admin` | Open admin panel |
 | `make status` | Show container status |
-| `make deploy-prod` | Deploy to production |
-| `make deploy-test` | Deploy to test environment |
-| `make deploy-dev` | Deploy to dev environment |
-| `make deploy-staging` | Deploy to staging (prod data) |
-| `make backup-prod` | Backup production data |
-| `make backup-test` | Backup test environment data |
+| `make deploy tier=prod` | Deploy to production |
+| `make deploy tier=test` | Deploy to test environment |
+| `make deploy tier=dev` | Deploy to dev environment |
+| `make deploy tier=staging` | Deploy to staging (prod data) |
+| `make backup tier=prod` | Backup production data |
+| `make backup tier=test` | Backup test environment data |
+| `make list-backups [tier=<env>]` | List available backup ids |
+| `make restore tier=<env> from=<id>` | Restore a tier (add `RESTORE_TO_TIER_ENABLED=1` to actually wipe; prod refused) |
+| `make rollback tier=<env>` | Roll back a tier to its previous release |
+| `make migrate-atomic tier=<env>` | One-time migration to atomic-release layout (prod refused) |
 | `make cache-clear` | Clear Grav cache |
 | `make reset-users` | Delete all user accounts (except admin) |
 | `make reset-admin` | Reset admin account (delete and recreate) |
@@ -240,18 +377,18 @@ PRs from feature branches always target `develop`. `main` is updated only via a 
 | Action | Commands |
 |--------|---------|
 | Start new feature | `git checkout -b feature/my-feature develop` |
-| Deploy feature to dev | `make deploy-dev` |
-| Merge to test | `git checkout develop && git merge feature/my-feature` then `make deploy-test` |
-| Release to production | `git checkout main && git merge develop` then `make deploy-prod` |
+| Deploy feature to dev | `make deploy tier=dev` |
+| Merge to test | `git checkout develop && git merge feature/my-feature` then `make deploy tier=test` |
+| Release to production | `git checkout main && git merge develop` then `make deploy tier=prod` |
 
 ## Environments
 
 | Environment | URL | Deploy command | Branch |
 |------------|-----|---------------|--------|
-| **Production** | hackersbychoice.dk | `make deploy-prod` | `main` |
-| **Test** | hackersbychoice.dk/test | `make deploy-test` | `develop` |
-| **Dev** | hackersbychoice.dk/dev | `make deploy-dev` | `feature/*` |
-| **Staging** | hackersbychoice.dk/staging | `make deploy-staging` | `main` + prod data |
+| **Production** | hackersbychoice.dk | `make deploy tier=prod` | `main` |
+| **Test** | hackersbychoice.dk/test | `make deploy tier=test` | `develop` |
+| **Dev** | hackersbychoice.dk/dev | `make deploy tier=dev` | `feature/*` |
+| **Staging** | hackersbychoice.dk/staging | `make deploy tier=staging` | `main` + prod data |
 | **Local** | localhost:8080 | `make start` | any branch |
 
 Credentials are in `.env.deploy` (git-ignored). Copy `.env.deploy.example` to get started.
@@ -259,8 +396,10 @@ Credentials are in `.env.deploy` (git-ignored). Copy `.env.deploy.example` to ge
 ## Backup
 
 ```bash
-make backup-prod    # Backup production data (accounts, flex objects, pages, media)
-make backup-test    # Backup test environment data
+make backup tier=prod    # Backup production data (accounts, flex objects, pages, media)
+make backup tier=test    # Backup test environment data
+make list-backups        # See available backup ids
+make restore tier=<env> from=<id>   # Restore a tier (RESTORE_TO_TIER_ENABLED=1 to actually wipe)
 ```
 
 Backups are stored locally in `backups/` (git-ignored) as timestamped snapshots. Last 30 backups are kept, older ones are pruned automatically. Ready to sync to NAS or cloud storage.

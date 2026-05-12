@@ -48,7 +48,10 @@ readonly RESTORE_SCRIPT_VERSION="0.1.0"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 readonly SCRIPT_DIR REPO_ROOT
-readonly LOCAL_BACKUP_DIR="$REPO_ROOT/backups"
+# Local-keep dir — must match backup.sh's resolution (machine-wide by
+# default, override via BV_KEEP_LOCAL_DIR). This is where restore.sh
+# looks first when --from <id> doesn't resolve in managed storage.
+readonly LOCAL_BACKUP_DIR="${BV_KEEP_LOCAL_DIR:-$HOME/.byvaerkstederne/backups}"
 readonly RESTORE_LOG_DIR="$REPO_ROOT/logs"
 readonly PATHS_FILE="$SCRIPT_DIR/backup-paths.txt"
 
@@ -68,9 +71,13 @@ usage() {
     cat <<'EOF' >&2
 Usage:
   ./deploy/restore.sh --to <dir> [--from <id>]
-  ./deploy/restore.sh <tier> --from <id> [--yes-i-mean-it]
+  ./deploy/restore.sh <tier> --from <id> [--allow-cross-tier] [--yes-i-mean-it]
 
   <tier> ∈ {prod, staging, test, dev}
+
+  --allow-cross-tier: accept an archive whose name prefixes a different
+  tier (e.g. restore a dev-* backup into the test tier). Required because
+  the source-tier prefix is normally enforced as a guardrail.
 EOF
 }
 
@@ -120,6 +127,7 @@ TIER=""
 TO_DIR=""
 FROM_ID=""
 YES_FLAG=0
+ALLOW_CROSS_TIER=0  # accept archives whose tier-prefix differs from the target tier
 
 if [ $# -eq 0 ]; then usage; exit 1; fi
 
@@ -150,6 +158,9 @@ while [ $# -gt 0 ]; do
         --yes-i-mean-it)
             YES_FLAG=1; shift
             ;;
+        --allow-cross-tier)
+            ALLOW_CROSS_TIER=1; shift
+            ;;
         --help|-h) usage; exit 0 ;;
         *) die "Unknown option: $(printf %q "$1")" 1 ;;
     esac
@@ -162,7 +173,7 @@ if [ "$MODE" = "tier" ] && [ -z "$FROM_ID" ]; then
     die "--from <id> is required for restore-to-tier" 1
 fi
 
-readonly MODE TIER TO_DIR FROM_ID YES_FLAG
+readonly MODE TIER TO_DIR FROM_ID YES_FLAG ALLOW_CROSS_TIER
 
 # ──────────────────────────────────────────────────────────────────────
 # Source environment file (if present).
@@ -175,6 +186,18 @@ if [ -f "$ENV_FILE" ]; then
     . "$ENV_FILE"
     set +a
 fi
+
+# SSH-auth helpers — same pattern as backup.sh. Picks between sshpass
+# password-auth (DEPLOY_PASS / DEPLOY_PROD_PASS) and bare-ssh+key-auth
+# based on which env vars are set for the active tier.
+# shellcheck source=deploy/lib/ssh-auth.sh
+. "$REPO_ROOT/deploy/lib/ssh-auth.sh"
+
+# age-identity helpers — looks up Keychain items bv-age-identity-*
+# at decrypt time. Falls back to AGE_IDENTITY_FILE if no Keychain
+# item decrypts.
+# shellcheck source=deploy/lib/age-keychain.sh
+. "$REPO_ROOT/deploy/lib/age-keychain.sh"
 
 # ──────────────────────────────────────────────────────────────────────
 # Storage layer abstraction. Same shape as backup.sh: prefer
@@ -246,7 +269,7 @@ resolve_archive() {
         if [ -n "$tier_filter" ]; then
             case "$fname" in
                 "${tier_filter}-"*) ;;
-                *) die "Archive '$fname' is not for tier '$tier_filter'" 1 ;;
+                *) die "Archive '$fname' is not for tier '$tier_filter' (pass --allow-cross-tier to override)" 1 ;;
             esac
         fi
         printf '%s\n' "$fname"
@@ -305,21 +328,49 @@ decrypt_and_unpack() {
     # Spotlight never-index marker (operator privacy hygiene).
     : > "$target/.metadata_never_index"
 
-    local tmp_tar
-    tmp_tar="$(mktemp "${TMPDIR:-/tmp}/bv-restore.XXXXXXXX.tar.gz")"
-    trap 'rm -f "$tmp_tar"' RETURN
+    # mktemp template: BSD mktemp (macOS) only substitutes TRAILING
+    # X's; an X-block in the middle of the filename (.../bv-restore.
+    # XXXXXXXX.tar.gz) gets treated as a literal name and any second
+    # run hits "File exists". Allocate a tempdir, then name the file
+    # inside it instead — works on both BSD and GNU.
+    local tmp_dir tmp_tar
+    tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/bv-restore.XXXXXXXX")"
+    tmp_tar="$tmp_dir/archive.tar.gz"
+    trap 'rm -rf "$tmp_dir"' RETURN
 
-    if [ -n "$identity" ] && [ -f "$identity" ]; then
+    # Decryption strategy:
+    #   1. macOS Keychain: walk every bv-age-identity-* item and try
+    #      each as the identity. First one that decrypts wins. This
+    #      is the default operator path.
+    #   2. AGE_IDENTITY_FILE env-var: fall back to a file-based key
+    #      for CI / Linux operators / one-off overrides.
+    # If neither path produces plaintext, fail loud with a diagnostic
+    # naming the recipients in backup-meta.yaml (which the operator
+    # can cross-reference against `manage-age-keys.sh list` to find
+    # which key would have worked).
+    if bv_age_keychain_try_decrypt "$enc_archive" "$tmp_tar" 2>/dev/null; then
+        :   # decrypted via Keychain identity
+    elif [ -n "$identity" ] && [ -f "$identity" ]; then
         age -d -i "$identity" -o "$tmp_tar" "$enc_archive" \
             || die "age decryption failed (identity: $identity)" 3
     else
-        # Without an identity file, age will prompt — which violates
-        # our non-interactive contract. We fail loud instead, with a
-        # specific message.
-        if [ -z "${AGE_IDENTITY_FILE:-}" ]; then
-            die "AGE_IDENTITY_FILE not set (decryption needs the operator's age private key)" 1
+        # Diagnose. If recipients file is readable and we can
+        # extract its `age1...` lines, surface them so the operator
+        # can compare against their Keychain inventory.
+        local recipients_hint=""
+        local rf
+        rf="$(bv_age_recipients_file 2>/dev/null || true)"
+        if [ -f "$rf" ]; then
+            local first_pubkey
+            first_pubkey="$(grep -E '^age1[a-z0-9]+$' "$rf" | head -1 || true)"
+            if [ -n "$first_pubkey" ]; then
+                recipients_hint=" (the archive was encrypted to recipients in $rf — run \`./deploy/manage-age-keys.sh list\` to see which keys you hold)"
+            fi
         fi
-        die "age identity file not found: $identity" 1
+        if [ -z "${AGE_IDENTITY_FILE:-}" ]; then
+            die "No matching age identity available — neither macOS Keychain (bv-age-identity-*) nor AGE_IDENTITY_FILE.${recipients_hint}" 1
+        fi
+        die "age identity file not found: $identity${recipients_hint}" 1
     fi
 
     tar -xzf "$tmp_tar" -C "$target" \
@@ -340,7 +391,24 @@ if [ "$MODE" = "scratch" ]; then
         ARCHIVE_NAME="$(resolve_archive "latest" "")"
     fi
 else
-    ARCHIVE_NAME="$(resolve_archive "$FROM_ID" "$TIER")"
+    # tier mode. When --allow-cross-tier is set, skip the tier-prefix
+    # check inside resolve_archive (pass empty filter) and warn loudly
+    # so the cross-application is visible in the run log.
+    if [ "$ALLOW_CROSS_TIER" = "1" ]; then
+        ARCHIVE_NAME="$(resolve_archive "$FROM_ID" "")"
+        case "$ARCHIVE_NAME" in
+            "${TIER}-"*)
+                # archive prefix matches the target tier — flag is a no-op
+                ;;
+            *)
+                src_tier="${ARCHIVE_NAME%%-*}"
+                warn "cross-tier restore: applying ${src_tier}-tier archive '$ARCHIVE_NAME' to ${TIER} tier"
+                warn "  (the source tier's accounts / data / pages will replace the target tier's)"
+                ;;
+        esac
+    else
+        ARCHIVE_NAME="$(resolve_archive "$FROM_ID" "$TIER")"
+    fi
 fi
 
 # ──────────────────────────────────────────────────────────────────────
@@ -352,8 +420,13 @@ if [ "$MODE" = "scratch" ]; then
     # the hygiene banner before we materialise PII on disk.
     bv_show_first_write_banner_if_needed
     log "Restoring '$ARCHIVE_NAME' → $TO_DIR"
-    tmp_archive="$(mktemp "${TMPDIR:-/tmp}/bv-restore.XXXXXXXX.age")"
-    trap 'rm -f "$tmp_archive"' EXIT
+    # Same BSD-mktemp-trailing-X-only constraint as decrypt_and_unpack:
+    # allocate a tempdir, name the file inside it. Avoids the "File
+    # exists" failure mode when a stale .age file sits at a literal
+    # XXXXXXXX-bearing path from a prior run.
+    tmp_archive_dir="$(mktemp -d "${TMPDIR:-/tmp}/bv-restore.XXXXXXXX")"
+    tmp_archive="$tmp_archive_dir/archive.age"
+    trap 'rm -rf "$tmp_archive_dir"' EXIT
     download_archive "$ARCHIVE_NAME" "$tmp_archive"
     decrypt_and_unpack "$tmp_archive" "$TO_DIR"
     log "Scratch restore complete: $TO_DIR"
@@ -517,6 +590,9 @@ if [ -n "${RESTORE_LOCAL_TIER_DIR:-}" ]; then
 
     # Clear caches if a Grav binary is present at the target. The
     # spec-mandated command is `bin/grav clearcache` (no hyphen).
+    # Local-tier path retains +x via rsync's local fs semantics, so
+    # invoke directly. The SSH path below uses `php bin/grav` because
+    # one.com strips +x on rsync upload across the network.
     grav_bin="$RESTORE_LOCAL_TIER_DIR/bin/grav"
     if [ -x "$grav_bin" ] || [ -f "$grav_bin" ]; then
         log_op "running bin/grav clearcache from $RESTORE_LOCAL_TIER_DIR"
@@ -558,7 +634,7 @@ case "$TIER" in
         SSH_PORT="${DEPLOY_PORT:-22}"
         base_path="${DEPLOY_PATH:-}"
         case "$TIER" in
-            staging) SSH_PATH="$base_path" ;;
+            staging) SSH_PATH="$base_path/staging" ;;
             test)    SSH_PATH="$base_path/test" ;;
             dev)     SSH_PATH="$base_path/dev" ;;
         esac
@@ -595,11 +671,15 @@ done < "$PATHS_FILE"
 # Wipe + replace each allow-listed path. This is the call the
 # confinement hook would block — it's only reachable when
 # RESTORE_TO_TIER_ENABLED=1 is set explicitly on a real operator run.
+# bv_rsync_via_ssh + bv_rsync_ssh_e dispatch via sshpass when
+# DEPLOY_PASS / DEPLOY_PROD_PASS is configured for the tier.
+rsync_e="$(bv_rsync_ssh_e "$SSH_PORT")" \
+    || die "could not build rsync ssh-cmd (sshpass missing?)" 5
 for rel in "${INCLUDE_PATHS[@]}"; do
     src="$SCRATCH/unpacked/$rel/"
     [ -d "$src" ] || { log_op "skip $rel (not in archive)"; continue; }
     log_op "rsync --delete to ${SSH_USER}@${SSH_HOST}:${SSH_PATH}/$rel"
-    rsync -az --delete -e "ssh -p ${SSH_PORT}" \
+    bv_rsync_via_ssh -az --delete -e "$rsync_e" \
           "$src" "${SSH_USER}@${SSH_HOST}:${SSH_PATH}/${rel}/" \
           || die "rsync to ${SSH_HOST}:${SSH_PATH}/$rel failed (log: $LOG_FILE)" 5
 done
@@ -607,8 +687,8 @@ done
 # Clear caches afterwards. We use the spec-mandated `bin/grav
 # clearcache` (no hyphen).
 log_op "clearing Grav caches on ${SSH_HOST}"
-ssh -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" \
-    "cd $(printf %q "$SSH_PATH") && bin/grav clearcache" \
+bv_ssh_cmd -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" \
+    "cd $(printf %q "$SSH_PATH") && php bin/grav clearcache" \
     >>"$LOG_FILE" 2>&1 \
     || warn "bin/grav clearcache returned non-zero (continuing)"
 

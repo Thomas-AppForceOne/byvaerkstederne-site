@@ -6,16 +6,21 @@
 # flex objects, uploaded files) on the operator's machine. The paths
 # they actually write to are:
 #
-#   ./backups/                 — backup.sh --keep-local + upload-failure fallback
+#   $LOCAL_BACKUP_DIR          — backup.sh --keep-local + upload-failure
+#                                fallback. Default ~/.byvaerkstederne/backups
+#                                (machine-wide; once-per-machine
+#                                tmutil exclusion). Override via
+#                                BV_KEEP_LOCAL_DIR.
 #   <restore.sh --to TARGET>   — operator-chosen scratch dir (varies)
 #   $RESTORE_LOCAL_TIER_DIR    — operator-chosen tier dir for the
 #                                local-tier restore mode (varies)
 #
-# Of those, only ./backups/ has a fixed location. The other two are
-# operator-chosen at invocation time, so the banner can't pre-list
-# `tmutil addexclusion` commands for them — instead it warns the
-# operator to remember to exclude their chosen target path the first
-# time they pass --to <dir> or set RESTORE_LOCAL_TIER_DIR.
+# Of those, only the local-keep dir has a stable location across
+# invocations. The other two are operator-chosen at invocation time,
+# so the banner can't pre-list `tmutil addexclusion` commands for
+# them — instead it warns the operator to remember to exclude their
+# chosen target path the first time they pass --to <dir> or set
+# RESTORE_LOCAL_TIER_DIR.
 #
 # (An earlier draft listed `./deploy/staging-stage/` and
 # `./deploy/prod-stage/` here. The implementation never writes to
@@ -55,6 +60,12 @@ bv_show_first_write_banner_if_needed() {
         return 0
     fi
 
+    # Resolve the local-keep dir for the banner copy. Caller has
+    # already loaded backup.sh/restore.sh which set LOCAL_BACKUP_DIR;
+    # we read it via the env so the banner reflects the current
+    # value (default or BV_KEEP_LOCAL_DIR override).
+    local kept_dir="${LOCAL_BACKUP_DIR:-$HOME/.byvaerkstederne/backups}"
+
     # Print the banner to stderr. We use printf rather than a heredoc
     # so the indentation in source doesn't bleed into the output.
     {
@@ -67,10 +78,13 @@ bv_show_first_write_banner_if_needed() {
         printf '  can carry user account hashes, Flex Objects, and uploaded\n'
         printf '  files. Please exclude them from Time Machine.\n'
         printf '\n'
-        printf '  The persistent path is `./backups/` (local-keep archives\n'
-        printf '  and upload-fallback copies):\n'
+        printf '  The persistent path is `%s`\n' "$kept_dir"
+        printf '  (local-keep archives + upload-fallback copies). It is\n'
+        printf '  machine-wide — every worktree of this repo + every\n'
+        printf '  GAN-run worktree shares it, so the exclusion is\n'
+        printf '  once-per-machine, not once-per-worktree:\n'
         printf '\n'
-        printf '    tmutil addexclusion ./backups\n'
+        printf '    tmutil addexclusion %s\n' "$kept_dir"
         printf '\n'
         printf '  If you also use:\n'
         printf '    - `restore.sh --to <dir>` for scratch inspection, or\n'

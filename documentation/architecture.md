@@ -92,9 +92,12 @@ Note: the cache command is `bin/grav clearcache` — **not** `clear-cache` (no h
 Scripted via `deploy/deploy.sh` with an environment argument (`prod`, `test`, `dev`, `staging`).
 
 ```bash
-make deploy        # production
-make deploy-test   # test environment
-make backup-prod   # pull backup from production
+make deploy tier=prod    # production
+make deploy tier=test    # test environment
+make backup tier=prod    # pull backup from production
+make list-backups        # show available backup ids
+make restore tier=<env> from=<id>   # restore a tier (RESTORE_TO_TIER_ENABLED=1 to actually wipe; prod refused)
+make rollback tier=<env>            # roll back a tier to its previous release
 ```
 
 ---

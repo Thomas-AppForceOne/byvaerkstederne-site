@@ -662,3 +662,37 @@ considered and deferred.
   spec keeps N releases by count; a smarter policy would keep
   "every release for the last week, plus weekly snapshots beyond
   that." Out of scope until disk usage becomes a real constraint.
+
+---
+
+## Post-implementation note (2026-05-10)
+
+This spec shipped via `/gan` run `20260509T203443-0ee4` (PR #17),
+followed by a review-feedback follow-up commit set on the same branch.
+Two implementation-time decisions are worth flagging here for future
+readers; both are recorded in
+[ADR-004](../../decisions/ADR-004-atomic-deploy-fixture-only-testing.md).
+
+**Testing scope.** Every shell-level test in this work runs against
+local `mktemp` fixtures, not against a real remote. The GAN harness
+does not have SSH credentials by design (the framework's confinement
+hook excludes `~/.gan-secrets/`). The 374 fixture-mode assertions
+exercise the deploy/rollback/migrate primitives end-to-end, but the
+SSH plumbing is covered only by static lint
+(`tests/deploy/lint-remote-ssh.sh`) plus PR review.
+
+**Migration scope.** `deploy/migrate-to-atomic-layout.sh` ships with
+real-remote mode disabled; the script refuses to run unless
+`BV_MIGRATE_LOCAL_PARENT` is set. The exit criterion above ("one-time
+migration script promotes existing tiers from the current in-place
+layout to the new one without data loss") is realised today via a
+documented operator workaround:
+
+1. `rsync -a` the live tier's contents down to a local fixture parent.
+2. Run the migration locally against that fixture.
+3. `rsync -a` the resulting atomic-layout tree back up.
+
+ADR-004 documents the workaround in full and constrains future PRs
+that touch the SSH plumbing. A follow-up PR may ship the real-remote
+plumbing (with corresponding ADR update) once a credential-vault story
+exists for the GAN harness.

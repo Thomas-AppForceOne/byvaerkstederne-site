@@ -53,7 +53,14 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 readonly SCRIPT_DIR REPO_ROOT
 readonly PATHS_FILE="${BACKUP_PATHS_FILE:-$SCRIPT_DIR/backup-paths.txt}"
 readonly RECIPIENTS_FILE="${BACKUP_RECIPIENTS_FILE:-$SCRIPT_DIR/age-recipients.txt}"
-readonly LOCAL_BACKUP_DIR="$REPO_ROOT/backups"
+# Local-keep dir for archived backups + upload-fallback copies.
+# Machine-wide by default so all worktrees + GAN run worktrees share
+# one location — that way `tmutil addexclusion` is a once-per-machine
+# operation, not once-per-worktree (the prior <repo>/backups/ default
+# accumulated a separate dir in every worktree, each needing its own
+# exclusion). Override via BV_KEEP_LOCAL_DIR env var (in .env.deploy
+# or per-invocation).
+readonly LOCAL_BACKUP_DIR="${BV_KEEP_LOCAL_DIR:-$HOME/.byvaerkstederne/backups}"
 readonly DENY_PATTERNS=(
     "cache"
     "logs"
@@ -152,6 +159,20 @@ if ! grep -E '^age1[0-9a-z]+$' "$RECIPIENTS_FILE" >/dev/null 2>&1; then
     die "No valid age recipient (line starting with age1...) in $RECIPIENTS_FILE" 1
 fi
 
+# Enforce the cap: 1..BV_AGE_RECIPIENTS_CAP active recipients.
+# Source the helper just for BV_AGE_RECIPIENTS_CAP and the count fn;
+# helper is also used by restore.sh for Keychain identities.
+# shellcheck source=deploy/lib/age-keychain.sh
+. "$SCRIPT_DIR/lib/age-keychain.sh"
+BV_AGE_RECIPIENTS_FILE="$RECIPIENTS_FILE"   # tell the helper which file
+RECIPIENT_COUNT="$(bv_age_recipients_count)"
+if [ "$RECIPIENT_COUNT" -lt 1 ]; then
+    die "No active recipients in $RECIPIENTS_FILE (need at least 1)" 1
+fi
+if [ "$RECIPIENT_COUNT" -gt "$BV_AGE_RECIPIENTS_CAP" ]; then
+    die "Recipients file has $RECIPIENT_COUNT keys (cap: $BV_AGE_RECIPIENTS_CAP). Retire one with \`./deploy/manage-age-keys.sh retire <label>\`." 1
+fi
+
 # ──────────────────────────────────────────────────────────────────────
 # Source environment file (gitignored). Only sourced if it exists —
 # unit tests run without it and inject env vars directly. We avoid
@@ -168,6 +189,14 @@ if [ -f "$ENV_FILE" ] && [ -z "${BACKUP_FIXTURE_DIR:-}" ]; then
     . "$ENV_FILE"
     set +a
 fi
+
+# SSH-auth helpers (bv_ssh_cmd, bv_rsync_ssh_e, bv_rsync_via_ssh,
+# bv_resolve_ssh_password). These pick between sshpass+password and
+# bare ssh+key-auth based on whether DEPLOY_PASS / DEPLOY_PROD_PASS is
+# set for the active tier. Source unconditionally — fixture mode never
+# calls them, real-host mode does.
+# shellcheck source=deploy/lib/ssh-auth.sh
+. "$REPO_ROOT/deploy/lib/ssh-auth.sh"
 
 # ──────────────────────────────────────────────────────────────────────
 # Resolve source: either a remote SSH host (production path) or a
@@ -203,7 +232,7 @@ if [ "$USE_FIXTURE" = "0" ]; then
             SSH_PORT="${DEPLOY_PORT:-22}"
             base_path="${DEPLOY_PATH:-}"
             case "$TIER" in
-                staging) SSH_PATH="$base_path" ;;
+                staging) SSH_PATH="$base_path/staging" ;;
                 test)    SSH_PATH="$base_path/test" ;;
                 dev)     SSH_PATH="$base_path/dev" ;;
             esac
@@ -224,8 +253,11 @@ if [ "$USE_FIXTURE" = "0" ]; then
     # over a dead connection. Without this probe, an unreachable host
     # would surface as "source tier missing config/www/VERSION" — a
     # misleading message that hides the real failure mode (network).
-    if ! ssh -o BatchMode=yes -o ConnectTimeout=10 -p "$SSH_PORT" \
-             "${SSH_USER}@${SSH_HOST}" true 2>/dev/null; then
+    #
+    # bv_ssh_cmd dispatches to sshpass+password OR bare ssh+BatchMode
+    # depending on whether DEPLOY_PASS / DEPLOY_PROD_PASS is set for
+    # this tier (see deploy/lib/ssh-auth.sh).
+    if ! bv_ssh_cmd -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" true 2>/dev/null; then
         die "ssh to ${SSH_HOST}:${SSH_PORT} failed" 2
     fi
 fi
@@ -322,9 +354,16 @@ trim_line() {
 # In fixture mode the source is a local directory; in SSH mode we
 # round-trip a `cat` over ssh.
 source_read_first_line() {
-    local rel="$1"   # path relative to <source-root>/config/www, e.g. "VERSION"
+    local rel="$1"   # path relative to the Grav root, e.g. "VERSION"
+    # NOTE: deploy.sh ships the contents of <repo>/config/www/* as the
+    # tier root on the remote — i.e. <SSH_PATH>/index.php exists, NOT
+    # <SSH_PATH>/config/www/index.php. Both fixture and SSH paths
+    # therefore look at the Grav root directly, never with a config/www/
+    # prefix. (Earlier versions had a `config/www/` segment here that
+    # made backup.sh fail against real one.com tiers; the bats fixture
+    # masked it because it built `<fixture>/config/www/` to match.)
     if [ "$USE_FIXTURE" = "1" ]; then
-        local f="$BACKUP_FIXTURE_DIR/config/www/$rel"
+        local f="$BACKUP_FIXTURE_DIR/$rel"
         if [ -f "$f" ]; then
             head -n 1 "$f"
         fi
@@ -334,9 +373,9 @@ source_read_first_line() {
     # isn't consumed. We swallow stderr to keep "no such file" from
     # leaking into our parsed value; the calling site interprets the
     # empty stdout as "missing".
-    ssh -n -o BatchMode=yes -o ConnectTimeout=10 -p "$SSH_PORT" \
+    bv_ssh_cmd -n -p "$SSH_PORT" \
         "${SSH_USER}@${SSH_HOST}" \
-        "test -f $(printf %q "$SSH_PATH/config/www/$rel") && head -n 1 $(printf %q "$SSH_PATH/config/www/$rel")" \
+        "test -f $(printf %q "$SSH_PATH/$rel") && head -n 1 $(printf %q "$SSH_PATH/$rel")" \
         2>/dev/null || true
 }
 
@@ -363,17 +402,20 @@ extract_yaml_version_field() {
 }
 
 # Read raw data-version.yaml content from source (empty if missing).
+# Same path-shape note as source_read_first_line: source root IS the
+# Grav root, so the file lives at `<root>/user/data-version.yaml` —
+# never `<root>/config/www/user/data-version.yaml`.
 source_read_data_version_yaml() {
     if [ "$USE_FIXTURE" = "1" ]; then
-        local f="$BACKUP_FIXTURE_DIR/config/www/user/data-version.yaml"
+        local f="$BACKUP_FIXTURE_DIR/user/data-version.yaml"
         if [ -f "$f" ]; then
             cat "$f"
         fi
         return 0
     fi
-    ssh -n -o BatchMode=yes -o ConnectTimeout=10 -p "$SSH_PORT" \
+    bv_ssh_cmd -n -p "$SSH_PORT" \
         "${SSH_USER}@${SSH_HOST}" \
-        "test -f $(printf %q "$SSH_PATH/config/www/user/data-version.yaml") && cat $(printf %q "$SSH_PATH/config/www/user/data-version.yaml")" \
+        "test -f $(printf %q "$SSH_PATH/user/data-version.yaml") && cat $(printf %q "$SSH_PATH/user/data-version.yaml")" \
         2>/dev/null || true
 }
 
@@ -381,14 +423,14 @@ source_read_data_version_yaml() {
 raw="$(source_read_first_line VERSION)"
 CODE_VERSION="$(trim_line "$raw")"
 if [ -z "$CODE_VERSION" ]; then
-    die "source tier missing config/www/VERSION (cannot stamp backup metadata)" 3
+    die "source tier missing VERSION (cannot stamp backup metadata)" 3
 fi
 
 # CODE_BUILD ------------------------------------------------------------
 raw="$(source_read_first_line BUILD)"
 CODE_BUILD="$(trim_line "$raw")"
 if [ -z "$CODE_BUILD" ]; then
-    die "source tier missing config/www/BUILD (cannot stamp backup metadata)" 3
+    die "source tier missing BUILD (cannot stamp backup metadata)" 3
 fi
 
 # DATA_VERSION ----------------------------------------------------------
@@ -401,8 +443,8 @@ fi
 # trust a metadata field that came from corrupted state.
 dv_raw="$(source_read_data_version_yaml)"
 if [ -z "$dv_raw" ]; then
-    # File-not-present: spec-defined fallback to "0.0.0".
-    warn "source tier has no config/www/user/data-version.yaml — defaulting data_version to 0.0.0"
+    # File-not-present: fallback to "0.0.0". data-version.yaml is reserved
+    # for a future data-versioning feature that has not yet shipped.
     DATA_VERSION="0.0.0"
 else
     DATA_VERSION="$(extract_yaml_version_field "$dv_raw")"
@@ -416,7 +458,7 @@ else
         # destructive results. Refusing to back up is the safe
         # response — the operator can fix or remove the file and
         # retry.
-        die "source tier config/www/user/data-version.yaml exists but has no parseable 'version:' field; refusing to stamp metadata" 3
+        die "source tier user/data-version.yaml exists but has no parseable 'version:' field; refusing to stamp metadata" 3
     fi
 fi
 
@@ -460,22 +502,46 @@ else
     log "Pulling source from ${SSH_USER}@${SSH_HOST}:${SSH_PORT} (${SSH_PATH})"
     # SSH reachability was already probed up front in the credentials
     # block; if we got here, the connection is alive.
+    #
+    # Pre-rsync existence probe per allow-list entry. rsync of a
+    # missing source aborts the whole backup; missing user-content
+    # paths (e.g. user/uploads on a fresh dev tier) are legitimately
+    # absent, so we skip them with a WARN — same shape as fixture
+    # mode. Tier:reldir collisions in the deny-list still apply
+    # (the rsync --exclude handling below).
+    rsync_e="$(bv_rsync_ssh_e "$SSH_PORT")" \
+        || die "could not build rsync ssh-cmd (sshpass missing?)" 2
+    rsync_excludes=()
+    for pat in "${DENY_PATTERNS[@]}"; do
+        rsync_excludes+=(--exclude="$pat")
+    done
+    SKIPPED_PATHS=()
     for rel in "${INCLUDE_PATHS[@]}"; do
+        # Probe the allow-list entry's existence on the remote.
+        # Skip-on-missing matches fixture mode's `[ -e $src ]` gate
+        # below, so backup behaviour is consistent across both modes.
+        # Missing paths are silently skipped — allow-list entries like
+        # user/uploads are legitimately absent on tiers that have never
+        # had file uploads.
+        if ! bv_ssh_cmd -n -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" \
+            "test -e $(printf %q "$SSH_PATH/$rel")" >/dev/null 2>&1; then
+            SKIPPED_PATHS+=("$rel")
+            continue
+        fi
+
         mkdir -p "$STAGE_DIR/$(dirname "$rel")"
         # Use rsync without --delete; we're rsyncing INTO an empty
         # tempdir, so deletion is meaningless and the confinement hook
         # blocks --delete anyway.
-        # Construct exclude args from DENY_PATTERNS.
-        rsync_excludes=()
-        for pat in "${DENY_PATTERNS[@]}"; do
-            rsync_excludes+=(--exclude="$pat")
-        done
-        rsync -az -e "ssh -p ${SSH_PORT}" \
+        # bv_rsync_via_ssh exports SSHPASS for rsync's child process
+        # when password-auth is configured.
+        bv_rsync_via_ssh -az -e "$rsync_e" \
               "${rsync_excludes[@]}" \
               "${SSH_USER}@${SSH_HOST}:${SSH_PATH}/${rel}/" \
               "$STAGE_DIR/${rel}/" \
               || die "rsync failed for ${rel} from ${SSH_HOST}" 2
     done
+    true
 fi
 
 # Apply deny-list locally as a belt-and-braces measure (in case the
@@ -508,6 +574,14 @@ META_FILE="$STAGE_DIR/backup-meta.yaml"
     if [ -n "$TAG" ]; then
         printf 'tag: "%s"\n' "$TAG"
     fi
+    # encrypted_to: list every age public-key recipient at backup
+    # time. Restore.sh reads this BEFORE decrypt so the operator can
+    # cross-reference against `manage-age-keys.sh list` to find
+    # which Keychain item would unlock the archive.
+    printf 'encrypted_to:\n'
+    grep -E '^age1[a-z0-9]+$' "$RECIPIENTS_FILE" | while IFS= read -r _pk; do
+        printf '  - "%s"\n' "$_pk"
+    done
 } > "$META_FILE"
 
 # ──────────────────────────────────────────────────────────────────────

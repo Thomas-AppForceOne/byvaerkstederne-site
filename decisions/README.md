@@ -33,6 +33,7 @@ Use [ADR-template.md](ADR-template.md). File naming: `ADR-NNN-short-slug.md` wit
 | [ADR-001](ADR-001-navigation-footer-placement.md) | Footer-only placement for community feedback affordances | Accepted | 2026-04-18 |
 | [ADR-002](ADR-002-prod-data-on-staging.md) | Prod data on staging — unanonymised, gated by access controls | Accepted | 2026-04-30 |
 | [ADR-003](ADR-003-release-branch-promotion.md) | Release-branch model for prod promotion | Accepted | 2026-04-30 |
+| [ADR-004](ADR-004-atomic-deploy-fixture-only-testing.md) | Atomic-deploy testing — shell-level fixtures only, with documented gaps on the remote-side path | Accepted | 2026-05-10 |
 
 The data-lifecycle spec set (semantic versioning, backup/restore,
 data versioning + migrations, promote-to-staging, promote-to-prod)

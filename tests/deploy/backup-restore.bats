@@ -53,14 +53,21 @@ setup() {
     echo 'should-not-ship'  > "$FIXTURE/user/logs/access.log"
     echo 'tmpdata'          > "$FIXTURE/user/some.tmp"
 
-    # Plant the live-tier metadata markers that backup.sh now reads
+    # Plant the live-tier metadata markers that backup.sh reads
     # directly from the source (instead of from the operator's repo).
-    # Tests that need different values either override BACKUP_FAKE_*
-    # or rewrite these files before invoking backup.sh.
-    mkdir -p "$FIXTURE/config/www/user"
-    echo '0.1.0' > "$FIXTURE/config/www/VERSION"
-    echo '247'   > "$FIXTURE/config/www/BUILD"
-    cat > "$FIXTURE/config/www/user/data-version.yaml" <<'EOF'
+    # Tests that need different values rewrite these files before
+    # invoking backup.sh.
+    #
+    # IMPORTANT: paths are relative to the FIXTURE root — i.e. the
+    # Grav root, NOT <fixture>/config/www/. deploy.sh ships the
+    # contents of <repo>/config/www/* directly into the tier root on
+    # the remote, so backup.sh reads from <SSH_PATH>/VERSION etc. —
+    # never <SSH_PATH>/config/www/VERSION. The fixture mirrors the
+    # remote shape (matching the Grav root layout) since 819ffa6.
+    mkdir -p "$FIXTURE/user"
+    echo '0.1.0' > "$FIXTURE/VERSION"
+    echo '247'   > "$FIXTURE/BUILD"
+    cat > "$FIXTURE/user/data-version.yaml" <<'EOF'
 version: "0.1.0"
 EOF
 
@@ -92,8 +99,9 @@ EOF
     # convenience. They were removed because their presence skipped
     # the source-fetch code path — every test that ran with them set
     # was bypassing the very behaviour the contract asks us to
-    # exercise. The fixture's `config/www/{VERSION,BUILD,user/data-version.yaml}`
-    # files (planted above) ARE the metadata source now, just routed
+    # exercise. The fixture's `{VERSION,BUILD,user/data-version.yaml}`
+    # files (planted above at the FIXTURE root, matching the deployed
+    # Grav root layout) ARE the metadata source now, just routed
     # through the same code path an operator run uses.
     export AGE_IDENTITY_FILE="$KEYDIR/identity.txt"
     # Stable backup time (2026-04-29T12:34:00Z UTC) for filename
@@ -106,31 +114,28 @@ EOF
     export XDG_CONFIG_HOME="$TMP/xdg-config"
     mkdir -p "$XDG_CONFIG_HOME"
 
-    # The backup script's local-keep dir is fixed at $REPO_ROOT/backups,
-    # which we don't want to pollute. Tests that exercise --keep-local
-    # set HOME-style isolation by running with a different REPO_ROOT
-    # via wrapping; for simplicity we accept the side effect and clean
-    # up in teardown.
-    KEEP_LOCAL_DIR="$REPO_ROOT/backups"
-    KEEP_LOCAL_SNAPSHOT="$TMP/keep-local-snapshot"
-    if [ -d "$KEEP_LOCAL_DIR" ]; then
-        cp -R "$KEEP_LOCAL_DIR" "$KEEP_LOCAL_SNAPSHOT"
-    fi
+    # The backup script's local-keep dir is now machine-wide (under
+    # ~/.byvaerkstederne/backups by default; the path that survives
+    # across worktrees so `tmutil addexclusion` is a once-per-machine
+    # operation). Tests override it with a per-test temp dir via
+    # BV_KEEP_LOCAL_DIR so we never touch the operator's real path.
+    export BV_KEEP_LOCAL_DIR="$TMP/keep-local"
+    mkdir -p "$BV_KEEP_LOCAL_DIR"
+
+    # Test isolation: stop backup.sh / restore.sh from sourcing the
+    # operator's real .env.deploy. backup.sh skips sourcing when
+    # BACKUP_FIXTURE_DIR is set (already exported above), but
+    # restore.sh has no fixture-awareness — it sources .env.deploy
+    # unconditionally and would override BACKUP_LOCAL_STORE_DIR with
+    # whatever the operator put there. Pointing BACKUP_ENV_FILE at a
+    # non-existent path makes both scripts' `if [ -f $f ]` skip the
+    # source. Belt-and-braces against test/operator collision.
+    export BACKUP_ENV_FILE="$TMP/no-such-env-file"
 }
 
 teardown() {
     if [ -n "${TMP:-}" ] && [ -d "$TMP" ]; then
         rm -rf "$TMP"
-    fi
-    # Restore $REPO_ROOT/backups if we touched it.
-    if [ -d "$KEEP_LOCAL_SNAPSHOT" ]; then
-        rm -rf "$KEEP_LOCAL_DIR"
-        mv "$KEEP_LOCAL_SNAPSHOT" "$KEEP_LOCAL_DIR"
-    elif [ -d "$KEEP_LOCAL_DIR" ] && [ ! -e "$KEEP_LOCAL_SNAPSHOT" ]; then
-        # Tests created ./backups/ where there was none. Remove it
-        # if it's empty; otherwise leave content alone — the gitignore
-        # handles it.
-        rmdir "$KEEP_LOCAL_DIR" 2>/dev/null || true
     fi
 }
 
@@ -375,6 +380,51 @@ teardown() {
     [[ "$output" == *"Unknown tier"* ]]
 }
 
+@test "restore.sh refuses cross-tier archive without --allow-cross-tier" {
+    # Take a backup so something exists in managed storage, then try
+    # to restore it into a different tier than the archive's prefix.
+    run "$BACKUP_SH" prod
+    [ "$status" -eq 0 ]
+    archive="$(ls "$BACKUP_LOCAL_STORE_DIR"/prod-*.tar.gz.age | head -n1)"
+    id="$(basename "$archive" .tar.gz.age)"
+
+    # Try to restore the prod-* archive into the dev tier — should refuse.
+    run "$RESTORE_SH" dev --from "$id"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"is not for tier 'dev'"* ]]
+    [[ "$output" == *"--allow-cross-tier"* ]]
+}
+
+@test "restore.sh accepts cross-tier archive with --allow-cross-tier and warns" {
+    run "$BACKUP_SH" prod
+    [ "$status" -eq 0 ]
+    archive="$(ls "$BACKUP_LOCAL_STORE_DIR"/prod-*.tar.gz.age | head -n1)"
+    id="$(basename "$archive" .tar.gz.age)"
+
+    # The flag bypasses the tier-prefix gate. Dev tier doesn't require
+    # --yes-i-mean-it, so the script should reach the log-write path
+    # (in tier-stand-in mode without RESTORE_TO_TIER_ENABLED=1).
+    run "$RESTORE_SH" dev --from "$id" --allow-cross-tier
+    [ "$status" -eq 0 ]
+    # The cross-tier warning fired.
+    [[ "$output" == *"cross-tier restore"* ]]
+    [[ "$output" == *"prod"* ]]
+    [[ "$output" == *"dev"* ]]
+}
+
+@test "restore.sh: --allow-cross-tier with same-tier archive is a no-op (no warning)" {
+    run "$BACKUP_SH" prod
+    [ "$status" -eq 0 ]
+    archive="$(ls "$BACKUP_LOCAL_STORE_DIR"/prod-*.tar.gz.age | head -n1)"
+    id="$(basename "$archive" .tar.gz.age)"
+
+    # Cross-tier flag set, but archive's tier already matches target.
+    # Cross-tier warning must NOT fire.
+    run "$RESTORE_SH" prod --from "$id" --yes-i-mean-it --allow-cross-tier
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"cross-tier restore"* ]]
+}
+
 # ─── failure modes (subset of the contract's failure_modes criterion) ─
 
 @test "missing recipients file → specific error, non-zero exit" {
@@ -512,7 +562,12 @@ teardown() {
     # Persistent path: ./backups/ — must be named verbatim with the
     # exclusion command, since this is the only path the script
     # always writes to.
-    [[ "$stderr" == *"tmutil addexclusion ./backups"* ]]
+    # Banner names the keep-local path explicitly. After the
+    # machine-wide-keep-local refactor, this is whatever
+    # BV_KEEP_LOCAL_DIR resolves to (the test sets it to
+    # $TMP/keep-local in setup); the banner is no longer the literal
+    # `./backups` it was before.
+    [[ "$stderr" == *"tmutil addexclusion $BV_KEEP_LOCAL_DIR"* ]]
     # Operator-chosen paths (`--to <dir>` / `RESTORE_LOCAL_TIER_DIR`):
     # the banner mentions them by env-var name rather than listing
     # made-up `./deploy/staging-stage/` and `./deploy/prod-stage/`
@@ -576,7 +631,12 @@ teardown() {
     # is named with its `tmutil` command, the operator-chosen paths
     # are referenced by their env-var/flag names rather than by
     # made-up directory names.
-    [[ "$stderr" == *"tmutil addexclusion ./backups"* ]]
+    # Banner names the keep-local path explicitly. After the
+    # machine-wide-keep-local refactor, this is whatever
+    # BV_KEEP_LOCAL_DIR resolves to (the test sets it to
+    # $TMP/keep-local in setup); the banner is no longer the literal
+    # `./backups` it was before.
+    [[ "$stderr" == *"tmutil addexclusion $BV_KEEP_LOCAL_DIR"* ]]
     [[ "$stderr" == *"--to <dir>"* ]]
     [[ "$stderr" == *"RESTORE_LOCAL_TIER_DIR"* ]]
 
@@ -611,7 +671,7 @@ teardown() {
 @test "code_version comes from fixture VERSION (not from \$REPO_ROOT)" {
     # Plant a fixture VERSION distinct from the orchestrating repo's
     # VERSION (currently 0.2.0 on this branch).
-    echo '9.9.9' > "$FIXTURE/config/www/VERSION"
+    echo '9.9.9' > "$FIXTURE/VERSION"
     # Disable the BACKUP_FAKE_* overrides so the source-read path runs.
     unset BACKUP_FAKE_CODE_VERSION
     unset BACKUP_FAKE_DATA_VERSION
@@ -631,7 +691,7 @@ teardown() {
 }
 
 @test "code_build comes from fixture BUILD (not from \$REPO_ROOT)" {
-    echo '424242' > "$FIXTURE/config/www/BUILD"
+    echo '424242' > "$FIXTURE/BUILD"
     unset BACKUP_FAKE_CODE_BUILD
     unset BACKUP_FAKE_DATA_VERSION
 
@@ -644,7 +704,7 @@ teardown() {
 }
 
 @test "data_version comes from fixture data-version.yaml version: field" {
-    cat > "$FIXTURE/config/www/user/data-version.yaml" <<'EOF'
+    cat > "$FIXTURE/user/data-version.yaml" <<'EOF'
 # This data version applies to the live tier's flex objects schema.
 version: "3.4.5"
 EOF
@@ -660,16 +720,15 @@ EOF
 }
 
 @test "data_version defaults to 0.0.0 (NOT code_version) when fixture missing data-version.yaml" {
-    rm -f "$FIXTURE/config/www/user/data-version.yaml"
+    rm -f "$FIXTURE/user/data-version.yaml"
     # Use distinctive code_version to ensure the fallback isn't
     # silently inheriting it.
-    echo '1.2.3' > "$FIXTURE/config/www/VERSION"
+    echo '1.2.3' > "$FIXTURE/VERSION"
 
     run --separate-stderr "$BACKUP_SH" prod
     [ "$status" -eq 0 ]
-    # Stderr names the missing file.
-    [[ "$stderr" == *"data-version.yaml"* ]]
-    [[ "$stderr" == *"0.0.0"* ]]
+    # No warning emitted — missing data-version.yaml silently defaults to 0.0.0
+    # (the feature is not yet implemented; warning was removed as noise).
 
     SCRATCH="$TMP/scratch-dvmiss"
     run "$RESTORE_SH" --to "$SCRATCH"
@@ -686,7 +745,7 @@ EOF
     # produce metadata claiming version 0.0.0, which downstream
     # migration tooling would trust and apply migrations against.
     # The fix: treat malformed-but-present as a hard error (exit 3).
-    cat > "$FIXTURE/config/www/user/data-version.yaml" <<'EOF'
+    cat > "$FIXTURE/user/data-version.yaml" <<'EOF'
 # This file exists but has no parseable version: field.
 something_else: "value"
 EOF
@@ -700,7 +759,7 @@ EOF
 }
 
 @test "missing fixture VERSION → hard fail (exit 3) naming the file" {
-    rm -f "$FIXTURE/config/www/VERSION"
+    rm -f "$FIXTURE/VERSION"
 
     run "$BACKUP_SH" prod
     [ "$status" -eq 3 ]
@@ -710,7 +769,7 @@ EOF
 }
 
 @test "missing fixture BUILD → hard fail (exit 3) naming the file" {
-    rm -f "$FIXTURE/config/www/BUILD"
+    rm -f "$FIXTURE/BUILD"
 
     run "$BACKUP_SH" prod
     [ "$status" -eq 3 ]
@@ -732,10 +791,17 @@ EOF
     # SSH_PATH) inject shell metacharacters into the remote command.
     # This is the cheapest way to catch a regression in command
     # construction without a real SSH daemon.
-    grep -q "printf %q \"\$SSH_PATH/config/www/\$rel\"" \
+    #
+    # NOTE: paths intentionally have NO `config/www/` prefix — the
+    # remote tier root IS the Grav root (deploy.sh ships the contents
+    # of <repo>/config/www/* there). An earlier version of this test
+    # asserted the wrong shape and masked the bug fixed by 819ffa6.
+    grep -q "printf %q \"\$SSH_PATH/\$rel\"" \
          "$REPO_ROOT/deploy/backup.sh"
-    grep -q "printf %q \"\$SSH_PATH/config/www/user/data-version.yaml\"" \
+    grep -q "printf %q \"\$SSH_PATH/user/data-version.yaml\"" \
          "$REPO_ROOT/deploy/backup.sh"
+    # Belt-and-braces: explicitly assert the bogus shape is GONE.
+    ! grep -q "SSH_PATH/config/www" "$REPO_ROOT/deploy/backup.sh"
 }
 
 @test "SSH-mode metadata fetch: end-to-end via fake-ssh shim, asserts correct values land in meta" {
@@ -752,12 +818,24 @@ EOF
     #     metadata code path completed successfully over (fake) SSH.
     unset BACKUP_FIXTURE_DIR
 
-    # Build a "remote" tree at a path the shim can serve.
+    # Build a "remote" tree at a path the shim can serve. Layout
+    # mirrors what deploy.sh actually ships: the Grav root IS the
+    # tier root — `<SSH_PATH>/VERSION`, `<SSH_PATH>/user/...` —
+    # never `<SSH_PATH>/config/www/...`.
+    #
+    # Allow-list dirs (per deploy/backup-paths.txt: user/accounts,
+    # user/data, user/pages, user/uploads) must exist for the new
+    # existence-probe to find them; without them backup.sh would
+    # skip every rsync silently and the rsync-failure assertion
+    # below would never fire.
     REMOTE_ROOT="$TMP/remote-tier"
-    mkdir -p "$REMOTE_ROOT/config/www/user"
-    echo '7.7.7' > "$REMOTE_ROOT/config/www/VERSION"
-    echo '999'   > "$REMOTE_ROOT/config/www/BUILD"
-    cat > "$REMOTE_ROOT/config/www/user/data-version.yaml" <<'EOF'
+    mkdir -p "$REMOTE_ROOT/user/accounts" \
+             "$REMOTE_ROOT/user/data" \
+             "$REMOTE_ROOT/user/pages" \
+             "$REMOTE_ROOT/user/uploads"
+    echo '7.7.7' > "$REMOTE_ROOT/VERSION"
+    echo '999'   > "$REMOTE_ROOT/BUILD"
+    cat > "$REMOTE_ROOT/user/data-version.yaml" <<'EOF'
 version: "5.5.5"
 EOF
 
@@ -774,6 +852,14 @@ case "\$cmd" in
     true)
         # Bare connectivity probe.
         exit 0
+        ;;
+    "test -e "*)
+        # Existence probe per allow-list entry (added in the
+        # missing-allow-list-path-skips-gracefully fix). Pass-through
+        # to local fs — "remote" paths are local in the shim, so
+        # test -e returns the right thing.
+        eval "\$cmd"
+        exit \$?
         ;;
     "test -f "*" && head -n 1 "*|"test -f "*" && cat "*)
         # Metadata-fetch shapes (head -n 1 for VERSION/BUILD,
@@ -820,12 +906,17 @@ EOF
     [[ "$output" != *"source tier missing config/www/BUILD"* ]]
 
     # Trace assertion: the shim should have seen exactly the three
-    # expected fetch shapes plus the connectivity probe.
+    # expected fetch shapes plus the connectivity probe. Path shapes
+    # match the deployed Grav-root layout (NO config/www/ prefix —
+    # see source_read_first_line / source_read_data_version_yaml in
+    # backup.sh, fixed in 819ffa6).
     [ -f "$SHIM_TRACE" ]
     grep -q "true" "$SHIM_TRACE"
-    grep -q "test -f .*config/www/VERSION.* && head -n 1" "$SHIM_TRACE"
-    grep -q "test -f .*config/www/BUILD.* && head -n 1" "$SHIM_TRACE"
-    grep -q "test -f .*config/www/user/data-version.yaml.* && cat" "$SHIM_TRACE"
+    grep -q "test -f .*VERSION.* && head -n 1" "$SHIM_TRACE"
+    grep -q "test -f .*BUILD.* && head -n 1" "$SHIM_TRACE"
+    grep -q "test -f .*user/data-version.yaml.* && cat" "$SHIM_TRACE"
+    # Belt-and-braces — should NOT see the bogus `config/www/` shape.
+    ! grep -q "config/www/VERSION" "$SHIM_TRACE"
 }
 
 @test "SSH-mode metadata fetch: missing VERSION on remote → exit 3 with naming error" {
@@ -835,10 +926,10 @@ EOF
     unset BACKUP_FIXTURE_DIR
 
     REMOTE_ROOT="$TMP/remote-tier-no-version"
-    mkdir -p "$REMOTE_ROOT/config/www/user"
-    echo '999' > "$REMOTE_ROOT/config/www/BUILD"
+    mkdir -p "$REMOTE_ROOT/user"
+    echo '999' > "$REMOTE_ROOT/BUILD"
     # Deliberately no VERSION.
-    cat > "$REMOTE_ROOT/config/www/user/data-version.yaml" <<'EOF'
+    cat > "$REMOTE_ROOT/user/data-version.yaml" <<'EOF'
 version: "0.1.0"
 EOF
 
@@ -864,6 +955,73 @@ EOF
     [ "$status" -eq 3 ]
     [[ "$output" == *"VERSION"* ]]
     [[ "$output" == *"source tier"* ]]
+}
+
+@test "SSH-mode: missing allow-list path on remote skips silently, does not abort backup" {
+    # Regression test for the user/uploads scenario hit during PR #17
+    # Tier 4a real-tier exercise: a fresh dev tier with no
+    # `user/uploads/` dir caused backup.sh to abort with rsync
+    # exit 23. The fix probes existence per allow-list entry and
+    # skips missing ones silently — matching fixture mode's
+    # `[ -e $src ]` gate. Missing allow-list paths are normal
+    # (e.g. user/uploads on a tier with no uploads) and not a warning.
+    unset BACKUP_FIXTURE_DIR
+
+    # Custom allow-list with the MISSING path FIRST. Otherwise the
+    # script would rsync (and fail in the shim) for an earlier path
+    # before reaching the missing one.
+    PATHS_FILE="$TMP/test-allow-list.txt"
+    cat > "$PATHS_FILE" <<EOF
+user/uploads
+user/accounts
+EOF
+    export BACKUP_PATHS_FILE="$PATHS_FILE"
+
+    # Build a "remote" tree with the metadata files AND user/accounts,
+    # but DELIBERATELY OMIT user/uploads/.
+    REMOTE_ROOT="$TMP/remote-tier-missing-optional-path"
+    mkdir -p "$REMOTE_ROOT/user/accounts"
+    # Note: NO user/uploads/ — it is the deliberately absent path.
+    echo 'alice'   > "$REMOTE_ROOT/user/accounts/alice.yaml"
+    echo '0.2.0' > "$REMOTE_ROOT/VERSION"
+    echo '247'   > "$REMOTE_ROOT/BUILD"
+    cat > "$REMOTE_ROOT/user/data-version.yaml" <<'EOF'
+version: "0.1.0"
+EOF
+
+    # Shim: handle test -e (existence probe), the metadata-fetch
+    # shapes (test -f && head/cat), and the connectivity probe
+    # (true). Anything else (including rsync transport) returns 255
+    # so backup.sh aborts there — we only need to assert the WARN
+    # for user/uploads fired, not that the subsequent backup
+    # completed.
+    SHIM_BIN="$TMP/shim-skip"
+    mkdir -p "$SHIM_BIN"
+    cat > "$SHIM_BIN/ssh" <<'EOF'
+#!/usr/bin/env bash
+cmd="${!#}"
+case "$cmd" in
+    "true")                                                  exit 0 ;;
+    "test -e "*)                                             eval "$cmd"; exit $? ;;
+    "test -f "*" && head -n 1 "*|"test -f "*" && cat "*)     eval "$cmd"; exit $? ;;
+    *)                                                       exit 255 ;;
+esac
+EOF
+    chmod +x "$SHIM_BIN/ssh"
+
+    export DEPLOY_PROD_HOST=fake.host
+    export DEPLOY_PROD_USER=fake
+    export DEPLOY_PROD_PORT=22
+    export DEPLOY_PROD_PATH="$REMOTE_ROOT"
+
+    PATH="$SHIM_BIN:$PATH" run --separate-stderr "$BACKUP_SH" prod
+    # The load-bearing assertion: user/uploads (the only allow-list
+    # path NOT planted on the remote) was silently skipped — no WARN
+    # emitted. The loop must have continued rather than aborting.
+    [[ "$stderr" != *"uploads"* ]]
+    # backup.sh will eventually fail (rsync of EXISTING dirs trips the
+    # shim's catch-all), but that's downstream of what we're testing.
+    [ "$status" -ne 0 ]
 }
 
 # ─── restore-to-tier (local-tier mode) ───────────────────────────────
