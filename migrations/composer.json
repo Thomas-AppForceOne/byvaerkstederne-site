@@ -1,0 +1,14 @@
+{
+    "name": "byvaerkstederne/migrations",
+    "description": "Forward-only data-shape migrations for the Byvaerkstederne Grav site.",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.1",
+        "symfony/yaml": "6.4.13"
+    },
+    "config": {
+        "sort-packages": true,
+        "optimize-autoloader": true
+    }
+}

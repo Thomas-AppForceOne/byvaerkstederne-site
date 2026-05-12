@@ -1,0 +1,15 @@
+# Data-schema version of the data tree this file lives in.
+#
+# The git-tracked copy of this file is the schema version the deployed
+# code expects. On a live tier the same path is rewritten by the
+# data-push step of a promotion to reflect the schema version actually
+# on disk.
+#
+# Bump the value when (and only when) you add a migration script under
+# migrations/. The marker is read by deploy/migrate.sh to decide which
+# migrations to apply.
+#
+# See specifications/archive/data_versioning_and_migrations_specification.md
+# (or specifications/data_versioning_and_migrations_specification.md while
+# the spec is still active) for the full contract.
+data_version: "0.1.0"
