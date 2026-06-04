@@ -190,3 +190,67 @@ event012:
   button_style: primary
   featured: false
   featured_tag: ""
+event013:
+  published: true
+  title: "Billedkunst — blindtegning intro v. Elsebeth"
+  description: "Kom og prøv blindtegning. Skørt, skævt og med sin egen charme. Ingen tilmelding. Brugerbetaling til materialer."
+  group: kreativ
+  badge: "Krea Café"
+  event_date: "2026-06-12"
+  event_time: ""
+  location: "Nørregade 21, Hundested"
+  capacity: ""
+  price: "Brugerbetaling"
+  button_text: "Se billedkunst"
+  button_url: "/vaerksteder/krea-cafe/billedkunst"
+  button_style: tertiary
+  featured: false
+  featured_tag: ""
+event014:
+  published: true
+  title: "Billedkunst — skraldebøger intro v. Elsebeth"
+  description: "Design din egen unikke bog af genbrugsmaterialer. Ingen tilmelding. Brugerbetaling til materialer."
+  group: kreativ
+  badge: "Krea Café"
+  event_date: "2026-06-18"
+  event_time: ""
+  location: "Nørregade 21, Hundested"
+  capacity: ""
+  price: "Brugerbetaling"
+  button_text: "Se billedkunst"
+  button_url: "/vaerksteder/krea-cafe/billedkunst"
+  button_style: tertiary
+  featured: false
+  featured_tag: ""
+event015:
+  published: true
+  title: "Billedkunst — gummistempel intro v. Elsebeth"
+  description: "Tegn og snit dit eget stempel. Til kort, signaturer eller mønstre. Ingen tilmelding. Brugerbetaling til materialer."
+  group: kreativ
+  badge: "Krea Café"
+  event_date: "2026-06-25"
+  event_time: ""
+  location: "Nørregade 21, Hundested"
+  capacity: ""
+  price: "Brugerbetaling"
+  button_text: "Se billedkunst"
+  button_url: "/vaerksteder/krea-cafe/billedkunst"
+  button_style: tertiary
+  featured: false
+  featured_tag: ""
+event016:
+  published: true
+  title: "Billedkunst — gelli-print intro v. Elsebeth"
+  description: "Mønstrede mono-print med en plade af stivnet gelé — unikke print til collager eller kunstkort. Ingen tilmelding. Brugerbetaling til materialer."
+  group: kreativ
+  badge: "Krea Café"
+  event_date: "2026-07-02"
+  event_time: ""
+  location: "Nørregade 21, Hundested"
+  capacity: ""
+  price: "Brugerbetaling"
+  button_text: "Se billedkunst"
+  button_url: "/vaerksteder/krea-cafe/billedkunst"
+  button_style: tertiary
+  featured: false
+  featured_tag: ""
