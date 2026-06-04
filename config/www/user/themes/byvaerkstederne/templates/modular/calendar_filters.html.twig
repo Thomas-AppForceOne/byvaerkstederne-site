@@ -10,7 +10,7 @@
             {% for filter in h.filters|default([
                 {label: 'Makerspace & Reparation', group: 'secondary', filter: 'makerspace'},
                 {label: 'Kreativ Fitness', group: 'tertiary', filter: 'kreativ'},
-                {label: 'Det Grønne Fællesskab', group: 'primary', filter: 'groenne'},
+                {label: 'Grønt BYværksted', group: 'primary', filter: 'groenne'},
                 {label: 'Kulturhus', group: 'kulturhus', filter: 'kulturhus'}
             ]) %}
             <button class="bv-filter-btn bv-filter-btn--{{ filter.group }}" data-filter="{{ filter.filter }}">

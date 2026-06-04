@@ -1,7 +1,8 @@
 {% set h = page.header %}
+{% set has_sidebar = h.wishlist or h.gallery_image %}
 <section>
     <div class="bv-container">
-        <div style="display: grid; grid-template-columns: 7fr 5fr; gap: var(--space-12);">
+        <div style="display: grid; grid-template-columns: {{ has_sidebar ? '7fr 5fr' : '1fr' }}; gap: var(--space-12);">
             {# Left column: Status + Progress #}
             <div style="display: flex; flex-direction: column; gap: var(--space-20);">
                 {# Status card #}
@@ -38,8 +39,10 @@
             </div>
 
             {# Right column: Wishlist + Gallery CTA #}
+            {% if has_sidebar %}
             <aside style="display: flex; flex-direction: column; gap: var(--space-12);">
                 {# Wishlist #}
+                {% if h.wishlist %}
                 <div style="background: var(--surface-container-low); padding: var(--space-10);">
                     <div style="display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-10);">
                         <span class="material-symbols-outlined" style="color: var(--tertiary);">inventory_2</span>
@@ -69,6 +72,7 @@
                     </div>
                     {% endif %}
                 </div>
+                {% endif %}
 
                 {# Gallery CTA image #}
                 {% if h.gallery_image %}
@@ -83,6 +87,7 @@
                 </div>
                 {% endif %}
             </aside>
+            {% endif %}
         </div>
     </div>
 </section>

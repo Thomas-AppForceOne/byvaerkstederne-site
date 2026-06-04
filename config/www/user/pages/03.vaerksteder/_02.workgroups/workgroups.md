@@ -10,8 +10,8 @@ groups:
       description: "Keramik, træarbejde og tekstil. Træn din kreativitet gennem fysisk skabelse."
       color: tertiary
       url: /vaerksteder/krea-cafe
-    - title: "Det Gr\xF8nne F\xE6llesskab"
-      description: "Byhaver, kompost og biodiversitet. Vi dyrker byen og fællesskabet i det fri."
+    - title: "Gr\xF8nt BYv\xE6rksted"
+      description: "Planter og grønne fællesskaber i den lille byhave overfor Nørregade 21. Frøbytte, havevandringer og urtehave."
       color: primary
       url: /vaerksteder/groent-byvaerksted
     - title: Kulturhus

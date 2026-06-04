@@ -1,5 +1,5 @@
 ---
-title: "Det Grønne Fællesskab"
+title: "Grønt BYværksted"
 content:
     items: '@self.modular'
     order:

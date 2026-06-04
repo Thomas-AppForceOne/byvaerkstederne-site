@@ -11,7 +11,7 @@ photos:
     - src: /user/themes/byvaerkstederne/images/press-kreativ.png
       alt: "Kreativ Fitness"
     - src: /user/themes/byvaerkstederne/images/press-groenne.png
-      alt: "Det Grønne Fællesskab"
+      alt: "Grønt BYværksted"
     - src: /user/themes/byvaerkstederne/images/press-kulturhus.png
       alt: "Kulturhus"
 ---
