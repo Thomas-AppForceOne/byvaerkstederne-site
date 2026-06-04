@@ -11,5 +11,5 @@ techniques:
       description: "Et printet fotografi overføres til akvarelpapir, lærred, stof eller træ. Bruges i kunst, scrapbooking og collage til et unikt, rustikt udtryk. Print → smør gel/potch → pres ned → fugt → gnid papirlaget væk. Tilbage står blækket på den nye overflade."
     - title: "Maling, collage og eksperimenter"
       description: "Akrylmaling på mange materialer — lærred, stof, antikke pudevår med håndsyede monogrammer og kniplinger, papir, genbrug. Kridt, stempler og aftryk bliver en del af billedet. Malerierne bliver ofte udgangspunkt for digitale collager hvor maleri, foto og grafik mødes."
-outro: "Lærreder, pensler og akryl/oliemaling indkøbes ikke — det tager man selv med. Der er heller ikke staffelier. Hilsen Lene Pels, 4. juni 2026."
+outro: "Lærreder, pensler og akryl/oliemaling indkøbes ikke — det tager man selv med. Der er heller ikke staffelier."
 ---
