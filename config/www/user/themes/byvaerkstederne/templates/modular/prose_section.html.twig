@@ -1,0 +1,14 @@
+{% set h = page.header %}
+<section class="bv-section">
+    <div class="bv-container" style="max-width: 56rem;">
+        {% if h.section_label %}
+        <span class="bv-label" style="color: var(--{{ h.accent|default('tertiary') }}); letter-spacing: 0.2em; margin-bottom: var(--space-4); display: block;">{{ h.section_label }}</span>
+        {% endif %}
+        {% if h.section_title %}
+        <h2 class="bv-headline" style="font-size: 2.5rem; margin-bottom: var(--space-8);">{{ h.section_title }}</h2>
+        {% endif %}
+        <div class="bv-prose" style="font-size: 1.05rem; line-height: 1.7; color: var(--on-surface);">
+            {{ content|raw }}
+        </div>
+    </div>
+</section>

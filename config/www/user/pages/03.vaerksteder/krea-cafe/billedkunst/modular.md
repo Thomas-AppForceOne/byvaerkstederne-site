@@ -1,5 +1,5 @@
 ---
-title: "Krea Café"
+title: "Billedkunst"
 content:
     items: '@self.modular'
     order:

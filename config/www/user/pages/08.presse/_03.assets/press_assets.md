@@ -9,7 +9,7 @@ photos:
     - src: /user/themes/byvaerkstederne/images/press-makerspace.png
       alt: "Makerspace & Reparation"
     - src: /user/themes/byvaerkstederne/images/press-kreativ.png
-      alt: "Kreativ Fitness"
+      alt: "Krea Café"
     - src: /user/themes/byvaerkstederne/images/press-groenne.png
       alt: "Grønt BYværksted"
     - src: /user/themes/byvaerkstederne/images/press-kulturhus.png

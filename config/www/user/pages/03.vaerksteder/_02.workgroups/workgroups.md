@@ -6,8 +6,8 @@ groups:
       description: "3D-print, laserskæring og elektronik. Her fikser vi alt fra kaffemaskiner til droner."
       color: secondary
       url: /vaerksteder/makerspace
-    - title: Kreativ Fitness
-      description: "Keramik, træarbejde og tekstil. Træn din kreativitet gennem fysisk skabelse."
+    - title: "Krea Caf\xE9"
+      description: "Billedkunst, tekstil og kunsthåndværk under samme tag. To billedkunstgrupper og et syværksted i opstart."
       color: tertiary
       url: /vaerksteder/krea-cafe
     - title: "Gr\xF8nt BYv\xE6rksted"

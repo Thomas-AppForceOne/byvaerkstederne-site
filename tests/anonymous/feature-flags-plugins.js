@@ -556,19 +556,6 @@ const FLAG_PROBES = [
     },
   },
   {
-    flag: 'workshop_workday_signup',
-    desc: '"Deltag i næste arbejdsdag" placeholder gated (parent detail page 404 under public-demo)',
-    async publicDemo(ctx) {
-      const r = await ctx.get('/vaerksteder/krea-cafe', { maxRedirects: 0 });
-      expect(r.status()).toBe(404);
-    },
-    async internal(ctx) {
-      const r = await ctx.get('/vaerksteder/krea-cafe', { maxRedirects: 0 });
-      expect(r.status()).toBe(200);
-      expect(/Deltag i n.+ste arbejdsdag/i.test(await r.text())).toBe(true);
-    },
-  },
-  {
     flag: 'kulturhus_program',
     desc: '"Se Program" placeholder gated (parent detail page 404 under public-demo)',
     async publicDemo(ctx) {

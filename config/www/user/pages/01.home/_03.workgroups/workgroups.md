@@ -7,8 +7,8 @@ groups:
       color: secondary
       url: /vaerksteder/makerspace
       image: "https://lh3.googleusercontent.com/aida-public/AB6AXuDIahD6Vg5PzBc_4ouuDnJi2vbGAEZRCEjnlLDMXf62M1ou6yMm6GRig77SybbPmrWwmiTUGm3xiRTPrDkIYZzgfaCFpxSWZa98X6YC2m-0F_Ixgf-LDr7BDEVxGypd5gKvZDsXtoDp5hdmVOEHLZgM3S5-c2O3aIh9shyjvrk0F9RKJd4CmVg-zvAxleQHeF4LnwChLQ2neocGTtuZB8wlmcFyMcW9Vf6xbdVije7Py2iA_HaQ6NYes682xxDjvcRI7Q6hRFDtK1Q"
-    - title: Kreativ Fitness
-      description: "Keramik, træarbejde og tekstil. Træn din kreativitet gennem fysisk skabelse."
+    - title: "Krea Caf\xE9"
+      description: "Billedkunst, tekstil og kunsthåndværk under samme tag. To billedkunstgrupper og et syværksted i opstart."
       color: tertiary
       url: /vaerksteder/krea-cafe
       image: "https://lh3.googleusercontent.com/aida-public/AB6AXuAACORfEirx00b6FRjtYnNY9mvmU15ho6s4MQ4CHkKjhG8EjL-jLnxajNTr65QMxBrku8WuhNwPYs4KnnIVAs9dMb-Tcfy7n-oYCInCkO4JKuAiVM0AC7Ll0Fy-TWr8CX4D6Vy4gfiqYFAT4zXlr9fPHBnb8HvfehjnPBqKCPB5Ab_E5KMHsBrZCJ-s74xAHxkDUfkyD2I6obZVauIKKuXkE6JplLyI1-xD6kFj3jW6RgsI4jobMuzFgcqicKjmTvYk4HOk6waSxRc"
