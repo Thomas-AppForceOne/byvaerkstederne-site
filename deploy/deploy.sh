@@ -177,13 +177,18 @@ fi
 # Production lives on a separate hosting account; gate prod behind its
 # own credential set.
 if [ "$DRY_RUN" != "1" ] && [ "$ENV" = "prod" ]; then
-    : "${DEPLOY_PROD_HOST:?prod deploy requires DEPLOY_PROD_HOST in .env.deploy — production is on a separate hosting account from staging/test/dev. Populate DEPLOY_PROD_HOST/USER/PASS/PORT/PATH there.}"
+    : "${DEPLOY_PROD_HOST:?prod deploy requires DEPLOY_PROD_HOST in .env.deploy — production is on a separate hosting account from staging/test/dev. Populate DEPLOY_PROD_HOST/USER/PORT/PATH there.}"
     : "${DEPLOY_PROD_USER:?prod deploy requires DEPLOY_PROD_USER in .env.deploy}"
-    : "${DEPLOY_PROD_PASS:?prod deploy requires DEPLOY_PROD_PASS in .env.deploy or DEPLOY_PROD_PASS_KEYCHAIN naming the Keychain item}"
     : "${DEPLOY_PROD_PATH:?prod deploy requires DEPLOY_PROD_PATH in .env.deploy}"
+    # DEPLOY_PROD_PASS is OPTIONAL — empty signals key-auth, populated
+    # signals sshpass-via-password. Chosting.dk (the prod provider) is
+    # SSH-key-only by default; one.com (staging/test/dev) is password.
+    # The downstream bv_ssh_cmd / bv_rsync_ssh_e / bv_remote_run all
+    # dispatch via ssh-auth.sh which picks the right path based on
+    # whether bv_resolve_ssh_password yields a value for the TIER.
     DEPLOY_HOST="$DEPLOY_PROD_HOST"
     DEPLOY_USER="$DEPLOY_PROD_USER"
-    DEPLOY_PASS="$DEPLOY_PROD_PASS"
+    DEPLOY_PASS="${DEPLOY_PROD_PASS:-}"
     DEPLOY_PORT="${DEPLOY_PROD_PORT:-${DEPLOY_PORT}}"
     DEPLOY_PATH="$DEPLOY_PROD_PATH"
 fi
@@ -446,7 +451,9 @@ if [ "$ENV_KIND" = "landing" ]; then
 
     echo "→ Step 3/4: Uploading apex (landing) to ${DEPLOY_HOST}:${DEPLOY_TARGET}..."
 
-    sshpass -p "$DEPLOY_PASS" ssh -o StrictHostKeyChecking=no -p "$DEPLOY_PORT" \
+    # Use bv_ssh_cmd / bv_rsync_via_ssh from ssh-auth.sh so password-
+    # auth (one.com) and key-auth (chosting.dk) are both supported.
+    bv_ssh_cmd -p "$DEPLOY_PORT" \
         "${DEPLOY_USER}@${DEPLOY_HOST}" \
         "mkdir -p ${DEPLOY_TARGET}"
 
@@ -474,15 +481,17 @@ if [ "$ENV_KIND" = "landing" ]; then
     )
 
     # Spinner only when rsync has no native progress (openrsync).
+    _rsync_e="$(bv_rsync_ssh_e "$DEPLOY_PORT")" \
+        || { echo "❌  could not build rsync ssh-cmd (sshpass missing?)" >&2; exit 1; }
     if [ -n "$_progress_flag" ]; then
-        sshpass -p "$DEPLOY_PASS" rsync "${RSYNC_FLAGS[@]}" \
-            -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
+        bv_rsync_via_ssh "${RSYNC_FLAGS[@]}" \
+            -e "$_rsync_e" \
             "$STAGING_DIR/" \
             "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_TARGET}/"
     else
         _rsync_err="$(mktemp)"
-        sshpass -p "$DEPLOY_PASS" rsync "${RSYNC_FLAGS[@]}" \
-            -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
+        bv_rsync_via_ssh "${RSYNC_FLAGS[@]}" \
+            -e "$_rsync_e" \
             "$STAGING_DIR/" \
             "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_TARGET}/" \
             2>"$_rsync_err" &
@@ -496,7 +505,7 @@ if [ "$ENV_KIND" = "landing" ]; then
         rm -f "$_rsync_err"
         unset _rsync_err _rsync_pid
     fi
-    unset _progress_flag
+    unset _progress_flag _rsync_e
 
     echo "  ✓ Upload complete"
     echo ""
@@ -704,15 +713,17 @@ unset _excl_line
 # let it own stdout. Otherwise (openrsync on macOS) the long upload
 # looks like a stall — run the rsync in the background and animate a
 # spinner so the operator sees the deploy is alive.
+_rsync_e="$(bv_rsync_ssh_e "$DEPLOY_PORT")" \
+    || { echo "❌  could not build rsync ssh-cmd (sshpass missing?)" >&2; exit 1; }
 if [ -n "$_progress_flag" ]; then
-    sshpass -p "$DEPLOY_PASS" rsync "${RSYNC_FLAGS_ATOMIC[@]}" \
-        -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
+    bv_rsync_via_ssh "${RSYNC_FLAGS_ATOMIC[@]}" \
+        -e "$_rsync_e" \
         "$STAGING_DIR/" \
         "${DEPLOY_USER}@${DEPLOY_HOST}:${RELEASE_DIR}/"
 else
     _rsync_err="$(mktemp)"
-    sshpass -p "$DEPLOY_PASS" rsync "${RSYNC_FLAGS_ATOMIC[@]}" \
-        -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
+    bv_rsync_via_ssh "${RSYNC_FLAGS_ATOMIC[@]}" \
+        -e "$_rsync_e" \
         "$STAGING_DIR/" \
         "${DEPLOY_USER}@${DEPLOY_HOST}:${RELEASE_DIR}/" \
         2>"$_rsync_err" &
@@ -726,7 +737,7 @@ else
     rm -f "$_rsync_err"
     unset _rsync_err _rsync_pid
 fi
-unset _progress_flag
+unset _progress_flag _rsync_e
 
 echo "  ✓ Upload complete"
 
@@ -824,10 +835,13 @@ bv_write_release_meta_yaml_full \
     "$DEPLOYED_IS_DIRTY" \
     "v0"
 
-sshpass -p "$DEPLOY_PASS" rsync -a \
-    -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
+_rsync_e="$(bv_rsync_ssh_e "$DEPLOY_PORT")" \
+    || { echo "❌  could not build rsync ssh-cmd (sshpass missing?)" >&2; exit 1; }
+bv_rsync_via_ssh -a \
+    -e "$_rsync_e" \
     "$META_LOCAL" \
     "${DEPLOY_USER}@${DEPLOY_HOST}:${RELEASE_DIR}/release-meta.yaml"
+unset _rsync_e
 
 echo "  ✓ release-meta.yaml (pre-swap) written"
 
@@ -950,10 +964,13 @@ bv_append_post_swap_meta \
     "$PROBE_EXPECTED" \
     "$PROBE_MATCHED"
 
-sshpass -p "$DEPLOY_PASS" rsync -a \
-    -e "ssh -o StrictHostKeyChecking=no -p ${DEPLOY_PORT}" \
+_rsync_e="$(bv_rsync_ssh_e "$DEPLOY_PORT")" \
+    || { echo "❌  could not build rsync ssh-cmd (sshpass missing?)" >&2; exit 1; }
+bv_rsync_via_ssh -a \
+    -e "$_rsync_e" \
     "$META_LOCAL" \
     "${DEPLOY_USER}@${DEPLOY_HOST}:${RELEASE_DIR}/release-meta.yaml"
+unset _rsync_e
 
 if [ "$PROBE_MATCHED" != "true" ] || [ "$PROBE_STATUS" != "200" ]; then
     # Re-fetch to capture the redirected URL + body so the diagnostic

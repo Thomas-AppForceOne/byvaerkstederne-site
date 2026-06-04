@@ -1146,10 +1146,14 @@ bv_remote_run() {
         echo "FATAL: bv_remote_run requires DEPLOY_USER" >&2
         return 1
     fi
-    if [ -z "${DEPLOY_PASS:-}" ]; then
-        echo "FATAL: bv_remote_run requires DEPLOY_PASS" >&2
-        return 1
-    fi
+    # DEPLOY_PASS is OPTIONAL since the key-auth bring-up:
+    #   * Empty  → key-auth path (bv_ssh_cmd's BatchMode=yes branch).
+    #              Used by prod against chosting.dk where SSH-keys are
+    #              the only supported auth mode per the cPanel default.
+    #   * Set    → password-auth path (sshpass). Used by dev/test/staging
+    #              against one.com hackersbychoice.dk.
+    # Both paths converge on bv_ssh_cmd below; the helper picks the right
+    # one based on whether a password is resolved for the active TIER.
     if [ -z "${DEPLOY_PORT:-}" ]; then
         echo "FATAL: bv_remote_run requires DEPLOY_PORT" >&2
         return 1
@@ -1203,7 +1207,18 @@ bv_remote_run() {
         printf '%s\n' "$body"
     )" || return $?
 
-    sshpass -p "$DEPLOY_PASS" ssh -o StrictHostKeyChecking=no \
-        -p "$DEPLOY_PORT" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+    # Dispatch via bv_ssh_cmd from ssh-auth.sh — picks sshpass vs bare
+    # ssh+BatchMode=yes based on whether bv_resolve_ssh_password yields
+    # a password for the active TIER. Lazy-source the helper here so
+    # callers (like the unit-remote-run.sh fixture) that don't preload
+    # ssh-auth.sh still get the dispatch behaviour.
+    if ! declare -F bv_ssh_cmd >/dev/null 2>&1; then
+        local _lib_dir
+        _lib_dir="$(dirname "${BASH_SOURCE[0]}")"
+        # shellcheck source=ssh-auth.sh
+        . "$_lib_dir/ssh-auth.sh"
+    fi
+
+    bv_ssh_cmd -p "$DEPLOY_PORT" "${DEPLOY_USER}@${DEPLOY_HOST}" \
         bash -s <<<"$script_input"
 }
