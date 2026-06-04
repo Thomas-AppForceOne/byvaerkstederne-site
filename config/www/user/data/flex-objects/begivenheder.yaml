@@ -1,112 +1,192 @@
 event001:
   published: true
-  title: "Stor Arbejdsdag i Byværkstederne"
-  description: "Vi gør foråret klar i alle værksteder. Der skal males, fejes, organiseres og plantes. Vi slutter af med fællesspisning kl. 18:00 for alle frivillige."
-  group: alle
-  badge: "All Hands"
-  event_date: "2026-04-25"
-  event_time: "09:00 — 17:00"
-  location: "Hele området"
+  title: "Elektronik og 3D-print for nybegyndere"
+  description: "Drop-in værksted. Ingen tilmelding. 12 år og opefter. Tag gerne en ven med."
+  group: makerspace
+  badge: "Makerspace & Reparation"
+  event_date: "2026-06-10"
+  event_time: "18:00 — 20:00"
+  location: "Nørregade 21, Hundested"
   capacity: ""
-  price: ""
-  button_text: Tilmeld
-  button_url: "#"
-  button_style: primary
-  featured: true
-  featured_tag: "All Hands"
+  price: "Drop-in"
+  button_text: "Se Makerspace"
+  button_url: "/vaerksteder/makerspace"
+  button_style: secondary
+  featured: false
+  featured_tag: ""
 event002:
   published: true
-  title: "Foredrag: Hundested Havns Historie"
-  description: "Fortælling om havnens udvikling fra fiskerleje til moderne kulturknudepunkt."
-  group: kulturhus
-  badge: Kulturhus
-  event_date: "2026-04-30"
-  event_time: "19:00 — 21:00"
-  location: "Kulturhus lokalet"
-  capacity: "Begrænset plads"
-  price: ""
-  button_text: Tilmeld
-  button_url: "#"
-  button_style: primary
+  title: "Elektronik og 3D-print for nybegyndere"
+  description: "Drop-in værksted. Ingen tilmelding. 12 år og opefter. Tag gerne en ven med."
+  group: makerspace
+  badge: "Makerspace & Reparation"
+  event_date: "2026-06-17"
+  event_time: "18:00 — 20:00"
+  location: "Nørregade 21, Hundested"
+  capacity: ""
+  price: "Drop-in"
+  button_text: "Se Makerspace"
+  button_url: "/vaerksteder/makerspace"
+  button_style: secondary
   featured: false
   featured_tag: ""
 event003:
   published: true
-  title: "Introduktion til Laserskæring"
-  description: "Lær de grundlæggende teknikker og sikkerhedsprocedurer."
+  title: "Elektronik og 3D-print for nybegyndere"
+  description: "Drop-in værksted. Ingen tilmelding. 12 år og opefter. Tag gerne en ven med."
   group: makerspace
   badge: "Makerspace & Reparation"
-  event_date: "2026-05-02"
-  event_time: "18:00 — 21:00"
-  location: "Makerspace lokalet"
-  capacity: "8 Pladser"
-  price: ""
-  button_text: Tilmeld
-  button_url: "#"
-  button_style: primary
+  event_date: "2026-06-24"
+  event_time: "18:00 — 20:00"
+  location: "Nørregade 21, Hundested"
+  capacity: ""
+  price: "Drop-in"
+  button_text: "Se Makerspace"
+  button_url: "/vaerksteder/makerspace"
+  button_style: secondary
   featured: false
   featured_tag: ""
 event004:
   published: true
-  title: "Plantemærked & Stiklingsbytte"
-  description: "Bytte og deling af planter, stiklinger og frø."
-  group: groenne
-  badge: "Det Grønne Fællesskab"
-  event_date: "2026-05-05"
-  event_time: "10:00 — 14:00"
-  location: "Byhaven"
+  title: "Billedkunst — photo transfer intro v. Lene Pels"
+  description: "Kom og prøv foto-overførsel i atelieret. Ingen tilmelding. Brugerbetaling til materialer."
+  group: kreativ
+  badge: "Krea Café"
+  event_date: "2026-06-10"
+  event_time: "15:00 — 17:00"
+  location: "Nørregade 21, Hundested"
   capacity: ""
-  price: "Gratis entré"
-  button_text: Detaljer
-  button_url: "#"
-  button_style: primary
+  price: "Brugerbetaling"
+  button_text: "Se billedkunst"
+  button_url: "/vaerksteder/krea-cafe/billedkunst"
+  button_style: tertiary
   featured: false
   featured_tag: ""
 event005:
   published: true
-  title: "Fællesspisning: Lokale Råvarer"
-  description: "Vi laver aftensmad og spiser sammen. Alle velkommen."
-  group: kulturhus
-  badge: Kulturhus
-  event_date: "2026-05-07"
-  event_time: "17:00 — 21:00"
-  location: "Kulturhus lokalet"
-  capacity: ""
-  price: "50 kr. voksne"
-  button_text: "Køb Billet"
-  button_url: "#"
+  title: "Billedkunst — silketryk intro v. Lene Pels"
+  description: "Introduktion til silketryk. Max 3 personer kan arbejde med rammer ad gangen — er der flere kan man arbejde to og to. Ingen tilmelding."
+  group: kreativ
+  badge: "Krea Café"
+  event_date: "2026-06-13"
+  event_time: "11:00 — 13:00"
+  location: "Nørregade 21, Hundested"
+  capacity: "Max 3 rammer"
+  price: "Brugerbetaling"
+  button_text: "Se billedkunst"
+  button_url: "/vaerksteder/krea-cafe/billedkunst"
   button_style: tertiary
   featured: false
   featured_tag: ""
 event006:
   published: true
-  title: "Klargøring af det nye Keramikværksted"
-  description: "Vi bygger reoler, maler og rydder op i værkstedslokalet."
+  title: "Syværkstedet — sæsonstart"
+  description: "Vi mødes for første gang i denne sæson. Kom og hils på. Alle erfaringsniveauer velkomne."
   group: kreativ
-  badge: "Kreativ Fitness"
-  event_date: "2026-05-08"
-  event_time: "10:00 — 16:00"
-  location: "Keramiklokalet"
+  badge: "Krea Café"
+  event_date: "2026-06-15"
+  event_time: "18:00 — 20:00"
+  location: "Nørregade 21, Hundested"
   capacity: ""
-  price: ""
-  button_text: Deltag
-  button_url: "#"
+  price: "Drop-in"
+  button_text: "Se syværkstedet"
+  button_url: "/vaerksteder/krea-cafe/syvaerkstedet"
   button_style: tertiary
   featured: false
   featured_tag: ""
 event007:
   published: true
-  title: "Open Night: 3D-print for Begyndere"
-  description: "Vi gennemgår software og praksis."
-  group: makerspace
-  badge: "Makerspace & Reparation"
-  event_date: "2026-05-15"
-  event_time: "18:00 — 21:00"
-  location: "Makerspace lokalet"
-  capacity: "Mange Velkomne"
-  price: ""
-  button_text: Tilmeld
-  button_url: "#"
-  button_style: secondary
+  title: "Syværkstedet — småbørnstøj af aflagt tøj"
+  description: "Sy det sødeste børnetøj af dit aflagte tøj og rester af stof. Enkle mønstre str. 0-3 år. Tilmelding via SMS til Bitten."
+  group: kreativ
+  badge: "Krea Café"
+  event_date: "2026-06-27"
+  event_time: "11:00 — 14:00"
+  location: "Nørregade 21, Hundested"
+  capacity: ""
+  price: "Brugerbetaling"
+  button_text: "SMS Bitten 22 39 54 80"
+  button_url: "sms:+4522395480"
+  button_style: tertiary
+  featured: false
+  featured_tag: ""
+event008:
+  published: true
+  title: "Syværkstedet — lav din egen scrapbog"
+  description: "En kedelig bog ændres til en personlig smuk bog med et omslag af stofrester. Tilmelding via SMS til Birgit."
+  group: kreativ
+  badge: "Krea Café"
+  event_date: "2026-06-30"
+  event_time: "18:00 — 21:30"
+  location: "Nørregade 21, Hundested"
+  capacity: ""
+  price: "Brugerbetaling"
+  button_text: "SMS Birgit 30 13 42 33"
+  button_url: "sms:+4530134233"
+  button_style: tertiary
+  featured: false
+  featured_tag: ""
+event009:
+  published: true
+  title: "Syværkstedet — små punge, tasker og toilettasker"
+  description: "Lav din egen unikke pung. Medbring lynlås, tråd, vlieseline og stof. Tilmelding via SMS til Birgit."
+  group: kreativ
+  badge: "Krea Café"
+  event_date: "2026-07-09"
+  event_time: "13:00 — 18:00"
+  location: "Nørregade 21, Hundested"
+  capacity: ""
+  price: "Brugerbetaling"
+  button_text: "SMS Birgit 30 13 42 33"
+  button_url: "sms:+4530134233"
+  button_style: tertiary
+  featured: false
+  featured_tag: ""
+event010:
+  published: true
+  title: "Verdenskoncert"
+  description: "Afrikanske sange, ældre danske sange, indiske mantraer, taizé-sange og meget mere. Selvom man ikke forstår alle ordene, mærker man helt sikkert stemningen."
+  group: kulturhus
+  badge: "Eventværkstedet"
+  event_date: "2026-06-11"
+  event_time: "19:00 — 20:30"
+  location: "Nørregade 21, Hundested"
+  capacity: ""
+  price: "Gratis"
+  button_text: "Se Eventværkstedet"
+  button_url: "/vaerksteder/eventvaerkstedet"
+  button_style: primary
+  featured: false
+  featured_tag: ""
+event011:
+  published: true
+  title: "Syng-med-koncert"
+  description: "Overalt på kloden har mennesker altid sunget sammen — for når vi synger sammen, oplever de fleste af os glæde, nærvær og fællesskab. Du behøver ikke kunne synge. Alle kan være med."
+  group: kulturhus
+  badge: "Eventværkstedet"
+  event_date: "2026-08-06"
+  event_time: "19:00 — 20:30"
+  location: "Nørregade 21, Hundested"
+  capacity: ""
+  price: "Gratis"
+  button_text: "Se Eventværkstedet"
+  button_url: "/vaerksteder/eventvaerkstedet"
+  button_style: primary
+  featured: false
+  featured_tag: ""
+event012:
+  published: true
+  title: "Åben scene"
+  description: "En hjertevarm aften med forskellige slags optrædener — ikke af professionelle, men af mennesker ligesom dig. Det handler ikke om at være perfekt, men om at være den, du er. Vil du optræde 5-10 min? Skriv til byvaerkstederne@halsnaes.dk."
+  group: kulturhus
+  badge: "Eventværkstedet"
+  event_date: "2026-09-03"
+  event_time: "19:00 — 20:30"
+  location: "Nørregade 21, Hundested"
+  capacity: ""
+  price: "Gratis"
+  button_text: "Skriv om optræden"
+  button_url: "mailto:byvaerkstederne@halsnaes.dk"
+  button_style: primary
   featured: false
   featured_tag: ""

@@ -23,10 +23,10 @@
                         <label class="bv-form-label">Hvilke v&aelig;rksteder interesserer dig?</label>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-top: var(--space-4);">
                             {% for option in h.workshop_options|default([
-                                {label: 'Det Grønne Fællesskab', color: 'primary'},
+                                {label: 'Grønt BYværksted', color: 'primary'},
                                 {label: 'Makerspace', color: 'secondary'},
-                                {label: 'Kreativ Fitness', color: 'tertiary'},
-                                {label: 'Keramik', color: 'tertiary'}
+                                {label: 'Krea Café', color: 'tertiary'},
+                                {label: 'Eventværkstedet', color: 'kulturhus'}
                             ]) %}
                             <label class="bv-check-option bv-check-option--{{ option.color }}">
                                 <input type="checkbox" class="bv-checkbox bv-checkbox--{{ option.color }}"/>

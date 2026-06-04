@@ -269,7 +269,7 @@ Run `make help` to see all available commands:
 ### Design System: "Industrial Brutalism Refined"
 
 - **Fonts:** Space Grotesk (headlines), Work Sans (body)
-- **Colors:** Primary `#13483b` (green), Secondary `#325f9b` (blue), Tertiary `#712800` (terracotta), Kulturhus `#27272a` (dark)
+- **Colors:** Primary `#13483b` (green), Secondary `#325f9b` (blue), Tertiary `#712800` (terracotta), Eventværkstedet `#27272a` (dark) — note: the CSS variable is still `--kulturhus` from the pre-rename era.
 - **Rules:** 0px border-radius, no 1px borders, tonal surface layering, glassmorphism overlays
 
 ### Theme Structure
@@ -340,9 +340,9 @@ Data files live in `config/www/user/data/flex-objects/`. Templates pull from Fle
 | `/vaerkstedskalenderen` | Public | Calendar with category filters |
 | `/vaerksteder` | Public | Workshop groups landing |
 | `/vaerksteder/makerspace` | Public | Makerspace & Reparation |
-| `/vaerksteder/kreativ-fitness` | Public | Kreativ Fitness |
-| `/vaerksteder/det-groenne-faellesskab` | Public | Det Grønne Fællesskab |
-| `/vaerksteder/kulturhus` | Public | Kulturhus |
+| `/vaerksteder/krea-cafe` | Public | Krea Café |
+| `/vaerksteder/groent-byvaerksted` | Public | Grønt BYværksted |
+| `/vaerksteder/eventvaerkstedet` | Public | Eventværkstedet |
 | `/kontakt` | Public | Contact form, team, location |
 | `/opret-medlemskab` | Public | Member registration |
 | `/vedtaegter` | Public | Bylaws (info nav) |

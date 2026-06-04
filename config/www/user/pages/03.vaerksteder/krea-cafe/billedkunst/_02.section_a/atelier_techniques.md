@@ -1,0 +1,26 @@
+---
+title: "Sektion A — Papir, tryk og grafik"
+section_label: "Sektion A"
+section_title: "Papir, tryk og grafik"
+accent: tertiary
+intro: "Der er begrænset udvalg af materialer, så medbring gerne dit eget — det anbefales pr. teknik. Forklæde eller gammelt tøj kan være en god idé. Aktiviteterne egner sig til voksne eller næsten voksne."
+techniques:
+    - title: "Skraldebøger"
+      description: "Design din egen unikke bog eller hæfte af genbrugsmaterialer. Klip, mal, lim og sy lækre bøger til scrapbog, junk journal eller artistbook. Omslag og sider bindes med et simpelt hulsystem — ikke klassisk bogbinderi."
+      bring: "papir og pap (brugt emballage, kort, noder, breve, tegninger, broderi, knapper, snor/garn, klistermærker), saks, lim, lineal, pensler, poscatusser."
+    - title: "Tegn og snit et gummistempel"
+      description: "Stempler kan kombineres med tekst til kort, signaturer eller mønstre til hele plakater. Først tegnes, så snittes. Blød gummi er let at forme — ikke hårdt for fingrene."
+      bring: "linoleumssnitteknive hvis du har dem, og papir/karton til at stemple på. Brugt fiskekonserves-emballage virker fint i starten."
+    - title: "Blindtegning"
+      description: "At tegne uden at se på papiret udfordrer dine egne forventninger. Det handler ikke om at tegne pænt — men frit og levende. Skørt, skævt og med sin egen charme."
+      bring: "lækkert papir (fx akvarelpapir), akvarelpensler, gode blyanter, flydende tusch, poscatusser."
+    - title: "Gelli-print"
+      description: "Flotte mønstrede mono-print med en plade af stivnet gelé (Gelliplate / Gel Press). Akrylmaling rulles på pladen, spor laves i malingen — og du får unikke print til collager eller kunstkort."
+      bring: "rigeligt papir (kopipapir eller tyndt madpapir), og hvis du har det: din egen gelli-plade, valse og akrylmaling. Vi har fem sæt værktøj — så vi skiftes hvis vi er mange."
+    - title: "Grafiske tryk — collografi/paptryk"
+      description: "Lettere grafisk teknik. Trykpladerne laves af brugt emballage der ridses og præges, sværtes ind og køres gennem trykpressen. Max ca. A4. 10 kr. pr. tryk."
+      bring: "spændende papir eller brugt emballage (mælkekarton, cornflakespakker o.lign.) til at trykke på."
+    - title: "Grafiske tryk — xerolitografi"
+      description: "Print dine interessante fotos i sort-hvid på laserprinter, og tryk dem over på tykt trykpapir. Farven kommer fra sværten. Max A4. 10 kr. pr. tryk."
+      bring: "LASER-printede fotos, SORT-HVID (uden gråtoner), med store KONTRASTER — gerne flere af hvert. Og evt. spændende papir (bogsider eller andet smukt genbrugspapir) at trykke på."
+---

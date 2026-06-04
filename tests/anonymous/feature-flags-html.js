@@ -227,7 +227,7 @@ test.describe('Sprint-3: Twig gates hide flagged affordances under public-demo',
     const body = await resp.text();
     // Match the specific <h3 class="bv-footer__heading"> wrapper, not
     // arbitrary text occurrences ("værkstedsfællesskab" in the site
-    // description, "Det Grønne Fællesskab" as a workshop name).
+    // description).
     const headingRe =
       /<h3[^>]*class="[^"]*bv-footer__heading[^"]*"[^>]*>\s*F(?:&aelig;|æ)llesskab\s*<\/h3>/i;
     expect(

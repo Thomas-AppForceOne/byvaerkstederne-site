@@ -1,37 +1,20 @@
 {% set h = page.header %}
 <section style="padding: var(--space-24) 0;">
     <div style="max-width: 56rem; margin: 0 auto; text-align: center; padding: 0 var(--space-8);">
-        <h2 class="bv-display" style="font-size: clamp(3rem, 7vw, 5rem); margin-bottom: var(--space-8);">{{ h.cta_heading|default('Bliv en del af os') }}</h2>
+        <h2 class="bv-display" style="font-size: clamp(3rem, 7vw, 5rem); margin-bottom: var(--space-8);">{{ h.cta_heading|default('Kom forbi') }}</h2>
         <p class="bv-body-lg" style="max-width: 42rem; margin: 0 auto var(--space-12);">{{ h.cta_text|default('') }}</p>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-6); text-align: left;">
-            {# Team card #}
-            {% if h.leader_name %}
-            <div style="background: var(--surface-container-lowest); border-left: 8px solid var(--secondary); padding: var(--space-8); display: flex; align-items: center; gap: var(--space-6);">
-                <div style="width: 5rem; height: 5rem; background: var(--surface-dim); overflow: hidden; flex-shrink: 0;">
-                    {% if h.leader_image %}
-                    <img src="{{ h.leader_image }}" alt="{{ h.leader_name }}" style="width: 100%; height: 100%; object-fit: cover; filter: grayscale(1);"/>
-                    {% endif %}
-                </div>
-                <div>
-                    <span style="font-size: 0.625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.2em; color: var(--secondary); display: block; margin-bottom: 0.25rem;">Gruppeleder</span>
-                    <h4 class="bv-headline" style="font-size: 1.5rem;">{{ h.leader_name }}</h4>
-                    <p style="font-size: 0.875rem; color: var(--on-surface-variant);">{{ h.leader_email }}</p>
-                </div>
-            </div>
-            {% endif %}
-
-            {# Next meeting card #}
-            {% if feature_enabled('makerspace_meeting_link') %}
-            <a href="{{ h.meeting_url|default('#') }}" style="background: var(--inverse-surface); color: var(--inverse-on-surface); padding: var(--space-8); display: flex; align-items: center; justify-content: space-between; transition: background 0.3s;" onmouseover="this.style.background='var(--secondary)'" onmouseout="this.style.background='var(--inverse-surface)'">
+        {% if h.meeting_title and feature_enabled('makerspace_meeting_link') %}
+        <div style="max-width: 28rem; margin: 0 auto;">
+            <div style="background: var(--inverse-surface); color: var(--inverse-on-surface); padding: var(--space-8); display: flex; align-items: center; justify-content: space-between; gap: var(--space-6); text-align: left;">
                 <div>
                     <span style="font-size: 0.625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.2em; color: rgba(161,161,170,1); display: block; margin-bottom: 0.25rem;">Kom forbi</span>
-                    <h4 class="bv-headline" style="font-size: 1.5rem;">{{ h.meeting_title|default('Næste møde') }}</h4>
+                    <h4 class="bv-headline" style="font-size: 1.5rem;">{{ h.meeting_title }}</h4>
                     <p style="font-size: 0.875rem; color: rgba(161,161,170,1);">{{ h.meeting_time|default('') }}</p>
                 </div>
                 <span class="material-symbols-outlined" style="font-size: 2.5rem;">arrow_forward</span>
-            </a>
-            {% endif %}
+            </div>
         </div>
+        {% endif %}
     </div>
 </section>

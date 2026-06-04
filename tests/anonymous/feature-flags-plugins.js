@@ -556,84 +556,6 @@ const FLAG_PROBES = [
     },
   },
   {
-    flag: 'workshop_project_blueprints',
-    desc: '"Se Blueprint" / "Vis Projekter" placeholders gated (detail pages 404 under public-demo anyway)',
-    async publicDemo(ctx) {
-      const r = await ctx.get('/vaerksteder/makerspace', { maxRedirects: 0 });
-      expect(r.status()).toBe(404);
-    },
-    async internal(ctx) {
-      const r = await ctx.get('/vaerksteder/makerspace', { maxRedirects: 0 });
-      expect(r.status()).toBe(200);
-      expect(/Se Blueprint/i.test(await r.text())).toBe(true);
-    },
-  },
-  {
-    flag: 'workshop_workday_signup',
-    desc: '"Deltag i næste arbejdsdag" placeholder gated (parent detail page 404 under public-demo)',
-    async publicDemo(ctx) {
-      const r = await ctx.get('/vaerksteder/kreativ-fitness', { maxRedirects: 0 });
-      expect(r.status()).toBe(404);
-    },
-    async internal(ctx) {
-      const r = await ctx.get('/vaerksteder/kreativ-fitness', { maxRedirects: 0 });
-      expect(r.status()).toBe(200);
-      expect(/Deltag i n.+ste arbejdsdag/i.test(await r.text())).toBe(true);
-    },
-  },
-  {
-    flag: 'kulturhus_program',
-    desc: '"Se Program" placeholder gated (parent detail page 404 under public-demo)',
-    async publicDemo(ctx) {
-      const r = await ctx.get('/vaerksteder/kulturhus', { maxRedirects: 0 });
-      expect(r.status()).toBe(404);
-    },
-    async internal(ctx) {
-      const r = await ctx.get('/vaerksteder/kulturhus', { maxRedirects: 0 });
-      expect(r.status()).toBe(200);
-      expect(/Se Program/i.test(await r.text())).toBe(true);
-    },
-  },
-  {
-    flag: 'kulturhus_volunteer',
-    desc: '"Bliv Frivillig" placeholder gated (parent detail page 404 under public-demo)',
-    async publicDemo(ctx) {
-      const r = await ctx.get('/vaerksteder/kulturhus', { maxRedirects: 0 });
-      expect(r.status()).toBe(404);
-    },
-    async internal(ctx) {
-      const r = await ctx.get('/vaerksteder/kulturhus', { maxRedirects: 0 });
-      expect(r.status()).toBe(200);
-      expect(/Bliv Frivillig/i.test(await r.text())).toBe(true);
-    },
-  },
-  {
-    flag: 'donation_mobilepay',
-    desc: '"Donér via MobilePay" placeholder gated (parent detail page 404 under public-demo)',
-    async publicDemo(ctx) {
-      const r = await ctx.get('/vaerksteder/kulturhus', { maxRedirects: 0 });
-      expect(r.status()).toBe(404);
-    },
-    async internal(ctx) {
-      const r = await ctx.get('/vaerksteder/kulturhus', { maxRedirects: 0 });
-      expect(r.status()).toBe(200);
-      expect(/Don.+r via MobilePay/i.test(await r.text())).toBe(true);
-    },
-  },
-  {
-    flag: 'gear_donation',
-    desc: '"Donér Grej" placeholder gated (parent detail page 404 under public-demo)',
-    async publicDemo(ctx) {
-      const r = await ctx.get('/vaerksteder/det-groenne-faellesskab', { maxRedirects: 0 });
-      expect(r.status()).toBe(404);
-    },
-    async internal(ctx) {
-      const r = await ctx.get('/vaerksteder/det-groenne-faellesskab', { maxRedirects: 0 });
-      expect(r.status()).toBe(200);
-      expect(/Don.+r Grej/i.test(await r.text())).toBe(true);
-    },
-  },
-  {
     flag: 'social_media_links',
     desc: 'Footer social icons (Facebook/Instagram placeholders) absent on public-demo; present on internal',
     async publicDemo(ctx) {
@@ -655,7 +577,7 @@ const FLAG_PROBES = [
   },
   {
     flag: 'makerspace_meeting_link',
-    desc: '"Næste møde" CTA card placeholder gated (parent detail page 404 under public-demo)',
+    desc: '"Næste åbning" CTA card gated (parent detail page 404 under public-demo)',
     async publicDemo(ctx) {
       const r = await ctx.get('/vaerksteder/makerspace', { maxRedirects: 0 });
       expect(r.status()).toBe(404);
@@ -663,7 +585,7 @@ const FLAG_PROBES = [
     async internal(ctx) {
       const r = await ctx.get('/vaerksteder/makerspace', { maxRedirects: 0 });
       expect(r.status()).toBe(200);
-      expect(/N.+ste m.+de/i.test(await r.text())).toBe(true);
+      expect(/N.+ste .+ning/i.test(await r.text())).toBe(true);
     },
   },
 ];

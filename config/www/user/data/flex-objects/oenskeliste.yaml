@@ -28,26 +28,6 @@ wish003:
   fulfilled: false
   fulfilled_date: ""
   donor: ""
-wish004:
-  published: true
-  name: Drejeskive til keramik
-  description: "Elektrisk drejeskive, begynderniveau"
-  group: kreativ
-  priority: high
-  estimated_cost: "2.500 kr"
-  fulfilled: false
-  fulfilled_date: ""
-  donor: ""
-wish005:
-  published: true
-  name: "Ovnhylder og -støtter"
-  description: "Til keramikovn"
-  group: kreativ
-  priority: high
-  estimated_cost: "800 kr"
-  fulfilled: false
-  fulfilled_date: ""
-  donor: ""
 wish006:
   published: true
   name: "Plantekasser i lærketræ"
