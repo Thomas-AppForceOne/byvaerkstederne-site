@@ -1,6 +1,5 @@
 ---
-title: "Sektion A — Papir, tryk og grafik"
-section_label: "Sektion A"
+title: "Papir, tryk og grafik"
 section_title: "Papir, tryk og grafik"
 accent: tertiary
 intro: "Der er begrænset udvalg af materialer, så medbring gerne dit eget — det anbefales pr. teknik. Forklæde eller gammelt tøj kan være en god idé. Aktiviteterne egner sig til voksne eller næsten voksne."

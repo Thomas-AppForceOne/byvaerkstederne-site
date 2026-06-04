@@ -1,5 +1,5 @@
 ---
-title: "Sektion B — Galleri"
+title: "Galleri — Lene Pels"
 images:
     - src: "/vaerksteder/krea-cafe/billedkunst/section-b-01.jpeg"
       alt: "Værker ved Lene Pels"
