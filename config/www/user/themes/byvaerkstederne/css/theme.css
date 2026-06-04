@@ -1080,12 +1080,21 @@ a { color: inherit; text-decoration: none; }
     position: relative;
     overflow: hidden;
     aspect-ratio: 4/3;
+    /* Neutral surface behind the contained image — visible as letterbox /
+       pillarbox when the image aspect ratio doesn't match the 4:3 cell.
+       Required because we use object-fit: contain (not cover) so portrait
+       works (e.g. Lene Pels' 1128x1600 photos) are never cropped. */
+    background: var(--surface-container);
 }
 .bv-bento__item--wide { grid-column: span 2; }
 .bv-bento__item img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    /* `contain` instead of `cover`: scale the image to fit inside the cell
+       without ever cropping. Trade-off is letterboxing for non-matching
+       aspect ratios — accepted because no-crop is the explicit contract
+       for this gallery. */
+    object-fit: contain;
     transition: transform 0.5s;
 }
 .bv-bento__item:hover img { transform: scale(1.05); }
