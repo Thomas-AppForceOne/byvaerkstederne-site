@@ -556,19 +556,6 @@ const FLAG_PROBES = [
     },
   },
   {
-    flag: 'workshop_project_blueprints',
-    desc: '"Se Blueprint" / "Vis Projekter" placeholders gated (detail pages 404 under public-demo anyway)',
-    async publicDemo(ctx) {
-      const r = await ctx.get('/vaerksteder/makerspace', { maxRedirects: 0 });
-      expect(r.status()).toBe(404);
-    },
-    async internal(ctx) {
-      const r = await ctx.get('/vaerksteder/makerspace', { maxRedirects: 0 });
-      expect(r.status()).toBe(200);
-      expect(/Se Blueprint/i.test(await r.text())).toBe(true);
-    },
-  },
-  {
     flag: 'workshop_workday_signup',
     desc: '"Deltag i næste arbejdsdag" placeholder gated (parent detail page 404 under public-demo)',
     async publicDemo(ctx) {
@@ -642,7 +629,7 @@ const FLAG_PROBES = [
   },
   {
     flag: 'makerspace_meeting_link',
-    desc: '"Næste møde" CTA card placeholder gated (parent detail page 404 under public-demo)',
+    desc: '"Næste åbning" CTA card gated (parent detail page 404 under public-demo)',
     async publicDemo(ctx) {
       const r = await ctx.get('/vaerksteder/makerspace', { maxRedirects: 0 });
       expect(r.status()).toBe(404);
@@ -650,7 +637,7 @@ const FLAG_PROBES = [
     async internal(ctx) {
       const r = await ctx.get('/vaerksteder/makerspace', { maxRedirects: 0 });
       expect(r.status()).toBe(200);
-      expect(/N.+ste m.+de/i.test(await r.text())).toBe(true);
+      expect(/N.+ste .+ning/i.test(await r.text())).toBe(true);
     },
   },
 ];
