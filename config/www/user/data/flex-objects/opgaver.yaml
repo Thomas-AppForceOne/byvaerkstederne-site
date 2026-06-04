@@ -17,16 +17,6 @@ opgave002:
   priority: medium
   assigned_to: ''
   due_date: ''
-opgave003:
-  published: true
-  title: 'Klargøring af keramikovn'
-  description: 'Rengøring af plader og tjek af elementer.'
-  group: kreativ
-  color: tertiary
-  status: open
-  priority: medium
-  assigned_to: ''
-  due_date: ''
 6d32f817c0fa3fae513c836a1aaab33b:
   published: true
   title: 'Sorterer elektronik kasserne'

@@ -17,7 +17,9 @@
             </nav>
         </div>
 
-        {# Information #}
+        {# Information — column hidden entirely when every link inside it is
+           feature-gated off, so the heading doesn't render alone. #}
+        {% if feature_enabled('statutes_page') or feature_enabled('privacy_policy') or feature_enabled('minutes_archive') or feature_enabled('press_page') %}
         <div class="bv-footer__col">
             <h3 class="bv-footer__heading">Information</h3>
             <nav class="bv-footer__nav">
@@ -35,6 +37,7 @@
                 {% endif %}
             </nav>
         </div>
+        {% endif %}
 
         {# Fællesskab — authenticated users only, gated by community_footer_column flag #}
         {% if feature_enabled('community_footer_column') %}
@@ -62,7 +65,7 @@
             <div class="bv-footer__contact">
                 <div class="bv-footer__contact-item">
                     <span class="material-symbols-outlined">location_on</span>
-                    <span>N&oslash;rregade 11,<br/>3390 Hundested</span>
+                    <span>N&oslash;rregade 21,<br/>3390 Hundested</span>
                 </div>
                 <div class="bv-footer__contact-item">
                     <span class="material-symbols-outlined">mail</span>
