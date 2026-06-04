@@ -11,7 +11,7 @@ groups:
       description: "Billedkunst, tekstil og kunsthåndværk under samme tag. To billedkunstgrupper og et syværksted i opstart."
       color: tertiary
       url: /vaerksteder/krea-cafe
-      image: "https://lh3.googleusercontent.com/aida-public/AB6AXuAACORfEirx00b6FRjtYnNY9mvmU15ho6s4MQ4CHkKjhG8EjL-jLnxajNTr65QMxBrku8WuhNwPYs4KnnIVAs9dMb-Tcfy7n-oYCInCkO4JKuAiVM0AC7Ll0Fy-TWr8CX4D6Vy4gfiqYFAT4zXlr9fPHBnb8HvfehjnPBqKCPB5Ab_E5KMHsBrZCJ-s74xAHxkDUfkyD2I6obZVauIKKuXkE6JplLyI1-xD6kFj3jW6RgsI4jobMuzFgcqicKjmTvYk4HOk6waSxRc"
+      image: "/vaerksteder/krea-cafe/billedkunst/section-b-02.jpeg"
     - title: "Gr\xF8nt BYv\xE6rksted"
       description: "Planter og grønne fællesskaber i den lille byhave overfor Nørregade 21. Frøbytte, havevandringer og urtehave."
       color: primary
