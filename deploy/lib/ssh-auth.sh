@@ -135,7 +135,16 @@ bv_ssh_cmd() {
             -o StrictHostKeyChecking=no \
             "$@"
     else
-        ssh -o BatchMode=yes -o ConnectTimeout=10 "$@"
+        # Key-auth path. StrictHostKeyChecking=accept-new lets first
+        # connection to a new host (e.g. chosting.dk on prod bring-up)
+        # succeed by recording the fingerprint, but rejects a CHANGED
+        # fingerprint on subsequent runs — same protection as
+        # StrictHostKeyChecking=yes after the first connection. The
+        # sshpass path above uses =no because one.com's shared-hosting
+        # fingerprints have rotated more than once historically.
+        ssh -o BatchMode=yes -o ConnectTimeout=10 \
+            -o StrictHostKeyChecking=accept-new \
+            "$@"
     fi
 }
 
@@ -164,7 +173,10 @@ bv_rsync_ssh_e() {
         fi
         printf 'sshpass -e ssh -p %s -o ConnectTimeout=10 -o StrictHostKeyChecking=no' "$port"
     else
-        printf 'ssh -p %s -o ConnectTimeout=10 -o BatchMode=yes' "$port"
+        # Key-auth path — same StrictHostKeyChecking=accept-new
+        # rationale as bv_ssh_cmd above. First connection to chosting
+        # records the fingerprint; subsequent runs verify it.
+        printf 'ssh -p %s -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new' "$port"
     fi
 }
 

@@ -25,6 +25,7 @@
 #   bv_rollback_local             <parent-dir> <env> <docroot-name>  # local-mode rollback (no ssh) — used by tests and rollback.sh's --local mode
 #   bv_append_rollback_log_row    <releases-dir> <rolled-back-at> <rolled-back-by> <from-release> <to-release> <swap-duration-ms> <probe-url> <probe-status> <probe-substring> <probe-matched>
 #   bv_yaml_quote_escape          <value>                                 # escape backslashes and double-quotes for inline-quoted YAML emission
+#   bv_check_no_lfs_pointers      <staging-dir>                            # scan for git-lfs pointer files; rc=0 if none, rc=1 if any (with operator-readable list on stderr)
 #   bv_remote_run                 "<bash-body>" KEY=VALUE...              # safe ssh dispatch (see security note below)
 #
 # These run locally (no ssh, no remote) — the deploy script wraps them
@@ -1061,6 +1062,56 @@ bv_now_ms() {
     printf '%s\n' "$(( $(date +%s%N) / 1000000 ))"
 }
 
+# Scan a built staging dir for git-lfs pointer files. A pointer is the
+# tiny (~130-byte) text file that lives in a worktree which hasn't run
+# `git lfs checkout` — its first line is literally
+#     version https://git-lfs.github.com/spec/v1
+# Without this guard, rsync ships the pointers verbatim to the remote;
+# browsers fetch 131-byte "JPEG" responses that won't render, and the
+# smoke probe still passes because HTTP returns 200. Result: every LFS-
+# tracked asset on the deployed site looks broken.
+#
+# Returns 0 if the staging tree is clean, 1 if any pointer is found
+# (with an operator-readable list + recovery command on stderr). The
+# scan is bounded to files ≤ 200 bytes for speed — real LFS pointers
+# are always tiny; binary assets are always larger. Failure mode is
+# fail-loud-before-rsync, not silent-rsync-of-broken-bundle.
+bv_check_no_lfs_pointers() {
+    local staging_dir="${1:-}"
+    if [ -z "$staging_dir" ] || [ ! -d "$staging_dir" ]; then
+        echo "FATAL: bv_check_no_lfs_pointers requires an existing staging-dir argument" >&2
+        return 2
+    fi
+
+    local hits
+    # find -size -200c restricts to candidates small enough to plausibly
+    # be a pointer. grep -l prints filenames of matches. The magic line
+    # is the version: URL — checking that substring is enough; pointer
+    # format guarantees it on line 1.
+    hits="$(find "$staging_dir" -type f -size -200c \
+            -exec grep -l "git-lfs.github.com/spec/v1" {} + 2>/dev/null \
+            || true)"
+    if [ -n "$hits" ]; then
+        echo "" >&2
+        echo "❌  Git LFS pointer files found in the deploy bundle." >&2
+        echo "    These are tiny text files (~131 bytes) — the real binary" >&2
+        echo "    is stored in LFS. Deploying these breaks every LFS-tracked" >&2
+        echo "    asset on the site (browsers receive 131 bytes of YAML and" >&2
+        echo "    fail to render). The smoke probe will still pass because" >&2
+        echo "    HTTP returns 200 — so this is a silent regression class." >&2
+        echo "" >&2
+        echo "    Recover by materialising the LFS objects in this checkout:" >&2
+        echo "" >&2
+        echo "        git lfs checkout" >&2
+        echo "" >&2
+        echo "    Then re-run the deploy. Pointer files found:" >&2
+        printf '%s\n' "$hits" | sed "s|^$staging_dir/|      • |" >&2
+        echo "" >&2
+        return 1
+    fi
+    return 0
+}
+
 # Dispatch a bash body to the remote configured by the caller's
 # DEPLOY_HOST/USER/PASS/PORT environment. Values are passed as named
 # environment variables on the remote side, NOT interpolated into the
@@ -1146,10 +1197,14 @@ bv_remote_run() {
         echo "FATAL: bv_remote_run requires DEPLOY_USER" >&2
         return 1
     fi
-    if [ -z "${DEPLOY_PASS:-}" ]; then
-        echo "FATAL: bv_remote_run requires DEPLOY_PASS" >&2
-        return 1
-    fi
+    # DEPLOY_PASS is OPTIONAL since the key-auth bring-up:
+    #   * Empty  → key-auth path (bv_ssh_cmd's BatchMode=yes branch).
+    #              Used by prod against chosting.dk where SSH-keys are
+    #              the only supported auth mode per the cPanel default.
+    #   * Set    → password-auth path (sshpass). Used by dev/test/staging
+    #              against one.com hackersbychoice.dk.
+    # Both paths converge on bv_ssh_cmd below; the helper picks the right
+    # one based on whether a password is resolved for the active TIER.
     if [ -z "${DEPLOY_PORT:-}" ]; then
         echo "FATAL: bv_remote_run requires DEPLOY_PORT" >&2
         return 1
@@ -1203,7 +1258,18 @@ bv_remote_run() {
         printf '%s\n' "$body"
     )" || return $?
 
-    sshpass -p "$DEPLOY_PASS" ssh -o StrictHostKeyChecking=no \
-        -p "$DEPLOY_PORT" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+    # Dispatch via bv_ssh_cmd from ssh-auth.sh — picks sshpass vs bare
+    # ssh+BatchMode=yes based on whether bv_resolve_ssh_password yields
+    # a password for the active TIER. Lazy-source the helper here so
+    # callers (like the unit-remote-run.sh fixture) that don't preload
+    # ssh-auth.sh still get the dispatch behaviour.
+    if ! declare -F bv_ssh_cmd >/dev/null 2>&1; then
+        local _lib_dir
+        _lib_dir="$(dirname "${BASH_SOURCE[0]}")"
+        # shellcheck source=ssh-auth.sh
+        . "$_lib_dir/ssh-auth.sh"
+    fi
+
+    bv_ssh_cmd -p "$DEPLOY_PORT" "${DEPLOY_USER}@${DEPLOY_HOST}" \
         bash -s <<<"$script_input"
 }
