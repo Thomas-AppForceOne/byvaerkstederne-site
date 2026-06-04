@@ -142,3 +142,51 @@ event009:
   button_style: tertiary
   featured: false
   featured_tag: ""
+event010:
+  published: true
+  title: "Verdenskoncert"
+  description: "Afrikanske sange, ældre danske sange, indiske mantraer, taizé-sange og meget mere. Selvom man ikke forstår alle ordene, mærker man helt sikkert stemningen."
+  group: kulturhus
+  badge: "Eventværkstedet"
+  event_date: "2026-06-11"
+  event_time: "19:00 — 20:30"
+  location: "Nørregade 21, Hundested"
+  capacity: ""
+  price: "Gratis"
+  button_text: "Se Eventværkstedet"
+  button_url: "/vaerksteder/eventvaerkstedet"
+  button_style: primary
+  featured: false
+  featured_tag: ""
+event011:
+  published: true
+  title: "Syng-med-koncert"
+  description: "Overalt på kloden har mennesker altid sunget sammen — for når vi synger sammen, oplever de fleste af os glæde, nærvær og fællesskab. Du behøver ikke kunne synge. Alle kan være med."
+  group: kulturhus
+  badge: "Eventværkstedet"
+  event_date: "2026-08-06"
+  event_time: "19:00 — 20:30"
+  location: "Nørregade 21, Hundested"
+  capacity: ""
+  price: "Gratis"
+  button_text: "Se Eventværkstedet"
+  button_url: "/vaerksteder/eventvaerkstedet"
+  button_style: primary
+  featured: false
+  featured_tag: ""
+event012:
+  published: true
+  title: "Åben scene"
+  description: "En hjertevarm aften med forskellige slags optrædener — ikke af professionelle, men af mennesker ligesom dig. Det handler ikke om at være perfekt, men om at være den, du er. Vil du optræde 5-10 min? Skriv til byvaerkstederne@halsnaes.dk."
+  group: kulturhus
+  badge: "Eventværkstedet"
+  event_date: "2026-09-03"
+  event_time: "19:00 — 20:30"
+  location: "Nørregade 21, Hundested"
+  capacity: ""
+  price: "Gratis"
+  button_text: "Skriv om optræden"
+  button_url: "mailto:byvaerkstederne@halsnaes.dk"
+  button_style: primary
+  featured: false
+  featured_tag: ""

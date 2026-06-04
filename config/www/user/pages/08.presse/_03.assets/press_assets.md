@@ -13,5 +13,5 @@ photos:
     - src: /user/themes/byvaerkstederne/images/press-groenne.png
       alt: "Grønt BYværksted"
     - src: /user/themes/byvaerkstederne/images/press-kulturhus.png
-      alt: "Kulturhus"
+      alt: "Eventværkstedet"
 ---

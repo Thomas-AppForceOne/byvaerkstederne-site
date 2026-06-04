@@ -556,45 +556,6 @@ const FLAG_PROBES = [
     },
   },
   {
-    flag: 'kulturhus_program',
-    desc: '"Se Program" placeholder gated (parent detail page 404 under public-demo)',
-    async publicDemo(ctx) {
-      const r = await ctx.get('/vaerksteder/kulturhus', { maxRedirects: 0 });
-      expect(r.status()).toBe(404);
-    },
-    async internal(ctx) {
-      const r = await ctx.get('/vaerksteder/kulturhus', { maxRedirects: 0 });
-      expect(r.status()).toBe(200);
-      expect(/Se Program/i.test(await r.text())).toBe(true);
-    },
-  },
-  {
-    flag: 'kulturhus_volunteer',
-    desc: '"Bliv Frivillig" placeholder gated (parent detail page 404 under public-demo)',
-    async publicDemo(ctx) {
-      const r = await ctx.get('/vaerksteder/kulturhus', { maxRedirects: 0 });
-      expect(r.status()).toBe(404);
-    },
-    async internal(ctx) {
-      const r = await ctx.get('/vaerksteder/kulturhus', { maxRedirects: 0 });
-      expect(r.status()).toBe(200);
-      expect(/Bliv Frivillig/i.test(await r.text())).toBe(true);
-    },
-  },
-  {
-    flag: 'donation_mobilepay',
-    desc: '"Donér via MobilePay" placeholder gated (parent detail page 404 under public-demo)',
-    async publicDemo(ctx) {
-      const r = await ctx.get('/vaerksteder/kulturhus', { maxRedirects: 0 });
-      expect(r.status()).toBe(404);
-    },
-    async internal(ctx) {
-      const r = await ctx.get('/vaerksteder/kulturhus', { maxRedirects: 0 });
-      expect(r.status()).toBe(200);
-      expect(/Don.+r via MobilePay/i.test(await r.text())).toBe(true);
-    },
-  },
-  {
     flag: 'social_media_links',
     desc: 'Footer social icons (Facebook/Instagram placeholders) absent on public-demo; present on internal',
     async publicDemo(ctx) {

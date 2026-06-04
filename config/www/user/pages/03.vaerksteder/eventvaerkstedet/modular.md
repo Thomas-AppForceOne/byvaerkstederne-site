@@ -1,5 +1,5 @@
 ---
-title: "Kulturhus"
+title: "Eventværkstedet"
 content:
     items: '@self.modular'
     order:

@@ -80,7 +80,7 @@ form:
         makerspace: Makerspace & Reparation
         kreativ: Krea Café
         groenne: Grønt BYværksted
-        kulturhus: Kulturhus
+        kulturhus: Eventværkstedet
 
     email:
       type: text

@@ -83,12 +83,12 @@ form:
         makerspace: Makerspace & Reparation
         kreativ: Krea Café
         groenne: Grønt BYværksted
-        kulturhus: Kulturhus
+        kulturhus: Eventværkstedet
 
     badge:
       type: text
       label: Kategori badge
-      help: "Vises som farvet badge, f.eks. 'Kulturhus' eller 'Makerspace & Reparation'"
+      help: "Vises som farvet badge, f.eks. 'Eventværkstedet' eller 'Makerspace & Reparation'"
 
     event_date:
       type: text
