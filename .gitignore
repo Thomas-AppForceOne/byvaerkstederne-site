@@ -16,6 +16,10 @@ config/www/assets/
 config/www/vendor/
 config/www/bin/
 
+# Migration runner vendor (installed via `composer install` in
+# migrations/; reproducible from migrations/composer.lock)
+migrations/vendor/
+
 # IDE
 .idea/
 .vscode/

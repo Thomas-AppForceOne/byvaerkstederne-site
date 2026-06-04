@@ -54,6 +54,16 @@ GRAV_URL="https://github.com/getgrav/grav/releases/download/${GRAV_VERSION}/grav
 # shellcheck source=deploy/lib/atomic-release.sh
 . "$SCRIPT_DIR/lib/atomic-release.sh"
 
+# shellcheck source=deploy/lib/migrate-integration.sh
+# Provides bv_remote_run_migration_step — invoked between the cache
+# clear (step 7) and the atomic swap (step 8) to handle schema bumps
+# on a per-deploy basis. The helper either no-ops (live data version
+# matches bundle data version) or carries out the spec's
+# `cp -a <tier>data/v<old> <tier>data/v<new>` + `deploy/migrate.sh
+# <tier>data/v<new>` + repoint-`current` sequence. See spec preamble
+# and acceptance criterion deploy_sh_invokes_migration_runner_on_schema_bump.
+. "$SCRIPT_DIR/lib/migrate-integration.sh"
+
 # Require GNU coreutils for ms-resolution swap_duration_ms timing.
 # Fail loud BEFORE we touch any path or read .env.deploy. macOS needs
 # `brew install coreutils` (the script's PATH prepend brings in
@@ -833,6 +843,52 @@ if ! bv_remote_run '
     exit 1
 fi
 echo "  ✓ Cache cleared in new release"
+
+# ── Step 7.5: Data-schema migration runner ────────────────────────────
+#
+# Per the data-versioning spec: if the live tier's data_version
+# differs from the bundle's data_version, copy the current data dir
+# to a new versioned dir, run migrate.sh against the copy, and only
+# then proceed. If migrate.sh exits non-zero, abort here BEFORE the
+# atomic symlink swap so the live tier stays on its previous release.
+#
+# When the live tier's data_version already matches the bundle's, the
+# runner is documented to be a no-op; the helper short-circuits with
+# a "no schema bump" diagnostic and returns 0.
+echo "→ Step 7.5/8: Data-schema migration runner..."
+# Distinguish apex deploys (no Grav state, no migration step) from
+# Grav deploys (must carry a data-version.yaml). Apex staging dirs
+# have no user/ subdir; Grav staging dirs do. A Grav-staging dir
+# that is missing data-version.yaml is a regression, not a quiet
+# skip — refuse the deploy rather than ship code against unstamped
+# data.
+if [ ! -d "$STAGING_DIR/user" ]; then
+    echo "  ✓ apex deploy: no user/ in staging; migration step does not apply"
+else
+    BUNDLE_DATA_VERSION="$(awk '
+        /^[[:space:]]*#/ { next }
+        /^data_version:[[:space:]]*/ {
+            v = $0
+            sub(/^data_version:[[:space:]]*/, "", v)
+            gsub(/^["'\'']|["'\'']$/, "", v)
+            sub(/[[:space:]]+#.*$/, "", v)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+            print v
+            exit
+        }
+    ' "$STAGING_DIR/user/data-version.yaml" 2>/dev/null || true)"
+    if [ -z "$BUNDLE_DATA_VERSION" ]; then
+        echo "❌  Grav staging dir at $STAGING_DIR/user has no data-version.yaml — refusing to deploy." >&2
+        echo "    The deploy bundle must carry config/www/user/data-version.yaml so the migration step can compare schema versions." >&2
+        echo "    If you are deploying intentionally-stateless content, route it through the apex deploy target instead." >&2
+        exit 1
+    fi
+    if ! bv_remote_run_migration_step "$BUNDLE_DATA_VERSION" "$DATA_DIR"; then
+        echo "❌  Migration step failed — aborting BEFORE the docroot swap." >&2
+        echo "    The previous release stays live; <tier>data/current is unchanged." >&2
+        exit 1
+    fi
+fi
 
 # ── Step 8: Atomic ln -sfn swap of <tier> ─────────────────────────────
 echo "→ Step 8/8: Atomic swap of ${DEPLOY_TARGET}..."
