@@ -9,11 +9,11 @@ groups:
     - title: Kreativ Fitness
       description: "Keramik, træarbejde og tekstil. Træn din kreativitet gennem fysisk skabelse."
       color: tertiary
-      url: /vaerksteder/kreativ-fitness
+      url: /vaerksteder/krea-cafe
     - title: "Det Gr\xF8nne F\xE6llesskab"
       description: "Byhaver, kompost og biodiversitet. Vi dyrker byen og fællesskabet i det fri."
       color: primary
-      url: /vaerksteder/det-groenne-faellesskab
+      url: /vaerksteder/groent-byvaerksted
     - title: Kulturhus
       description: "Koncerter, foredrag og fællesspisning. Hjertet for de sociale og kulturelle bånd."
       color: dark

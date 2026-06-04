@@ -340,8 +340,8 @@ Data files live in `config/www/user/data/flex-objects/`. Templates pull from Fle
 | `/vaerkstedskalenderen` | Public | Calendar with category filters |
 | `/vaerksteder` | Public | Workshop groups landing |
 | `/vaerksteder/makerspace` | Public | Makerspace & Reparation |
-| `/vaerksteder/kreativ-fitness` | Public | Kreativ Fitness |
-| `/vaerksteder/det-groenne-faellesskab` | Public | Det Grønne Fællesskab |
+| `/vaerksteder/krea-cafe` | Public | Krea Café |
+| `/vaerksteder/groent-byvaerksted` | Public | Grønt BYværksted |
 | `/vaerksteder/kulturhus` | Public | Kulturhus |
 | `/kontakt` | Public | Contact form, team, location |
 | `/opret-medlemskab` | Public | Member registration |

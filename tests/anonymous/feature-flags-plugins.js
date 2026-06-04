@@ -572,11 +572,11 @@ const FLAG_PROBES = [
     flag: 'workshop_workday_signup',
     desc: '"Deltag i næste arbejdsdag" placeholder gated (parent detail page 404 under public-demo)',
     async publicDemo(ctx) {
-      const r = await ctx.get('/vaerksteder/kreativ-fitness', { maxRedirects: 0 });
+      const r = await ctx.get('/vaerksteder/krea-cafe', { maxRedirects: 0 });
       expect(r.status()).toBe(404);
     },
     async internal(ctx) {
-      const r = await ctx.get('/vaerksteder/kreativ-fitness', { maxRedirects: 0 });
+      const r = await ctx.get('/vaerksteder/krea-cafe', { maxRedirects: 0 });
       expect(r.status()).toBe(200);
       expect(/Deltag i n.+ste arbejdsdag/i.test(await r.text())).toBe(true);
     },
@@ -624,11 +624,11 @@ const FLAG_PROBES = [
     flag: 'gear_donation',
     desc: '"Donér Grej" placeholder gated (parent detail page 404 under public-demo)',
     async publicDemo(ctx) {
-      const r = await ctx.get('/vaerksteder/det-groenne-faellesskab', { maxRedirects: 0 });
+      const r = await ctx.get('/vaerksteder/groent-byvaerksted', { maxRedirects: 0 });
       expect(r.status()).toBe(404);
     },
     async internal(ctx) {
-      const r = await ctx.get('/vaerksteder/det-groenne-faellesskab', { maxRedirects: 0 });
+      const r = await ctx.get('/vaerksteder/groent-byvaerksted', { maxRedirects: 0 });
       expect(r.status()).toBe(200);
       expect(/Don.+r Grej/i.test(await r.text())).toBe(true);
     },

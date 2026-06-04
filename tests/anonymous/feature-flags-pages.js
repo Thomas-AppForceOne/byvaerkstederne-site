@@ -203,7 +203,7 @@ test.describe('feature-flags: public-demo profile 404s flagged pages', () => {
     expect(gridMatch, 'expected workgroups grid container in response').not.toBeNull();
     const grid = gridMatch[1];
     const disabledHrefRe =
-      /href="[^"]*\/vaerksteder\/(det-groenne-faellesskab|kreativ-fitness|kulturhus|makerspace)[^"]*"/g;
+      /href="[^"]*\/vaerksteder\/(groent-byvaerksted|krea-cafe|kulturhus|makerspace)[^"]*"/g;
     const matches = grid.match(disabledHrefRe) || [];
     expect(
       matches,
@@ -249,7 +249,7 @@ test.describe('feature-flags: internal profile renders flagged pages', () => {
     expect(gridMatch, 'expected workgroups grid container in response').not.toBeNull();
     const grid = gridMatch[1];
     const disabledHrefRe =
-      /href="[^"]*\/vaerksteder\/(det-groenne-faellesskab|kreativ-fitness|kulturhus|makerspace)[^"]*"/g;
+      /href="[^"]*\/vaerksteder\/(groent-byvaerksted|krea-cafe|kulturhus|makerspace)[^"]*"/g;
     const matches = grid.match(disabledHrefRe) || [];
     expect(
       matches.length,

@@ -10,12 +10,12 @@ groups:
     - title: Kreativ Fitness
       description: "Keramik, træarbejde og tekstil. Træn din kreativitet gennem fysisk skabelse."
       color: tertiary
-      url: /vaerksteder/kreativ-fitness
+      url: /vaerksteder/krea-cafe
       image: "https://lh3.googleusercontent.com/aida-public/AB6AXuAACORfEirx00b6FRjtYnNY9mvmU15ho6s4MQ4CHkKjhG8EjL-jLnxajNTr65QMxBrku8WuhNwPYs4KnnIVAs9dMb-Tcfy7n-oYCInCkO4JKuAiVM0AC7Ll0Fy-TWr8CX4D6Vy4gfiqYFAT4zXlr9fPHBnb8HvfehjnPBqKCPB5Ab_E5KMHsBrZCJ-s74xAHxkDUfkyD2I6obZVauIKKuXkE6JplLyI1-xD6kFj3jW6RgsI4jobMuzFgcqicKjmTvYk4HOk6waSxRc"
     - title: "Det Gr\xF8nne F\xE6llesskab"
       description: "Byhaver, kompost og biodiversitet. Vi dyrker byen og fællesskabet i det fri."
       color: primary
-      url: /vaerksteder/det-groenne-faellesskab
+      url: /vaerksteder/groent-byvaerksted
       image: "https://lh3.googleusercontent.com/aida-public/AB6AXuDj8DYIsY7jbFdYrZ-L14_xr2cV0wQ77gEKf9fsWkk7saxNIPNNh7q45LsXFVapk25sH7dR6lQGvw6FZz46V-Ois3DZiasCGU_jA_LaF0GBf7V2Q6egkqEY-Lfvp0QK6HgKC4ZZEs2KntHQYqam47Py2NkdXWN5Jxb_GCvZWNF8381TkmJitdWmySnP9VS5efy2FYWnjMo1IbshCwL3zWvc6Eg7gNsJ4yhlMMejJk0yrSsi8hF3QUfNto383-2zWEUSDIQLK-v7H-U"
     - title: Kulturhus
       description: "Koncerter, foredrag og fællesspisning. Hjertet for de sociale og kulturelle bånd."
