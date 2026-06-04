@@ -434,6 +434,17 @@ JSON
 echo "  ✓ Package built ($(du -sh "$STAGING_DIR" | cut -f1))"
 echo "  ✓ Version: ${VERSION} · build ${BUILD}"
 
+# Refuse to deploy a bundle that still contains git-lfs pointer files —
+# they're tiny YAML-shaped placeholders that look like JPEGs to rsync,
+# pass smoke probes with HTTP 200, and quietly break every LFS-tracked
+# asset on the site. See bv_check_no_lfs_pointers in
+# deploy/lib/atomic-release.sh for the full rationale + recovery hint.
+# Fail BEFORE the SSH pre-flight so the operator sees this before any
+# network work happens.
+if ! bv_check_no_lfs_pointers "$STAGING_DIR"; then
+    exit 1
+fi
+
 # =============================================================================
 # Landing branch — legacy in-place rsync flow. Atomic-release machinery
 # is overkill for the apex selector page.
