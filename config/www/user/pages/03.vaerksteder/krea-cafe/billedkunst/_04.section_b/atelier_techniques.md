@@ -1,6 +1,5 @@
 ---
-title: "Sektion B — Lene Pels"
-section_label: "Sektion B"
+title: "Tryk, foto-overførsel og collage ved Lene Pels"
 section_title: "Tryk, foto-overførsel og collage"
 section_byline: "ved Lene Pels"
 accent: tertiary

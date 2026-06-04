@@ -1,6 +1,6 @@
 ---
 title: "Næste intro-sessioner"
-section_label: "Sektion B — Lene Pels"
+section_label: "v. Lene Pels"
 section_title: "Næste intro-sessioner"
 accent: tertiary
 intro: "Lene Pels laver to introduktionssessioner i atelieret. Bare kom forbi — ingen tilmelding. Der er begrænset plads."
