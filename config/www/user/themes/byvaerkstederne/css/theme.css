@@ -832,6 +832,7 @@ a { color: inherit; text-decoration: none; }
 .bv-workgroup-card--primary { background: var(--primary); }
 .bv-workgroup-card--secondary { background: var(--secondary); }
 .bv-workgroup-card--tertiary { background: var(--tertiary); }
+.bv-workgroup-card--tertiary-alt { background: var(--tertiary-container); }
 .bv-workgroup-card--dark { background: var(--kulturhus); }
 
 /* ---------- Calendar ---------- */
