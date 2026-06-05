@@ -4,7 +4,7 @@
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>{% if page.title %}{{ page.title }} | {% endif %}{{ site.title }}</title>
-    <meta name="description" content="{{ page.summary|striptags|truncate(160) ?: site.metadata.description }}"/>
+    <meta name="description" content="{{ page.header.metadata.description ?: page.summary|striptags|truncate(160) ?: site.metadata.description }}"/>
 
     <link rel="preconnect" href="https://fonts.googleapis.com"/>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -32,7 +32,17 @@
         {% include 'partials/footer.html.twig' %}
     {% endblock %}
 
+    {# login_overlay is always included: the overlay's <form> is also the
+       form rendered by Grav's /login route. Gating it would break /login
+       under profiles where membership_signup is false. The visibility of
+       the "Log ind" button itself is gated in navigation.html.twig. #}
     {% include 'partials/login_overlay.html.twig' %}
+    {% if feature_enabled('bug_report') %}
+    {% include 'partials/bug_report_overlay.html.twig' %}
+    {% endif %}
+    {% if feature_enabled('feature_suggestion') %}
+    {% include 'partials/feature_suggestion_overlay.html.twig' %}
+    {% endif %}
 
     <script src="{{ url('theme://js/site.js') }}?v={{ 'now'|date('U') }}"></script>
 

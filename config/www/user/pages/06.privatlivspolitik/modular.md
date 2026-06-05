@@ -1,5 +1,6 @@
 ---
 title: Privatlivspolitik
+feature: privacy_policy
 nav_type: info
 content:
     items: '@self.modular'

@@ -29,7 +29,7 @@ form:
                 primary: Grøn (primary)
                 secondary: Blå (secondary)
                 tertiary: Terracotta (tertiary)
-                kulturhus: Mørk (kulturhus)
+                kulturhus: Mørk (eventværkstedet)
             header.title_before:
               type: text
               label: Tekst før accent

@@ -1,0 +1,133 @@
+{% extends 'flex-objects/types/default/edit.html.twig' %}
+
+{% block content_top %}
+    {{ parent() }}
+
+    {% if object.exists %}
+        {# Promote to roadmap action panel #}
+        <div class="bv-admin-promote-panel" style="margin-bottom: 1.5rem; padding: 1rem 1.5rem; background: #f4f3f3; border-left: 4px solid #325f9b; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+            <div>
+                {% if object.promoted %}
+                    <span style="display:inline-flex;align-items:center;gap:0.5rem;background:#13483b;color:#fff;font-weight:700;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.1em;padding:0.25rem 0.75rem;">
+                        ✓ Fremmet til roadmap
+                    </span>
+                    {% if object.promoted_item_id %}
+                        <span style="margin-left:0.5rem;font-size:0.85rem;color:#42474a;">Roadmap-element ID: <code>{{ object.promoted_item_id }}</code></span>
+                    {% endif %}
+                {% else %}
+                    <div>
+                        <strong style="font-size:0.9rem;">Fremme til roadmap</strong>
+                        <span style="margin-left:0.5rem;font-size:0.85rem;color:#73787b;">Opret et roadmap-element baseret på denne rapport.</span>
+                    </div>
+                {% endif %}
+            </div>
+            {% if not object.promoted %}
+                {# Generate nonce server-side for secure CSRF token #}
+                {% set promote_nonce_html = nonce_field('bug-report-promote', 'promote_nonce') %}
+                <div>
+                    <form id="bv-promote-form" style="display:inline-block;">
+                        <input type="hidden" name="report_id" value="{{ key }}">
+                        {{ promote_nonce_html|raw }}
+                        <button type="button" onclick="bvAdminPromote()" class="button button-action" style="background:#325f9b;color:#fff;border:none;padding:0.5rem 1.25rem;font-weight:700;cursor:pointer;font-size:0.875rem;">
+                            Fremme til roadmap
+                        </button>
+                    </form>
+                    <div id="bv-promote-message" style="display:none;margin-top:0.5rem;font-size:0.875rem;"></div>
+                </div>
+            {% endif %}
+        </div>
+
+        {# Image display panel #}
+        {% if object.image_path %}
+            {% set img_file = object.image_path|split('/')|last %}
+            {% set img_url = '/admin/bug-report-image?file=' ~ img_file|url_encode %}
+            <div style="margin-bottom:1.5rem;padding:1rem 1.5rem;background:#f4f3f3;border-left:4px solid #325f9b;">
+                <strong style="font-size:0.85rem;text-transform:uppercase;letter-spacing:0.1em;display:block;margin-bottom:0.75rem;">Vedhæftet billede:</strong>
+                <div style="display:flex;align-items:flex-start;gap:1rem;flex-wrap:wrap;">
+                    <a href="{{ img_url }}" target="_blank" rel="noopener" style="display:block;flex-shrink:0;border:2px solid #c2c7ca;background:#fff;" title="Åbn billede i ny fane">
+                        <img src="{{ img_url }}"
+                             alt="Vedhæftet billede til fejlrapport"
+                             style="display:block;max-width:200px;max-height:150px;object-fit:contain;"
+                             onerror="this.parentElement.style.display='none';document.getElementById('bv-img-fallback-{{ key }}').style.display='block';">
+                    </a>
+                    <div id="bv-img-fallback-{{ key }}" style="display:none;font-size:0.8rem;color:#ba1a1a;">Kunne ikke vise thumbnail.</div>
+                    <div>
+                        <a href="{{ img_url }}" download="{{ img_file }}" style="display:inline-flex;align-items:center;gap:0.4rem;background:#325f9b;color:#fff;font-weight:700;font-size:0.8rem;padding:0.4rem 0.9rem;text-decoration:none;margin-bottom:0.5rem;">
+                            ⬇ Download billede
+                        </a>
+                        <p style="font-size:0.75rem;color:#42474a;margin:0.25rem 0 0;">
+                            <code style="background:#e2e2e2;padding:0.1rem 0.3rem;font-size:0.7rem;">{{ object.image_path }}</code>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div style="margin-bottom:1.5rem;padding:0.75rem 1.5rem;background:#f4f3f3;border-left:4px solid #c2c7ca;font-size:0.875rem;color:#42474a;">
+                Intet billede vedhæftet.
+            </div>
+        {% endif %}
+
+        {# Steps display panel #}
+        <div style="margin-bottom:1.5rem;padding:1rem 1.5rem;background:#f4f3f3;border-left:4px solid #73787b;">
+            <strong style="font-size:0.85rem;text-transform:uppercase;letter-spacing:0.1em;display:block;margin-bottom:0.5rem;">Trin til at reproducere:</strong>
+            {% if object.steps and object.steps|length > 0 %}
+                <ol style="margin:0;padding-left:1.5rem;">
+                    {% for step in object.steps %}
+                        <li style="margin-bottom:0.25rem;">{{ step }}</li>
+                    {% endfor %}
+                </ol>
+            {% else %}
+                <span style="color:#73787b;font-size:0.875rem;">Ingen trin angivet.</span>
+            {% endif %}
+        </div>
+
+        {% if not object.promoted %}
+        <script>
+        function bvAdminPromote() {
+            var form = document.getElementById('bv-promote-form');
+            var msgEl = document.getElementById('bv-promote-message');
+            var btn = form.querySelector('button[type="button"]');
+
+            btn.disabled = true;
+            btn.textContent = 'Fremmer...';
+
+            var formData = new FormData(form);
+
+            fetch('/admin/bug-report-promote', {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            })
+            .then(function(r) {
+                return r.json().then(function(d) { return { status: r.status, data: d }; });
+            })
+            .then(function(result) {
+                if (result.data.success || result.data.already_promoted) {
+                    var msg = result.data.message || 'Rapporten er fremmet til roadmap.';
+                    msgEl.style.cssText = 'display:block;color:#13483b;font-weight:600;margin-top:0.5rem;';
+                    msgEl.textContent = '✓ ' + msg;
+                    btn.textContent = 'Fremmet';
+                    btn.disabled = true;
+                    btn.style.background = '#13483b';
+                    // Reload after 1.5s to show the updated promoted state
+                    setTimeout(function() { window.location.reload(); }, 1500);
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = 'Fremme til roadmap';
+                    var errMsg = result.data.error || 'Fejl ved fremring. Prøv igen.';
+                    msgEl.style.cssText = 'display:block;color:#ba1a1a;font-weight:600;margin-top:0.5rem;';
+                    msgEl.textContent = '✗ ' + errMsg;
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.textContent = 'Fremme til roadmap';
+                msgEl.style.cssText = 'display:block;color:#ba1a1a;font-weight:600;margin-top:0.5rem;';
+                msgEl.textContent = '✗ Netværksfejl. Prøv igen.';
+            });
+        }
+        </script>
+        {% endif %}
+    {% endif %}
+{% endblock %}

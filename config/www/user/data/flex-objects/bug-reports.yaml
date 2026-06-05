@@ -1,0 +1,78 @@
+br_promoted_login_mobile:
+  username: testmedlem
+  timestamp: '2026-04-01T09:30:00Z'
+  page_url: /log-ind
+  browser_os: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Safari/604.1'
+  description: 'Login overlay lukker ikke når man trykker på baggrunden på iOS'
+  expected: 'Overlayden lukker når man trykker uden for boksen, ligesom på desktop.'
+  steps:
+    - 'Åbn hjemmesiden på en iPhone i Safari'
+    - 'Klik på ''Log ind'' i navigationen'
+    - 'Tryk på den mørke baggrund uden for login-boksen'
+    - 'Login-overlayden lukker ikke — man er nødt til at bruge X-knappen'
+  image_path: null
+  promoted: true
+  promoted_item_id: rm_promoted_login_mobile
+  title: 'Login overlay lukker ikke når man trykker på baggrunden på iOS'
+br_promoted_contact_form:
+  username: testmedlem
+  timestamp: '2026-04-02T11:45:00Z'
+  page_url: /kontakt
+  browser_os: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/123.0.0.0'
+  description: 'Kontaktformular viser generisk fejlbesked ved lange beskeder over 500 tegn'
+  expected: 'En klar og forklarende fejlbesked om maksimal tegngrænse vises direkte under tekstfeltet.'
+  steps:
+    - 'Gå til /kontakt siden'
+    - 'Udfyld alle felter'
+    - 'Skriv mere end 500 tegn i beskedfeltet'
+    - 'Klik ''Send besked'''
+    - 'En generisk ''Der opstod en fejl'' vises i stedet for en specifik forklaring'
+  image_path: null
+  promoted: true
+  promoted_item_id: rm_promoted_contact_form
+  title: 'Kontaktformular viser generisk fejlbesked ved lange beskeder over 500 tegn'
+br_77849b834a630d55:
+  username: thomasadmin
+  timestamp: '2026-04-12T18:57:38Z'
+  page_url: 'http://localhost:8080/vaerksteder'
+  browser_os: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.3.1 Safari/605.1.15'
+  description: zfvdfbdfbadbb
+  expected: 'SDvdfzd zdffv'
+  steps:
+    - 'd SDd ds v'
+    - 'zc zdfzdv'
+    - 'SD D d'
+  image_path: null
+  promoted: false
+  promoted_item_id: null
+  title: zfvdfbdfbadbb
+br_29061c1a6cc4bafe:
+  username: thomasadmin
+  timestamp: '2026-04-12T18:58:31Z'
+  page_url: 'http://localhost:8080/kontakt'
+  browser_os: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.3.1 Safari/605.1.15'
+  description: ddddd
+  expected: ddddddd
+  steps: {  }
+  image_path: null
+  promoted: false
+  promoted_item_id: null
+  title: ddddd
+br_65d6e613c9f9220e:
+  username: thomasadmin
+  timestamp: '2026-04-13T04:16:13Z'
+  page_url: 'http://localhost:8080/roadmap'
+  browser_os: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.3.1 Safari/605.1.15'
+  description: gogogogo
+  expected: 'gogo?'
+  steps:
+    - qoq1
+    - qwe2
+    - erere3
+    - aaaa4
+  image_path: bug-report-images/af0d5e6b0cf6fc9e515024d7575a1305.png
+  promoted: true
+  promoted_item_id: rm_33b1f83311238c96
+  roadmap_id: '#B003'
+  display_id: '#B003'
+  title: gogogogo

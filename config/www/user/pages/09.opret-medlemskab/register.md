@@ -1,5 +1,6 @@
 ---
 title: Opret Medlemskab
+feature: membership_signup
 
 form:
     name: registration

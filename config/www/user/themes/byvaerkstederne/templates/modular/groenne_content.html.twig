@@ -1,7 +1,8 @@
 {% set h = page.header %}
+{% set has_sidebar = h.wishlist or h.gallery_image %}
 <section>
     <div class="bv-container">
-        <div style="display: grid; grid-template-columns: 7fr 5fr; gap: var(--space-12);">
+        <div style="display: grid; grid-template-columns: {{ has_sidebar ? '7fr 5fr' : '1fr' }}; gap: var(--space-12);">
             {# Left column: Status + Progress #}
             <div style="display: flex; flex-direction: column; gap: var(--space-20);">
                 {# Status card #}
@@ -38,8 +39,10 @@
             </div>
 
             {# Right column: Wishlist + Gallery CTA #}
+            {% if has_sidebar %}
             <aside style="display: flex; flex-direction: column; gap: var(--space-12);">
                 {# Wishlist #}
+                {% if h.wishlist %}
                 <div style="background: var(--surface-container-low); padding: var(--space-10);">
                     <div style="display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-10);">
                         <span class="material-symbols-outlined" style="color: var(--tertiary);">inventory_2</span>
@@ -60,8 +63,8 @@
                         {% endfor %}
                     </ul>
 
-                    {# Donation CTA #}
-                    {% if h.donate_cta %}
+                    {# Donation CTA — gated on gear_donation; the destination (accept gear inventory / intake form) is not yet built. #}
+                    {% if h.donate_cta and feature_enabled('gear_donation') %}
                     <div style="margin-top: var(--space-10); padding: var(--space-6); background: var(--secondary-container); color: var(--on-secondary-container);">
                         <p style="font-family: var(--font-headline); font-weight: 700; text-transform: uppercase; font-size: 0.875rem; margin-bottom: var(--space-4);">{{ h.donate_heading|default('Har du noget liggende?') }}</p>
                         <p style="font-size: 0.875rem; margin-bottom: var(--space-6); line-height: 1.6;">{{ h.donate_text|default('Vi tager imod både nyt og brugt grej, så længe det virker.') }}</p>
@@ -69,6 +72,7 @@
                     </div>
                     {% endif %}
                 </div>
+                {% endif %}
 
                 {# Gallery CTA image #}
                 {% if h.gallery_image %}
@@ -76,11 +80,14 @@
                     <img src="{{ h.gallery_image }}" alt="Galleri" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.6; transition: transform 0.7s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"/>
                     <div style="position: relative; z-index: 1; text-align: center; padding: var(--space-8);">
                         <h3 style="font-family: var(--font-headline); font-weight: 900; color: #fff; text-transform: uppercase; font-size: 1.5rem; letter-spacing: -0.02em; margin-bottom: var(--space-4);">Se vores galleri</h3>
+                        {% if feature_enabled('workshop_project_blueprints') %}
                         <a href="#" class="bv-btn bv-btn--outlined" style="color: #fff; border-color: #fff; font-size: 0.875rem;">Vis Projekter <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1rem;">arrow_forward</span></a>
+                        {% endif %}
                     </div>
                 </div>
                 {% endif %}
             </aside>
+            {% endif %}
         </div>
     </div>
 </section>

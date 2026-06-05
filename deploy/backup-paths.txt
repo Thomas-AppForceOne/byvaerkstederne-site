@@ -1,0 +1,20 @@
+# deploy/backup-paths.txt
+#
+# Allow-list of paths included in a backup, relative to the Grav user
+# root (i.e. live tier's `user/` directory after web-root prefix).
+#
+# Lines starting with `#` and blank lines are ignored. One path per
+# line, no leading `./` or trailing `/`.
+#
+# Reviewable in PR — adding a path here is the one and only way to get
+# it into a backup. Deny-list paths (cache/, logs/, system/, vendor/,
+# tmp/, *.tmp) are NEVER included regardless of what is listed here;
+# `deploy/backup.sh` enforces those exclusions independently.
+#
+# See `specifications/archive/prod_backup_restore_specification.md`
+# for the rationale behind the allow-list approach.
+
+user/accounts
+user/data
+user/pages
+user/uploads

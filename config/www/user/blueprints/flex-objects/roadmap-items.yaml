@@ -1,0 +1,154 @@
+title: Roadmap-elementer
+description: Offentlige roadmap-elementer (fejl og funktionsforslag)
+type: flex-objects
+
+config:
+  admin:
+    list:
+      title: title
+      fields:
+        published:
+          field:
+            type: toggle
+            label: Synlig
+          width: 8
+        type:
+          label: Type
+          width: 10
+        priority:
+          label: Prioritet
+          width: 10
+        status:
+          label: Status
+          width: 16
+        title:
+          label: Titel
+          link: edit
+        vote_count:
+          label: Stemmer
+          width: 8
+      order:
+        by: timestamp
+        dir: desc
+    edit:
+      title:
+        template: "{{ object.title ?? 'Nyt roadmap-element' }}"
+    configure:
+      authorize: admin.super
+
+  data:
+    object: 'Grav\Plugin\Roadmap\Flex\RoadmapItemObject'
+    collection: 'Grav\Common\Flex\Types\Generic\GenericCollection'
+    index: 'Grav\Common\Flex\Types\Generic\GenericIndex'
+    storage:
+      class: 'Grav\Framework\Flex\Storage\SimpleStorage'
+      options:
+        formatter:
+          class: 'Grav\Framework\File\Formatter\YamlFormatter'
+        folder: user-data://flex-objects/roadmap-items.yaml
+    search:
+      options:
+        contains: 1
+      fields:
+        - title
+        - description
+
+form:
+  validation: loose
+  fields:
+    published:
+      type: toggle
+      label: Synlig på roadmap
+      highlight: 1
+      default: 0
+      options:
+        1: Ja
+        0: Nej
+      validate:
+        type: bool
+
+    type:
+      type: select
+      label: Type
+      validate:
+        required: true
+      options:
+        bug: Fejl (Bug)
+        feature: Funktionsforslag
+
+    priority:
+      type: select
+      label: Prioritet
+      options:
+        kritisk: Kritisk
+        hoej: Høj
+        middel: Middel
+        lav: Lav
+        nyhed: Nyhed
+        forbedring: Forbedring
+
+    status:
+      type: select
+      label: Status
+      default: rapporteret
+      options:
+        rapporteret: Rapporteret
+        under_afklaring: Under afklaring
+        klar_til_implementation: Klar til implementation
+        under_implementation: Under implementation
+        klar_til_test: Klar til test
+        loest: Løst
+
+    title:
+      type: text
+      label: Titel
+      validate:
+        required: true
+
+    description:
+      type: textarea
+      label: Beskrivelse
+      rows: 4
+      validate:
+        required: true
+
+    expected:
+      type: textarea
+      label: "Forventet adfærd (for fejl)"
+      rows: 3
+
+    steps:
+      type: textarea
+      label: Reproduktionsskridt
+      rows: 4
+      validate:
+        type: array
+
+    page_url:
+      type: text
+      label: Side-URL (for fejl)
+
+    submitter_username:
+      type: text
+      label: Indsendt af
+
+    source_report_id:
+      type: text
+      label: Kilde-rapport ID
+      help: "ID på den originale fejlrapport (hvis fremmet)"
+
+    timestamp:
+      type: display
+      label: Oprettet
+
+    vote_count:
+      type: display
+      label: Antal stemmer (skrivebeskyttet)
+
+    votes_released:
+      type: display
+      label: Stemmer frigivet
+
+    display_id:
+      type: text
+      label: Visnings-ID (f.eks. #A1B2)

@@ -17,7 +17,7 @@ toc:
 
 ## Dataansvarlig {#dataansvarlig}
 
-Byværkstederne i Hundested er dataansvarlig for behandlingen af de personoplysninger, som vi modtager om dig. Du kan kontakte os på følgende adresse: Nørregade 11, 3390 Hundested, eller via e-mail på info@byvaerkstederne.dk. Har du spørgsmål til vores behandling af dine personoplysninger, er du altid velkommen til at kontakte os.
+Byværkstederne i Hundested er dataansvarlig for behandlingen af de personoplysninger, som vi modtager om dig. Du kan kontakte os på følgende adresse: Nørregade 21, 3390 Hundested, eller via e-mail på info@byvaerkstederne.dk. Har du spørgsmål til vores behandling af dine personoplysninger, er du altid velkommen til at kontakte os.
 
 ## Personoplysninger {#personoplysninger}
 

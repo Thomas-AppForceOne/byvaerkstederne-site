@@ -11,22 +11,53 @@
             <h3 class="bv-footer__heading">V&aelig;rksteder</h3>
             <nav class="bv-footer__nav">
                 <a href="/vaerksteder/makerspace">Makerspace &amp; Reparation</a>
-                <a href="/vaerksteder/kreativ-fitness">Kreativ Fitness</a>
-                <a href="/vaerksteder/det-groenne-faellesskab">Det Gr&oslash;nne F&aelig;llesskab</a>
-                <a href="/vaerksteder/kulturhus">Kulturhus</a>
+                <a href="/vaerksteder/krea-cafe">Krea Café</a>
+                <a href="/vaerksteder/groent-byvaerksted">Gr&oslash;nt BYv&aelig;rksted</a>
+                <a href="/vaerksteder/eventvaerkstedet">Eventv&aelig;rkstedet</a>
             </nav>
         </div>
 
-        {# Information #}
+        {# Information — column hidden entirely when every link inside it is
+           feature-gated off, so the heading doesn't render alone. #}
+        {% if feature_enabled('statutes_page') or feature_enabled('privacy_policy') or feature_enabled('minutes_archive') or feature_enabled('press_page') %}
         <div class="bv-footer__col">
             <h3 class="bv-footer__heading">Information</h3>
             <nav class="bv-footer__nav">
+                {% if feature_enabled('statutes_page') %}
                 <a href="/vedtaegter">Vedt&aelig;gter</a>
+                {% endif %}
+                {% if feature_enabled('privacy_policy') %}
                 <a href="/privatlivspolitik">Privatlivspolitik</a>
+                {% endif %}
+                {% if feature_enabled('minutes_archive') %}
                 <a href="/referater">Referater</a>
+                {% endif %}
+                {% if feature_enabled('press_page') %}
                 <a href="/presse">Presse</a>
+                {% endif %}
             </nav>
         </div>
+        {% endif %}
+
+        {# Fællesskab — authenticated users only, gated by community_footer_column flag #}
+        {% if feature_enabled('community_footer_column') %}
+        {% if grav.user.authenticated and grav.user.authorized %}
+        <div class="bv-footer__col">
+            <h3 class="bv-footer__heading">F&aelig;llesskab</h3>
+            <nav class="bv-footer__nav">
+                {% if feature_enabled('roadmap') %}
+                <a href="/roadmap">Roadmap</a>
+                {% endif %}
+                {% if feature_enabled('feature_suggestion') %}
+                <button type="button" onclick="bvFeatureSuggestion.open(); return false;">Forsl&aring; feature</button>
+                {% endif %}
+                {% if feature_enabled('bug_report') %}
+                <button type="button" onclick="bvBugReport.open(); return false;">Rapport&eacute;r fejl</button>
+                {% endif %}
+            </nav>
+        </div>
+        {% endif %}
+        {% endif %}
 
         {# Find os #}
         <div class="bv-footer__col">
@@ -34,7 +65,7 @@
             <div class="bv-footer__contact">
                 <div class="bv-footer__contact-item">
                     <span class="material-symbols-outlined">location_on</span>
-                    <span>N&oslash;rregade 11,<br/>3390 Hundested</span>
+                    <span>N&oslash;rregade 21,<br/>3390 Hundested</span>
                 </div>
                 <div class="bv-footer__contact-item">
                     <span class="material-symbols-outlined">mail</span>
@@ -47,10 +78,20 @@
     <div class="bv-footer__bottom">
         <div class="bv-footer__bottom-inner">
             <span class="bv-footer__copyright">&copy; 2026 BYV&AElig;RKSTEDERNE I HUNDESTED.</span>
+            {# ── Site version + build, read from config/www/VERSION + BUILD via the
+               site-version plugin. Both `null` ⇒ omit the entire line rather than
+               render a double <em>ukendt</em>. Twig autoescape is on by default so
+               sv.version / sv.build pass through htmlspecialchars implicitly. ──#}
+            {% set sv = site_version() %}
+            {% if sv.version is not null or sv.build is not null %}
+            <span class="bv-footer__version">Version {% if sv.version is not null %}{{ sv.version }}{% else %}<em>ukendt</em>{% endif %} · build {% if sv.build is not null %}{{ sv.build }}{% else %}<em>ukendt</em>{% endif %}</span>
+            {% endif %}
+            {% if feature_enabled('social_media_links') %}
             <div class="bv-footer__social">
                 <a href="#" aria-label="Facebook"><span class="material-symbols-outlined">groups</span></a>
                 <a href="#" aria-label="Instagram"><span class="material-symbols-outlined">photo_camera</span></a>
             </div>
+            {% endif %}
             <span class="bv-footer__location-tag">HUNDESTED</span>
         </div>
     </div>

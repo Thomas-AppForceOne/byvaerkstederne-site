@@ -1,0 +1,42 @@
+{% set h = page.header %}
+<section class="bv-section">
+    <div class="bv-container">
+        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: var(--space-12); gap: var(--space-8);">
+            <div>
+                {% if h.section_label %}
+                <span class="bv-label" style="color: var(--{{ h.accent|default('tertiary') }}); letter-spacing: 0.2em; margin-bottom: var(--space-4); display: block;">{{ h.section_label }}</span>
+                {% endif %}
+                <h2 class="bv-headline" style="font-size: 2.5rem;">{{ h.section_title }}</h2>
+                {% if h.section_byline %}
+                <p class="bv-label" style="margin-top: var(--space-2); color: var(--on-surface-variant);">{{ h.section_byline }}</p>
+                {% endif %}
+            </div>
+            <div style="background: var(--surface-dim); height: 2px; flex: 1; max-width: 33%; margin-bottom: var(--space-4);"></div>
+        </div>
+
+        {% if h.intro %}
+        <p class="bv-body-lg" style="max-width: 56rem; margin-bottom: var(--space-12);">{{ h.intro }}</p>
+        {% endif %}
+
+        {% if h.techniques %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: var(--space-6);">
+            {% for t in h.techniques %}
+            <div style="background: var(--surface-container); padding: var(--space-8); position: relative; overflow: hidden;">
+                <div style="position: absolute; top: var(--space-4); right: var(--space-4); font-family: var(--font-headline); font-weight: 700; font-size: 3rem; color: var(--on-surface-variant); opacity: 0.1;">{{ loop.index|format('%02d') }}</div>
+                <div style="position: relative; z-index: 1;">
+                    <h3 class="bv-headline" style="font-size: 1.25rem; margin-bottom: var(--space-4);">{{ t.title }}</h3>
+                    <p style="color: var(--on-surface-variant); line-height: 1.6; font-size: 0.95rem;">{{ t.description }}</p>
+                    {% if t.bring %}
+                    <p style="margin-top: var(--space-4); font-size: 0.8rem; color: var(--on-surface-variant); font-style: italic;"><strong>Medbring:</strong> {{ t.bring }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if h.outro %}
+        <p style="margin-top: var(--space-12); max-width: 56rem; color: var(--on-surface-variant);">{{ h.outro }}</p>
+        {% endif %}
+    </div>
+</section>

@@ -83,9 +83,9 @@ form:
         required: true
       options:
         makerspace: Makerspace & Reparation
-        kreativ: Kreativ Fitness
-        groenne: Det Grønne Fællesskab
-        kulturhus: Kulturhus
+        kreativ: Krea Café
+        groenne: Grønt BYværksted
+        kulturhus: Eventværkstedet
 
     priority:
       type: select

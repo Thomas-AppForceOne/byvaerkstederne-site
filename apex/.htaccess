@@ -1,0 +1,54 @@
+# Apex landing page — hackersbychoice.dk root.
+#
+# Serves the non-prod tier selector. Fronted by one.com Varnish, just
+# like the Grav installs. Non-prod hosting → no search engines.
+
+# Make Apache + PHP see the real scheme behind Varnish (matches the
+# Grav heredoc in deploy/deploy.sh — same TLS termination story).
+SetEnvIf X-Forwarded-Proto https HTTPS=on
+
+<IfModule mod_headers.c>
+    # Belt and braces. robots.txt covers compliant crawlers; this
+    # cascades into descendant folders (dev/, test/, staging/) so the
+    # whole non-prod surface is opted out of indexing in one place.
+    Header always set X-Robots-Tag "noindex, nofollow, noarchive"
+
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-XSS-Protection "1; mode=block"
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Force HTTPS, gated on X-Forwarded-Proto so the redirect doesn't
+    # loop on one.com's plain-HTTP backhaul (debugged 2026-04-25).
+    RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+    RewriteCond %{HTTPS} !=on
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+
+    # Pretty URL: /test-instructions → /test-instructions.html
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^([^/]+)$ $1.html [L]
+</IfModule>
+
+# Cache static assets briefly (logo, css). Short TTL keeps version
+# updates visible without manual purges.
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/svg+xml "access plus 1 hour"
+    ExpiresByType text/css      "access plus 5 minutes"
+</IfModule>
+
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml
+</IfModule>
+
+# Hide the version manifest from public reads. Landing page reads it
+# via PHP from the local filesystem, not over HTTP.
+<Files "version.json">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+</Files>

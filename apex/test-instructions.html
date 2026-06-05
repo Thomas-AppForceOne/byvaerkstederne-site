@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="da">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow, noarchive">
+    <title>Sådan tester du — hackersbychoice.dk</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=Work+Sans:wght@300..700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="/logo.svg">
+    <link rel="stylesheet" href="/landing.css">
+    <style>
+        .hbc-doc { max-width: 42rem; }
+        .hbc-doc h2 { font-family: var(--font-headline); font-size: 1.5rem; margin-top: var(--space-8); margin-bottom: var(--space-3); color: var(--primary); }
+        .hbc-doc p, .hbc-doc ul, .hbc-doc ol { margin-bottom: var(--space-4); }
+        .hbc-doc ul, .hbc-doc ol { padding-left: var(--space-6); }
+        .hbc-doc li { margin-bottom: var(--space-2); }
+        .hbc-back { display: inline-block; margin-bottom: var(--space-4); font-size: 0.875rem; color: var(--secondary); }
+    </style>
+</head>
+<body>
+    <main class="hbc-shell hbc-doc">
+        <a class="hbc-back" href="/">← tilbage til oversigten</a>
+
+        <header class="hbc-hero">
+            <h1 class="hbc-title">Sådan tester du</h1>
+            <p class="hbc-lede">
+                Vejledning til super brugere der afprøver
+                <a href="https://test.hackersbychoice.dk">test.hackersbychoice.dk</a>.
+                Det er et udkast — sig endelig til hvis noget mangler.
+            </p>
+        </header>
+
+        <h2>Hvad du tester</h2>
+        <p>
+            Testversionen ligner det, rigtige besøgende kommer til at se, men med fiktive data.
+            Koden er allerede gennemgået én gang; din opgave er at finde fejl, brudte forløb,
+            akavet sprog og alt andet der vil virke pinligt foran en rigtig besøgende.
+        </p>
+
+        <h2>Hvor du starter</h2>
+        <ol>
+            <li>Åbn <a href="https://test.hackersbychoice.dk">test.hackersbychoice.dk</a> i en frisk fane (gerne i et privat vindue).</li>
+            <li>Brug siden som en nysgerrig førstegangsbesøgende ville: forsiden først, og så klik dig rundt. Du behøver ikke følge en bestemt rækkefølge.</li>
+            <li>Prøv de formularer du støder på (medlemstilmelding, forslag til funktioner, kontakt osv.). Brug åbenlyst falske oplysninger — for eksempel mailadresser som <code>test+ditnavn@example.com</code>.</li>
+            <li>Prøv også siden på din mobil. Layoutet ændrer sig på små skærme, og det er ofte der man finder fejl.</li>
+        </ol>
+
+        <h2>Det du skal kigge efter</h2>
+        <ul>
+            <li>Sider der ikke loader, eller hvor billeder eller layout er gået i stykker.</li>
+            <li>Knapper og links der ikke fører nogen steder hen, eller fører det forkerte sted hen.</li>
+            <li>Forvirrende tekst — alt der får dig til at standse op og læse igen.</li>
+            <li>Formularer der godtager åbenlyst forkerte oplysninger, eller afviser åbenlyst rigtige.</li>
+            <li>Alt der føles langsomt, hakkende eller bare underligt på en måde du ikke helt kan sætte ord på.</li>
+        </ul>
+
+        <h2>Sådan rapporterer du</h2>
+        <p>
+            For nu: notér ned hvad du så og på hvilken adresse, og send det til den der har henvist dig til denne side.
+            Skærmbilleder hjælper. Hvis du finder en "rapportér en fejl"-formular i bunden af siden, må du gerne bruge den.
+        </p>
+
+        <h2>Godt at vide</h2>
+        <ul>
+            <li>Indholdet er fiktivt. Forvent ikke rigtige medlemmer, rigtige arrangementer eller rigtige personoplysninger.</li>
+            <li>Siden kan ændre sig eller gå ned mens du tester. Det er normalt — vi udruller ofte nye versioner.</li>
+            <li>Hvis hele afsnit af siden ser ud til at mangle, er det bevidst: funktioner vi endnu ikke har slået til her er gemt, ikke i stykker.</li>
+        </ul>
+
+        <footer class="hbc-foot" style="margin-top: var(--space-12);">
+            <p><a href="/">← tilbage til oversigten</a></p>
+        </footer>
+    </main>
+</body>
+</html>

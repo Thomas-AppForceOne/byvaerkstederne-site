@@ -1,0 +1,52 @@
+{% set h = page.header %}
+<section class="bv-section" style="background: var(--surface-container-low);">
+    <div class="bv-container">
+        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: var(--space-12); gap: var(--space-8);">
+            <div>
+                {% if h.section_label %}
+                <span class="bv-label" style="color: var(--{{ h.accent|default('tertiary') }}); letter-spacing: 0.2em; margin-bottom: var(--space-4); display: block;">{{ h.section_label }}</span>
+                {% endif %}
+                <h2 class="bv-headline" style="font-size: 2.5rem;">{{ h.section_title|default('Næste sessioner') }}</h2>
+            </div>
+            <div style="background: var(--surface-dim); height: 2px; flex: 1; max-width: 33%; margin-bottom: var(--space-4);"></div>
+        </div>
+
+        {% if h.intro %}
+        <p class="bv-body-lg" style="max-width: 56rem; margin-bottom: var(--space-12);">{{ h.intro }}</p>
+        {% endif %}
+
+        <div style="display: flex; flex-direction: column; gap: var(--space-6);">
+            {% for s in h.sessions %}
+            <div style="background: var(--surface-container-lowest); border-left: 8px solid var(--{{ h.accent|default('tertiary') }}); padding: var(--space-8); display: grid; grid-template-columns: 8rem 1fr auto; gap: var(--space-6); align-items: center;">
+                <div>
+                    <div style="font-family: var(--font-headline); font-weight: 900; font-size: 2.5rem; line-height: 1; color: var(--{{ h.accent|default('tertiary') }});">{{ s.day }}</div>
+                    <div class="bv-label" style="text-transform: uppercase; letter-spacing: 0.15em; color: var(--on-surface-variant); margin-top: 0.25rem;">{{ s.month }}</div>
+                </div>
+                <div>
+                    <h3 class="bv-headline" style="font-size: 1.25rem; margin-bottom: var(--space-2);">{{ s.title }}</h3>
+                    {% if s.time %}
+                    <p style="font-size: 0.9rem; color: var(--on-surface-variant); margin-bottom: var(--space-2);"><strong>{{ s.time }}</strong></p>
+                    {% endif %}
+                    {% if s.description %}
+                    <p style="color: var(--on-surface-variant); line-height: 1.5; font-size: 0.95rem;">{{ s.description }}</p>
+                    {% endif %}
+                </div>
+                {% if s.contact_name %}
+                <div style="text-align: right;">
+                    <span class="bv-label" style="display: block; color: var(--on-surface-variant); margin-bottom: 0.25rem;">Tilmelding</span>
+                    <div style="font-family: var(--font-headline); font-weight: 700;">{{ s.contact_name }}</div>
+                    {% if s.contact_sms %}
+                    <a href="sms:+45{{ s.contact_sms }}" style="font-size: 0.9rem; color: var(--{{ h.accent|default('tertiary') }}); text-decoration: underline; text-underline-offset: 4px;">{{ s.contact_sms }}</a>
+                    {% endif %}
+                </div>
+                {% elseif s.no_signup %}
+                <div style="text-align: right;">
+                    <span class="bv-label" style="display: block; color: var(--on-surface-variant);">Drop-in</span>
+                    <div style="font-family: var(--font-headline); font-weight: 700; font-size: 0.95rem;">Ingen tilmelding</div>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>

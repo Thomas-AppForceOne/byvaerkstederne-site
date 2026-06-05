@@ -80,9 +80,9 @@ form:
       options:
         alle: Alle grupper (fælles)
         makerspace: Makerspace & Reparation
-        kreativ: Kreativ Fitness
-        groenne: Det Grønne Fællesskab
-        kulturhus: Kulturhus
+        kreativ: Krea Café
+        groenne: Grønt BYværksted
+        kulturhus: Eventværkstedet
 
     status:
       type: select

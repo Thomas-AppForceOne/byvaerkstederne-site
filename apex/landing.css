@@ -1,0 +1,244 @@
+/*
+ * Landing page stylesheet for hackersbychoice.dk apex.
+ *
+ * Borrows the Byværkstederne theme's design tokens (colours, typography,
+ * spacing scale) so the selector feels like the rest of the family, but
+ * uses a simpler standalone layout — no nav chrome, no footer columns,
+ * no Grav. Selectors are scoped under .hbc-* to avoid stomping on the
+ * Grav theme if anything is ever shared between the two.
+ */
+
+:root {
+    /* Primary: Green Community / Garden */
+    --primary: #13483b;
+    --primary-container: #2e6052;
+    --on-primary: #ffffff;
+    --on-primary-container: #a4d8c6;
+
+    /* Secondary: Makerspace / Industrial Blue */
+    --secondary: #325f9b;
+    --secondary-container: #93bdff;
+    --on-secondary: #ffffff;
+
+    /* Tertiary: Creative Fitness / Terracotta */
+    --tertiary: #712800;
+    --tertiary-container: #943b0c;
+    --on-tertiary: #ffffff;
+
+    /* Surfaces & text */
+    --background: #f9f9f9;
+    --surface-container-low: #f4f3f3;
+    --surface-container: #eeeeee;
+    --on-background: #1a1c1c;
+    --on-surface-variant: #42474a;
+    --outline-variant: #c2c7ca;
+
+    /* Typography */
+    --font-headline: 'Space Grotesk', system-ui, sans-serif;
+    --font-body: 'Work Sans', system-ui, sans-serif;
+
+    /* Spacing scale (subset) */
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-6: 1.5rem;
+    --space-8: 2rem;
+    --space-12: 3rem;
+    --space-16: 4rem;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+    font-family: var(--font-body);
+    color: var(--on-background);
+    background: var(--background);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+}
+
+a { color: var(--secondary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+    background: var(--surface-container);
+    padding: 0.125em 0.375em;
+    border-radius: 3px;
+}
+
+/* ----- Layout ----- */
+
+.hbc-shell {
+    /* 80rem = 1.25× of the 64rem we started with. The hero text inside
+       has its own narrower max-widths (.hbc-lede, .hbc-warn) so reading
+       comfort is preserved; only the cards row gets visibly wider. */
+    max-width: 80rem;
+    margin: 0 auto;
+    padding: var(--space-12) var(--space-6);
+}
+
+@media (min-width: 768px) {
+    .hbc-shell { padding: var(--space-16) var(--space-8); }
+}
+
+/* ----- Hero ----- */
+
+.hbc-hero { text-align: left; margin-bottom: var(--space-12); }
+
+.hbc-logo { margin-bottom: var(--space-4); }
+
+.hbc-title {
+    font-family: var(--font-headline);
+    font-weight: 700;
+    font-size: clamp(2.25rem, 5vw, 3.5rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--primary);
+}
+
+.hbc-title-tld { color: var(--on-surface-variant); font-weight: 400; }
+
+.hbc-lede {
+    margin-top: var(--space-4);
+    font-size: 1.125rem;
+    max-width: 42rem;
+    color: var(--on-surface-variant);
+}
+
+.hbc-warn {
+    margin-top: var(--space-6);
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface-container-low);
+    border-left: 4px solid var(--tertiary);
+    font-size: 0.95rem;
+    max-width: 42rem;
+}
+
+.hbc-prod-link { font-weight: 600; }
+
+/* ----- Tier cards ----- */
+
+.hbc-tiers {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+    margin-bottom: var(--space-16);
+}
+
+@media (min-width: 900px) {
+    .hbc-tiers { grid-template-columns: repeat(3, 1fr); }
+}
+
+.hbc-card {
+    background: var(--surface-container-low);
+    border: 1px solid var(--outline-variant);
+    border-left-width: 8px;
+    padding: var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.hbc-accent-primary   { border-left-color: var(--primary); }
+.hbc-accent-secondary { border-left-color: var(--secondary); }
+.hbc-accent-tertiary  { border-left-color: var(--tertiary); }
+
+.hbc-card-title {
+    font-family: var(--font-headline);
+    font-weight: 700;
+    font-size: 1.5rem;
+}
+
+.hbc-card-tagline {
+    font-size: 0.875rem;
+    color: var(--on-surface-variant);
+    margin-top: var(--space-1);
+}
+
+.hbc-card-desc {
+    font-size: 0.95rem;
+    line-height: 1.55;
+    flex-grow: 1;
+}
+
+/* Placeholder for per-version release notes — stays until we have a
+   real source for feature descriptions. Sits between tier intro and
+   the version block. */
+.hbc-card-prep {
+    font-size: 0.85rem;
+    color: var(--on-surface-variant);
+    font-style: italic;
+}
+
+/* Version + deployment date. Compact, surface-tinted, sits at the
+   bottom of the card so all three line up regardless of description
+   length. */
+.hbc-version {
+    margin-top: auto;
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface-container);
+    border-radius: 4px;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+.hbc-version strong { color: var(--on-background); }
+
+.hbc-deployed {
+    color: var(--on-surface-variant);
+    font-size: 0.8125rem;
+}
+
+/* Buttons */
+
+.hbc-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+}
+
+.hbc-btn {
+    display: inline-block;
+    padding: var(--space-2) var(--space-4);
+    border-radius: 0;
+    font-family: var(--font-headline);
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-decoration: none;
+    transition: background 120ms, color 120ms, transform 120ms;
+    border: 2px solid var(--primary);
+}
+
+.hbc-btn:hover { text-decoration: none; }
+.hbc-btn:active { transform: scale(0.97); }
+
+.hbc-btn-primary {
+    background: var(--primary);
+    color: var(--on-primary);
+}
+.hbc-btn-primary:hover { background: var(--primary-container); }
+
+.hbc-btn-outlined {
+    background: transparent;
+    color: var(--on-background);
+    border-color: var(--outline-variant);
+}
+.hbc-btn-outlined:hover { background: var(--on-background); color: var(--background); }
+
+/* ----- Footer ----- */
+
+.hbc-foot {
+    border-top: 1px solid var(--outline-variant);
+    padding-top: var(--space-6);
+    font-size: 0.85rem;
+    color: var(--on-surface-variant);
+}
+
+.hbc-foot p + p { margin-top: var(--space-1); }

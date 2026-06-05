@@ -1,0 +1,743 @@
+{% extends 'partials/base.html.twig' %}
+
+{# ============================================================================
+   Roadmap page — v7 Two-column board layout
+   Bugs (left) and Features (right) shown simultaneously.
+   Voting requires authentication. Public access for view only.
+   ============================================================================ #}
+
+{% set is_auth = grav.user.authenticated and grav.user.authorized %}
+
+{# ── Override hero block — hero is now inline in body ──────────────────────── #}
+{% block hero %}{% endblock %}
+
+{% block body %}
+<section class="bv-rm-page" aria-label="Website Roadmap">
+<div class="bv-container">
+
+    {# ── Hero section ──────────────────────────────────────────────────────── #}
+    <div class="bv-rm-hero">
+        <h1 class="bv-rm-hero__heading">Website Roadmap</h1>
+        <div class="bv-rm-hero__row">
+            <p class="bv-rm-hero__intro">
+                Hjælp os med at prioritere udviklingen af det
+                <span class="bg-primary text-on-primary" style="padding: 0 0.25em;">Digitale Værksted</span>.
+                Du har 3 stjerner til at stemme på tekniske fejl og 3 til funktioner.
+                Dette er kun til feedback på websitet, ikke de fysiske værksteder.
+            </p>
+            <div class="bv-rm-hero__badges">
+                <span class="bv-rm-badge bv-rm-badge--status">
+                    <span class="bv-rm-badge__dot" aria-hidden="true"></span>
+                    System Status: {{ platform_status|e }}
+                </span>
+                <span class="bv-rm-badge bv-rm-badge--version">
+                    Version {{ platform_version|e }}
+                </span>
+            </div>
+        </div>
+
+        {# "Forstå processen" button #}
+        <button
+            type="button"
+            id="bv-rm-process-btn"
+            class="bv-btn bv-btn--outline bv-rm-process-btn"
+            aria-haspopup="dialog"
+            aria-expanded="false"
+            aria-controls="bv-rm-process-panel">
+            <span class="material-symbols-outlined" aria-hidden="true">info</span>
+            Forstå processen
+        </button>
+    </div>
+
+    {# ── "Forstå processen" overlay panel ─────────────────────────────────── #}
+    <div
+        id="bv-rm-process-panel"
+        class="bv-rm-process-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Forstå processen"
+        aria-hidden="true">
+        <div class="bv-rm-process-overlay__inner">
+            <div class="bv-rm-process-overlay__header">
+                <h2 class="bv-rm-process-overlay__title">Sådan fungerer det</h2>
+                <button
+                    type="button"
+                    id="bv-rm-process-close"
+                    class="bv-rm-process-overlay__close"
+                    aria-label="Luk panel">
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                </button>
+            </div>
+
+            <div class="bv-rm-process-overlay__body">
+                <div class="bv-rm-process-grid">
+
+                    {# Left: Voting & selection #}
+                    <div class="bv-rm-process-section">
+                        <h3 class="bv-rm-process-section__title">
+                            <span class="material-symbols-outlined" aria-hidden="true">star</span>
+                            Stemmeafgivelse
+                        </h3>
+                        <p>
+                            Hvert logget ind medlem tildeles <strong>6 stemmer i alt</strong>:
+                            3 til "Registrerede Website-fejl" og 3 til "Forslag til Websitet".
+                            Dine stemmer hjælper os se hvad der er vigtigst for fællesskabet.
+                        </p>
+                        <p>
+                            Du kan <strong>trække en stemme tilbage</strong> og genbruge den på et andet emne —
+                            stemmerne er ikke permanente, så du kan ændre prioritering.
+                        </p>
+
+                        <h3 class="bv-rm-process-section__title" style="margin-top: var(--space-8);">
+                            <span class="material-symbols-outlined" aria-hidden="true">lock_open</span>
+                            Frigivelse af stemmer
+                        </h3>
+                        <p>
+                            Når et emne når status <strong>"Klar til implementation"</strong>,
+                            frigives alle stemmer afgivet på det emne automatisk tilbage til
+                            stemmernes ejeres budget. Du kan nu bruge disse stemmer et andet sted.
+                            Din stemmehistorik for emnet bevares stadig.
+                        </p>
+
+                        <h3 class="bv-rm-process-section__title" style="margin-top: var(--space-8);">
+                            <span class="material-symbols-outlined" aria-hidden="true">playlist_add_check</span>
+                            Udvælgelse
+                        </h3>
+                        <p>
+                            Vi gennemgår regelmæssigt de mest stemte emner.
+                            Valget baseres på en kombination af <strong>stemmetal</strong>,
+                            <strong>teknisk sværhedsgrad</strong> og
+                            <strong>overordnet værdi</strong> for platformen.
+                        </p>
+                    </div>
+
+                    {# Right: Status workflow #}
+                    <div class="bv-rm-process-statuses">
+                        <h3 class="bv-rm-process-section__title">Status &amp; Workflow</h3>
+                        <div class="bv-rm-process-status-list" role="list">
+                            <div class="bv-rm-process-status" role="listitem">
+                                <div class="bv-rm-process-status__bar bv-rm-process-status__bar--rapporteret"></div>
+                                <div>
+                                    <span class="bv-rm-status-badge bv-rm-status--rapporteret">Rapporteret</span>
+                                    <p>Emnet er modtaget og venter på indledende gennemsyn.</p>
+                                </div>
+                            </div>
+                            <div class="bv-rm-process-status" role="listitem">
+                                <div class="bv-rm-process-status__bar bv-rm-process-status__bar--under-afklaring"></div>
+                                <div>
+                                    <span class="bv-rm-status-badge bv-rm-status--under-afklaring">Under afklaring</span>
+                                    <p>Vi undersøger fejlen eller planlægger hvordan featuren skal bygges.</p>
+                                </div>
+                            </div>
+                            <div class="bv-rm-process-status" role="listitem">
+                                <div class="bv-rm-process-status__bar bv-rm-process-status__bar--klar-til-implementation"></div>
+                                <div>
+                                    <span class="bv-rm-status-badge bv-rm-status--klar-til-implementation">Klar til implementation</span>
+                                    <p>Løsningen er defineret og klar til at blive kodet. Stemmer frigives.</p>
+                                </div>
+                            </div>
+                            <div class="bv-rm-process-status" role="listitem">
+                                <div class="bv-rm-process-status__bar bv-rm-process-status__bar--under-implementation"></div>
+                                <div>
+                                    <span class="bv-rm-status-badge bv-rm-status--under-implementation">Under implementation</span>
+                                    <p>Der arbejdes aktivt på sagen. Stemmeafgivelse er låst.</p>
+                                </div>
+                            </div>
+                            <div class="bv-rm-process-status" role="listitem">
+                                <div class="bv-rm-process-status__bar bv-rm-process-status__bar--klar-til-test"></div>
+                                <div>
+                                    <span class="bv-rm-status-badge bv-rm-status--klar-til-test">Klar til test</span>
+                                    <p>Bygget og i kvalitetsgennemsyn. Stemmeafgivelse er låst.</p>
+                                </div>
+                            </div>
+                            <div class="bv-rm-process-status" role="listitem">
+                                <div class="bv-rm-process-status__bar bv-rm-process-status__bar--loest"></div>
+                                <div>
+                                    <span class="bv-rm-status-badge bv-rm-status--loest">Løst</span>
+                                    <p>Afsendt og live. Emnet vises stadig for transparens.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>{# /.bv-rm-process-grid #}
+            </div>{# /.bv-rm-process-overlay__body #}
+        </div>{# /.bv-rm-process-overlay__inner #}
+    </div>{# /#bv-rm-process-panel #}
+
+    {# ── Nonce for vote requests (authenticated only) ─────────────────────── #}
+    {% if is_auth %}
+    <div id="bv-rm-vote-nonces" style="display:none;" aria-hidden="true">
+        {{ nonce_field('roadmap-vote', 'vote_nonce')|raw }}
+    </div>
+    {% endif %}
+
+    {# ── Two-column board ──────────────────────────────────────────────────── #}
+    <div class="bv-rm-board">
+
+        {# ── Left column: Registrerede Website-fejl (bugs) ──────────────────── #}
+        <div class="bv-rm-column">
+            <div class="bv-rm-column__header bv-rm-column__header--bugs">
+                <h2 class="bv-rm-column__title">Registrerede Website-fejl</h2>
+                <span class="bv-rm-column__subtitle">Tekniske fejl på platformen</span>
+
+                {# Star budget widget — authenticated only #}
+                {% if is_auth %}
+                    {% set bug_bud_raw = roadmap_bug_budget|default(0) %}
+                    {% set bug_bud_clamped = [bug_bud_raw, 3]|min %}
+                    {% set bug_bud_clamped = [bug_bud_clamped, 0]|max %}
+                    <div class="bv-rm-star-budget" id="bv-rm-bug-star-budget" aria-live="polite" aria-label="Fejl-stemmer til rådighed: {{ bug_bud_clamped }} af 3">
+                        <span class="bv-rm-star-budget__label">Stemmer til rådighed</span>
+                        {% for i in 1..3 %}
+                            {% if i <= bug_bud_clamped %}
+                                <span class="material-symbols-outlined bv-rm-star-budget__star bv-rm-star-budget__star--filled" aria-hidden="true">star</span>
+                            {% else %}
+                                <span class="material-symbols-outlined bv-rm-star-budget__star bv-rm-star-budget__star--empty" aria-hidden="true">star</span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="bv-rm-cards" role="list">
+                {# Solved bugs first (80% opacity via CSS) #}
+                {% for item_id, item in roadmap_bugs if item.status|default('') == 'loest' %}
+                    {% if feature_enabled('roadmap') %}
+                    {% include 'partials/roadmap_card.html.twig' with {
+                        item: item,
+                        item_id: item_id,
+                        is_auth: is_auth,
+                        user_voted: item_id in roadmap_user_voted_items,
+                        bug_budget: roadmap_bug_budget,
+                        feature_budget: roadmap_feature_budget,
+                        use_canonical_id: true
+                    } only %}
+                    {% endif %}
+                {% endfor %}
+
+                {# Non-solved bugs #}
+                {% for item_id, item in roadmap_bugs if item.status|default('') != 'loest' %}
+                    {% if feature_enabled('roadmap') %}
+                    {% include 'partials/roadmap_card.html.twig' with {
+                        item: item,
+                        item_id: item_id,
+                        is_auth: is_auth,
+                        user_voted: item_id in roadmap_user_voted_items,
+                        bug_budget: roadmap_bug_budget,
+                        feature_budget: roadmap_feature_budget,
+                        use_canonical_id: true
+                    } only %}
+                    {% endif %}
+                {% endfor %}
+
+                {% if roadmap_bugs is empty %}
+                <div class="bv-rm-empty">
+                    <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.5rem;display:block;margin-bottom:0.5rem;">bug_report</span>
+                    Ingen fejl er rapporteret endnu.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# ── Right column: Forslag til Websitet (features) ───────────────────── #}
+        <div class="bv-rm-column">
+            <div class="bv-rm-column__header bv-rm-column__header--features">
+                <h2 class="bv-rm-column__title">Forslag til Websitet</h2>
+                <span class="bv-rm-column__subtitle">Feature-forslag fra fællesskabet</span>
+
+                {# Star budget widget — authenticated only #}
+                {% if is_auth %}
+                    {% set feat_bud_raw = roadmap_feature_budget|default(0) %}
+                    {% set feat_bud_clamped = [feat_bud_raw, 3]|min %}
+                    {% set feat_bud_clamped = [feat_bud_clamped, 0]|max %}
+                    <div class="bv-rm-star-budget" id="bv-rm-feature-star-budget" aria-live="polite" aria-label="Forslags-stemmer til rådighed: {{ feat_bud_clamped }} af 3">
+                        <span class="bv-rm-star-budget__label">Stemmer til rådighed</span>
+                        {% for i in 1..3 %}
+                            {% if i <= feat_bud_clamped %}
+                                <span class="material-symbols-outlined bv-rm-star-budget__star bv-rm-star-budget__star--filled" aria-hidden="true">star</span>
+                            {% else %}
+                                <span class="material-symbols-outlined bv-rm-star-budget__star bv-rm-star-budget__star--empty" aria-hidden="true">star</span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="bv-rm-cards" role="list">
+                {# Solved features first (80% opacity via CSS) #}
+                {% for item_id, item in roadmap_features if item.status|default('') == 'loest' %}
+                    {% if feature_enabled('roadmap') %}
+                    {% include 'partials/roadmap_card.html.twig' with {
+                        item: item,
+                        item_id: item_id,
+                        is_auth: is_auth,
+                        user_voted: item_id in roadmap_user_voted_items,
+                        bug_budget: roadmap_bug_budget,
+                        feature_budget: roadmap_feature_budget,
+                        use_canonical_id: true
+                    } only %}
+                    {% endif %}
+                {% endfor %}
+
+                {# Non-solved features #}
+                {% for item_id, item in roadmap_features if item.status|default('') != 'loest' %}
+                    {% if feature_enabled('roadmap') %}
+                    {% include 'partials/roadmap_card.html.twig' with {
+                        item: item,
+                        item_id: item_id,
+                        is_auth: is_auth,
+                        user_voted: item_id in roadmap_user_voted_items,
+                        bug_budget: roadmap_bug_budget,
+                        feature_budget: roadmap_feature_budget,
+                        use_canonical_id: true
+                    } only %}
+                    {% endif %}
+                {% endfor %}
+
+                {% if roadmap_features is empty %}
+                <div class="bv-rm-empty">
+                    <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.5rem;display:block;margin-bottom:0.5rem;">lightbulb</span>
+                    Ingen feature-forslag endnu.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>{# /.bv-rm-board #}
+
+    {# ── Unauthenticated vote prompt ───────────────────────────────────────── #}
+    {% if not is_auth %}
+    <div class="bv-rm-login-notice" role="complementary" aria-label="Log ind for at stemme">
+        <span class="material-symbols-outlined" aria-hidden="true">how_to_vote</span>
+        <span>
+            <a
+                href="#"
+                class="bv-rm-login-notice__link"
+                onclick="document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;">
+                Log ind
+            </a>
+            for at se din stemmeoversigt og stemme på emner.
+        </span>
+    </div>
+    {% endif %}
+
+    {# ── Inline error toast container ─────────────────────────────────────── #}
+    <div id="bv-rm-toast" class="bv-rm-toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+</div>{# /.bv-container #}
+</section>
+{% endblock %}
+
+{% block bottom %}
+<script>
+(function () {
+    'use strict';
+
+    /* ── Data passed from PHP ─────────────────────────────────────────────── */
+    var AUTH      = {{ is_auth ? 'true' : 'false' }};
+    var BUG_BUD   = {{ roadmap_bug_budget|default(3) }};
+    var FEAT_BUD  = {{ roadmap_feature_budget|default(3) }};
+    var VOTED     = {{ roadmap_user_voted_items|default([])|json_encode|raw }};
+
+    /* Nonce is read from the hidden input rendered by nonce_field() */
+    function getVoteNonce() {
+        var el = document.querySelector('#bv-rm-vote-nonces [name="vote_nonce"]');
+        return el ? el.value : '';
+    }
+
+    /* ── "Forstå processen" panel ─────────────────────────────────────────── */
+    var processBtn   = document.getElementById('bv-rm-process-btn');
+    var processPanel = document.getElementById('bv-rm-process-panel');
+    var processClose = document.getElementById('bv-rm-process-close');
+
+    if (processBtn && processPanel) {
+        processBtn.addEventListener('click', function () {
+            openProcessPanel();
+        });
+
+        if (processClose) {
+            processClose.addEventListener('click', function () {
+                closeProcessPanel();
+            });
+        }
+
+        // Close on backdrop click
+        processPanel.addEventListener('click', function (e) {
+            if (e.target === processPanel) {
+                closeProcessPanel();
+            }
+        });
+
+        // Close on Escape key; trap focus inside panel
+        document.addEventListener('keydown', function (e) {
+            if (!processPanel.classList.contains('is-open')) return;
+
+            if (e.key === 'Escape') {
+                closeProcessPanel();
+                return;
+            }
+
+            if (e.key === 'Tab') {
+                var focusable = Array.from(processPanel.querySelectorAll(
+                    'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+                ));
+                if (!focusable.length) { e.preventDefault(); return; }
+                var first = focusable[0];
+                var last  = focusable[focusable.length - 1];
+                if (e.shiftKey) {
+                    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+                } else {
+                    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+                }
+            }
+        });
+    }
+
+    function openProcessPanel() {
+        if (!processPanel) return;
+        processPanel.classList.add('is-open');
+        processPanel.setAttribute('aria-hidden', 'false');
+        if (processBtn) processBtn.setAttribute('aria-expanded', 'true');
+        document.body.style.overflow = 'hidden';
+        if (processClose) {
+            setTimeout(function () { processClose.focus(); }, 50);
+        }
+    }
+
+    function closeProcessPanel() {
+        if (!processPanel) return;
+        processPanel.classList.remove('is-open');
+        processPanel.setAttribute('aria-hidden', 'true');
+        if (processBtn) processBtn.setAttribute('aria-expanded', 'false');
+        document.body.style.overflow = '';
+        if (processBtn) {
+            try { processBtn.focus(); } catch (e) {}
+        }
+    }
+
+    /* ── Helper: toggle a card's action bar ──────────────────────────────── */
+    function toggleCard(card) {
+        var isOpen = card.classList.contains('is-expanded');
+
+        // Close all other cards
+        document.querySelectorAll('.bv-rm-card.is-expanded').forEach(function (c) {
+            if (c !== card) {
+                c.classList.remove('is-expanded');
+                c.setAttribute('aria-expanded', 'false');
+                var bar = c.querySelector('.bv-rm-card__action-bar');
+                if (bar) bar.setAttribute('hidden', '');
+            }
+        });
+
+        // Toggle this one
+        if (isOpen) {
+            card.classList.remove('is-expanded');
+            card.setAttribute('aria-expanded', 'false');
+            var bar = card.querySelector('.bv-rm-card__action-bar');
+            if (bar) bar.setAttribute('hidden', '');
+        } else {
+            card.classList.add('is-expanded');
+            card.setAttribute('aria-expanded', 'true');
+            var bar = card.querySelector('.bv-rm-card__action-bar');
+            if (bar) bar.removeAttribute('hidden');
+        }
+    }
+
+    /* ── Card click → inline action bar ──────────────────────────────────── */
+    document.querySelectorAll('.bv-rm-card[data-item-id]').forEach(function (card) {
+        card.addEventListener('click', function (e) {
+            // If the face vote button was clicked, handle vote directly
+            var faceVoteBtn = e.target.closest('.bv-rm-card__vote-btn');
+            if (faceVoteBtn && faceVoteBtn.tagName === 'BUTTON') {
+                e.stopPropagation();
+                if (!faceVoteBtn.disabled && faceVoteBtn.dataset.action) {
+                    submitVoteFromBtn(faceVoteBtn, card);
+                } else if (!AUTH) {
+                    var loginOverlay = document.getElementById('bv-login-overlay');
+                    if (loginOverlay) {
+                        loginOverlay.classList.add('is-open');
+                        document.body.style.overflow = 'hidden';
+                    }
+                }
+                return;
+            }
+
+            // Don't toggle if the click was on any other button or link
+            if (e.target.closest('button, a')) return;
+
+            // Locked and solved cards are not expandable
+            if (card.classList.contains('bv-rm-card--locked') || card.classList.contains('bv-rm-card--solved')) return;
+
+            toggleCard(card);
+        });
+
+        // Keyboard: Enter/Space on the card itself
+        card.addEventListener('keydown', function (e) {
+            if ((e.key === 'Enter' || e.key === ' ') && e.target === card) {
+                e.preventDefault();
+                // Locked and solved cards are not expandable
+                if (card.classList.contains('bv-rm-card--locked') || card.classList.contains('bv-rm-card--solved')) return;
+                toggleCard(card);
+            }
+        });
+    });
+
+    /* ── Star vote-button keyboard activation ────────────────────────────── */
+    document.querySelectorAll('.bv-rm-card__vote-btn').forEach(function (btn) {
+        if (btn.tagName !== 'BUTTON') return;
+        btn.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                var card = btn.closest('.bv-rm-card');
+                if (!btn.disabled && btn.dataset.action) {
+                    submitVoteFromBtn(btn, card);
+                } else if (card) {
+                    toggleCard(card);
+                }
+            }
+        });
+    });
+
+    /**
+     * Submit a vote AJAX call from either a face star button or an action bar button.
+     */
+    function submitVoteFromBtn(btn, card) {
+        if (!AUTH) return;
+        if (btn.getAttribute('aria-disabled') === 'true') return;
+        if (btn.disabled) return;
+
+        var itemId   = card.dataset.itemId;
+        var itemType = card.dataset.itemType;
+        var nonce    = getVoteNonce();
+
+        if (!nonce) {
+            showToast('Sikkerhedstoken mangler. Genindlæs siden.', 'error');
+            return;
+        }
+
+        // Capture pre-request state for rollback
+        var countEl    = card.querySelector('.bv-rm-card__vote-count');
+        var prevCount  = countEl  ? parseInt(countEl.textContent, 10)  : 0;
+
+        // Disable all vote buttons for this card during request
+        card.querySelectorAll('button[data-action]').forEach(function (b) { b.disabled = true; });
+
+        var action   = btn.dataset.action || 'add';
+        var formData = new FormData();
+        formData.append('item_id',    itemId);
+        formData.append('action',     action);
+        formData.append('vote_nonce', nonce);
+
+        fetch('/roadmap/vote', {
+            method:      'POST',
+            body:        formData,
+            headers:     { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+        })
+        .then(function (response) {
+            return response.json().then(function (data) {
+                return { status: response.status, data: data };
+            });
+        })
+        .then(function (result) {
+            // Re-enable vote buttons
+            card.querySelectorAll('button[data-action]').forEach(function (b) { b.disabled = false; });
+
+            if (result.status === 200 && result.data.success) {
+                // Update stored nonce with fresh one-time nonce from server
+                if (result.data.new_nonce) {
+                    var nonceInput = document.querySelector('#bv-rm-vote-nonces [name="vote_nonce"]');
+                    if (nonceInput) nonceInput.value = result.data.new_nonce;
+                }
+
+                var actualAction = result.data.action || (VOTED.indexOf(itemId) !== -1 ? 'remove' : 'add');
+
+                // Update ALL vote count elements for this item
+                document.querySelectorAll('[data-item-id="' + itemId + '"]').forEach(function (c) {
+                    c.querySelectorAll('.bv-rm-card__vote-count').forEach(function (el) {
+                        el.textContent = result.data.vote_count;
+                    });
+                });
+
+                // Update budget variables
+                BUG_BUD  = result.data.bug_budget;
+                FEAT_BUD = result.data.feature_budget;
+
+                // Update voted tracking and toggle button state
+                document.querySelectorAll('[data-item-id="' + itemId + '"]').forEach(function (c) {
+                    updateCardVoteState(c, itemId, actualAction, itemType);
+                });
+
+            } else {
+                if (countEl) countEl.textContent = prevCount;
+                // Defensive error extraction: handle both response shapes and non-string error values.
+                // New server format: {status:"error", data:{error:"string"}}
+                // Fallback format:   {error:"string"} or {error:{message:"string"}}
+                var rawErr = null;
+                if (result.data) {
+                    if (result.data.data && result.data.data.error !== undefined) {
+                        rawErr = result.data.data.error;
+                    } else if (result.data.error !== undefined) {
+                        rawErr = result.data.error;
+                    }
+                }
+                var errMsg;
+                if (typeof rawErr === 'string' && rawErr !== '') {
+                    errMsg = rawErr;
+                } else if (rawErr !== null && typeof rawErr === 'object' && typeof rawErr.message === 'string' && rawErr.message !== '') {
+                    errMsg = rawErr.message;
+                } else {
+                    errMsg = 'Stemme mislykkedes. Prøv igen.';
+                }
+                showToast(errMsg, 'error');
+            }
+        })
+        .catch(function () {
+            card.querySelectorAll('button[data-action]').forEach(function (b) { b.disabled = false; });
+            if (countEl) countEl.textContent = prevCount;
+            showToast('Stemme mislykkedes. Prøv igen.', 'error');
+        });
+    }
+
+    /* ── Action bar vote button clicks ───────────────────────────────────── */
+    document.querySelectorAll('.bv-rm-vote-btn[data-action]').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var card = btn.closest('.bv-rm-card');
+            if (card) {
+                submitVoteFromBtn(btn, card);
+            }
+        });
+    });
+
+    /**
+     * After a successful vote, update the card's action bar and face button.
+     */
+    function updateCardVoteState(card, itemId, action, itemType) {
+        if (!card) return;
+
+        var addBtn    = card.querySelector('.bv-rm-vote-btn[data-action="add"]');
+        var removeBtn = card.querySelector('.bv-rm-vote-btn[data-action="remove"]');
+        var starBtn   = card.querySelector('.bv-rm-card__vote-btn[data-action]');
+
+        var currentBudget = (itemType === 'bug') ? BUG_BUD : FEAT_BUD;
+
+        if (action === 'add') {
+            VOTED.push(itemId);
+            if (addBtn) {
+                addBtn.setAttribute('aria-disabled', 'true');
+                addBtn.classList.add('is-voted');
+                addBtn.classList.add('bv-rm-vote-btn--hidden');
+            }
+            if (removeBtn) {
+                removeBtn.removeAttribute('aria-disabled');
+                removeBtn.removeAttribute('disabled');
+                removeBtn.classList.remove('bv-rm-vote-btn--hidden');
+            }
+            if (starBtn) {
+                starBtn.classList.add('is-voted');
+                starBtn.setAttribute('data-action', 'remove');
+                starBtn.setAttribute('aria-pressed', 'true');
+                starBtn.setAttribute('aria-label', 'Fjern din stemme');
+            }
+        } else { // remove
+            VOTED = VOTED.filter(function (id) { return id !== itemId; });
+            if (removeBtn) {
+                removeBtn.setAttribute('aria-disabled', 'true');
+                removeBtn.classList.add('bv-rm-vote-btn--hidden');
+            }
+            if (addBtn) {
+                addBtn.classList.remove('is-voted');
+                addBtn.classList.remove('bv-rm-vote-btn--hidden');
+                if (currentBudget > 0) {
+                    addBtn.removeAttribute('aria-disabled');
+                    addBtn.removeAttribute('disabled');
+                } else {
+                    addBtn.setAttribute('aria-disabled', 'true');
+                }
+            }
+            if (starBtn) {
+                starBtn.classList.remove('is-voted');
+                starBtn.setAttribute('data-action', 'add');
+                starBtn.setAttribute('aria-pressed', 'false');
+                starBtn.setAttribute('aria-label', 'Stem');
+                if (currentBudget <= 0) {
+                    starBtn.setAttribute('aria-disabled', 'true');
+                } else {
+                    starBtn.removeAttribute('aria-disabled');
+                }
+            }
+        }
+
+        // Update all "add" buttons in the same column based on new budget
+        document.querySelectorAll('[data-item-type="' + itemType + '"] .bv-rm-vote-btn[data-action="add"]').forEach(function (b) {
+            var cardItemId = b.closest('[data-item-id]') ? b.closest('[data-item-id]').dataset.itemId : null;
+            var alreadyVoted = VOTED.indexOf(cardItemId) !== -1;
+            if (!alreadyVoted) {
+                if (currentBudget <= 0) {
+                    b.setAttribute('aria-disabled', 'true');
+                } else {
+                    b.removeAttribute('aria-disabled');
+                }
+            }
+        });
+
+        // Also update all face vote star buttons for zero-budget state
+        document.querySelectorAll('[data-item-type="' + itemType + '"] .bv-rm-card__vote-btn[data-action="add"]').forEach(function (b) {
+            var cardItemId = b.closest('[data-item-id]') ? b.closest('[data-item-id]').dataset.itemId : null;
+            var alreadyVoted = VOTED.indexOf(cardItemId) !== -1;
+            if (!alreadyVoted) {
+                if (currentBudget <= 0) {
+                    b.setAttribute('aria-disabled', 'true');
+                } else {
+                    b.removeAttribute('aria-disabled');
+                }
+            }
+        });
+
+        // Update star budget display widget
+        renderStarBudget(itemType, currentBudget);
+    }
+
+    /* ── Star budget display updater ─────────────────────────────────────── */
+    function renderStarBudget(itemType, budget) {
+        var widgetId = (itemType === 'bug') ? 'bv-rm-bug-star-budget' : 'bv-rm-feature-star-budget';
+        var widget = document.getElementById(widgetId);
+        if (!widget) return;
+
+        var filled = Math.max(0, Math.min(3, budget));
+        var stars = widget.querySelectorAll('.bv-rm-star-budget__star');
+        stars.forEach(function (star, idx) {
+            if (idx < filled) {
+                star.classList.add('bv-rm-star-budget__star--filled');
+                star.classList.remove('bv-rm-star-budget__star--empty');
+            } else {
+                star.classList.add('bv-rm-star-budget__star--empty');
+                star.classList.remove('bv-rm-star-budget__star--filled');
+            }
+        });
+
+        var total = stars.length || 3;
+        widget.setAttribute('aria-label',
+            (itemType === 'bug' ? 'Fejl' : 'Forslags') + '-stemmer til rådighed: ' + filled + ' af ' + total);
+    }
+
+    /* ── Toast notifications ─────────────────────────────────────────────── */
+    var toastTimer = null;
+    function showToast(msg, type) {
+        var toast = document.getElementById('bv-rm-toast');
+        if (!toast) return;
+
+        toast.className  = 'bv-rm-toast bv-rm-toast--' + (type || 'info') + ' is-visible';
+        toast.textContent = msg;
+
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () {
+            toast.classList.remove('is-visible');
+        }, 5000);
+    }
+
+}());
+</script>
+{% endblock %}

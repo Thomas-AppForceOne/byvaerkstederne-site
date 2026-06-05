@@ -1,0 +1,6 @@
+Options -Indexes
+php_flag engine off
+<FilesMatch ".*">
+  Order Deny,Allow
+  Deny from all
+</FilesMatch>

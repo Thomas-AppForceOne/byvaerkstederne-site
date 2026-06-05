@@ -1,0 +1,159 @@
+{% extends 'flex-objects/types/default/edit.html.twig' %}
+
+{% block content_top %}
+    {{ parent() }}
+
+    {% if object.exists %}
+        {% set current_status = object.status ?? 'pending' %}
+
+        {# ── Action panel ───────────────────────────────────────────────────── #}
+        <div class="bv-admin-fs-panel" style="margin-bottom: 1.5rem; padding: 1rem 1.5rem; background: #f4f3f3; border-left: 4px solid #325f9b; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+            <div>
+                {% if current_status == 'approved' %}
+                    <span style="display:inline-flex;align-items:center;gap:0.5rem;background:#13483b;color:#fff;font-weight:700;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.1em;padding:0.25rem 0.75rem;">
+                        ✓ Godkendt — fremmet til roadmap
+                    </span>
+                    {% if object.roadmap_id %}
+                        <span style="margin-left:0.5rem;font-size:0.85rem;color:#42474a;">Roadmap-element ID: <code>{{ object.roadmap_id }}</code></span>
+                    {% endif %}
+                {% elseif current_status == 'archived' %}
+                    <span style="display:inline-flex;align-items:center;gap:0.5rem;background:#73787b;color:#fff;font-weight:700;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.1em;padding:0.25rem 0.75rem;">
+                        Arkiveret
+                    </span>
+                {% else %}
+                    <div>
+                        <strong style="font-size:0.9rem;">Gennemgå forslag</strong>
+                        <span style="margin-left:0.5rem;font-size:0.85rem;color:#73787b;">Godkend og fremme til roadmap, eller arkivér forslaget.</span>
+                    </div>
+                {% endif %}
+            </div>
+
+            {% if current_status == 'pending' %}
+                <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                    {# Approve form #}
+                    {% set approve_nonce_html = nonce_field('feature-suggestion-approve', 'approve_nonce') %}
+                    <form id="bv-fs-approve-form" style="display:inline-block;">
+                        <input type="hidden" name="suggestion_id" value="{{ key }}">
+                        {{ approve_nonce_html|raw }}
+                        <button type="button" onclick="bvFsApprove()" class="button button-action" style="background:#13483b;color:#fff;border:none;padding:0.5rem 1.25rem;font-weight:700;cursor:pointer;font-size:0.875rem;">
+                            ✓ Godkend → roadmap
+                        </button>
+                    </form>
+
+                    {# Decline form #}
+                    {% set decline_nonce_html = nonce_field('feature-suggestion-decline', 'decline_nonce') %}
+                    <form id="bv-fs-decline-form" style="display:inline-block;">
+                        <input type="hidden" name="suggestion_id" value="{{ key }}">
+                        {{ decline_nonce_html|raw }}
+                        <button type="button" onclick="bvFsDecline()" class="button" style="background:#ba1a1a;color:#fff;border:none;padding:0.5rem 1.25rem;font-weight:700;cursor:pointer;font-size:0.875rem;">
+                            ✗ Afvis (arkivér)
+                        </button>
+                    </form>
+                </div>
+            {% endif %}
+        </div>
+
+        {# Action feedback message #}
+        <div id="bv-fs-action-message" style="display:none;margin-bottom:1.5rem;padding:0.75rem 1.25rem;font-size:0.875rem;font-weight:600;"></div>
+
+        {% if current_status == 'pending' %}
+        <script>
+        function bvFsApprove() {
+            var form = document.getElementById('bv-fs-approve-form');
+            var msgEl = document.getElementById('bv-fs-action-message');
+            var btn = form.querySelector('button[type="button"]');
+            var declineBtn = document.querySelector('#bv-fs-decline-form button');
+
+            btn.disabled = true;
+            btn.textContent = 'Godkender…';
+            if (declineBtn) declineBtn.disabled = true;
+
+            var formData = new FormData(form);
+
+            fetch('/feature-suggestion/approve', {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            })
+            .then(function(r) {
+                return r.json().then(function(d) { return { status: r.status, data: d }; });
+            })
+            .then(function(result) {
+                if (result.data.success) {
+                    msgEl.style.cssText = 'display:block;padding:0.75rem 1.25rem;margin-bottom:1.5rem;font-size:0.875rem;font-weight:600;background:#d4edda;color:#13483b;border-left:4px solid #13483b;';
+                    msgEl.textContent = '✓ Forslaget er godkendt og fremmet til roadmap. Roadmap-element ID: ' + (result.data.roadmap_id || '');
+                    btn.textContent = 'Godkendt';
+                    btn.style.background = '#0a2e22';
+                    // Reload after 2s to show updated status
+                    setTimeout(function() { window.location.reload(); }, 2000);
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = '✓ Godkend → roadmap';
+                    if (declineBtn) declineBtn.disabled = false;
+                    msgEl.style.cssText = 'display:block;padding:0.75rem 1.25rem;margin-bottom:1.5rem;font-size:0.875rem;font-weight:600;background:#f8d7da;color:#ba1a1a;border-left:4px solid #ba1a1a;';
+                    msgEl.textContent = '✗ ' + (result.data.error || 'Fejl ved godkendelse. Prøv igen.');
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.textContent = '✓ Godkend → roadmap';
+                if (declineBtn) declineBtn.disabled = false;
+                msgEl.style.cssText = 'display:block;padding:0.75rem 1.25rem;margin-bottom:1.5rem;font-size:0.875rem;font-weight:600;background:#f8d7da;color:#ba1a1a;border-left:4px solid #ba1a1a;';
+                msgEl.textContent = '✗ Netværksfejl. Prøv igen.';
+            });
+        }
+
+        function bvFsDecline() {
+            if (!confirm('Er du sikker på, at du vil arkivere dette forslag? Det vil ikke længere fremgå af den aktive liste.')) {
+                return;
+            }
+
+            var form = document.getElementById('bv-fs-decline-form');
+            var msgEl = document.getElementById('bv-fs-action-message');
+            var btn = form.querySelector('button[type="button"]');
+            var approveBtn = document.querySelector('#bv-fs-approve-form button');
+
+            btn.disabled = true;
+            btn.textContent = 'Arkiverer…';
+            if (approveBtn) approveBtn.disabled = true;
+
+            var formData = new FormData(form);
+
+            fetch('/feature-suggestion/decline', {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            })
+            .then(function(r) {
+                return r.json().then(function(d) { return { status: r.status, data: d }; });
+            })
+            .then(function(result) {
+                if (result.data.success) {
+                    msgEl.style.cssText = 'display:block;padding:0.75rem 1.25rem;margin-bottom:1.5rem;font-size:0.875rem;font-weight:600;background:#d4edda;color:#13483b;border-left:4px solid #13483b;';
+                    msgEl.textContent = '✓ Forslaget er arkiveret og fjernet fra den aktive liste.';
+                    btn.textContent = 'Arkiveret';
+                    btn.style.background = '#5a1010';
+                    // Reload after 2s
+                    setTimeout(function() { window.location.reload(); }, 2000);
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = '✗ Afvis (arkivér)';
+                    if (approveBtn) approveBtn.disabled = false;
+                    msgEl.style.cssText = 'display:block;padding:0.75rem 1.25rem;margin-bottom:1.5rem;font-size:0.875rem;font-weight:600;background:#f8d7da;color:#ba1a1a;border-left:4px solid #ba1a1a;';
+                    msgEl.textContent = '✗ ' + (result.data.error || 'Fejl ved arkivering. Prøv igen.');
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.textContent = '✗ Afvis (arkivér)';
+                if (approveBtn) approveBtn.disabled = false;
+                msgEl.style.cssText = 'display:block;padding:0.75rem 1.25rem;margin-bottom:1.5rem;font-size:0.875rem;font-weight:600;background:#f8d7da;color:#ba1a1a;border-left:4px solid #ba1a1a;';
+                msgEl.textContent = '✗ Netværksfejl. Prøv igen.';
+            });
+        }
+        </script>
+        {% endif %}
+    {% endif %}
+{% endblock %}

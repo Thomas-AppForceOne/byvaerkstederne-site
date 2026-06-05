@@ -1,0 +1,12 @@
+# Pin Grav's base URL for the test tier.
+#
+# See dev.hackersbychoice.dk/config/system.yaml for the full diagnosis;
+# the same one.com docroot-mapping quirk applies to test/ and would
+# manifest as identical /test/-prefixed URLs and 404'd subpages.
+custom_base_url: 'https://test.hackersbychoice.dk'
+absolute_urls: false
+
+# Same session-cookie-path fix as dev/staging — see
+# dev.hackersbychoice.dk/config/system.yaml for the full diagnosis.
+session:
+  path: /

@@ -1,4 +1,4 @@
-.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-data reset-cache reset-all create-admin deploy deploy-prod deploy-test deploy-dev deploy-staging backup-prod backup-test
+.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy rollback migrate-atomic backup list-backups restore restore-scratch test test-headed test-auth test-install test-deploy test-backup-restore add-age-key list-age-keys retire-age-key
 
 # Default target
 help: ## Show this help
@@ -19,7 +19,7 @@ setup: check-deps lfs-pull start create-admin ## Full first-time setup (check to
 	@echo ""
 
 create-admin: ## Create an admin account (interactive)
-	@if [ -z "$$(ls config/www/user/accounts/*.yaml 2>/dev/null)" ]; then \
+	@if [ ! -f config/www/user/accounts/thomasadmin.yaml ]; then \
 		echo ""; \
 		echo "  No admin account found. Let's create one."; \
 		echo ""; \
@@ -27,8 +27,10 @@ create-admin: ## Create an admin account (interactive)
 		read -p "  Email: " email; \
 		read -p "  Full name: " fullname; \
 		read -s -p "  Password: " password; echo ""; \
-		docker exec grav bash -c "cd /var/www/html && bin/plugin login new-user -u $$username -e $$email -p $$password -n '$$fullname' -t admin -s enabled -a admin.super" 2>/dev/null \
-			|| docker exec grav bash -c "cd /app/www/public && bin/plugin login new-user -u $$username -e $$email -p $$password -n '$$fullname' -t admin -s enabled -a admin.super"; \
+		CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(1) }' 2>/dev/null) || { \
+			echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
+		}; \
+		docker exec -w /app/www/public "$$CONTAINER" bin/plugin login new-user -u $$username -e $$email -p $$password -n "$$fullname" -t admin -s enabled -a admin.super; \
 		echo ""; \
 		echo "  ✓ Admin account '$$username' created"; \
 	else \
@@ -45,7 +47,7 @@ check-deps: ## Verify all required tools are installed
 	@command -v git >/dev/null 2>&1 || { echo "❌  Git is not installed."; exit 1; }
 	@echo "  ✓ Git"
 	@command -v git-lfs >/dev/null 2>&1 || { echo "⚠️  Git LFS not found. Installing..."; brew install git-lfs 2>/dev/null || { echo "❌  Could not install Git LFS. Install manually: https://git-lfs.com"; exit 1; }; }
-	@git lfs install --skip-smudge >/dev/null 2>&1
+	@git lfs install --skip-smudge --force >/dev/null 2>&1 || true
 	@echo "  ✓ Git LFS"
 	@echo "All dependencies OK ✓"
 
@@ -57,49 +59,122 @@ lfs-pull: ## Pull all LFS files (images, videos, etc.)
 # ── Docker ─────────────────────────────────────────────
 
 start: ## Start the site (Docker)
-	@docker compose up -d
-	@echo "Waiting for Grav to start..."
-	@for i in 1 2 3 4 5 6 7 8 9 10; do \
-		curl -s -o /dev/null http://localhost:8080 && break || sleep 2; \
-	done
-	@echo "Site is live at http://localhost:8080"
+	@scripts/grav-up.sh . 8080
 
 stop: ## Stop the site
-	@docker compose down
+	@scripts/grav-down.sh .
 
-restart: ## Restart the site
-	@docker compose restart
-	@echo "Restarted. Site at http://localhost:8080"
+restart: stop start ## Restart the site
 
 logs: ## Tail container logs
-	@docker compose logs -f --tail=50
+	@CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(1) }' 2>/dev/null) || { \
+		echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
+	}; \
+	docker logs -f --tail=50 "$$CONTAINER"
 
 status: ## Show container status
-	@docker compose ps
+	@CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(0) }' 2>/dev/null); \
+	if [ -n "$$CONTAINER" ]; then \
+		docker ps --filter "name=^$$CONTAINER$$" --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'; \
+	else \
+		echo "(no Grav container registered for this checkout — run: scripts/grav-up.sh . [port])"; \
+	fi
 
-# ── Deploy ─────────────────────────────────────────────
+# ── Tier-parameterised commands ────────────────────────
+#
+# Tier is passed as a Make variable: `tier=<env>`. Each target validates
+# the value against the closed set before invoking the script, so a
+# typo can never reach the live remote. Restoring prod is intentionally
+# refused at the Make layer — the operator must invoke the script
+# directly so the RESTORE_TO_TIER_ENABLED + --yes-i-mean-it gates are
+# impossible to miss. Same posture for migrate-atomic on prod.
+#
+# Examples:
+#   make deploy tier=dev
+#   make rollback tier=test
+#   make migrate-atomic tier=staging
+#   make backup tier=prod
+#   make restore tier=dev from=<id>   # add RESTORE_TO_TIER_ENABLED=1 to actually wipe
 
-deploy: deploy-prod ## Alias for deploy-prod
+deploy: ## Atomic deploy (tier=dev|test|staging|prod|landing)
+	@t="$(tier)"; \
+	case "$$t" in \
+	  dev|test|staging|prod|landing) ./deploy/deploy.sh "$$t" ;; \
+	  "") echo "❌  Usage: make deploy tier=<dev|test|staging|prod|landing>"; exit 1 ;; \
+	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging|prod|landing)"; exit 1 ;; \
+	esac
 
-deploy-prod: ## Deploy to production (hackersbychoice.dk)
-	@./deploy/deploy.sh prod
+rollback: ## Roll back a tier to its previous release (tier=dev|test|staging|prod)
+	@t="$(tier)"; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/rollback.sh "$$t" ;; \
+	  "") echo "❌  Usage: make rollback tier=<dev|test|staging|prod>"; exit 1 ;; \
+	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
 
-deploy-test: ## Deploy to test (hackersbychoice.dk/test)
-	@./deploy/deploy.sh test
+migrate-atomic: ## Migrate a tier to atomic layout — one-time supervised (tier=dev|test|staging; prod refused)
+	@t="$(tier)"; \
+	case "$$t" in \
+	  dev|test|staging) ./deploy/migrate-to-atomic-layout.sh "$$t" ;; \
+	  prod) \
+	    echo ""; \
+	    echo "❌  'make migrate-atomic tier=prod' is intentionally refused."; \
+	    echo ""; \
+	    echo "    Prod migration is a one-time, operator-supervised, irreversible-"; \
+	    echo "    without-restore operation. Invoke the script directly with the"; \
+	    echo "    --i-mean-it flag so the gate is impossible to miss:"; \
+	    echo ""; \
+	    echo "        ./deploy/migrate-to-atomic-layout.sh prod --i-mean-it"; \
+	    echo ""; \
+	    echo "    See ./deploy/migrate-to-atomic-layout.sh --help for the seven-step"; \
+	    echo "    sequence and the recovery path on failure."; \
+	    echo ""; \
+	    exit 1 ;; \
+	  "") echo "❌  Usage: make migrate-atomic tier=<dev|test|staging>"; exit 1 ;; \
+	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging; prod refused)"; exit 1 ;; \
+	esac
 
-deploy-dev: ## Deploy to dev (hackersbychoice.dk/dev)
-	@./deploy/deploy.sh dev
+backup: ## Backup a tier's data (tier=dev|test|staging|prod)
+	@t="$(tier)"; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/backup.sh "$$t" ;; \
+	  "") echo "❌  Usage: make backup tier=<dev|test|staging|prod>"; exit 1 ;; \
+	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
 
-deploy-staging: ## Deploy to staging (hackersbychoice.dk/staging)
-	@./deploy/deploy.sh staging
+list-backups: ## List backup ids available for restore (optional tier=dev|test|staging|prod)
+	@./deploy/list-backups.sh $(tier)
 
-# ── Backup ─────────────────────────────────────────────
+restore: ## Restore a tier from a backup (tier=<env> from=<id> [allow_cross_tier=1]; RESTORE_TO_TIER_ENABLED=1 to actually wipe; prod refused)
+	@t="$(tier)"; f="$(from)"; xt="$(allow_cross_tier)"; \
+	xt_flag=""; [ "$$xt" = "1" ] && xt_flag="--allow-cross-tier"; \
+	case "$$t" in \
+	  dev|test|staging) \
+	    if [ -z "$$f" ]; then echo "❌  Usage: make restore tier=$$t from=<id> [allow_cross_tier=1]"; exit 1; fi; \
+	    ./deploy/restore.sh "$$t" --from "$$f" $$xt_flag ;; \
+	  prod) \
+	    echo ""; \
+	    echo "❌  'make restore tier=prod' is intentionally refused."; \
+	    echo ""; \
+	    echo "    Restoring prod is a destructive, operator-supervised operation."; \
+	    echo "    Invoke the script directly so the safety gates are impossible"; \
+	    echo "    to miss:"; \
+	    echo ""; \
+	    echo "        RESTORE_TO_TIER_ENABLED=1 ./deploy/restore.sh prod \\"; \
+	    echo "          --from <id> --yes-i-mean-it"; \
+	    echo ""; \
+	    exit 1 ;; \
+	  "") echo "❌  Usage: make restore tier=<dev|test|staging> from=<id>"; exit 1 ;; \
+	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging; prod refused)"; exit 1 ;; \
+	esac
 
-backup-prod: ## Backup production data (accounts, flex objects, media)
-	@./deploy/backup.sh prod
-
-backup-test: ## Backup test environment data
-	@./deploy/backup.sh test
+restore-scratch: ## Restore a backup into a scratch dir for inspection (to=<dir> [from=<id|latest>])
+	@if [ -z "$(to)" ]; then echo "❌  Usage: make restore-scratch to=<dir> [from=<id>]"; exit 1; fi
+	@if [ -n "$(from)" ]; then \
+		./deploy/restore.sh --to $(to) --from $(from); \
+	else \
+		./deploy/restore.sh --to $(to); \
+	fi
 
 # ── Utilities ──────────────────────────────────────────
 
@@ -110,11 +185,101 @@ admin: ## Open the admin panel in default browser
 	@open http://localhost:8080/admin 2>/dev/null || xdg-open http://localhost:8080/admin 2>/dev/null || echo "Open http://localhost:8080/admin in your browser"
 
 clean: ## Remove Docker volumes and cache (keeps content)
-	@docker compose down -v
-	@echo "Containers and volumes removed."
+	@CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(0) }' 2>/dev/null); \
+	if [ -n "$$CONTAINER" ]; then \
+		scripts/grav-down.sh . >/dev/null 2>&1 || true; \
+		docker rm -f "$$CONTAINER" >/dev/null 2>&1 || true; \
+		docker volume ls -q --filter "label=com.docker.compose.project=$$CONTAINER" | xargs -r docker volume rm >/dev/null 2>&1 || true; \
+		rm -f .gan/port-registry.json; \
+		echo "Container $$CONTAINER + per-checkout volumes removed."; \
+	else \
+		echo "(no Grav container registered for this checkout — nothing to clean)"; \
+	fi
 
 cache-clear: ## Clear Grav cache
-	@docker exec grav bash -c 'cd /var/www/html && bin/grav cache' 2>/dev/null || echo "Container not running. Start with: make start"
+	@CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(1) }' 2>/dev/null) || { \
+		echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
+	}; \
+	docker exec -u abc -w /app/www/public "$$CONTAINER" bin/grav clearcache
+
+# ── Tests ──────────────────────────────────────────────
+
+test-install: ## Install Playwright and browser binaries
+	@npm install
+	@npx playwright install chromium
+	@echo "  ✓ Playwright ready"
+
+test: ## Run all anonymous tests (auto-sources ~/.gan-secrets/workshop-site.env if present)
+	@PORT="$${GRAV_PORT}"; \
+	if [ -z "$$PORT" ]; then PORT=$$(node scripts/discover-grav-port.js 2>/dev/null || echo ""); fi; \
+	if [ -z "$$PORT" ]; then \
+		echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
+	fi; \
+	curl -s -o /dev/null "http://127.0.0.1:$$PORT" || { echo "❌  Grav not responding on port $$PORT (container is registered but not serving). Check: docker ps ; scripts/grav-down.sh . ; scripts/grav-up.sh . $$PORT"; exit 1; }; \
+	if [ -f $$HOME/.gan-secrets/workshop-site.env ]; then \
+		set -a; . $$HOME/.gan-secrets/workshop-site.env; set +a; \
+		if [ -z "$$TEST_ADMIN_PASSWORD" ]; then \
+			echo "❌  ~/.gan-secrets/workshop-site.env exists but TEST_ADMIN_PASSWORD is empty"; exit 1; \
+		fi; \
+		echo "🔑  Sourced test credentials from ~/.gan-secrets/workshop-site.env"; \
+	else \
+		echo "ℹ️   No ~/.gan-secrets/workshop-site.env — running in anonymous-only mode"; \
+	fi; \
+	echo "Running tests against http://127.0.0.1:$$PORT"; \
+	GRAV_PORT=$$PORT npx playwright test tests/anonymous.spec.js
+
+test-headed: ## Run tests with browser visible (for debugging)
+	@PORT="$${GRAV_PORT}"; \
+	if [ -z "$$PORT" ]; then PORT=$$(node scripts/discover-grav-port.js 2>/dev/null || echo ""); fi; \
+	if [ -z "$$PORT" ]; then \
+		echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
+	fi; \
+	curl -s -o /dev/null "http://127.0.0.1:$$PORT" || { echo "❌  Grav not responding on port $$PORT (container is registered but not serving). Check: docker ps ; scripts/grav-down.sh . ; scripts/grav-up.sh . $$PORT"; exit 1; }; \
+	if [ -f $$HOME/.gan-secrets/workshop-site.env ]; then set -a; . $$HOME/.gan-secrets/workshop-site.env; set +a; fi; \
+	echo "Running tests against http://127.0.0.1:$$PORT (headed)"; \
+	GRAV_PORT=$$PORT npx playwright test tests/anonymous.spec.js --headed
+
+add-age-key: ## Generate an age keypair, store private in Keychain, append public to deploy/age-recipients.txt (NAME=<label>)
+	@if [ -z "$(NAME)" ]; then echo "❌  Usage: make add-age-key NAME=<label>"; exit 1; fi
+	@./deploy/manage-age-keys.sh generate $(NAME)
+
+list-age-keys: ## Show recipients in deploy/age-recipients.txt + which ones have a private key in your local Keychain
+	@./deploy/manage-age-keys.sh list
+
+retire-age-key: ## Remove an age key from deploy/age-recipients.txt (NAME=<label> [DELETE_KEYCHAIN=1])
+	@if [ -z "$(NAME)" ]; then echo "❌  Usage: make retire-age-key NAME=<label> [DELETE_KEYCHAIN=1]"; exit 1; fi
+	@if [ "$(DELETE_KEYCHAIN)" = "1" ]; then \
+		./deploy/manage-age-keys.sh retire $(NAME) --delete-keychain; \
+	else \
+		./deploy/manage-age-keys.sh retire $(NAME); \
+	fi
+
+test-deploy: ## Run deploy-script regression tests (lint + unit + atomic-layout + rollback + migration probes)
+	@bash tests/deploy/lint-remote-ssh.sh
+	@bash tests/deploy/unit-remote-run.sh
+	@bash tests/deploy/unit-ssh-auth.sh
+	@bash tests/deploy/unit-age-keychain.sh
+	@bash tests/deploy/excludes-preserve-live-state.sh
+	@bash tests/deploy/atomic-layout.sh
+	@bash tests/deploy/rollback.sh
+	@bash tests/deploy/migrate.sh
+
+test-backup-restore: ## Run backup/restore tooling tests (bats)
+	@command -v bats >/dev/null 2>&1 || { echo "❌  bats not installed. Run: brew install bats-core"; exit 1; }
+	@command -v age  >/dev/null 2>&1 || { echo "❌  age not installed. Run: brew install age"; exit 1; }
+	@bats tests/deploy/backup-restore.bats
+
+test-auth: ## Run authenticated tests (auto-sources ~/.gan-secrets/workshop-site.env)
+	@PORT="$${GRAV_PORT}"; \
+	if [ -z "$$PORT" ]; then PORT=$$(node scripts/discover-grav-port.js 2>/dev/null || echo ""); fi; \
+	if [ -z "$$PORT" ]; then \
+		echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
+	fi; \
+	curl -s -o /dev/null "http://127.0.0.1:$$PORT" || { echo "❌  Grav not responding on port $$PORT (container is registered but not serving). Check: docker ps ; scripts/grav-down.sh . ; scripts/grav-up.sh . $$PORT"; exit 1; }; \
+	if [ -f $$HOME/.gan-secrets/workshop-site.env ]; then set -a; . $$HOME/.gan-secrets/workshop-site.env; set +a; fi; \
+	[ -n "$$TEST_PASSWORD" ] && [ -n "$$TEST_ADMIN_PASSWORD" ] || { echo "❌  TEST_PASSWORD and TEST_ADMIN_PASSWORD required (set via ~/.gan-secrets/workshop-site.env)"; exit 1; }; \
+	echo "Running tests against http://127.0.0.1:$$PORT"; \
+	GRAV_PORT=$$PORT npx playwright test tests/authenticated.spec.js
 
 # ── Reset ──────────────────────────────────────────────
 
@@ -123,10 +288,15 @@ reset-users: ## Delete all user accounts (except admin)
 	@find config/www/user/accounts -name "*.yaml" ! -name "thomasadmin.yaml" -delete 2>/dev/null; true
 	@echo "  ✓ Users reset (only thomasadmin remains)"
 
-reset-data: ## Reset Flex Objects data to last committed state
-	@echo "Resetting Flex Objects data..."
-	@git checkout -- config/www/user/data/flex-objects/ 2>/dev/null || echo "  ⚠ No committed data to restore"
-	@echo "  ✓ Data reset to last commit"
+reset-admin: ## Reset admin account (delete and recreate interactively)
+	@echo "Removing admin account (thomasadmin)..."
+	@rm -f config/www/user/accounts/thomasadmin.yaml
+	@$(MAKE) create-admin
+
+reset-data: ## Delete all Flex Objects data
+	@echo "Deleting all Flex Objects data..."
+	@rm -f config/www/user/data/flex-objects/*.yaml 2>/dev/null; true
+	@echo "  ✓ All Flex Objects data deleted"
 
 reset-cache: cache-clear ## Alias for cache-clear
 

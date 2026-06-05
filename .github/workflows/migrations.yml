@@ -1,0 +1,71 @@
+name: migrations
+
+# Triggers on PRs whose changed files match the affected-files set in
+# the data-versioning spec — the migrations folder itself, the
+# committed deploy-bundle marker, or its example.
+on:
+  pull_request:
+    paths:
+      - 'migrations/**'
+      - 'config/www/user/data-version.yaml'
+      - 'config/www/user/data-version.yaml.example'
+      - 'deploy/migrate.sh'
+      - 'deploy/deploy.sh'
+      - 'deploy/lib/migrate-integration.sh'
+      - 'deploy/lib/atomic-release.sh'
+      - 'tests/deploy/migrate-integration.sh'
+      - '.github/workflows/migrations.yml'
+
+# Concurrency: cancel superseded runs on the same PR head.
+concurrency:
+  group: migrations-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # PHP version matrix tracks the versions Grav 1.7.x supports. The
+    # spec says "the matrix-PHP versions Grav itself supports"; Grav
+    # 1.7 ships under PHP 8.1/8.2/8.3 (composer.json requires PHP >=
+    # 7.3.6 but 8.x is the modern supported set). When Grav's matrix
+    # changes, edit this list.
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['8.1', '8.2', '8.3']
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP ${{ matrix.php-version }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          tools: composer:v2
+          extensions: yaml, mbstring
+          coverage: none
+
+      - name: Cache composer downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-php${{ matrix.php-version }}-${{ hashFiles('migrations/composer.lock') }}
+          restore-keys: |
+            composer-php${{ matrix.php-version }}-
+
+      - name: Install migration runner dependencies
+        working-directory: migrations
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Run migration tests
+        env:
+          # The runner picks this up and uses the host PHP, skipping
+          # its Docker-fallback resolution.
+          BV_MIGRATE_PHP: php
+        run: bash migrations/run-tests.sh
+
+      - name: Run deploy.sh ↔ migrate.sh integration tests
+        env:
+          BV_MIGRATE_PHP: php
+        run: bash tests/deploy/migrate-integration.sh

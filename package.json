@@ -1,0 +1,13 @@
+{
+  "name": "byvaerkstederne-site",
+  "private": true,
+  "description": "Test infrastructure for Byværkstederne Grav CMS site",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}

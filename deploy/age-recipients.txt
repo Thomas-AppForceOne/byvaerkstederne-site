@@ -1,0 +1,7 @@
+# Byværkstederne age recipients — committed; per-operator
+# private keys live in macOS Keychain.
+#
+
+# bv-age-identity-thomas   (added 2026-05-10T14:37Z by taa@AppForceOne-Macbook-Pro)
+age19qqsf6gkq8a6nckr268043avsdvry6qewrqdavs89ezq50lw4vzq6kcmwd
+

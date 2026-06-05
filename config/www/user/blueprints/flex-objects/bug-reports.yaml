@@ -1,0 +1,96 @@
+title: Fejlrapporter
+description: Indsendte fejlrapporter fra medlemmer
+type: flex-objects
+
+config:
+  admin:
+    list:
+      title: title
+      fields:
+        promoted:
+          field:
+            type: toggle
+            label: Fremmet
+          width: 8
+        username:
+          label: Bruger
+          width: 12
+        timestamp:
+          label: Tidspunkt
+          width: 16
+        page_url:
+          label: Side-URL
+          width: 20
+        title:
+          label: Beskrivelse
+          link: edit
+      order:
+        by: timestamp
+        dir: desc
+    edit:
+      title:
+        template: "Fejlrapport — {{ object.username ?? 'Ukendt' }}"
+    configure:
+      authorize: admin.super
+
+  data:
+    object: 'Grav\Common\Flex\Types\Generic\GenericObject'
+    collection: 'Grav\Common\Flex\Types\Generic\GenericCollection'
+    index: 'Grav\Common\Flex\Types\Generic\GenericIndex'
+    storage:
+      class: 'Grav\Framework\Flex\Storage\SimpleStorage'
+      options:
+        formatter:
+          class: 'Grav\Framework\File\Formatter\YamlFormatter'
+        folder: user-data://flex-objects/bug-reports.yaml
+    search:
+      options:
+        contains: 1
+      fields:
+        - username
+        - description
+        - page_url
+
+form:
+  validation: loose
+  fields:
+    username:
+      type: display
+      label: Indsendt af
+      markdown: false
+
+    timestamp:
+      type: display
+      label: Tidspunkt (UTC)
+
+    page_url:
+      type: display
+      label: Side-URL
+
+    browser_os:
+      type: display
+      label: Browser / OS
+
+    description:
+      type: textarea
+      label: "Hvad skete der?"
+      rows: 4
+      validate:
+        required: true
+
+    expected:
+      type: textarea
+      label: "Hvad forventede du ville ske?"
+      rows: 4
+      validate:
+        required: true
+
+    promoted:
+      type: display
+      label: Status
+      markdown: false
+
+    promoted_item_id:
+      type: display
+      label: Roadmap-element ID
+      markdown: false

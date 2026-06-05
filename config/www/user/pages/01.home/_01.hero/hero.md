@@ -1,6 +1,6 @@
 ---
 title: Hero
-badge: Hundested Havn
+badge: "N\xF8rregade Hundested"
 title_before: "Byv\xE6rkstederne:"
 title_accent: "Vi skaber rummet"
 title_after: "\u2013 vil du v\xE6re med?"
@@ -14,4 +14,5 @@ buttons:
     - text: Se Kalender
       url: /vaerkstedskalenderen
       style: outlined
+      feature: workshop_calendar
 ---
