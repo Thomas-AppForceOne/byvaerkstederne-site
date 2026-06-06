@@ -955,6 +955,26 @@ a { color: inherit; text-decoration: none; }
 .bv-event-row--tertiary { border-left: 4px solid var(--tertiary); }
 .bv-event-row--kulturhus { border-left: 4px solid var(--kulturhus); }
 
+/* ---------- Technique / Pitch Cards (atelier_techniques.html.twig) ----------
+   The decorative numeral was previously inline-styled directly in the Twig
+   template; promoted to a class so the mobile breakpoint can target it
+   (screenshot 5: faded "5" overlapped "DU HAR SCENESKRÆK …" on a narrow
+   column). The desktop visual intent — large faded outline numeral anchored
+   top-right — is preserved unchanged here. */
+.bv-technique-card__index {
+    position: absolute;
+    top: var(--space-4);
+    right: var(--space-4);
+    font-family: var(--font-headline);
+    font-weight: 700;
+    font-size: 3rem;
+    line-height: 1;
+    color: var(--on-surface-variant);
+    opacity: 0.1;
+    pointer-events: none;
+}
+.bv-technique-card__body { position: relative; z-index: 1; }
+
 /* ---------- Team Cards ---------- */
 .bv-team-card {
     display: flex;
