@@ -23,11 +23,21 @@ const { useDevHost } = require('./_helpers');
 
 const ROUTE = '/vaerksteder/eventvaerkstedet';
 
-// Match the post-rename class first, fall back to the legacy selector so
-// the test would also have failed on the pre-fix tree (where there is no
-// .bv-technique-card class at all, only the inline-styled divs). Both
-// selector forms find six pitch cards.
-const CARD_SELECTOR = '.bv-technique-card, .techniques';
+// Two locators, two selector dialects:
+//   POST_RENAME_SELECTOR  matches the new .bv-technique-card class the fix
+//                         emits via atelier_techniques.html.twig.
+//   FALLBACK_SELECTOR     matches the pre-rename inline-styled card wrapper
+//                         (the screenshot-5 base tree has no card-level
+//                         class at all, only the inline-styled div with
+//                         position:relative + overflow:hidden that the
+//                         template emitted before the rename).
+// The for-loop below binds `cards` to whichever locator's count() returned
+// positive, so the iterated locator is always the one that resolved.
+// Iterating the original (post-rename) locator after only the fallback
+// resolved was the F1 silent-pass bug — the loop ran zero iterations on
+// the base ref and the geometric assertion never executed.
+const POST_RENAME_SELECTOR = '.bv-technique-card';
+const FALLBACK_SELECTOR = 'section.bv-section div[style*="position: relative"][style*="overflow: hidden"]';
 
 test.describe('Mobile — pitch / technique cards (screenshot 5, numeral overlap)', () => {
   test.beforeEach(async ({ page }) => { await useDevHost(page); });
@@ -36,22 +46,16 @@ test.describe('Mobile — pitch / technique cards (screenshot 5, numeral overlap
     const response = await page.goto(ROUTE);
     expect(response?.status()).toBe(200);
 
-    // Find every pitch card. The atelier_techniques.html.twig template
-    // renders one per technique listed in the page front-matter; the
-    // current eventvaerkstedet page has six entries.
-    const cards = page.locator(CARD_SELECTOR);
-    let count = await cards.count();
-    if (count === 0) {
-      // Fallback: pre-rename markup wrapped each card in a div with no
-      // class but with the absolute-positioned numeral as its first child.
-      // Query by the inline-styled signature so the failure-path test
-      // would have meaningful targets on the base ref.
-      const fallback = page.locator('section.bv-section div[style*="position: relative"][style*="overflow: hidden"]');
-      count = await fallback.count();
-      expect(count, `expected pitch cards on ${ROUTE}`).toBeGreaterThan(0);
-    } else {
-      expect(count, `expected pitch cards on ${ROUTE}`).toBeGreaterThan(0);
-    }
+    // Resolve the cards locator: prefer the post-rename class; fall back
+    // to the inline-styled signature only if the post-rename count is
+    // zero. Bind `cards` to whichever locator resolved positive so the
+    // for-loop iterates a non-empty locator on every tree (HEAD or base).
+    const postRename = page.locator(POST_RENAME_SELECTOR);
+    const fallback = page.locator(FALLBACK_SELECTOR);
+    const postRenameCount = await postRename.count();
+    const cards = postRenameCount > 0 ? postRename : fallback;
+    const count = postRenameCount > 0 ? postRenameCount : await fallback.count();
+    expect(count, `expected pitch cards on ${ROUTE}`).toBeGreaterThan(0);
 
     const TOL = 0.5;
 
@@ -107,11 +111,17 @@ test.describe('Mobile — pitch / technique cards (screenshot 5, numeral overlap
   test('mobile-pitch-numeral-remains-inside-card', async ({ page }) => {
     // Guard against a future "just move the numeral way off-card" regression
     // that would technically satisfy the non-intersection rule but break the
-    // visual design.
+    // visual design. Uses the same post-rename / fallback locator resolution
+    // as the overlap test so the loop iterates a non-empty locator on both
+    // HEAD and the base ref (no silent no-op when the post-rename class is
+    // absent).
     await page.goto(ROUTE);
-    const cards = page.locator(CARD_SELECTOR);
-    const count = await cards.count();
-    if (count === 0) return; // covered by the previous test's fallback path
+    const postRename = page.locator(POST_RENAME_SELECTOR);
+    const fallback = page.locator(FALLBACK_SELECTOR);
+    const postRenameCount = await postRename.count();
+    const cards = postRenameCount > 0 ? postRename : fallback;
+    const count = postRenameCount > 0 ? postRenameCount : await fallback.count();
+    expect(count, `expected pitch cards on ${ROUTE}`).toBeGreaterThan(0);
     for (let i = 0; i < count; i += 1) {
       const card = cards.nth(i);
       const numeral = card.locator('.bv-technique-card__index, :scope > div').first();
