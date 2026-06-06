@@ -49,6 +49,51 @@ module.exports = defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      // Keep the desktop project on the existing entry points (anonymous +
+      // authenticated). The new mobile suite is scoped to its own project
+      // below to avoid running every desktop case at a 390 × 844 viewport.
+      testIgnore: ['tests/mobile/**', 'tests/mobile.spec.js'],
+    },
+    {
+      // Mobile-rendering suite for the four iPhone-class defects (workgroup
+      // card clip, event-row overflow, long-title crowding, pitch-card
+      // numeral overlap) plus the four-route horizontal-overflow sweep.
+      // Anonymous-only — must NOT gate on TEST_PASSWORD (CLAUDE.md, spec
+      // hard constraints).
+      //
+      // Engine note: the project is "mobile-chromium" — we keep Chromium
+      // (not WebKit, which devices['iPhone 14 Pro'] defaults to) so the
+      // suite reuses the existing browser binary and so the bug surface
+      // matches the user's actual reporting context (Chromium on iPhone
+      // viewport-class emulation is the closest reproduction we can run
+      // headlessly in CI without a WebKit install step). The viewport,
+      // device pixel ratio, isMobile and hasTouch flags taken from the
+      // iPhone 14 Pro descriptor give the exact 390 × 844 layout the
+      // spec calls for.
+      name: 'mobile-chromium',
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 390, height: 844 },
+        deviceScaleFactor: 3,
+        isMobile: true,
+        hasTouch: true,
+        userAgent:
+          'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+        // /vaerkstedskalenderen is gated behind the `workshop_calendar`
+        // feature flag, which is OFF in the default localhost Grav profile
+        // (user/config/features.yaml leaves every flag commented out). The
+        // dev-tier env profile (user/env/dev.hackersbychoice.dk/) has every
+        // flag "true", so we force Grav into that profile by:
+        //   - overriding baseURL with dev.hackersbychoice.dk so the browser
+        //     sends Host: dev.hackersbychoice.dk natively, and
+        //   - adding a Chromium host-resolver rule so the DNS lookup still
+        //     lands on the local Grav container.
+        baseURL: `http://dev.hackersbychoice.dk:${(baseURL.match(/:(\d+)/) || [, '8081'])[1]}`,
+        launchOptions: {
+          args: ['--host-resolver-rules=MAP dev.hackersbychoice.dk 127.0.0.1'],
+        },
+      },
+      testMatch: ['tests/mobile.spec.js'],
     },
   ],
 });
