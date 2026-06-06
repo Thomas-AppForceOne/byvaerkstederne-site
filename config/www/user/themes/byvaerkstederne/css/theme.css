@@ -1426,7 +1426,19 @@ a { color: inherit; text-decoration: none; }
 
     /* Workgroups: single column, shorter cards */
     .bv-workgroups { grid-template-columns: 1fr; }
-    .bv-workgroup-card { aspect-ratio: 16/9; }
+    /* Mobile workgroup cards (screenshot 1, BILLEDKUNST clipped at top edge of
+       the krea-cafe atelier card): the fixed 16:9 aspect-ratio collapsed the
+       card below the height needed by the bottom-anchored title + description
+       + line stack, and overflow:hidden then clipped the heading. Drop the
+       fixed aspect on mobile and let the card grow to fit its content while
+       still presenting an image-shaped silhouette via min-height (≈ 16:9 of a
+       full-width column on a 390 px viewport ≈ 220 px). Image-as-background
+       and bottom-anchored content stack are preserved. */
+    .bv-workgroup-card {
+        aspect-ratio: auto;
+        min-height: 14rem;
+        height: auto;
+    }
     .bv-footer__grid { grid-template-columns: 1fr; padding: var(--space-12) var(--space-4); }
     .bv-featured-event { grid-template-columns: 1fr; }
     .bv-featured-event__image { width: 100%; }
@@ -1438,12 +1450,79 @@ a { color: inherit; text-decoration: none; }
     /* Hero: no right padding overflow */
     .bv-hero { max-width: 100vw; }
 
-    /* Event rows: stack vertically on mobile */
-    .bv-event-row { flex-direction: column; align-items: flex-start; gap: var(--space-3); }
-    .bv-event-row__date { display: flex; gap: var(--space-2); align-items: baseline; }
+    /* Event rows: stack vertically on mobile (screenshots 2, 3, 4 — "DRO"/
+       "Ing"/"tilmeld" letters cut at the viewport edge, drop-in pill squeezed
+       into a vertical sliver, TEGN OG SNIT GUMMISTEMPEL hugging the right
+       edge). min-width:0 on every flex child stops a long unbreakable token
+       from forcing the row wider than the viewport; overflow-wrap on the body
+       and title lets long Danish workshop titles break mid-word; max-width:100%
+       on the embedded CTA stops it from pushing the meta column off the right
+       edge when stacked. */
+    .bv-event-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-3);
+        min-width: 0;
+    }
+    .bv-event-row__date { display: flex; gap: var(--space-2); align-items: baseline; min-width: 0; }
     .bv-event-row__date-month { font-size: 0.875rem; }
     .bv-event-row__date-day { font-size: 1.25rem; }
-    .bv-event-row__meta { width: 100%; justify-content: flex-start; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-2); }
+    .bv-event-row__body {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        padding-right: var(--space-2);
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+    .bv-event-row__title {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        max-width: 100%;
+    }
+    .bv-event-row__desc {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        max-width: 100%;
+    }
+    .bv-event-row__meta {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        gap: var(--space-3);
+        margin-top: var(--space-2);
+    }
+    .bv-event-row__meta .bv-btn { max-width: 100%; overflow-wrap: anywhere; }
+    .bv-event-row__capacity { max-width: 100%; overflow-wrap: anywhere; }
+
+    /* Mobile pitch / technique cards (screenshot 5, "DU HAR SCENESKRÆK — OG
+       EN HEMMELIG DRØM" overlapped by the faded "05"). Two coupled rules
+       guarantee bounding-box non-intersection at 390 px width:
+         a) numeral is tucked into the top-right corner and capped to ~2.5 rem
+            wide so its left edge sits well inside the card's right padding.
+         b) title's max-width reserves space for the numeral on its right and
+            (crucially) makes the h3's bounding box stop short of the numeral
+            even though the surrounding body has no padding-right.
+       The numeral stays visible (no display:none / visibility:hidden — the
+       design-intent guard called out in the spec). */
+    .bv-technique-card__index {
+        font-size: 1.75rem;
+        top: var(--space-2);
+        right: var(--space-2);
+        width: 2.5rem;
+        text-align: right;
+        z-index: 0;
+        opacity: 0.08;
+    }
+    .bv-technique-card__title {
+        position: relative;
+        z-index: 2;
+        max-width: calc(100% - 3.5rem);
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
 
     /* To-Do card: match inner padding to container padding on mobile */
     .bv-todo-trigger { padding: var(--space-4) !important; }
