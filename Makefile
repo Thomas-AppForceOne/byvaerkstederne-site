@@ -18,24 +18,29 @@ setup: check-deps lfs-pull start create-admin ## Full first-time setup (check to
 	@echo "  ⚙️   Admin: http://localhost:8080/admin"
 	@echo ""
 
-create-admin: ## Create an admin account (interactive)
-	@if [ ! -f config/www/user/accounts/thomasadmin.yaml ]; then \
-		echo ""; \
-		echo "  No admin account found. Let's create one."; \
-		echo ""; \
-		read -p "  Username: " username; \
-		read -p "  Email: " email; \
-		read -p "  Full name: " fullname; \
-		read -s -p "  Password: " password; echo ""; \
-		CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(1) }' 2>/dev/null) || { \
-			echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
-		}; \
-		docker exec -w /app/www/public "$$CONTAINER" bin/plugin login new-user -u $$username -e $$email -p $$password -n "$$fullname" -t admin -s enabled -a admin.super; \
-		echo ""; \
-		echo "  ✓ Admin account '$$username' created"; \
-	else \
-		echo "  Admin account already exists. Skipping."; \
-	fi
+create-admin: ## Create a super-admin account (interactive)
+	@echo ""; \
+	echo "  Create a super-admin account."; \
+	echo ""; \
+	read -p "  Username: " username; \
+	if [ -f config/www/user/accounts/$$username.yaml ]; then \
+		echo "  ❌  Account '$$username' already exists at config/www/user/accounts/$$username.yaml. Pick a different username or remove the file first."; \
+		exit 1; \
+	fi; \
+	read -p "  Email: " email; \
+	read -p "  Full name: " fullname; \
+	read -s -p "  Password: " password; echo ""; \
+	CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(1) }' 2>/dev/null) || { \
+		echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
+	}; \
+	docker exec -w /app/www/public "$$CONTAINER" bin/plugin login new-user \
+		-u "$$username" -e "$$email" -p "$$password" -N "$$fullname" -t admin -s enabled -P b || exit 1; \
+	docker exec -w /app/www/public "$$CONTAINER" sh -c "awk '/^  admin:/{print; print \"    super: true\"; next}1' user/accounts/$$username.yaml > user/accounts/$$username.yaml.tmp && mv user/accounts/$$username.yaml.tmp user/accounts/$$username.yaml" || { \
+		echo "❌  Failed to elevate '$$username' to super-admin (Login plugin's new-user grants admin.login + site.login via -P b but not admin.super; this step injects 'super: true' into the generated YAML)."; \
+		exit 1; \
+	}; \
+	echo ""; \
+	echo "  ✓ Super-admin account '$$username' created"
 
 check-deps: ## Verify all required tools are installed
 	@echo "Checking dependencies..."
