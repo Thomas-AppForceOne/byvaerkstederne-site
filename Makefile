@@ -34,11 +34,7 @@ create-admin: ## Create a super-admin account (interactive)
 		echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
 	}; \
 	docker exec -w /app/www/public "$$CONTAINER" bin/plugin login new-user \
-		-u "$$username" -e "$$email" -p "$$password" -N "$$fullname" -t admin -s enabled -P b || exit 1; \
-	docker exec -w /app/www/public "$$CONTAINER" sh -c "awk '/^  admin:/{print; print \"    super: true\"; next}1' user/accounts/$$username.yaml > user/accounts/$$username.yaml.tmp && mv user/accounts/$$username.yaml.tmp user/accounts/$$username.yaml" || { \
-		echo "❌  Failed to elevate '$$username' to super-admin (Login plugin's new-user grants admin.login + site.login via -P b but not admin.super; this step injects 'super: true' into the generated YAML)."; \
-		exit 1; \
-	}; \
+		-u "$$username" -e "$$email" -p "$$password" -N "$$fullname" -t admin -s enabled -P b -n || exit 1; \
 	echo ""; \
 	echo "  ✓ Super-admin account '$$username' created"
 
