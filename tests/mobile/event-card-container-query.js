@@ -30,10 +30,6 @@
 
 const { test, expect } = require('@playwright/test');
 
-// Desktop viewport — the mobile-chromium project defaults to 390 × 844.
-// The criterion-C12 static gate greps for width >= 1024 inside test.use.
-test.use({ viewport: { width: 1280, height: 800 } });
-
 // Structural CSS subset: tokens the partial needs + the .bv-event-list
 // reset + the .bv-event-item container declaration + the .bv-event-row
 // rules + the @container event-row (max-width: 540px) block. Verbatim
@@ -141,6 +137,15 @@ const SANDBOX_HTML = `<!doctype html>
 </html>`;
 
 test.describe('mobile-event-card-container-query', () => {
+  // Desktop viewport — the mobile-chromium project defaults to 390 × 844.
+  // The criterion-C12 static gate greps for width >= 1024 inside test.use.
+  // Scoped to this describe block (NOT module-level) because all mobile
+  // tests are merged via tests/mobile.spec.js require()s; module-level
+  // test.use would leak into the other mobile tests and force every
+  // route-probe test to 1280 × 800, defeating the four-rule mobile
+  // invariant.
+  test.use({ viewport: { width: 1280, height: 800 } });
+
   test('container query fires on .bv-event-item at 360 px wrapper width regardless of 1280 × 800 viewport', async ({ page }) => {
     await page.setContent(SANDBOX_HTML);
 
