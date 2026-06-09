@@ -74,23 +74,33 @@ async function injectOverflowProbeRow(page, btnText) {
   await page.evaluate((t) => {
     const host = document.querySelector('section.bv-section--sm .bv-container');
     if (!host) throw new Error('event-list section.bv-section--sm .bv-container not found');
-    const row = document.createElement('div');
-    row.className = 'bv-event-row bv-event-row--secondary';
+    // Canonical post-unification DOM: the .bv-event-item wrapper carries
+    // container-type: inline-size so the @container event-row (max-width: 540px)
+    // query fires on the row's own width. Without this wrapper the row
+    // never stacks and meta .bv-btn never goes full-width — the same
+    // structural shape the migrated event_list.html.twig emits.
+    const wrapper = document.createElement('div');
+    wrapper.className = 'bv-event-item';
+    const row = document.createElement('article');
+    row.className = 'bv-event-row';
+    row.setAttribute('data-group', 'makerspace');
+    row.setAttribute('style', '--bv-accent: var(--secondary);');
     row.setAttribute('data-test', 'gen-b-overflow-probe');
     row.innerHTML = `
-      <div class="bv-event-row__date" style="color: var(--primary);">
-        <div class="bv-event-row__date-month">June</div>
-        <div class="bv-event-row__date-day">28</div>
+      <div class="bv-event-row__date">
+        <span class="bv-event-row__date-month">JUN</span>
+        <span class="bv-event-row__date-day">28</span>
       </div>
       <div class="bv-event-row__body">
-        <div class="bv-event-row__title">Probe</div>
-        <div class="bv-event-row__desc">Synthetic row to lock down the .bv-event-row__meta .bv-btn overflow fix.</div>
+        <h3 class="bv-event-row__title">Probe</h3>
+        <p class="bv-event-row__desc">Synthetic row to lock down the .bv-event-row__meta .bv-btn overflow fix.</p>
       </div>
       <div class="bv-event-row__meta">
         <a href="#" class="bv-btn bv-btn--secondary bv-btn--sm">${t}</a>
       </div>
     `;
-    host.appendChild(row);
+    wrapper.appendChild(row);
+    host.appendChild(wrapper);
   }, btnText);
 }
 
@@ -105,22 +115,28 @@ async function injectLongTitleProbeRow(page, titleText) {
   await page.evaluate((t) => {
     const host = document.querySelector('section.bv-section--sm .bv-container');
     if (!host) throw new Error('event-list section.bv-section--sm .bv-container not found');
-    const row = document.createElement('div');
-    row.className = 'bv-event-row bv-event-row--tertiary';
+    // Canonical post-unification DOM — see injectOverflowProbeRow.
+    const wrapper = document.createElement('div');
+    wrapper.className = 'bv-event-item';
+    const row = document.createElement('article');
+    row.className = 'bv-event-row';
+    row.setAttribute('data-group', 'kreativ');
+    row.setAttribute('style', '--bv-accent: var(--tertiary);');
     row.setAttribute('data-test', 'gen-b-longtitle-probe');
     row.innerHTML = `
-      <div class="bv-event-row__date" style="color: var(--primary);">
-        <div class="bv-event-row__date-month">July</div>
-        <div class="bv-event-row__date-day">02</div>
+      <div class="bv-event-row__date">
+        <span class="bv-event-row__date-month">JUL</span>
+        <span class="bv-event-row__date-day">02</span>
       </div>
       <div class="bv-event-row__body">
-        <div class="bv-event-row__title">${t}</div>
+        <h3 class="bv-event-row__title">${t}</h3>
       </div>
       <div class="bv-event-row__meta">
         <a href="#" class="bv-btn bv-btn--tertiary bv-btn--sm">Tilmeld</a>
       </div>
     `;
-    host.appendChild(row);
+    wrapper.appendChild(row);
+    host.appendChild(wrapper);
   }, titleText);
 }
 

@@ -1036,6 +1036,14 @@ a { color: inherit; text-decoration: none; }
     .bv-event-row__meta { width: 100%; }
     .bv-event-row__meta { align-items: flex-start; text-align: left; margin-top: var(--space-2); }
     .bv-event-row__meta .bv-btn { width: 100%; }
+    /* Long Danish workshop titles (the "TEGN OG SNIT GUMMISTEMPEL" case
+       from PR #35's screenshot 2) must break mid-token at narrow widths
+       so they cannot push the body's bounding box past the row's right
+       edge. Identical PR #35 fix, scoped to the container-query block
+       where it is needed. */
+    .bv-event-row__title { overflow-wrap: anywhere; word-break: break-word; max-width: 100%; }
+    .bv-event-row__desc { overflow-wrap: anywhere; word-break: break-word; max-width: 100%; }
+    .bv-event-row__body { padding-right: var(--space-2); }
 }
 
 /* ---------- Technique / Pitch Cards (atelier_techniques.html.twig) ----------
