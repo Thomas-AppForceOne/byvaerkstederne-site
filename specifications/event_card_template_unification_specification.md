@@ -88,9 +88,10 @@ in-repo Claude Design handoff. After this lands:
   a "your enrolments" listing in a member area, etc.) starts by
   including the partial and is correct-by-construction.
 
-The unification also closes three production-data regressions that an
-attempted first pass against the v1 handoff exposed (and that the v2
-handoff specifically addresses):
+The v2 handoff was commissioned specifically to close gaps a first
+implementation attempt against the v1 handoff exposed. The unification
+therefore also closes three production-data regressions and one latent
+CSS bug that v1 had not caught:
 
 - **F1** — calendar filter regression. The v1 partial conflated the
   workshop accent colour and the filter ID into one field, so
@@ -169,7 +170,8 @@ event:
   filter: "makerspace" # BEHAVIOUR: emitted as data-group="{filter}" for site.js
                        # one of the filter IDs the calendar's filter buttons emit
                        # via data-filter (makerspace, krea-cafe, groenne,
-                       # kulturhus, alle)
+                       # kulturhus, alle). Optional — when absent, no
+                       # data-group attribute is emitted.
 
   # Optional meta-column slots — render any combination, empty slots collapse.
   # ALL three are independently optional. This is the v2 unification: the
@@ -197,7 +199,20 @@ Three rules to internalise:
    collapse with no reserved space.
 3. **`badge` is body-column eyebrow, not meta.** It sits above the
    `<h3>` title inside `.bv-event-row__body`, using the existing
-   `.bv-badge` class with the accent-variant modifier.
+   `.bv-badge` class with the accent-variant modifier. An empty or
+   missing `badge` value MUST NOT render an empty `<span>` (the
+   partial's `{% if event.badge %}` guard handles this; the badge
+   negative-case test guards against a future regression where someone
+   replaces it with `{% if event.badge is defined %}` or similar).
+4. **`accent` values come from a closed, trusted set.** The four
+   workshop tokens (`primary`, `secondary`, `tertiary`, `kulturhus`)
+   come from Flex Object YAML or page-header YAML in this codebase —
+   never from user input. The partial MUST nevertheless validate the
+   incoming value against the closed set before interpolating it into
+   the inline `style="--bv-accent: var(--{value});"` attribute, and
+   fall back to `primary` on miss. Belt-and-braces: the YAML is
+   trusted today, but the partial is the single point that emits the
+   token into a style context and is the right place to enforce.
 
 ### Mapping per source template (canonicalised against the v2 model)
 
@@ -211,13 +226,13 @@ Three rules to internalise:
 | `begivenheder.yaml` `event_time:` | `event.time` |
 | `begivenheder.yaml` `title:` / `description:` | `event.title` / `event.description` |
 | `begivenheder.yaml` `price:` | `event.price` |
-| `begivenheder.yaml` `button_text:` + `button_url:` | `event.cta = { label, href, variant: accent }` |
+| `begivenheder.yaml` `button_text:` + `button_url:` | `event.cta = { label, href, variant: accent }`. **Both fields required**: a `button_text` with no `button_url` (or vice versa) renders no CTA at all (silent drop, not an `href="#"` fallback). This is a deliberate behaviour change from the pre-v1 template, which rendered an unactionable button. |
 | `begivenheder.yaml` `capacity:` (free-form string) | `event.capacity` |
 | `event_list` page-header fallback fields | same canonical fields, page-header sourced when flex-objects absent |
 | `atelier_sessions` page-level `h.accent` | `event.accent` (per-session accent overrides not in scope) |
 | `atelier_sessions` `s.day/month/title/time/description` | same canonical fields |
 | `atelier_sessions` `s.contact_name` + `s.contact_sms` | `event.cta = { label: s.contact_name, href: "sms:+45" ~ s.contact_sms }` |
-| `atelier_sessions` `s.no_signup: true` | `event.price = "Drop-in"`, no `cta`, no `capacity` |
+| `atelier_sessions` `s.no_signup: true` | `event.price = "Drop-in"`, no `cta`, no `capacity`. **`no_signup` wins** — if a session sets both `no_signup: true` AND `contact_name`/`contact_sms`, render the drop-in form and ignore the contact fields. |
 | `atelier_sessions` filter (page-level) | `event.filter` (e.g. `krea-cafe`) |
 | `calendar_featured` h.event_title / event_description / event_date | `event.title` / `event.description` / parsed (day,month); featured flag → `--featured` modifier |
 | `event_highlight` primary featured event | same — featured modifier |
@@ -229,13 +244,28 @@ Three rules to internalise:
 config/www/user/themes/byvaerkstederne/templates/partials/event_card.html.twig
 ```
 
-Renders the v2 handoff's DOM exactly:
+Renders the v2 handoff's DOM exactly. The partial accepts an optional
+`inList` flag (default `true`) that picks the wrapper tag — `<li>` for
+list contexts (`event_list`, `atelier_sessions`, the secondary list
+inside `event_highlight`), and `<div>` for single-card contexts
+(`calendar_featured`, the primary featured card inside
+`event_highlight`). The container-query target class
+`.bv-event-item` is the same regardless of tag.
 
 ```twig
-<li class="bv-event-item">
+{# Validate accent against the closed set. The four workshop tokens are
+   the only values theme.css recognises; an unknown value would silently
+   produce an inline style that resolves to nothing. #}
+{% set _allowed_accents = ['primary', 'secondary', 'tertiary', 'kulturhus'] %}
+{% set _accent = event.accent in _allowed_accents ? event.accent : 'primary' %}
+{% set _in_list = event.inList ?? true %}
+{% set _cta_variant = (event.cta.variant ?? _accent) in _allowed_accents
+                       ? (event.cta.variant ?? _accent) : 'primary' %}
+
+{% if _in_list %}<li class="bv-event-item">{% else %}<div class="bv-event-item">{% endif %}
   <article class="bv-event-row{% if event.featured %} bv-event-row--featured{% endif %}"
            {% if event.filter %}data-group="{{ event.filter }}"{% endif %}
-           style="--bv-accent: var(--{{ event.accent|default('primary') }});">
+           style="--bv-accent: var(--{{ _accent }});">
 
     <div class="bv-event-row__date">
       <span class="bv-event-row__date-month">{{ event.month }}</span>
@@ -244,20 +274,20 @@ Renders the v2 handoff's DOM exactly:
 
     <div class="bv-event-row__body">
       {% if event.badge %}
-        <span class="bv-badge bv-badge--{{ event.accent|default('primary') }} bv-event-row__badge">{{ event.badge }}</span>
+        <span class="bv-badge bv-badge--{{ _accent }} bv-event-row__badge">{{ event.badge }}</span>
       {% endif %}
       <h3 class="bv-event-row__title">{{ event.title }}</h3>
       {% if event.time %}<p class="bv-event-row__time">{{ event.time }}</p>{% endif %}
       {% if event.description %}<p class="bv-event-row__desc">{{ event.description }}</p>{% endif %}
     </div>
 
-    {% if event.price or event.cta or event.capacity %}
+    {% if event.price or (event.cta and event.cta.label and event.cta.href) or event.capacity %}
       <div class="bv-event-row__meta">
         {% if event.price %}
           <span class="bv-event-row__price">{{ event.price }}</span>
         {% endif %}
         {% if event.cta and event.cta.label and event.cta.href %}
-          <a class="bv-btn bv-btn--{{ event.cta.variant|default(event.accent|default('primary')) }} bv-btn--sm"
+          <a class="bv-btn bv-btn--{{ _cta_variant }} bv-btn--sm"
              href="{{ event.cta.href }}">{{ event.cta.label }}</a>
         {% endif %}
         {% if event.capacity %}
@@ -269,23 +299,38 @@ Renders the v2 handoff's DOM exactly:
       </div>
     {% endif %}
   </article>
-</li>
+{% if _in_list %}</li>{% else %}</div>{% endif %}
 ```
 
-Three structural details called out by the v2 handoff:
+Four structural details called out by the v2 handoff:
 
-1. **`<li class="bv-event-item">` is the container-query target.** It
-   sits AROUND `<article class="bv-event-row">`. Setting
-   `container-type` on `.bv-event-row` and trying to restyle it from
-   its own `@container` query does not work — an element cannot react
-   to its own container-type; container queries only affect
-   descendants. This was a latent bug in the v1 spec. The v2 fix is
-   the wrapper.
-2. **Title is `<h3>`, not `<div>`.** Accessibility and heading
-   hierarchy.
-3. **Each list of cards is wrapped in `<ul class="bv-event-list">`
-   (or analogous) at the modular template level.** The `<li>` per
-   card preserves semantic list structure.
+1. **`.bv-event-item` is the container-query target.** It sits AROUND
+   `<article class="bv-event-row">`. Setting `container-type` on
+   `.bv-event-row` and trying to restyle it from its own
+   `@container` query does not work — an element cannot react to its
+   own container-type; container queries only affect descendants.
+   This was a latent bug in the v1 spec. The v2 fix is the wrapper.
+2. **The wrapper tag is `<li>` in list contexts and `<div>` in
+   single-card contexts.** The `inList` flag picks one; the container
+   class stays `.bv-event-item` regardless. `event_list` and
+   `atelier_sessions` pass `inList: true` (default); `calendar_featured`
+   and `event_highlight`'s primary featured card pass `inList: false`.
+   When `inList: true`, the caller wraps the for-loop in
+   `<ul class="bv-event-list">...</ul>`; when `inList: false`, no
+   `<ul>` is emitted.
+3. **Title is `<h3>`, not `<div>`.** Accessibility and heading
+   hierarchy. A future Playwright regression check asserts the
+   element resolves to an `<h3>` tag.
+4. **Meta-column collapse semantics.** When all three meta fields
+   (`price`, `cta`, `capacity`) are absent, the entire
+   `.bv-event-row__meta` `<div>` is NOT rendered (the partial's outer
+   `{% if … %}` guard skips it), and the flex layout reclaims the
+   column space. When at least one meta field IS present, the meta
+   column renders with its full `min-width: 9rem` (the layout reserves
+   the column even when one or two slots are empty — partial-collapse
+   keeps the desktop alignment of adjacent rows consistent). The
+   "without reserved space" criterion below covers the all-empty case;
+   the partial-empty case keeps the 9 rem reservation intentionally.
 
 ### CSS — container query on `.bv-event-item`, NOT `.bv-event-row`
 
@@ -311,9 +356,19 @@ Stylesheet changes live in
   `config/www/user/` must return zero hits before they can be deleted.
 
 **Added** (insert into the calendar section verbatim from the v2
-handoff's `## Production implementation` block):
+handoff's `## Production implementation` block, plus two new design
+tokens to `:root` and a `--featured` modifier):
 
 ```css
+/* :root additions — the v2 handoff's CSS uses two tokens that
+   theme.css does not currently define. Add them in the existing :root
+   block (do not introduce a second :root block). */
+:root {
+    /* … existing tokens … */
+    --border-thick: 4px;          /* the visible workshop-accent left border */
+    --tracking-tight: -0.02em;    /* title letter-spacing per handoff */
+}
+
 /* Each entry is its own query container; the row (descendant) reacts. */
 .bv-event-item { container-type: inline-size; container-name: event-row; }
 .bv-event-item + .bv-event-item { margin-top: var(--space-3); }
@@ -369,15 +424,43 @@ handoff's `## Production implementation` block):
 > closes the comment early and corrupts the next rule. Use a single
 > comment per block.
 
-`.bv-event-row--featured` modifier — desktop-only typography bump on
-`.bv-event-row__date-day` and tighter spacing for the
-`calendar_featured` and `event_highlight` callers; mobile inherits the
-canonical stacked layout without modifier-specific overrides. The
-implementation adds it only if needed for visual parity.
+`.bv-event-row--featured` modifier — desktop-only typography bump and
+tighter spacing for the `calendar_featured` and `event_highlight`
+primary callers. Mobile inherits the canonical stacked layout without
+modifier-specific overrides. The modifier is concrete (not "decide
+during implementation"):
+
+```css
+/* Featured modifier — used by calendar_featured.html.twig and the
+   primary featured card in event_highlight.html.twig. */
+.bv-event-row--featured .bv-event-row__date-day { font-size: 2rem; }
+.bv-event-row--featured .bv-event-row__date-month { font-size: 0.875rem; }
+.bv-event-row--featured .bv-event-row__title { font-size: 1.5rem; }
+.bv-event-row--featured { padding: var(--space-8) var(--space-6); }
+```
+
+The implementation may further tune these values during sprint 2 to
+minimise the visual diff against the existing `.bv-featured-event*`
+rendering, but the modifier MUST exist as the place where featured
+overrides live; do not move featured overrides onto `.bv-event-row`
+itself.
+
+### Trust posture for accent values
+
+`event.accent` values originate from YAML the operator controls:
+`begivenheder.yaml`'s `button_style` field for `event_list`, the page-
+header `accent:` field for `atelier_sessions`, and page-header
+fields for `calendar_featured` and `event_highlight`. None of these
+sources accept end-user input — they are admin-edited YAML. The
+partial's accent validation (closed set, fallback to `primary` on
+miss) is a defensive layer, not a trust boundary: the YAML is the
+trust boundary, and the validation guards against typos and
+future schema drift, not against an attacker.
 
 ### Tests
 
-Two new Playwright files:
+Two new Playwright files plus a new Playwright project plus a wiring
+entry point:
 
 **`tests/mobile/event-card-unification.js`** — geometric and behavioural
 invariants on each migrated route at viewport 390 × 844:
@@ -449,7 +532,25 @@ parity against the v2 handoff design. Per route, screenshots the
 rendered output and compares against a baseline captured AFTER the
 partial is introduced AND verified against the v2 handoff's
 `demo.html`. Pixel-diff threshold: 5 % per existing project Playwright
-convention. Baselines from any prior attempt are discarded.
+convention. Baselines from any prior attempt are discarded. The
+test's failure path is implicit: reverting the partial migration
+restores the bespoke (pre-v2) desktop rendering, which fails the
+baseline comparison; the evaluator's C6-style baseline-revert run
+captures this.
+
+**`tests/mobile.spec.js`** — new entry point that loads the two new
+mobile test files. Modelled on the existing `tests/anonymous.spec.js`
+pattern. Required because `tests/mobile.spec.js` does not exist on
+the foundation branch; without this entry point the
+`mobile-chromium` Playwright project has nothing to run.
+
+**`playwright.config.js`** — extend the existing `projects` array
+with a `mobile-chromium` project alongside the current `chromium`
+project. The project's `use` block sets a viewport of 390 × 844
+(`devices['iPhone 14 Pro']` is the closest match in the playwright
+device registry), and its `testMatch` filters to
+`tests/mobile.spec.js`. The existing `chromium` project is unchanged
+and continues to drive the anonymous + authenticated suites.
 
 The failure-path discipline from PR #35 carries through: each new
 mobile test must demonstrably fail when the partial migration is
@@ -509,26 +610,42 @@ or a grep.
     passes the four-rule mobile invariant at viewport 390 × 844. The
     `mobile-chromium` Playwright project's exit code is 0.
 12. **Container-query mechanism proven** —
-    `tests/mobile/event-card-container-query.js` renders the partial
-    in a 360 px wrapper on a 1280 px viewport and asserts
-    `flexDirection: 'column'` AND `order: -1` on `__date-day` AND CTA
-    width === 100%. Test passes on HEAD.
+    `tests/mobile/event-card-container-query.js` runs at viewport
+    1280 × 800 (via `test.use({ viewport: { width: 1280, height: 800 } })`)
+    inside the describe block, renders the partial in a 360 px
+    wrapper, and asserts: (a) `getComputedStyle(row).flexDirection ===
+    'column'`; (b) `getComputedStyle(row.querySelector('.bv-event-row__date-day')).order === '-1'`;
+    (c) the CTA's rendered width matches its parent's content-box
+    width within ±1 px:
+    `Math.abs(cta.getBoundingClientRect().width - cta.parentElement.getBoundingClientRect().width) <= 1`.
+    Note: do NOT compare against the string `"100%"`; the resolved
+    style returns a pixel value, not a percentage. Test passes on HEAD.
 13. **F1 filter contract preserved** —
     `tests/mobile/event-card-unification.js` asserts that for each
     rendered row, `row.dataset.group` equals the filter ID (not the
     accent token), and that clicking a filter button on
     `/vaerkstedskalenderen` shows only matching rows (and does NOT
     hide all rows).
-14. **F2 badge slot honoured** — for any event with a `badge:` YAML
-    value, the rendered DOM contains a `.bv-event-row__badge` element
-    with the badge text in `body` (not meta).
+14. **F2 badge slot honoured (with negative case)** — for any event
+    with a non-empty `badge:` YAML value, the rendered DOM contains
+    a `.bv-event-row__badge` element with the badge text inside
+    `.bv-event-row__body` (not inside `.bv-event-row__meta`). For an
+    event with no `badge:` or `badge: ""`, the rendered DOM contains
+    NO `.bv-event-row__badge` element at all (not an empty span).
+    Both cases are tested.
 15. **F3 three-meta-slots honoured** — for the event001 row (or a
     seeded equivalent carrying badge + price + CTA + capacity), the
     rendered DOM contains `.bv-event-row__price`, `a.bv-btn` inside
     `.bv-event-row__meta`, AND `.bv-event-row__capacity` simultaneously.
-    For an atelier drop-in row (no capacity), the capacity element
-    does NOT render and the meta column collapses without reserved
-    space.
+    For an event with NO meta fields (all of `price`, `cta`,
+    `capacity` absent), the rendered DOM contains NO
+    `.bv-event-row__meta` element at all (the partial's outer guard
+    skips it entirely, and the flex layout reclaims the column
+    space). For an atelier drop-in row (price + cta, no capacity),
+    the meta column DOES render with its `min-width: 9rem`; the
+    capacity element specifically does not render, but the column
+    reservation persists — this preserves desktop alignment of
+    adjacent rows.
 16. **a11y heading hierarchy** — `.bv-event-row__title` is rendered
     as an `<h3>` (not a `<div>`) in every event-card route.
 17. **Mobile failure-path coverage** — each affected route has at
@@ -562,6 +679,29 @@ or a grep.
     `bin/grav clearcache` (no hyphen) run inside the worktree's Grav
     container after every `.html.twig` edit and before every Playwright
     probe.
+24. **Design tokens defined before use** —
+    `grep -nE -- '--border-thick:|--tracking-tight:' config/www/user/themes/byvaerkstederne/css/theme.css`
+    returns at least one match per token within the existing `:root`
+    block. The v2 handoff's CSS uses both; the foundation branch does
+    not define them; the migration adds them.
+25. **Accent value is validated by the partial** —
+    `grep -nE "_allowed_accents|in.*\['primary'.*'secondary'.*'tertiary'.*'kulturhus'\]"
+    config/www/user/themes/byvaerkstederne/templates/partials/event_card.html.twig`
+    returns at least one match. The partial does not interpolate
+    `event.accent` into the inline `style="--bv-accent: …"` attribute
+    without first validating against the closed set.
+26. **Wrapper-tag flag honoured** — for the `event_list` and
+    `atelier_sessions` migrations the rendered DOM wraps each card
+    in `<li class="bv-event-item">`; for the `calendar_featured`
+    primary card the rendered DOM wraps in `<div class="bv-event-item">`
+    (not `<li>`). The container-query class `.bv-event-item` appears
+    on the wrapper regardless of tag.
+27. **`mobile-chromium` Playwright project exists** —
+    `grep -n 'mobile-chromium' playwright.config.js` returns at
+    least one match, and `tests/mobile.spec.js` exists and `require`s
+    both new mobile test files. Without these, the project has
+    nothing to run and the entire mobile suite silently passes with
+    zero tests.
 
 ---
 
@@ -579,10 +719,12 @@ Allowed prefixes for any change in this run:
   rules from the `@media (max-width: 767px)` block.
 - `tests/mobile/` — the two new mobile test files
   (`event-card-unification.js`, `event-card-container-query.js`).
+- `tests/mobile.spec.js` — new entry-point file required by the
+  `mobile-chromium` Playwright project's `testMatch`.
 - `tests/anonymous/` — the new visual-parity test file (this is the
   only reason `tests/anonymous/` is in scope).
-- `playwright.config.js` — only if a new project for visual-parity
-  baselines needs configuring.
+- `playwright.config.js` — adds the `mobile-chromium` project; may
+  also add a project for visual-parity baselines if needed.
 - `documentation/design/event-row-handoff/` — read-only access for
   the planner / generator. The bundle's contents are authoritative;
   agents do not edit them.
@@ -615,66 +757,84 @@ Suggested ordering inside sprint 1:
    including `reference/demo.html`) end-to-end before writing any code.
    Render `demo.html` in a browser to see the intended desktop +
    stacked behaviour live.
-2. Write the partial against the v2 canonical schema, matching the
-   v2 handoff's HTML structure exactly. The `<li class="bv-event-item">`
-   wrapper is mandatory.
-3. Add the base CSS, the container declaration on `.bv-event-item`,
-   and the container query block to `theme.css` — verbatim from the
-   v2 handoff's `## Production implementation` block. Delete PR #35's
+2. **Scaffold the mobile Playwright project.** Add `mobile-chromium`
+   to `playwright.config.js`'s `projects` array (viewport 390 × 844,
+   `testMatch: 'tests/mobile.spec.js'`). Create `tests/mobile.spec.js`
+   modelled on `tests/anonymous.spec.js`. Both test files
+   (`event-card-unification.js`, `event-card-container-query.js`) get
+   stub `test.describe` blocks at this step so wiring is testable
+   before content lands.
+3. **Add the two missing design tokens** (`--border-thick: 4px`,
+   `--tracking-tight: -0.02em`) to the existing `:root` block in
+   `theme.css`. They underpin the v2 handoff's CSS; without them the
+   handoff's rules silently fall back.
+4. Write the partial against the v2 canonical schema, matching the
+   v2 handoff's HTML structure exactly. The `.bv-event-item` wrapper
+   is mandatory; the `inList` flag picks `<li>` vs. `<div>`. The
+   accent-validation block is mandatory (criterion #25).
+5. Add the base CSS, the container declaration on `.bv-event-item`,
+   the `.bv-event-row--featured` modifier, and the container query
+   block to `theme.css` — verbatim from the spec's CSS section
+   (which is the v2 handoff's `## Production implementation` block
+   plus the modifier and the token additions). Delete PR #35's
    `@media (max-width: 767px)` rules on `.bv-event-row` in the same
    commit.
-4. Migrate `event_list.html.twig` — preserving the existing
+6. Migrate `event_list.html.twig` — preserving the existing
    flex-objects ↔ page-header fallback logic. The migration MUST set
    `event.filter` from `ev.group` (NOT from `ev.button_style`) and
-   `event.accent` from `ev.button_style` (NOT from `ev.group`). Capture
-   desktop visual-parity baselines via Playwright.
-5. Run the existing mobile + desktop Playwright suites; both must
+   `event.accent` from `ev.button_style` (NOT from `ev.group`). The
+   for-loop is wrapped in `<ul class="bv-event-list">…</ul>` and
+   each iteration calls the partial with `inList: true` (default).
+   Capture desktop visual-parity baselines via Playwright.
+7. Run the existing mobile + desktop Playwright suites; both must
    still pass.
-6. Migrate `atelier_sessions.html.twig`. Add the mobile probe for
-   `/vaerksteder/krea-cafe/syvaerkstedet` and the Lene Pels page.
-   Verify the probe fails on the pre-migration revert (the C6-style
-   failure-path discipline).
-7. Add `tests/mobile/event-card-container-query.js` and verify it
-   passes (proving the container query mechanism works on a wide
-   viewport with a narrow wrapper) AND that the container is the
-   wrapper, not the row.
-8. Add the F1/F2/F3-correctness guards to
-   `tests/mobile/event-card-unification.js` (filter dataset, badge
-   slot, three meta slots).
+8. Migrate `atelier_sessions.html.twig`. The for-loop is wrapped in
+   `<ul class="bv-event-list">…</ul>` (sessions are a list); each
+   iteration calls the partial with `inList: true` (default). Add
+   the mobile probe for `/vaerksteder/krea-cafe/syvaerkstedet` and
+   the Lene Pels page. Verify the probe fails on the pre-migration
+   revert (the C6-style failure-path discipline).
+9. Fill in `tests/mobile/event-card-container-query.js` (it was
+   stubbed in step 2) — assert the container query fires on
+   `.bv-event-item` (not on `.bv-event-row`), the date-day flip is
+   present, and the CTA full-width hold geometrically (per criterion
+   #12's exact comparison).
+10. Fill in `tests/mobile/event-card-unification.js` with the
+    F1/F2/F3-correctness + a11y guards (filter dataset, badge slot
+    positive + negative cases, three meta slots positive + meta-
+    column-absence case, h3 tag).
 
 Suggested ordering inside sprint 2:
 
-9. Migrate `calendar_featured.html.twig`. Decide between adding a
-   `.bv-event-row--featured` modifier and re-styling the canonical
-   class based on the smallest visual diff. Document the choice in a
-   comment on the canonical CSS block.
-10. Migrate `event_highlight.html.twig`. Use the modifier for the
-    primary featured event; use the canonical (no modifier) for the
-    secondary events list.
-11. Remove `.bv-featured-event*`, `.bv-event-highlight*`,
-    `.bv-event-date*` from `theme.css`.
-12. Final full-suite Playwright run on `mobile-chromium` and `chromium`;
+11. Migrate `calendar_featured.html.twig` — single featured card,
+    pass `inList: false` so the partial emits a `<div class="bv-event-item">`
+    wrapper (not `<li>`), and pass `featured: true` so the
+    `.bv-event-row--featured` modifier opts into the bigger date
+    typography. No surrounding `<ul>`.
+12. Migrate `event_highlight.html.twig`. The primary featured event
+    uses `inList: false` + `featured: true` (same as
+    `calendar_featured`). The secondary events list wraps the
+    for-loop in `<ul class="bv-event-list">…</ul>` and passes
+    `inList: true` (default), `featured: false` (default).
+13. Remove `.bv-featured-event*`, `.bv-event-highlight*`,
+    `.bv-event-date*` from `theme.css`. Verify with grep that no
+    consumer remains across `config/www/user/`.
+14. Final full-suite Playwright run on `mobile-chromium` and `chromium`;
     both must be green.
 
 ---
 
 ## Risks and decisions to make during implementation
 
-- **`.bv-event-row--featured` vs. canonical date scaling.** The
-  current `.bv-featured-event__date` is larger than
-  `.bv-event-row__date`. The v2 handoff does not directly address the
-  featured variant. Implementation picks: (a) the modifier
-  `.bv-event-row--featured` opts into bigger date typography for the
-  featured callers, or (b) the canonical date scales with viewport
-  intrinsically. The simpler outcome is (a); document the choice
-  inline.
-- **`event_highlight.html.twig`'s secondary-event list.** Currently a
-  vertical list of compact cards with their own bespoke
-  `.bv-event-date` class. Migration treats each list entry as a
-  partial-rendered card with no modifier; if the visual baseline
-  differs, the canonical container-query layout already covers
-  geometry, but the desktop look may need a `.bv-event-row--compact`
-  modifier. Decide after baseline screenshots reveal the actual delta.
+- **`event_highlight.html.twig`'s secondary-event list desktop look.**
+  Currently a vertical list of compact cards with bespoke
+  `.bv-event-date` styling. The canonical container-query layout
+  covers stacked geometry on any width; the desktop look may differ
+  enough from the bespoke rendering that a `.bv-event-row--compact`
+  modifier becomes useful for tighter padding / smaller date type.
+  Decide after baseline screenshots reveal the actual delta. The
+  spec does not commit to a compact modifier upfront — only the
+  `--featured` modifier is mandatory.
 - **Material Symbols loading.** The v2 handoff confirms the `group`
   glyph is already loaded by `base.html.twig`. Verify before
   implementation rather than after — if for any reason the load is
@@ -692,13 +852,6 @@ Suggested ordering inside sprint 2:
   Chrome / Edge / Safari / Firefox from 2023 onward. The v2 handoff
   commits to the container-query path without a fallback; this spec
   inherits that decision.
-- **Inline `style="--bv-accent: var(--{{ event.accent }});"` and
-  Twig auto-escape.** The accent token is one of a closed set
-  (`primary` / `secondary` / `tertiary` / `kulturhus`). The Twig
-  rendering MUST validate the value against the closed set before
-  emitting it into the inline style, OR the partial accepts only
-  pre-validated values. Either approach avoids a content-injection
-  vector via an unexpected `accent:` value.
 
 ---
 
@@ -731,24 +884,37 @@ Suggested ordering inside sprint 2:
 This spec is fully implemented when:
 
 - The four modular templates each render an event card via the canonical
-  partial and contain no inlined event-card markup.
+  partial and contain no inlined event-card markup. List callers
+  (`event_list`, `atelier_sessions`, `event_highlight` secondary list)
+  wrap their for-loop in `<ul class="bv-event-list">…</ul>` and call
+  the partial with `inList: true` (default). Single-card callers
+  (`calendar_featured`, `event_highlight` primary card) call the
+  partial with `inList: false` and `featured: true`.
 - The canonical partial is the only place that emits `.bv-event-row`
-  markup in the codebase.
+  markup in the codebase. The partial validates `event.accent` against
+  the closed set before interpolation.
 - The container query (`@container event-row (max-width: 540px)`) is
   declared on `.bv-event-item` and is the only mechanism handling
   responsive stacking of `.bv-event-row`. PR #35's
   `@media (max-width: 767px)` rules on `.bv-event-row` are deleted.
   `.bv-event-row` itself does NOT declare `container-type`.
+- `--border-thick` and `--tracking-tight` are defined in `theme.css`'s
+  `:root` block; the v2 handoff's CSS resolves rather than falling
+  back silently.
 - The dead bespoke classes (`.bv-featured-event*`,
   `.bv-event-highlight*`, `.bv-event-date*`) are removed from
   `theme.css`.
 - Every route that renders an event card passes the four-rule mobile
-  invariant at viewport 390 × 844 plus the F1 filter / F2 badge /
-  F3 three-meta-slots / a11y heading guards.
+  invariant at viewport 390 × 844 plus the F1 filter / F2 badge
+  (positive + negative case) / F3 three-meta-slots (positive +
+  meta-column-absence case) / a11y heading guards.
 - The container-query mechanism is independently proven by a Playwright
   test rendering the partial in a 360 px wrapper on a 1280 px desktop
-  viewport.
+  viewport, with geometric (not string-equality) assertions on
+  CTA full-width.
 - Desktop visual-parity tests pass with the v2 handoff design as ground
   truth on every affected route.
+- `playwright.config.js` includes the `mobile-chromium` project and
+  `tests/mobile.spec.js` exists with its `require` entries.
 - The PR opens against `develop` with the full migration in two (or
   one) sprints' worth of commits.
