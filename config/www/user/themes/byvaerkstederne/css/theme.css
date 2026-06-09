@@ -79,6 +79,11 @@
     --container: 80rem;
     --container-sm: 42rem;
     --container-md: 64rem;
+
+    /* Event-card design tokens (v2 handoff) — the visible workshop-accent
+       left border and the title's tightened letter-spacing. */
+    --border-thick: 4px;
+    --tracking-tight: -0.02em;
 }
 
 /* ---------- Reset & Base ---------- */
