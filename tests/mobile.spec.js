@@ -22,3 +22,5 @@ require('./mobile/workgroup-cards');
 require('./mobile/event-row');
 require('./mobile/pitch-cards');
 require('./mobile/no-horizontal-overflow');
+require('./mobile/event-card-unification');
+require('./mobile/event-card-container-query');
