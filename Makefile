@@ -112,6 +112,19 @@ rollback: ## Roll back a tier to its previous release (tier=dev|test|staging|pro
 	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
+push-data: ## Push local flex-objects YAML to a tier (tier=dev|test|staging|prod, files=<comma-list>, dry_run=1, yes=1, i_mean_it=1)
+	@t="$(tier)"; \
+	args=""; \
+	if [ -n "$(files)" ]; then args="$$args --files=$(files)"; fi; \
+	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
+	if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
+	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/push-data.sh "$$t" $$args ;; \
+	  "") echo "❌  Usage: make push-data tier=<dev|test|staging|prod> [files=<a.yaml,b.yaml>] [dry_run=1] [yes=1]"; exit 1 ;; \
+	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
 migrate-atomic: ## Migrate a tier to atomic layout — one-time supervised (tier=dev|test|staging; prod refused)
 	@t="$(tier)"; \
 	case "$$t" in \
