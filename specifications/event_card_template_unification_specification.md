@@ -258,9 +258,20 @@ inside `event_highlight`), and `<div>` for single-card contexts
    produce an inline style that resolves to nothing. #}
 {% set _allowed_accents = ['primary', 'secondary', 'tertiary', 'kulturhus'] %}
 {% set _accent = event.accent in _allowed_accents ? event.accent : 'primary' %}
-{% set _in_list = event.inList ?? true %}
-{% set _cta_variant = (event.cta.variant ?? _accent) in _allowed_accents
-                       ? (event.cta.variant ?? _accent) : 'primary' %}
+
+{# `inList` is a presentation-context flag the caller passes as a
+   top-level include variable, NOT a field of the event data — keeps
+   call sites readable and avoids forcing callers to `|merge` into the
+   event object. Defaults to true (list context). #}
+{% set _in_list = inList ?? true %}
+
+{# Defensive access on event.cta.variant — when event.cta is undefined
+   entirely (events without a CTA), Twig with strict_variables on would
+   throw on event.cta.variant. Grav usually runs with strict_variables
+   off, but be explicit. #}
+{% set _cta_variant_raw = (event.cta is defined and event.cta.variant is defined)
+                          ? event.cta.variant : _accent %}
+{% set _cta_variant = _cta_variant_raw in _allowed_accents ? _cta_variant_raw : 'primary' %}
 
 {% if _in_list %}<li class="bv-event-item">{% else %}<div class="bv-event-item">{% endif %}
   <article class="bv-event-row{% if event.featured %} bv-event-row--featured{% endif %}"
@@ -312,12 +323,25 @@ Four structural details called out by the v2 handoff:
    This was a latent bug in the v1 spec. The v2 fix is the wrapper.
 2. **The wrapper tag is `<li>` in list contexts and `<div>` in
    single-card contexts.** The `inList` flag picks one; the container
-   class stays `.bv-event-item` regardless. `event_list` and
-   `atelier_sessions` pass `inList: true` (default); `calendar_featured`
-   and `event_highlight`'s primary featured card pass `inList: false`.
-   When `inList: true`, the caller wraps the for-loop in
-   `<ul class="bv-event-list">...</ul>`; when `inList: false`, no
-   `<ul>` is emitted.
+   class stays `.bv-event-item` regardless. `inList` is a top-level
+   include variable, NOT a field of the event data:
+
+   ```twig
+   {# list caller — for-loop wrapped in <ul class="bv-event-list"> #}
+   <ul class="bv-event-list">
+     {% for ev in events %}
+       {% include 'partials/event_card.html.twig' with { event: ev, inList: true } %}
+     {% endfor %}
+   </ul>
+
+   {# single-card caller — no <ul>, inList: false #}
+   {% include 'partials/event_card.html.twig'
+      with { event: featured_event, inList: false } %}
+   ```
+
+   `event_list` and `atelier_sessions` use `inList: true` (or omit it
+   — it defaults to true). `calendar_featured` and `event_highlight`'s
+   primary featured card pass `inList: false`.
 3. **Title is `<h3>`, not `<div>`.** Accessibility and heading
    hierarchy. A future Playwright regression check asserts the
    element resolves to an `<h3>` tag.
@@ -367,6 +391,15 @@ tokens to `:root` and a `--featured` modifier):
     /* … existing tokens … */
     --border-thick: 4px;          /* the visible workshop-accent left border */
     --tracking-tight: -0.02em;    /* title letter-spacing per handoff */
+}
+
+/* Event list — reset default <ul> chrome (bullets, padding, margin) so
+   the canonical card layout owns its own spacing. The list is just a
+   semantic container for the .bv-event-item elements. */
+.bv-event-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
 }
 
 /* Each entry is its own query container; the row (descendant) reacts. */
@@ -583,10 +616,14 @@ or a grep.
 5. **`event_highlight.html.twig` renders through the partial** —
    `.bv-event-highlight` and `.bv-event-date` selectors are removed
    from the modular's card markup.
-6. **Bespoke CSS classes are deleted** —
+6. **Bespoke CSS classes are deleted by end of sprint 2** —
    `grep -rn '\.bv-featured-event\|\.bv-event-highlight\|\.bv-event-date'
    config/www/user/themes/byvaerkstederne/css/theme.css` returns no
-   matches at the end of the run.
+   matches at the end of the **run** (both sprints landed). This
+   criterion is sprint-2-scored, not sprint-1-scored — sprint 1's
+   evaluator should treat the classes still present as expected because
+   their consumers (`calendar_featured`, `event_highlight`) are
+   migrated in sprint 2.
 7. **PR #35's `@media (max-width: 767px)` rules on `.bv-event-row`
    are deleted** — `awk '/@media \(max-width: 767px\)/,/^}/'
    config/www/user/themes/byvaerkstederne/css/theme.css | grep
@@ -633,19 +670,24 @@ or a grep.
     event with no `badge:` or `badge: ""`, the rendered DOM contains
     NO `.bv-event-row__badge` element at all (not an empty span).
     Both cases are tested.
-15. **F3 three-meta-slots honoured** — for the event001 row (or a
-    seeded equivalent carrying badge + price + CTA + capacity), the
-    rendered DOM contains `.bv-event-row__price`, `a.bv-btn` inside
-    `.bv-event-row__meta`, AND `.bv-event-row__capacity` simultaneously.
-    For an event with NO meta fields (all of `price`, `cta`,
-    `capacity` absent), the rendered DOM contains NO
-    `.bv-event-row__meta` element at all (the partial's outer guard
-    skips it entirely, and the flex layout reclaims the column
-    space). For an atelier drop-in row (price + cta, no capacity),
-    the meta column DOES render with its `min-width: 9rem`; the
-    capacity element specifically does not render, but the column
-    reservation persists — this preserves desktop alignment of
-    adjacent rows.
+15. **F3 three-meta-slots honoured** — three sub-cases, all asserted
+    against the **desktop viewport** (the meta column's layout
+    behaviour is a desktop concept; in stacked layout the meta `<div>`
+    just becomes another column-flex row whether present or absent):
+    - **Full:** for the event001 row (or a seeded equivalent carrying
+      badge + price + CTA + capacity), the rendered DOM contains
+      `.bv-event-row__price`, `a.bv-btn` inside `.bv-event-row__meta`,
+      AND `.bv-event-row__capacity` simultaneously.
+    - **All-empty:** for an event with NO meta fields (all of
+      `price`, `cta`, `capacity` absent), the rendered DOM contains
+      NO `.bv-event-row__meta` element at all (the partial's outer
+      guard skips it entirely; on desktop the flex layout reclaims
+      the column space).
+    - **Partial:** for an atelier drop-in row (price + cta, no
+      capacity), the meta column DOES render with its
+      `min-width: 9rem`; the capacity element specifically does not
+      render, but the column reservation persists — this preserves
+      desktop alignment of adjacent rows.
 16. **a11y heading hierarchy** — `.bv-event-row__title` is rendered
     as an `<h3>` (not a `<div>`) in every event-card route.
 17. **Mobile failure-path coverage** — each affected route has at
@@ -702,6 +744,30 @@ or a grep.
     both new mobile test files. Without these, the project has
     nothing to run and the entire mobile suite silently passes with
     zero tests.
+28. **No silent-zero-tests on `mobile-chromium`** — after the wiring
+    step (sprint-1 step 2), running
+    `npx playwright test --project=mobile-chromium --reporter=list`
+    reports at least one PASSING test (the wiring-smoke assertion
+    described in step 2). A run that reports `0 passed, 0 failed`
+    indicates the project's `testMatch` did not pick up
+    `tests/mobile.spec.js`, OR the spec file's `require`s do not
+    resolve to test files with at least one `test(...)` call. Both
+    are silent failures the criterion catches before sprint 1's
+    content lands.
+29. **`.bv-event-list` styling reset** —
+    `grep -A 3 '\.bv-event-list \{' config/www/user/themes/byvaerkstederne/css/theme.css`
+    contains `list-style: none`, `padding: 0`, and `margin: 0`. Without
+    the reset, every event list inherits the browser's default `<ul>`
+    bullets + left padding, regressing the current bullet-less flat
+    rendering on `/vaerkstedskalenderen` and the atelier sub-pages.
+30. **Visual-parity baselines captured per migrated route** — sprint
+    1's evaluator log shows baselines were captured for
+    `/vaerkstedskalenderen` (event_list), `/vaerksteder/krea-cafe/syvaerkstedet`
+    (atelier_sessions), and the Lene Pels page (atelier_sessions)
+    AFTER all sprint-1 migrations landed, not piecemeal during each
+    migration step. Sprint 2's evaluator log shows the same for the
+    `calendar_featured` and `event_highlight` routes after sprint 2's
+    migrations.
 
 ---
 
@@ -762,8 +828,16 @@ Suggested ordering inside sprint 1:
    `testMatch: 'tests/mobile.spec.js'`). Create `tests/mobile.spec.js`
    modelled on `tests/anonymous.spec.js`. Both test files
    (`event-card-unification.js`, `event-card-container-query.js`) get
-   stub `test.describe` blocks at this step so wiring is testable
-   before content lands.
+   stub `test.describe` blocks at this step, each containing AT LEAST
+   ONE trivial `test('wiring smoke', () => { expect(1+1).toBe(2); })`
+   assertion. Without that assertion the project reports `0 passed,
+   0 failed` on a green run, which would shadow real content
+   regressions in steps 9 and 10. The wiring-smoke tests are deleted
+   when the real content lands in steps 9 and 10.
+
+   Verify with `npx playwright test --project=mobile-chromium
+   --reporter=list` — must report at least one passing test before
+   moving on (this is criterion #28).
 3. **Add the two missing design tokens** (`--border-thick: 4px`,
    `--tracking-tight: -0.02em`) to the existing `:root` block in
    `theme.css`. They underpin the v2 handoff's CSS; without them the
@@ -784,8 +858,8 @@ Suggested ordering inside sprint 1:
    `event.filter` from `ev.group` (NOT from `ev.button_style`) and
    `event.accent` from `ev.button_style` (NOT from `ev.group`). The
    for-loop is wrapped in `<ul class="bv-event-list">…</ul>` and
-   each iteration calls the partial with `inList: true` (default).
-   Capture desktop visual-parity baselines via Playwright.
+   each iteration calls the partial with the top-level include
+   variable `inList: true` (default; can be omitted).
 7. Run the existing mobile + desktop Playwright suites; both must
    still pass.
 8. Migrate `atelier_sessions.html.twig`. The for-loop is wrapped in
@@ -802,7 +876,18 @@ Suggested ordering inside sprint 1:
 10. Fill in `tests/mobile/event-card-unification.js` with the
     F1/F2/F3-correctness + a11y guards (filter dataset, badge slot
     positive + negative cases, three meta slots positive + meta-
-    column-absence case, h3 tag).
+    column-absence case + partial-empty case, h3 tag). Delete the
+    wiring-smoke tests from both mobile test files when the real
+    content lands.
+10a. **Capture desktop visual-parity baselines for sprint-1 routes**
+    AFTER all sprint-1 migrations have landed — `/vaerkstedskalenderen`
+    (event_list), `/vaerksteder/krea-cafe/syvaerkstedet`
+    (atelier_sessions), and the Lene Pels page (atelier_sessions).
+    Capturing piecemeal during each migration step would lock in
+    half-migrated state. Run the visual-parity test once with
+    `--update-snapshots`, then verify the captured PNGs match the
+    v2 handoff's `demo.html` desktop rendering side-by-side before
+    committing.
 
 Suggested ordering inside sprint 2:
 
@@ -818,7 +903,12 @@ Suggested ordering inside sprint 2:
     `inList: true` (default), `featured: false` (default).
 13. Remove `.bv-featured-event*`, `.bv-event-highlight*`,
     `.bv-event-date*` from `theme.css`. Verify with grep that no
-    consumer remains across `config/www/user/`.
+    consumer remains across `config/www/user/`. This closes
+    criterion #6.
+13a. **Capture visual-parity baselines for sprint-2 routes** AFTER
+    both sprint-2 migrations have landed — every route that renders
+    `calendar_featured` and every route that renders
+    `event_highlight`. Same single-pass approach as step 10a.
 14. Final full-suite Playwright run on `mobile-chromium` and `chromium`;
     both must be green.
 
