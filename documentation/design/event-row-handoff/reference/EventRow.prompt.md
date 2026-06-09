@@ -1,12 +1,25 @@
-Single calendar/event line with a square date block, title, optional time + description, and a meta column; colour-coded by workshop, slides on hover. **Responsive to its own width** — stacks vertically below ~540px (date goes horizontal, meta drops below).
+Single calendar/event line for the værkstedskalender. Three columns — **date | body | meta**. The body holds an optional **badge eyebrow** above a semantic `<h3>` title, plus optional time + description. The meta column stacks up to three independently-optional slots: a prominent **price**, a **CTA button** (`ctaLabel` + `ctaHref`), and a read-only **capacity** counter. Any combination renders; empty slots collapse. Colour-coded by workshop, slides on hover. **Responsive to its own width** — stacks vertically below ~540px (date goes horizontal, meta drops below, CTA goes full-width).
 
 ```jsx
-<EventRow month="JUN" day="14" title="Åben Makerspace-aften"
-  time="Onsdag kl. 15-17" description="Kom og print, lod og byg."
-  metaLabel="Drop-in" metaValue="Ingen tilmelding" color="secondary" />
+{/* Calendar event carrying all four signals at once */}
+<EventRow
+  month="JUN" day="10"
+  badge="Makerspace & Reparation"
+  title="Elektronik og 3D-print for nybegyndere"
+  time="Onsdag kl. 18–20"
+  description="Drop-in værksted. 12 år og opefter."
+  price="250 kr / person"
+  ctaLabel="Tilmeld" ctaHref="/tilmeld/elektronik"
+  capacity="12 / 20"
+  color="secondary"        /* visual left-border hue */
+  filter="makerspace"      /* filter ID → data-group, distinct from color */
+/>
 
-{/* or with a capacity counter instead of meta */}
-<EventRow month="JUN" day="18" title="Frøbytte" capacity="8 / 30" color="primary" />
+{/* Atelier drop-in: price + CTA, no capacity — the same stacked-meta pattern */}
+<EventRow month="JUN" day="14" title="Photo Transfer — Intro"
+  time="Onsdag kl. 15–17" price="Drop-in"
+  ctaLabel="Se Makerspace" ctaHref="/vaerksteder/makerspace"
+  color="tertiary" filter="krea-cafe" />
 ```
 
-Stack several with a small gap to form the calendar list. `color` is the workshop hue of the left border. Use `metaLabel`/`metaValue` for a drop-in/status badge, or `capacity` for a "12 / 20" counter — not both.
+`color` is the **visual** border hue; `filter` is the **behavioural** filter ID (emitted as `data-group`) — set them separately even when they correlate. Use `badge` for the eyebrow, `price`/`ctaLabel`+`ctaHref`/`capacity` for any of the three meta slots.
