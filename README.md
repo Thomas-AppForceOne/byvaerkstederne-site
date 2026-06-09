@@ -256,6 +256,7 @@ Run `make help` to see all available commands:
 | `make list-backups [tier=<env>]` | List available backup ids |
 | `make restore tier=<env> from=<id>` | Restore a tier (add `RESTORE_TO_TIER_ENABLED=1` to actually wipe; prod refused) |
 | `make rollback tier=<env>` | Roll back a tier to its previous release |
+| `make push-data tier=<env>` | Push local Flex Objects YAML to a tier's data tree (dev/test/staging; prod refused without `i_mean_it=1`). Defaults to `files=begivenheder.yaml`; pass `files=a.yaml,b.yaml` for multiple, `dry_run=1` for diff-only, `yes=1` to skip the confirmation prompt. |
 | `make migrate-atomic tier=<env>` | One-time migration to atomic-release layout (prod refused) |
 | `make cache-clear` | Clear Grav cache |
 | `make reset-users` | Delete all user accounts (except admin) |
@@ -331,6 +332,17 @@ Content that non-technical admins need to manage is stored in Flex Objects (flat
 | Teammedlemmer | `/admin/flex-objects/teammedlemmer` | Contact persons and team |
 
 Data files live in `config/www/user/data/flex-objects/`. Templates pull from Flex Objects automatically, with fallback to page YAML if Flex Objects is unavailable.
+
+**Deploying Flex Objects data** — `make deploy` deliberately excludes the live-state tree from its rsync (so a code deploy can't overwrite admin-edited content). To push local Flex Objects YAML to a developer tier out-of-band, use `make push-data tier=<env>`:
+
+```bash
+make push-data tier=dev dry_run=1                          # diff against dev, no push
+make push-data tier=dev                                    # push begivenheder.yaml with confirmation
+make push-data tier=staging files=begivenheder.yaml,roadmap-items.yaml yes=1
+make push-data tier=prod i_mean_it=1                       # prod requires explicit override
+```
+
+`bug-reports.yaml`, `feature-suggestions.yaml`, and `submission-tokens.yaml` are refused unconditionally — they carry user-generated content or CSRF tokens that local-as-truth would erase. See `deploy/push-data.sh --help` for the full flag set.
 
 ### Pages
 
