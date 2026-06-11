@@ -197,7 +197,7 @@ event013:
   group: kreativ
   badge: "Krea Café"
   event_date: "2026-06-12"
-  event_time: ""
+  event_time: "Fredag 17 - 20"
   location: "Nørregade 21, Hundested"
   capacity: ""
   price: "Brugerbetaling"
@@ -213,7 +213,7 @@ event014:
   group: kreativ
   badge: "Krea Café"
   event_date: "2026-06-18"
-  event_time: ""
+  event_time: "Torsdag 17 - 20"
   location: "Nørregade 21, Hundested"
   capacity: ""
   price: "Brugerbetaling"
@@ -229,7 +229,7 @@ event015:
   group: kreativ
   badge: "Krea Café"
   event_date: "2026-06-25"
-  event_time: ""
+  event_time: "Torsdag 17 - 20"
   location: "Nørregade 21, Hundested"
   capacity: ""
   price: "Brugerbetaling"
@@ -245,7 +245,7 @@ event016:
   group: kreativ
   badge: "Krea Café"
   event_date: "2026-07-02"
-  event_time: ""
+  event_time: "Torsdag 17 - 20"
   location: "Nørregade 21, Hundested"
   capacity: ""
   price: "Brugerbetaling"
