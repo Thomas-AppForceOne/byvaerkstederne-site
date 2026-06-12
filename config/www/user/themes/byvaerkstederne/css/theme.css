@@ -500,10 +500,15 @@ a { color: inherit; text-decoration: none; }
 /* Text-only hero */
 .bv-hero-text { padding: var(--space-12) 0 var(--space-6); }
 
-/* ---------- Event Highlight ---------- */
-.bv-event-highlight { display: flex; gap: var(--space-16); align-items: flex-start; }
-.bv-event-highlight__sidebar { width: 33.333%; flex-shrink: 0; }
-.bv-event-highlight__main { flex: 1; }
+/* ---------- Section split (sidebar + main) ---------- */
+/* Generic two-column section layout: fixed-third sidebar + fluid main.
+   Used by the home event-highlight section (sidebar = heading + featured
+   event card, main = todo list). Card-agnostic by design — the event-card
+   markup inside comes from partials/event_card.html.twig. Stacks to a
+   single column at <= 1023px (see the Responsive section). */
+.bv-section-split { display: flex; gap: var(--space-16); align-items: flex-start; }
+.bv-section-split__sidebar { width: 33.333%; flex-shrink: 0; }
+.bv-section-split__main { flex: 1; }
 
 .bv-event-date {
     font-family: var(--font-headline);
@@ -1487,8 +1492,8 @@ a { color: inherit; text-decoration: none; }
 
 @media (max-width: 1023px) {
     .bv-workgroups { grid-template-columns: repeat(2, 1fr); }
-    .bv-event-highlight { flex-direction: column; }
-    .bv-event-highlight__sidebar { width: 100%; }
+    .bv-section-split { flex-direction: column; }
+    .bv-section-split__sidebar { width: 100%; }
     .bv-hero-split { grid-template-columns: 1fr; }
     .bv-hero-split__image { min-height: 40vh; }
     .bv-footer__grid { grid-template-columns: repeat(2, 1fr); }
