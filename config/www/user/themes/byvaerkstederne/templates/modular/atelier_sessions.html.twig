@@ -15,38 +15,58 @@
         <p class="bv-body-lg" style="max-width: 56rem; margin-bottom: var(--space-12);">{{ h.intro }}</p>
         {% endif %}
 
-        <div style="display: flex; flex-direction: column; gap: var(--space-6);">
+        {# Page-level accent (h.accent) is applied to every session. Per-session
+           accent overrides are out of scope for sprint 1 per the source spec
+           — the partial would honour event.accent if set, but this template
+           feeds the page-level value uniformly. #}
+        {% set _page_accent = h.accent|default('tertiary') %}
+
+        <ul class="bv-event-list">
             {% for s in h.sessions %}
-            <div style="background: var(--surface-container-lowest); border-left: 8px solid var(--{{ h.accent|default('tertiary') }}); padding: var(--space-8); display: grid; grid-template-columns: 8rem 1fr auto; gap: var(--space-6); align-items: center;">
-                <div>
-                    <div style="font-family: var(--font-headline); font-weight: 900; font-size: 2.5rem; line-height: 1; color: var(--{{ h.accent|default('tertiary') }});">{{ s.day }}</div>
-                    <div class="bv-label" style="text-transform: uppercase; letter-spacing: 0.15em; color: var(--on-surface-variant); margin-top: 0.25rem;">{{ s.month }}</div>
-                </div>
-                <div>
-                    <h3 class="bv-headline" style="font-size: 1.25rem; margin-bottom: var(--space-2);">{{ s.title }}</h3>
-                    {% if s.time %}
-                    <p style="font-size: 0.9rem; color: var(--on-surface-variant); margin-bottom: var(--space-2);"><strong>{{ s.time }}</strong></p>
-                    {% endif %}
-                    {% if s.description %}
-                    <p style="color: var(--on-surface-variant); line-height: 1.5; font-size: 0.95rem;">{{ s.description }}</p>
-                    {% endif %}
-                </div>
-                {% if s.contact_name %}
-                <div style="text-align: right;">
-                    <span class="bv-label" style="display: block; color: var(--on-surface-variant); margin-bottom: 0.25rem;">Tilmelding</span>
-                    <div style="font-family: var(--font-headline); font-weight: 700;">{{ s.contact_name }}</div>
-                    {% if s.contact_sms %}
-                    <a href="sms:+45{{ s.contact_sms }}" style="font-size: 0.9rem; color: var(--{{ h.accent|default('tertiary') }}); text-decoration: underline; text-underline-offset: 4px;">{{ s.contact_sms }}</a>
-                    {% endif %}
-                </div>
-                {% elseif s.no_signup %}
-                <div style="text-align: right;">
-                    <span class="bv-label" style="display: block; color: var(--on-surface-variant);">Drop-in</span>
-                    <div style="font-family: var(--font-headline); font-weight: 700; font-size: 0.95rem;">Ingen tilmelding</div>
-                </div>
+                {#
+                   Meta-column rules per the source spec's atelier_sessions
+                   mapping:
+                     - s.no_signup: true  →  price = 'Drop-in', NO cta, NO capacity.
+                       no_signup wins: if both no_signup AND contact_* are set,
+                       the drop-in form takes precedence and the contact fields
+                       are ignored.
+                     - else if s.contact_name AND s.contact_sms set →
+                       cta = { label: s.contact_name, href: 'sms:+45<digits>' }
+                       (digits stripped of spaces).
+                     - else: no meta slots.
+                #}
+                {% if s.no_signup %}
+                    {% set _price = 'Drop-in' %}
+                    {% set _cta = null %}
+                {% elseif s.contact_name and s.contact_sms %}
+                    {% set _price = null %}
+                    {% set _cta = {
+                        label: s.contact_name,
+                        href: 'sms:+45' ~ (s.contact_sms|replace({' ': ''})),
+                        variant: _page_accent
+                    } %}
+                {% else %}
+                    {% set _price = null %}
+                    {% set _cta = null %}
                 {% endif %}
-            </div>
+
+                {% set _event = {
+                    day: s.day,
+                    month: s.month,
+                    title: s.title,
+                    badge: s.badge|default(null),
+                    time: s.time,
+                    description: s.description,
+                    accent: _page_accent,
+                    filter: s.filter|default(h.filter|default(null)),
+                    price: _price,
+                    cta: _cta,
+                    capacity: s.capacity|default(null),
+                    featured: false
+                } %}
+
+                {% include 'partials/event_card.html.twig' with { event: _event, inList: true } %}
             {% endfor %}
-        </div>
+        </ul>
     </div>
 </section>
