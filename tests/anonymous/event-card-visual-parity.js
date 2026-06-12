@@ -20,8 +20,11 @@
  * ground-truth visual contract; baselines are checked side-by-side
  * against reference/demo.html before being committed.
  *
- * Contract criteria covered: C18, C30. Sprint 2 extends with the
- * calendar_featured and event_highlight routes.
+ * Contract criteria covered: C18, C30. Sprint 2 adds the event_highlight
+ * route (/ — home). calendar_featured.html.twig is migrated but has NO
+ * route: its page (02.vaerkstedskalenderen/_03.featured) was removed in
+ * the opening-day cleanup (980eb9c), so the spec's "every route that
+ * renders calendar_featured" set is empty and no baseline exists for it.
  */
 
 const { test, expect } = require('@playwright/test');
@@ -62,6 +65,21 @@ test.describe('event-card-visual-parity (sprint 1)', () => {
     await page.goto('/vaerksteder/krea-cafe/billedkunst');
     await waitForFontsAndStability(page);
     await expect(page).toHaveScreenshot('billedkunst.png', {
+      maxDiffPixelRatio: 0.05,
+      fullPage: false,
+    });
+  });
+});
+
+test.describe('event-card-visual-parity (sprint 2)', () => {
+  test('event_highlight — / (home, primary featured card) visual parity', async ({ page }) => {
+    // Captured AFTER both sprint-2 migrations (calendar_featured +
+    // event_highlight) landed — never piecemeal (spec step 13a). The
+    // home sidebar card is the only live surface rendering the
+    // partial's single-card (inList: false) + featured path.
+    await page.goto('/');
+    await waitForFontsAndStability(page);
+    await expect(page).toHaveScreenshot('home-event-highlight.png', {
       maxDiffPixelRatio: 0.05,
       fullPage: false,
     });

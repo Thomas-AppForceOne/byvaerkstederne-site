@@ -2,12 +2,23 @@
 'use strict';
 
 /**
- * Mobile — event-card unification (sprint 1, step 10).
+ * Mobile — event-card unification (sprint 1, step 10 + sprint 2, step 12).
  *
- * Locks down the F1/F2/F3 + a11y guards on the three sprint-1 routes:
+ * Locks down the F1/F2/F3 + a11y guards on the migrated routes:
  *   /vaerkstedskalenderen                        — event_list
  *   /vaerksteder/krea-cafe/syvaerkstedet         — atelier_sessions
  *   /vaerksteder/krea-cafe/billedkunst           — atelier_sessions (Lene Pels)
+ *   /                                            — event_highlight (home,
+ *                                                  primary featured card)
+ *
+ * calendar_featured.html.twig is migrated too, but NO route renders it:
+ * its page (02.vaerkstedskalenderen/_03.featured) was removed in the
+ * opening-day cleanup (980eb9c) and only the template remains. The
+ * route-discovery grep the spec mandates therefore yields zero routes
+ * for it — its single-card/featured rendering path is identical to the
+ * event_highlight primary card covered below (same inList: false +
+ * featured: true include), and its template-level contract is locked by
+ * the grep criteria (#4, #6).
  *
  * Viewport is the mobile-chromium project default (390 × 844). Each
  * route is probed for the four-rule mobile invariant; the calendar
@@ -16,7 +27,8 @@
  * live data doesn't naturally exhibit a case (e.g. all-empty meta).
  *
  * Contract criteria covered: C11, C13, C14, C15, C16, C17 (failure
- * path via the evaluator's revert log), C26.
+ * path via the evaluator's revert log), C26 (both wrapper tags: <li>
+ * on the list routes, <div> on the home single-card context).
  */
 
 const { test, expect } = require('@playwright/test');
@@ -25,6 +37,11 @@ const { useDevHost } = require('./_helpers');
 const CALENDAR_ROUTE = '/vaerkstedskalenderen';
 const SYVAERKSTEDET_ROUTE = '/vaerksteder/krea-cafe/syvaerkstedet';
 const BILLEDKUNST_ROUTE = '/vaerksteder/krea-cafe/billedkunst';
+// Home renders event_highlight's primary featured card from the
+// begivenheder flex directory (next upcoming event — the seeded data
+// carries events into September 2026; the card disappears, and these
+// probes fail loud, if every seeded event_date is in the past).
+const HOME_ROUTE = '/';
 
 /**
  * Four-rule mobile invariant at 390 × 844.
@@ -135,6 +152,14 @@ test.describe('mobile-event-card-unification', () => {
     await assertFourRuleMobileInvariant(page, BILLEDKUNST_ROUTE);
   });
 
+  test('four-rule mobile invariant on / (event_highlight primary card)', async ({ page }) => {
+    // Sprint-2 probe: fails loud if event_highlight.html.twig stops
+    // rendering its featured card through the canonical partial (a
+    // revert restores the bespoke .bv-card/.bv-event-date markup, which
+    // carries no .bv-event-row and trips the rowCount assertion).
+    await assertFourRuleMobileInvariant(page, HOME_ROUTE);
+  });
+
   // ------------------------------------------------------------------
   // C26 — wrapper-tag flag honoured: every .bv-event-item on the sprint-1
   // list-context routes is rendered as an <li>, not a <div>.
@@ -160,6 +185,50 @@ test.describe('mobile-event-card-unification', () => {
       const tag = await items.nth(i).evaluate((el) => el.tagName);
       expect(tag, `atelier_sessions .bv-event-item[${i}] must be LI (sprint-1 list context)`).toBe('LI');
     }
+  });
+
+  test('C26 single-card wrapper is <div class="bv-event-item"> on event_highlight (home), with featured modifier', async ({ page }) => {
+    // Sprint-2 wrapper-tag contract: the home primary card is a
+    // single-card context — the partial is included with inList: false,
+    // so the .bv-event-item wrapper MUST be a <div>, MUST NOT sit
+    // inside a <ul class="bv-event-list">, and the row article MUST
+    // carry the .bv-event-row--featured modifier (featured: true).
+    await page.goto(HOME_ROUTE);
+    const items = page.locator('.bv-event-item');
+    const n = await items.count();
+    expect(n, 'expected at least one .bv-event-item on the home route (event_highlight primary card)').toBeGreaterThan(0);
+    for (let i = 0; i < n; i += 1) {
+      const item = items.nth(i);
+      const tag = await item.evaluate((el) => el.tagName);
+      expect(tag, `event_highlight .bv-event-item[${i}] must be DIV (single-card context, inList: false)`).toBe('DIV');
+      const inList = await item.evaluate((el) => el.closest('ul') !== null);
+      expect(inList, `event_highlight .bv-event-item[${i}] must NOT be wrapped in a <ul> (no surrounding bv-event-list)`).toBe(false);
+    }
+    const featured = page.locator('.bv-event-row--featured');
+    expect(await featured.count(), 'home primary card must carry .bv-event-row--featured (featured: true include variable)').toBeGreaterThan(0);
+  });
+
+  test('F1/F2 on event_highlight — home card carries filter ID in data-group, accent token in --bv-accent, badge in body', async ({ page }) => {
+    // The home card flows through the same accent_map/filter_map
+    // discipline as event_list: data-group gets the FILTER ID, the
+    // inline custom property gets the ACCENT token. Every seeded
+    // begivenheder event carries a badge, so the eyebrow must render
+    // inside the body column (F2 through the event_highlight caller).
+    await page.goto(HOME_ROUTE);
+    const row = page.locator('.bv-event-row--featured').first();
+    await expect(row, 'home featured row should render').toBeVisible();
+
+    const FILTER_IDS = new Set(['makerspace', 'kreativ', 'groenne', 'kulturhus', 'all']);
+    const ACCENT_TOKENS = new Set(['primary', 'secondary', 'tertiary', 'kulturhus']);
+    const group = await row.evaluate((el) => el.getAttribute('data-group') || '');
+    const accent = await row.evaluate((el) => el.style.getPropertyValue('--bv-accent').trim());
+    const accentTokenMatch = accent.match(/var\(--(\w+)\)/);
+    const accentToken = accentTokenMatch ? accentTokenMatch[1] : '';
+    expect(FILTER_IDS.has(group), `home card data-group="${group}" must be a filter ID`).toBe(true);
+    expect(ACCENT_TOKENS.has(accentToken), `home card --bv-accent token "${accentToken}" must be a closed-set accent`).toBe(true);
+
+    const badge = row.locator('.bv-event-row__body .bv-event-row__badge');
+    await expect(badge, 'home featured card must render its badge eyebrow inside __body (F2 via event_highlight)').toBeVisible();
   });
 
   // ------------------------------------------------------------------
@@ -418,8 +487,8 @@ test.describe('mobile-event-card-unification', () => {
   // C16 — a11y heading hierarchy
   // ------------------------------------------------------------------
 
-  test('a11y — every .bv-event-row__title resolves to <h3> across all sprint-1 routes', async ({ page }) => {
-    for (const route of [CALENDAR_ROUTE, SYVAERKSTEDET_ROUTE, BILLEDKUNST_ROUTE]) {
+  test('a11y — every .bv-event-row__title resolves to <h3> across all migrated routes', async ({ page }) => {
+    for (const route of [CALENDAR_ROUTE, SYVAERKSTEDET_ROUTE, BILLEDKUNST_ROUTE, HOME_ROUTE]) {
       await page.goto(route);
       const titles = page.locator('.bv-event-row__title');
       const n = await titles.count();
