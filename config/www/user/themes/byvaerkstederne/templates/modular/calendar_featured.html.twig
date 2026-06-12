@@ -1,34 +1,33 @@
 {% set h = page.header %}
 <section class="bv-section--sm">
     <div class="bv-container">
-        <div class="bv-featured-event">
-            <div class="bv-featured-event__date">
-                <div style="color: var(--error); font-family: var(--font-headline); font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em;">{{ h.day_name|default('Torsdag') }}</div>
-                <div style="font-family: var(--font-headline); font-weight: 800; font-size: 3.5rem; line-height: 1;">{{ h.day_number|default('25') }}</div>
-                <div style="font-family: var(--font-headline); font-weight: 700; text-transform: uppercase;">{{ h.month|default('April') }}</div>
-                {% if h.tag %}
-                <span class="bv-badge bv-badge--error" style="margin-top: var(--space-2); display: inline-block;">{{ h.tag }}</span>
-                {% endif %}
-            </div>
+        {# Canonical event-card migration (unification spec, step 11): the
+           featured card renders through partials/event_card.html.twig with
+           inList: false (single-card context → <div class="bv-event-item">
+           wrapper, no surrounding <ul>) and featured: true (opts into the
+           .bv-event-row--featured typography bump).
 
-            <div>
-                <h3 class="bv-headline" style="font-size: 2rem;">{{ h.event_title|default('Stor Arbejdsdag i Byv&aelig;rkstederne') }}</h3>
-                <p class="u-text-muted" style="margin-top: var(--space-4); max-width: 36rem;">{{ h.event_description|default('') }}</p>
-                <div style="display: flex; gap: var(--space-6); margin-top: var(--space-4); align-items: center;">
-                    {% if h.time %}
-                    <span style="display: flex; align-items: center; gap: 0.25rem; color: var(--on-surface-variant);"><span class="material-symbols-outlined" style="font-size: 1.25rem;">schedule</span> {{ h.time }}</span>
-                    {% endif %}
-                    {% if h.location %}
-                    <span style="display: flex; align-items: center; gap: 0.25rem; color: var(--on-surface-variant);"><span class="material-symbols-outlined" style="font-size: 1.25rem;">location_on</span> {{ h.location }}</span>
-                    {% endif %}
-                </div>
-            </div>
+           Mapping per the spec's canonicalisation table:
+             h.day_number → event.day, h.month → event.month,
+             h.event_title → event.title, h.event_description → event.description,
+             h.tag → event.badge, h.time → event.time,
+             h.accent (optional, closed-set token) → event.accent.
 
-            {% if page.media.images|first %}
-            <div class="bv-featured-event__image">
-                <img src="{{ page.media.images|first.url }}" alt="{{ h.event_title }}"/>
-            </div>
-            {% endif %}
-        </div>
+           h.day_name, h.location, and the page image have no slot in the
+           canonical model — the unification drops them. No live page renders
+           this template (02.vaerkstedskalenderen/_03.featured was removed in
+           the opening-day cleanup); a future re-enablement starts from the
+           canonical contract. #}
+        {% set _event = {
+            day: h.day_number|default('25'),
+            month: h.month|default('April'),
+            title: h.event_title|default('Stor Arbejdsdag i Byværkstederne'),
+            description: h.event_description|default(null),
+            badge: h.tag|default(null),
+            time: h.time|default(null),
+            accent: h.accent|default('primary'),
+            featured: true
+        } %}
+        {% include 'partials/event_card.html.twig' with { event: _event, inList: false } %}
     </div>
 </section>
