@@ -510,19 +510,6 @@ a { color: inherit; text-decoration: none; }
 .bv-section-split__sidebar { width: 33.333%; flex-shrink: 0; }
 .bv-section-split__main { flex: 1; }
 
-.bv-event-date {
-    font-family: var(--font-headline);
-    font-weight: 700;
-}
-.bv-event-date__day { font-size: 3rem; line-height: 1; }
-.bv-event-date__meta {
-    text-transform: uppercase;
-    font-weight: 700;
-    letter-spacing: 0.15em;
-    color: var(--on-surface-variant);
-    font-size: 0.875rem;
-}
-
 /* Todo list */
 .bv-todo-item {
     display: flex;
@@ -888,31 +875,6 @@ a { color: inherit; text-decoration: none; }
 .bv-filter-dot--secondary { background: var(--secondary); }
 .bv-filter-dot--tertiary { background: var(--tertiary); }
 .bv-filter-dot--kulturhus { background: var(--kulturhus); }
-
-/* Featured event */
-.bv-featured-event {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: var(--space-8);
-    align-items: center;
-    padding: var(--space-8);
-    background: var(--surface-container-lowest);
-    border-left: 8px solid var(--error);
-}
-.bv-featured-event__date { text-align: center; }
-.bv-featured-event__image {
-    width: 200px;
-    height: 150px;
-    overflow: hidden;
-}
-.bv-featured-event__image img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    filter: grayscale(1);
-    transition: filter 0.5s;
-}
-.bv-featured-event:hover .bv-featured-event__image img { filter: grayscale(0); }
 
 /* Event list — v2 handoff canonical layout. The <ul> wrapper is just a
    semantic container for the .bv-event-item entries; reset its default
@@ -1536,8 +1498,6 @@ a { color: inherit; text-decoration: none; }
         height: auto;
     }
     .bv-footer__grid { grid-template-columns: 1fr; padding: var(--space-12) var(--space-4); }
-    .bv-featured-event { grid-template-columns: 1fr; }
-    .bv-featured-event__image { width: 100%; }
     .bv-newsletter__form { flex-direction: column; }
     .bv-stats { grid-template-columns: 1fr 1fr; }
     .bv-bento { grid-template-columns: 1fr; }
