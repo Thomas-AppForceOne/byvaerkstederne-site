@@ -247,10 +247,18 @@ fi
 > "$LOG"
 TIER=dev DEPLOY_PASS="hunter2"
 PATH_BACKUP="$PATH"
-# Build a PATH that includes our ssh/rsync stubs but NOT sshpass.
+# Build a PATH containing ONLY our ssh/rsync stubs, so sshpass is
+# genuinely unreachable. Do NOT append /usr/bin:/bin — on Linux CI
+# runners sshpass lives in /usr/bin, so including the system dirs lets
+# `command -v sshpass` succeed and this "missing sshpass" assertion
+# fails there (it only passed on macOS because Homebrew's sshpass is
+# outside /usr/bin). bv_ssh_cmd reaches the sshpass check using only
+# shell builtins (bv_resolve_ssh_password returns DEPLOY_PASS directly
+# and the function returns before invoking ssh), so a stub-only PATH is
+# sufficient for it to run.
 NO_SSHPASS_DIR="$(mktemp -d -t "${STUB_PREFIX}nosshpass.XXXXXX")"
 cp "$STUB_DIR/ssh" "$STUB_DIR/rsync" "$NO_SSHPASS_DIR/"
-PATH="$NO_SSHPASS_DIR:/usr/bin:/bin"
+PATH="$NO_SSHPASS_DIR"
 err="$(bv_ssh_cmd -p 22 user@host true 2>&1 >/dev/null || true)"
 PATH="$PATH_BACKUP"
 rm -rf "$NO_SSHPASS_DIR"
