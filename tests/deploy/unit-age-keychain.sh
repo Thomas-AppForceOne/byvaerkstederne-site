@@ -80,8 +80,14 @@ case "$mode" in
             echo "security: SecKeychainItemCreateFromContent: The specified item already exists in the keychain." >&2
             exit 45
         fi
-        # base64 the password to keep TSV clean (multi-line OK)
-        printf '%s\t%s\n' "$service" "$(printf '%s' "$password" | base64)" >> "$state"
+        # base64 the password to keep TSV clean (multi-line OK).
+        # `tr -d '\n'` is required: GNU base64 (Linux CI) wraps output
+        # at 76 columns, and those embedded newlines would split one
+        # TSV entry across multiple lines — corrupting the store so a
+        # later find/get returns a truncated value. macOS base64 emits
+        # a single line, which is why this only bit on CI. Strip the
+        # wrapping so the encoding is one line on every platform.
+        printf '%s\t%s\n' "$service" "$(printf '%s' "$password" | base64 | tr -d '\n')" >> "$state"
         exit 0
         ;;
     find-generic-password)
