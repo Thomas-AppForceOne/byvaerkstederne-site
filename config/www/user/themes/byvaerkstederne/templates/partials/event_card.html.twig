@@ -1,0 +1,87 @@
+{#
+   Canonical event-card partial — the single chokepoint every event-card
+   surface routes through. Accepts the documented canonical-event-data
+   interface from the v2 handoff:
+
+     event:
+       day, month, title                    (required)
+       badge, time, description             (optional body content)
+       accent                               (visual; closed-set token)
+       filter                               (behaviour; data-group filter ID)
+       price, cta { label, href, variant? } (optional meta slots)
+       capacity, featured                   (optional)
+
+   The accent value is validated against a closed set before being
+   interpolated into the inline style attribute — defensive belt against
+   YAML drift, not a trust boundary (the YAML is operator-controlled).
+
+   The `inList` flag is a TOP-LEVEL include variable, not a field of the
+   event data. List callers (event_list, atelier_sessions, the secondary
+   list inside event_highlight) leave it default (true) or pass
+   `inList: true`; single-card callers (calendar_featured,
+   event_highlight's primary featured card) pass `inList: false`.
+
+   See documentation/design/event-row-handoff/README.md and
+   specifications/event_card_template_unification_specification.md for
+   the full contract.
+#}
+
+{# Validate accent against the closed set. The four workshop tokens are
+   the only values theme.css recognises; an unknown value would silently
+   produce an inline style that resolves to nothing. #}
+{% set _allowed_accents = ['primary', 'secondary', 'tertiary', 'kulturhus'] %}
+{% set _accent = event.accent in _allowed_accents ? event.accent : 'primary' %}
+
+{# `inList` is a presentation-context flag the caller passes as a
+   top-level include variable, NOT a field of the event data — keeps
+   call sites readable and avoids forcing callers to |merge into the
+   event object. Defaults to true (list context). #}
+{% set _in_list = inList ?? true %}
+
+{# Defensive access on event.cta.variant — when event.cta is undefined
+   entirely (events without a CTA), reading event.cta.variant with
+   strict_variables on would throw. Grav usually runs with
+   strict_variables off, but be explicit. The variant is re-validated
+   against the same closed set as the accent. #}
+{% set _cta_variant_raw = (event.cta is defined and event.cta.variant is defined)
+                          ? event.cta.variant : _accent %}
+{% set _cta_variant = _cta_variant_raw in _allowed_accents ? _cta_variant_raw : 'primary' %}
+
+{% if _in_list %}<li class="bv-event-item">{% else %}<div class="bv-event-item">{% endif %}
+  <article class="bv-event-row{% if event.featured %} bv-event-row--featured{% endif %}"
+           {% if event.filter %}data-group="{{ event.filter }}"{% endif %}
+           style="--bv-accent: var(--{{ _accent }});">
+
+    <div class="bv-event-row__date">
+      <span class="bv-event-row__date-month">{{ event.month }}</span>
+      <span class="bv-event-row__date-day">{{ event.day }}</span>
+    </div>
+
+    <div class="bv-event-row__body">
+      {% if event.badge %}
+        <span class="bv-badge bv-badge--{{ _accent }} bv-event-row__badge">{{ event.badge }}</span>
+      {% endif %}
+      <h3 class="bv-event-row__title">{{ event.title }}</h3>
+      {% if event.time %}<p class="bv-event-row__time">{{ event.time }}</p>{% endif %}
+      {% if event.description %}<p class="bv-event-row__desc">{{ event.description }}</p>{% endif %}
+    </div>
+
+    {% if event.price or (event.cta and event.cta.label and event.cta.href) or event.capacity %}
+      <div class="bv-event-row__meta">
+        {% if event.price %}
+          <span class="bv-event-row__price">{{ event.price }}</span>
+        {% endif %}
+        {% if event.cta and event.cta.label and event.cta.href %}
+          <a class="bv-btn bv-btn--{{ _cta_variant }} bv-btn--sm"
+             href="{{ event.cta.href }}">{{ event.cta.label }}</a>
+        {% endif %}
+        {% if event.capacity %}
+          <span class="bv-event-row__capacity">
+            <span class="material-symbols-outlined" aria-hidden="true">group</span>
+            {{ event.capacity }}
+          </span>
+        {% endif %}
+      </div>
+    {% endif %}
+  </article>
+{% if _in_list %}</li>{% else %}</div>{% endif %}

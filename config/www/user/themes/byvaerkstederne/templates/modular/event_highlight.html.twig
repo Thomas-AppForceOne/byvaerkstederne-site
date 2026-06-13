@@ -1,9 +1,14 @@
 {% set h = page.header %}
 <section class="bv-section">
     <div class="bv-container">
-        <div class="bv-event-highlight">
+        {# Section layout: sidebar (heading + featured card) + main (todo
+           list). Lives on the card-agnostic .bv-section-split namespace —
+           the bespoke event-highlight layout classes were deleted with the
+           event-card unification (the old name wrongly implied event-card
+           markup; the layout itself is generic sidebar + main). #}
+        <div class="bv-section-split">
             {# Left sidebar: heading + featured event card #}
-            <div class="bv-event-highlight__sidebar">
+            <div class="bv-section-split__sidebar">
                 <h2 class="bv-headline" style="font-size: 2.5rem; margin-bottom: var(--space-4);">{{ h.section_title|default('Det sker lige nu') }}</h2>
                 <p class="bv-body-lg u-mb-8">{{ h.section_subtitle|default('') }}</p>
 
@@ -24,30 +29,58 @@
                     {% endfor %}
                 {% endif %}
 
-                {% set ev_date = next_event ? next_event.event_date|date('d. M') : h.event_date|default('') %}
-                {% set ev_time = next_event ? next_event.event_time|default('') : h.event_time|default('') %}
-                {% set ev_title = next_event ? next_event.title : h.event_title|default('') %}
-                {% set ev_desc = next_event ? next_event.description : h.event_description|default('') %}
-                {% set ev_url = next_event ? next_event.button_url|default('#') : h.event_url|default('#') %}
-                {% set ev_group = next_event ? next_event.group|default('alle') : 'alle' %}
-                {% set accent_map = {makerspace: 'secondary', kreativ: 'tertiary', groenne: 'primary', kulturhus: 'kulturhus', alle: 'primary'} %}
-                {% set ev_accent = accent_map[ev_group]|default('primary') %}
+                {# Canonical event-card migration (unification spec, step 12):
+                   the primary featured event renders through
+                   partials/event_card.html.twig with inList: false (single-card
+                   context → <div class="bv-event-item"> wrapper, no <ul>) and
+                   featured: true (.bv-event-row--featured typography bump).
 
-                <div class="bv-card bv-card--container bv-card--accent-{{ ev_accent }}" style="padding: var(--space-8);">
-                    <div class="bv-event-date">
-                        <div class="bv-event-date__day">{{ ev_date }}</div>
-                        <div class="bv-event-date__meta">{{ ev_time }}</div>
-                    </div>
-                    <h3 class="bv-title" style="font-size: 1.5rem; margin-top: var(--space-4);">{{ ev_title }}</h3>
-                    <p class="u-text-muted" style="margin-top: var(--space-4);">{{ ev_desc }}</p>
-                    {% if feature_enabled('event_rsvp') %}
-                    <a href="{{ ev_url }}" class="bv-btn bv-btn--dark bv-btn--full" style="margin-top: var(--space-8);">{{ h.event_cta|default('Jeg kommer') }}</a>
-                    {% endif %}
-                </div>
+                   This template renders exactly ONE event card — there is no
+                   secondary events list in the markup (the spec's
+                   <ul class="bv-event-list"> list-wrapping rule has no
+                   application here; it covers event_list and atelier_sessions).
+
+                   accent vs filter (F1 discipline): accent_map feeds the VISUAL
+                   token from the event's group; filter_map feeds the BEHAVIOUR
+                   filter ID — same convention as event_list.html.twig. The home
+                   page renders no filter buttons, but the data-group contract
+                   stays uniform across every partial caller.
+
+                   When flex is broken/empty there is no upcoming event and the
+                   card is omitted entirely (the page YAML deliberately carries
+                   no fictive fallback fields — "better an empty card than a
+                   fictive one"). #}
+                {% if next_event %}
+                    {% set accent_map = {makerspace: 'secondary', kreativ: 'tertiary', groenne: 'primary', kulturhus: 'kulturhus', alle: 'primary'} %}
+                    {% set filter_map = {makerspace: 'makerspace', kreativ: 'kreativ', groenne: 'groenne', kulturhus: 'kulturhus', alle: 'all'} %}
+                    {% set ev_group = next_event.group|default('alle') %}
+                    {% set ev_accent = accent_map[ev_group]|default('primary') %}
+                    {# CTA only when the RSVP flag is on AND a real URL exists —
+                       per the partial's contract a missing href drops the CTA
+                       silently (no href="#" fallback). #}
+                    {% set ev_cta = (feature_enabled('event_rsvp') and next_event.button_url)
+                        ? { label: h.event_cta|default('Jeg kommer'), href: next_event.button_url, variant: ev_accent }
+                        : null %}
+                    {% set _event = {
+                        day: next_event.event_date|date('j'),
+                        month: next_event.event_date|date('M'),
+                        title: next_event.title,
+                        badge: next_event.badge|default(null),
+                        time: next_event.event_time|default(null),
+                        description: next_event.description|default(null),
+                        accent: ev_accent,
+                        filter: filter_map[ev_group]|default(ev_group),
+                        price: next_event.price|default(null),
+                        cta: ev_cta,
+                        capacity: next_event.capacity|default(null),
+                        featured: true
+                    } %}
+                    {% include 'partials/event_card.html.twig' with { event: _event, inList: false } %}
+                {% endif %}
             </div>
 
             {# Right: Todo list (clickable to expand) #}
-            <div class="bv-event-highlight__main">
+            <div class="bv-section-split__main">
                 <div class="bv-card bv-card--accent-top-secondary bv-todo-trigger" style="padding: var(--space-12); cursor: pointer;" onclick="document.getElementById('bv-todo-overlay').classList.add('is-open'); document.body.style.overflow='hidden';">
                     <h3 class="bv-headline" style="font-size: 1.75rem; display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-10);">
                         <span class="material-symbols-outlined u-text-secondary" style="font-variation-settings: 'FILL' 1;">assignment</span>

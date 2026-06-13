@@ -1,0 +1,38 @@
+<!-- Reference markup only — not a live design-system card. -->
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="utf-8"/>
+<link href="../../styles.css" rel="stylesheet"/>
+<script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+  body { margin: 0; padding: 24px; background: var(--background); }
+  .groups { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .rows { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { WorkgroupCard, EventRow, TeamCard } = window.ByvRkstederneDesignSystem_9c0cc0;
+  const maker = "https://lh3.googleusercontent.com/aida-public/AB6AXuDIahD6Vg5PzBc_4ouuDnJi2vbGAEZRCEjnlLDMXf62M1ou6yMm6GRig77SybbPmrWwmiTUGm3xiRTPrDkIYZzgfaCFpxSWZa98X6YC2m-0F_Ixgf-LDr7BDEVxGypd5gKvZDsXtoDp5hdmVOEHLZgM3S5-c2O3aIh9shyjvrk0F9RKJd4CmVg-zvAxleQHeF4LnwChLQ2neocGTtuZB8wlmcFyMcW9Vf6xbdVije7Py2iA_HaQ6NYes682xxDjvcRI7Q6hRFDtK1Q";
+  const groen = "https://lh3.googleusercontent.com/aida-public/AB6AXuDj8DYIsY7jbFdYrZ-L14_xr2cV0wQ77gEKf9fsWkk7saxNIPNNh7q45LsXFVapk25sH7dR6lQGvw6FZz46V-Ois3DZiasCGU_jA_LaF0GBf7V2Q6egkqEY-Lfvp0QK6HgKC4ZZEs2KntHQYqam47Py2NkdXWN5Jxb_GCvZWNF8381TkmJitdWmySnP9VS5efy2FYWnjMo1IbshCwL3zWvc6Eg7gNsJ4yhlMMejJk0yrSsi8hF3QUfNto383-2zWEUSDIQLK-v7H-U";
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <div>
+      <div className="groups">
+        <WorkgroupCard title="Makerspace" description="3D-print, laser, elektronik." color="secondary" image={maker} />
+        <WorkgroupCard title="Grønt BYværksted" description="Planter og fællesskab." color="primary" image={groen} />
+      </div>
+      <div className="rows">
+        <EventRow month="JUN" day="10" badge="Makerspace & Reparation" title="Elektronik og 3D-print" time="Onsdag kl. 18–20" description="Drop-in værksted. 12 år og opefter." price="250 kr / person" ctaLabel="Tilmeld" ctaHref="#" capacity="12 / 20" color="secondary" filter="makerspace" />
+        <EventRow month="JUN" day="18" badge="Grønt BYværksted" title="Frøbytte i byhaven" description="Tag dine egne frø med." capacity="8 / 30" color="primary" filter="groent" />
+      </div>
+      <TeamCard name="Lene Pels" role="Tovholder · Krea Café" email="lene@byvaerkstederne.dk" photo={maker} />
+    </div>
+  );
+</script>
+</body>
+</html>

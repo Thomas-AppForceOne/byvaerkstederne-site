@@ -79,6 +79,11 @@
     --container: 80rem;
     --container-sm: 42rem;
     --container-md: 64rem;
+
+    /* Event-card design tokens (v2 handoff) — the visible workshop-accent
+       left border and the title's tightened letter-spacing. */
+    --border-thick: 4px;
+    --tracking-tight: -0.02em;
 }
 
 /* ---------- Reset & Base ---------- */
@@ -495,23 +500,15 @@ a { color: inherit; text-decoration: none; }
 /* Text-only hero */
 .bv-hero-text { padding: var(--space-12) 0 var(--space-6); }
 
-/* ---------- Event Highlight ---------- */
-.bv-event-highlight { display: flex; gap: var(--space-16); align-items: flex-start; }
-.bv-event-highlight__sidebar { width: 33.333%; flex-shrink: 0; }
-.bv-event-highlight__main { flex: 1; }
-
-.bv-event-date {
-    font-family: var(--font-headline);
-    font-weight: 700;
-}
-.bv-event-date__day { font-size: 3rem; line-height: 1; }
-.bv-event-date__meta {
-    text-transform: uppercase;
-    font-weight: 700;
-    letter-spacing: 0.15em;
-    color: var(--on-surface-variant);
-    font-size: 0.875rem;
-}
+/* ---------- Section split (sidebar + main) ---------- */
+/* Generic two-column section layout: fixed-third sidebar + fluid main.
+   Used by the home event-highlight section (sidebar = heading + featured
+   event card, main = todo list). Card-agnostic by design — the event-card
+   markup inside comes from partials/event_card.html.twig. Stacks to a
+   single column at <= 1023px (see the Responsive section). */
+.bv-section-split { display: flex; gap: var(--space-16); align-items: flex-start; }
+.bv-section-split__sidebar { width: 33.333%; flex-shrink: 0; }
+.bv-section-split__main { flex: 1; }
 
 /* Todo list */
 .bv-todo-item {
@@ -879,81 +876,162 @@ a { color: inherit; text-decoration: none; }
 .bv-filter-dot--tertiary { background: var(--tertiary); }
 .bv-filter-dot--kulturhus { background: var(--kulturhus); }
 
-/* Featured event */
-.bv-featured-event {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: var(--space-8);
-    align-items: center;
-    padding: var(--space-8);
-    background: var(--surface-container-lowest);
-    border-left: 8px solid var(--error);
+/* Event list — v2 handoff canonical layout. The <ul> wrapper is just a
+   semantic container for the .bv-event-item entries; reset its default
+   chrome (bullets, padding, margin) so the canonical card layout owns
+   its own spacing. */
+.bv-event-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
 }
-.bv-featured-event__date { text-align: center; }
-.bv-featured-event__image {
-    width: 200px;
-    height: 150px;
-    overflow: hidden;
-}
-.bv-featured-event__image img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    filter: grayscale(1);
-    transition: filter 0.5s;
-}
-.bv-featured-event:hover .bv-featured-event__image img { filter: grayscale(0); }
 
-/* Event list item */
+/* Each entry is its own query container; the row (descendant) reacts.
+   An element cannot react to its own container-type — putting it on
+   .bv-event-row makes the container query inert (the v1 latent bug
+   the v2 handoff fixes). */
+.bv-event-item { container-type: inline-size; container-name: event-row; }
+.bv-event-item + .bv-event-item { margin-top: var(--space-3); }
+
 .bv-event-row {
     display: flex;
     align-items: center;
     gap: var(--space-6);
     padding: var(--space-6) var(--space-4);
     background: var(--surface-container-lowest);
-    transition: transform 0.2s;
+    border-left: var(--border-thick) solid var(--bv-accent, var(--primary));
+    transition: transform 0.2s ease;
 }
 .bv-event-row:hover { transform: translateX(0.25rem); }
+/* Legacy-DOM spacing — preserved so synthetic <div class="bv-event-row">
+   rows injected by tests/mobile/event-row.js still get the inter-row
+   gap when they sit as direct siblings outside a .bv-event-item wrapper. */
 .bv-event-row + .bv-event-row { margin-top: var(--space-3); }
 
+/* DATE */
 .bv-event-row__date {
+    flex-shrink: 0;
+    min-width: 4rem;
+    text-align: center;
     font-family: var(--font-headline);
     font-weight: 700;
-    text-align: center;
-    min-width: 4rem;
-    flex-shrink: 0;
+    line-height: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
-.bv-event-row__date-month { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; }
-.bv-event-row__date-day { font-size: 1.5rem; line-height: 1; }
+.bv-event-row__date-month { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--on-surface-variant); }
+.bv-event-row__date-day { font-size: 1.5rem; }
 
-.bv-event-row__body { flex: 1; min-width: 0; }
+/* BODY: badge + h3 + time + description */
+.bv-event-row__body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+}
+.bv-event-row__badge { margin-bottom: var(--space-1); }
 .bv-event-row__title {
+    margin: 0;
     font-family: var(--font-headline);
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: -0.02em;
+    letter-spacing: var(--tracking-tight);
+    font-size: 1.25rem;
+    line-height: 1.15;
 }
-.bv-event-row__desc { font-size: 0.875rem; color: var(--on-surface-variant); margin-top: 0.25rem; }
-
-.bv-event-row__meta {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    flex-shrink: 0;
+.bv-event-row__time {
+    margin: 0;
+    font-family: var(--font-headline);
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+.bv-event-row__desc {
+    margin: 0;
     font-size: 0.875rem;
+    color: var(--on-surface-variant);
+    text-wrap: pretty;
+}
+
+/* META: price over CTA over capacity (each independently optional) */
+.bv-event-row__meta {
+    flex-shrink: 0;
+    min-width: 9rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--space-2);
+    text-align: right;
+}
+.bv-event-row__price {
+    font-family: var(--font-headline);
+    font-weight: 700;
+    font-size: 0.95rem;
+    line-height: 1.2;
 }
 .bv-event-row__capacity {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 0.25rem;
+    font-size: 0.875rem;
     color: var(--on-surface-variant);
 }
+.bv-event-row__capacity .material-symbols-outlined { font-size: 1.1rem; }
 
-/* Color-coded left borders for events */
-.bv-event-row--primary { border-left: 4px solid var(--primary); }
-.bv-event-row--secondary { border-left: 4px solid var(--secondary); }
-.bv-event-row--tertiary { border-left: 4px solid var(--tertiary); }
-.bv-event-row--kulturhus { border-left: 4px solid var(--kulturhus); }
+/* Featured modifier — used by calendar_featured.html.twig and the
+   primary featured card in event_highlight.html.twig in sprint 2.
+   Desktop-only typography bump and tighter spacing; mobile inherits
+   the stacked layout without modifier-specific overrides. */
+.bv-event-row--featured { padding: var(--space-8) var(--space-6); }
+.bv-event-row--featured .bv-event-row__date-day { font-size: 2rem; }
+.bv-event-row--featured .bv-event-row__date-month { font-size: 0.875rem; }
+.bv-event-row--featured .bv-event-row__title { font-size: 1.5rem; }
+
+/* STACKED: when the ROW itself is < 540px — the container query fires
+   on the .bv-event-item wrapper (container-name: event-row), so the
+   row stacks as soon as ITS OWN width crosses the breakpoint, whether
+   that happens because of a narrow viewport, a narrow sidebar, or a
+   2-column tablet grid. */
+@container event-row (max-width: 540px) {
+    .bv-event-row { flex-direction: column; align-items: flex-start; gap: var(--space-3); }
+    .bv-event-row__date { flex-direction: row; align-items: baseline; gap: var(--space-2); min-width: auto; text-align: left; }
+    .bv-event-row__date-day { order: -1; font-size: 1.25rem; }
+    .bv-event-row__date-month { font-size: 0.8rem; }
+    .bv-event-row__body,
+    .bv-event-row__meta { width: 100%; }
+    .bv-event-row__meta { align-items: flex-start; text-align: left; margin-top: var(--space-2); }
+    .bv-event-row__meta .bv-btn { width: 100%; }
+    /* Long Danish workshop titles (the "TEGN OG SNIT GUMMISTEMPEL" case
+       from PR #35's screenshot 2) must break mid-token at narrow widths
+       so they cannot push the body's bounding box past the row's right
+       edge. Identical PR #35 fix, scoped to the container-query block
+       where it is needed. */
+    .bv-event-row__title { overflow-wrap: anywhere; word-break: break-word; max-width: 100%; }
+    .bv-event-row__desc { overflow-wrap: anywhere; word-break: break-word; max-width: 100%; }
+    .bv-event-row__body { padding-right: var(--space-2); }
+}
+
+/* ---------- Technique / Pitch Cards (atelier_techniques.html.twig) ----------
+   The decorative numeral was previously inline-styled directly in the Twig
+   template; promoted to a class so the mobile breakpoint can target it
+   (screenshot 5: faded "5" overlapped "DU HAR SCENESKRÆK …" on a narrow
+   column). The desktop visual intent — large faded outline numeral anchored
+   top-right — is preserved unchanged here. */
+.bv-technique-card__index {
+    position: absolute;
+    top: var(--space-4);
+    right: var(--space-4);
+    font-family: var(--font-headline);
+    font-weight: 700;
+    font-size: 3rem;
+    line-height: 1;
+    color: var(--on-surface-variant);
+    opacity: 0.1;
+    pointer-events: none;
+}
+.bv-technique-card__body { position: relative; z-index: 1; }
 
 /* ---------- Team Cards ---------- */
 .bv-team-card {
@@ -1376,8 +1454,8 @@ a { color: inherit; text-decoration: none; }
 
 @media (max-width: 1023px) {
     .bv-workgroups { grid-template-columns: repeat(2, 1fr); }
-    .bv-event-highlight { flex-direction: column; }
-    .bv-event-highlight__sidebar { width: 100%; }
+    .bv-section-split { flex-direction: column; }
+    .bv-section-split__sidebar { width: 100%; }
     .bv-hero-split { grid-template-columns: 1fr; }
     .bv-hero-split__image { min-height: 40vh; }
     .bv-footer__grid { grid-template-columns: repeat(2, 1fr); }
@@ -1406,10 +1484,20 @@ a { color: inherit; text-decoration: none; }
 
     /* Workgroups: single column, shorter cards */
     .bv-workgroups { grid-template-columns: 1fr; }
-    .bv-workgroup-card { aspect-ratio: 16/9; }
+    /* Mobile workgroup cards (screenshot 1, BILLEDKUNST clipped at top edge of
+       the krea-cafe atelier card): the fixed 16:9 aspect-ratio collapsed the
+       card below the height needed by the bottom-anchored title + description
+       + line stack, and overflow:hidden then clipped the heading. Drop the
+       fixed aspect on mobile and let the card grow to fit its content while
+       still presenting an image-shaped silhouette via min-height (≈ 16:9 of a
+       full-width column on a 390 px viewport ≈ 220 px). Image-as-background
+       and bottom-anchored content stack are preserved. */
+    .bv-workgroup-card {
+        aspect-ratio: auto;
+        min-height: 14rem;
+        height: auto;
+    }
     .bv-footer__grid { grid-template-columns: 1fr; padding: var(--space-12) var(--space-4); }
-    .bv-featured-event { grid-template-columns: 1fr; }
-    .bv-featured-event__image { width: 100%; }
     .bv-newsletter__form { flex-direction: column; }
     .bv-stats { grid-template-columns: 1fr 1fr; }
     .bv-bento { grid-template-columns: 1fr; }
@@ -1418,12 +1506,39 @@ a { color: inherit; text-decoration: none; }
     /* Hero: no right padding overflow */
     .bv-hero { max-width: 100vw; }
 
-    /* Event rows: stack vertically on mobile */
-    .bv-event-row { flex-direction: column; align-items: flex-start; gap: var(--space-3); }
-    .bv-event-row__date { display: flex; gap: var(--space-2); align-items: baseline; }
-    .bv-event-row__date-month { font-size: 0.875rem; }
-    .bv-event-row__date-day { font-size: 1.25rem; }
-    .bv-event-row__meta { width: 100%; justify-content: flex-start; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-2); }
+    /* Event-row responsive stacking moved to the @container event-row
+       (max-width: 540px) block above — PR #35's media-query rules are
+       superseded by the v2 handoff's container query, which fires on
+       the row's own width rather than the viewport. Container query
+       reaches narrow sidebars and 2-column tablet grids the media
+       query never did. */
+
+    /* Mobile pitch / technique cards (screenshot 5, "DU HAR SCENESKRÆK — OG
+       EN HEMMELIG DRØM" overlapped by the faded "05"). Two coupled rules
+       guarantee bounding-box non-intersection at 390 px width:
+         a) numeral is tucked into the top-right corner and capped to ~2.5 rem
+            wide so its left edge sits well inside the card's right padding.
+         b) title's max-width reserves space for the numeral on its right and
+            (crucially) makes the h3's bounding box stop short of the numeral
+            even though the surrounding body has no padding-right.
+       The numeral stays visible (no display:none / visibility:hidden — the
+       design-intent guard called out in the spec). */
+    .bv-technique-card__index {
+        font-size: 1.75rem;
+        top: var(--space-2);
+        right: var(--space-2);
+        width: 2.5rem;
+        text-align: right;
+        z-index: 0;
+        opacity: 0.08;
+    }
+    .bv-technique-card__title {
+        position: relative;
+        z-index: 2;
+        max-width: calc(100% - 3.5rem);
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
 
     /* To-Do card: match inner padding to container padding on mobile */
     .bv-todo-trigger { padding: var(--space-4) !important; }
