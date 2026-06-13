@@ -44,15 +44,38 @@ jobs:
           # The PR head itself, not the merge commit, and full history
           # so base + tags resolve. Rule 4 needs base main's VERSION and
           # rule 5 needs the tag list — neither is in the default shallow
-          # merge-ref checkout.
+          # merge-ref checkout. fetch-depth: 0 (full history) is required
+          # here because the back-merge advisory step below walks the
+          # graph: bv_count_commits_ahead runs `git rev-list --count
+          # origin/develop..origin/main`, which must reach the
+          # develop/main merge-base. The guard itself reads only single
+          # blobs + the tag list, but the shared checkout serves both.
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - name: Fetch base ref and tags
+      - name: Fetch refs and tags
+        # One hardened fetch feeds both the guard (origin/main + tags) and
+        # the back-merge advisory (origin/main + origin/develop). A
+        # required check must survive a transient network blip, so bound
+        # each remote call with `timeout` and retry with backoff rather
+        # than failing the PR on the first hiccup.
+        timeout-minutes: 3
         run: |
           set -euo pipefail
-          git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
-          git fetch --tags origin
+          fetch() {
+            local i
+            for i in 1 2 3; do
+              if timeout 60 git fetch "$@"; then
+                return 0
+              fi
+              sleep $((i * 5))
+            done
+            return 1
+          }
+          fetch --no-tags origin \
+            '+refs/heads/main:refs/remotes/origin/main' \
+            '+refs/heads/develop:refs/remotes/origin/develop'
+          fetch --tags origin
 
       - name: Release-PR guard
         env:
@@ -74,23 +97,13 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$rc"
 
-  backmerge-advisory:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-
-      - name: Fetch develop and main
-        run: |
-          set -euo pipefail
-          git fetch --no-tags origin \
-            '+refs/heads/main:refs/remotes/origin/main' \
-            '+refs/heads/develop:refs/remotes/origin/develop'
-
       - name: Back-merge advisory (informational — never fails)
+        # Folded into this job rather than run as a second VM: it reuses
+        # the shared checkout + fetch above instead of paying for its own.
+        # `if: always()` so it reports even when the guard above failed,
+        # and it ends `exit 0` so this step can never fail the job — the
+        # advisory reports, it never gates.
+        if: always()
         run: |
           set -uo pipefail
           . deploy/lib/release-flow.sh
@@ -102,5 +115,5 @@ jobs:
           fi
           echo "$msg"
           echo "$msg" >> "$GITHUB_STEP_SUMMARY"
-          # Always succeed: this job reports, it never gates.
+          # Always succeed: this step reports, it never gates.
           exit 0
