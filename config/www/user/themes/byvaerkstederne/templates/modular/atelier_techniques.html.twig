@@ -21,10 +21,10 @@
         {% if h.techniques %}
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: var(--space-6);">
             {% for t in h.techniques %}
-            <div style="background: var(--surface-container); padding: var(--space-8); position: relative; overflow: hidden;">
-                <div style="position: absolute; top: var(--space-4); right: var(--space-4); font-family: var(--font-headline); font-weight: 700; font-size: 3rem; color: var(--on-surface-variant); opacity: 0.1;">{{ loop.index|format('%02d') }}</div>
-                <div style="position: relative; z-index: 1;">
-                    <h3 class="bv-headline" style="font-size: 1.25rem; margin-bottom: var(--space-4);">{{ t.title }}</h3>
+            <div class="bv-technique-card" style="background: var(--surface-container); padding: var(--space-8); position: relative; overflow: hidden;">
+                <div class="bv-technique-card__index" aria-hidden="true">{{ loop.index|format('%02d') }}</div>
+                <div class="bv-technique-card__body">
+                    <h3 class="bv-headline bv-technique-card__title" style="font-size: 1.25rem; margin-bottom: var(--space-4);">{{ t.title }}</h3>
                     <p style="color: var(--on-surface-variant); line-height: 1.6; font-size: 0.95rem;">{{ t.description }}</p>
                     {% if t.bring %}
                     <p style="margin-top: var(--space-4); font-size: 0.8rem; color: var(--on-surface-variant); font-style: italic;"><strong>Medbring:</strong> {{ t.bring }}</p>

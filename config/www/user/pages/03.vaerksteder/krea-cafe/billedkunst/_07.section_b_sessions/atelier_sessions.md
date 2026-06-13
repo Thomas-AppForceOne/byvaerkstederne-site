@@ -13,8 +13,8 @@ sessions:
       no_signup: true
     - day: "13"
       month: "Juni"
-      title: "Silketryk — intro"
+      title: "AFLYST - Silketryk — intro"
       time: "Lørdag kl. 11-13"
-      description: "Introduktion til silketryksmetoden. 3 personer kan arbejde med rammer ad gangen — er der flere, kan man arbejde to og to. Brugerbetaling til materialer."
+      description: "AFLYST grundet manglende materialer som ikke er dukket op med posten. Der bliver en anden session. Hold øje med hjemmesiden."
       no_signup: true
 ---
