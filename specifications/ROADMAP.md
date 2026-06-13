@@ -80,9 +80,9 @@ Rollback uses the atomic-deploy `rollback.sh prod` for the code+symlink layer an
 
 **Exit criteria:** the gate refuses any prod deploy whose staging-blessing tuple doesn't match exactly; tagged pre-promotion backups exist for every promotion; bypass usage is logged on prod; both rollback paths (symlink + backup-restore) work; the previous release stays preserved for symlink-rollback per atomic-deploy.
 
-### 7. CI release protection, Part 1: PR validation & merge guards — Planned
+### 7. CI release protection, Part 1: PR validation & merge guards — IMPLEMENTED
 
-**Spec:** [ci_release_protection_part1_specification.md](ci_release_protection_part1_specification.md)
+**Spec:** [archive/ci_release_protection_part1_specification.md](archive/ci_release_protection_part1_specification.md)
 
 Move the release invariants that today live only in the local `make` tooling "left" to the pull request. A no-secrets GitHub Actions workflow runs `make test-deploy` on every PR and enforces the release-branch, bumped-version, and free-tag rules on PRs into `main`, so the rules hold regardless of who merges or how (the `1.1.0` cleanup showed how drift accumulates when nothing runs at merge time). The back-merge condition is reported but never blocks, so a required check can't deadlock the repo. First of a three-part CI series — Part 2 auto-tags and auto-opens the back-merge on merge (needs a token); Part 3 runs the deploys from CI (needs secrets + runner network).
 
