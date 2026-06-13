@@ -23,6 +23,12 @@
 # gated on rule 3 (a pre-release / malformed version cannot be compared
 # or sensibly tag-checked; they are reported "not evaluated" instead).
 #
+# The recognised component set is a FIXED, closed set of two — grav and
+# landing. It is NOT data-driven: adding a component is a deliberate code
+# change to the Rule 2 `case` block below (see the note at its catch-all
+# `*)` arm), not a caller argument or external configuration. This is
+# intended by the spec (rule 2), not an oversight.
+#
 # Pure function: takes the head branch name, the checkout dir, and the
 # base ref as positional args; reads the head VERSION from the working
 # tree and the base VERSION + tags from git. Unit-tested against a
@@ -64,6 +70,8 @@ bv_release_pr_guard() {
             component="grav";    version_file="config/www/VERSION"; tag_prefix="v" ;;
         release/landing-v[0-9]*|hotfix/landing-v[0-9]*)
             component="landing"; version_file="apex/VERSION";       tag_prefix="landing-v" ;;
+        # Closed set by design (spec rule 2). To add a component, add an arm
+        # ABOVE this one mapping its branch globs to <version_file> + <tag_prefix>.
         *)
             printf '❌  [rule 2] cannot resolve component from head "%s" (expected release/v* | release/landing-v* | hotfix/v* | hotfix/landing-v*).\n' "$head_ref" >&2
             return 1
