@@ -111,6 +111,15 @@ fail_case "config/www/VERSION 1.3.0-dev → rule 3 (must be finalised)" "release
 set_head grav 1.0.0
 fail_case "1.0.0 < base 1.1.0 → rule 4 (not bumped)" "release/v1.0.0" "[rule 4]" "not bumped"
 
+# ── Rule 4: comparator-error arm (shadow bv_semver_compare to fail) ────
+# An otherwise-valid clean, bumped head; force the comparator to error so
+# rule 4 takes its internal-error arm rather than the "not bumped" arm.
+set_head grav 1.3.0
+bv_semver_compare() { return 1; }
+fail_case "comparator failure → rule 4 (internal: comparison failed), fails closed" \
+    "release/v1.3.0" "[rule 4]" "internal" "comparison failed"
+unset -f bv_semver_compare
+
 # ── Rule 5: tag already exists (annotated grav, lightweight landing) ──
 set_head grav 2.0.0
 git -C "$R" tag v2.0.0                              # lightweight, bumped & clean

@@ -108,8 +108,10 @@ bv_release_pr_guard() {
             rc=1
         else
             local cmp
-            cmp="$(bv_semver_compare "$head_version" "$base_core")"
-            if [ "$cmp" != "1" ]; then
+            if ! cmp="$(bv_semver_compare "$head_version" "$base_core")"; then
+                printf '❌  [rule 4] internal: version comparison failed for head %s (%s) vs base %s (%s) — both were expected clean X.Y.Z.\n' "$version_file" "$head_version" "$base_ref" "$base_core" >&2
+                rc=1
+            elif [ "$cmp" != "1" ]; then
                 printf '❌  [rule 4] version not bumped: head %s (%s) is not greater than base %s (%s).\n' "$version_file" "$head_version" "$base_ref" "$base_version" >&2
                 rc=1
             fi
