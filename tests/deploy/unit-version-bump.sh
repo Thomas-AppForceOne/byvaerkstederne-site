@@ -82,5 +82,32 @@ err "two-part version → error" bv_semver_compare "1.2" "1.2.0"
 err "non-numeric → error" bv_semver_compare "x.y.z" "1.2.3"
 
 echo "---"
+echo "Unit test: version-bump.sh (bv_is_clean_semver)"
+echo "---"
+
+# ok: predicate returns 0 (true) for a clean X.Y.Z; err: returns non-zero.
+ok() {
+    local name="$1"; shift
+    if "$@" >/dev/null 2>&1; then echo "  ✓ $name"; PASS=$((PASS+1));
+    else echo "  ✗ $name (expected true, got false)" >&2; FAIL=$((FAIL+1)); fi
+}
+
+# Success path: clean X.Y.Z shapes are accepted (leading zeros are a
+# structural-only check — like the regex, the predicate does not reject
+# them; base-10 forcing lives in the comparator/bump helpers).
+ok "clean: 1.2.3 → true" bv_is_clean_semver "1.2.3"
+ok "clean: 0.0.0 → true" bv_is_clean_semver "0.0.0"
+ok "clean: 10.20.30 → true" bv_is_clean_semver "10.20.30"
+ok "clean: leading zero 1.0.08 → true" bv_is_clean_semver "1.0.08"
+
+# Failure path: any non-X.Y.Z shape is rejected.
+err "pre-release suffix → false" bv_is_clean_semver "1.2.3-dev"
+err "build metadata → false" bv_is_clean_semver "1.2.3+build"
+err "two-part version → false" bv_is_clean_semver "1.2"
+err "four-part version → false" bv_is_clean_semver "1.2.3.4"
+err "non-numeric → false" bv_is_clean_semver "x.y.z"
+err "empty string → false" bv_is_clean_semver ""
+
+echo "---"
 echo "version-bump: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

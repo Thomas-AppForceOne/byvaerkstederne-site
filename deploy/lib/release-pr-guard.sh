@@ -84,7 +84,7 @@ bv_release_pr_guard() {
     # ── Rule 3: version is a clean release SemVer ─────────────────────
     local clean=0
     if [ -n "$head_version" ]; then
-        if printf '%s' "$head_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+        if bv_is_clean_semver "$head_version"; then
             clean=1
         else
             printf '❌  [rule 3] %s is "%s" — pre-release version must be finalised (expected clean X.Y.Z, no -dev/-rc suffix) before it reaches main.\n' "$version_file" "$head_version" >&2
@@ -103,7 +103,7 @@ bv_release_pr_guard() {
         if [ -z "$base_version" ]; then
             printf '❌  [rule 4] could not read base %s at %s (is the base ref fetched?).\n' "$version_file" "$base_ref" >&2
             rc=1
-        elif ! printf '%s' "$base_core" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+        elif ! bv_is_clean_semver "$base_core"; then
             printf '❌  [rule 4] base %s at %s is "%s" — no clean X.Y.Z core to compare against.\n' "$version_file" "$base_ref" "$base_version" >&2
             rc=1
         else

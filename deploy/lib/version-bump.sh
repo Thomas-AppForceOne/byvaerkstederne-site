@@ -14,6 +14,24 @@
 #
 # Pure function → unit-tested directly.
 
+# bv_is_clean_semver <value>
+#
+# The canonical "is this a clean release X.Y.Z?" predicate for the
+# sourced deploy/lib SemVer vocabulary. Returns 0 (true) iff <value> is
+# exactly three dot-separated digit runs — no pre-release / build suffix,
+# no missing component. This is a purely STRUCTURAL ^X.Y.Z$ shape check:
+# like the regex it replaces it does not constrain leading zeros (the
+# comparator/bump helpers force base-10 with `10#` after this screen).
+#
+# Every sourced site that asks "is this clean SemVer?" must call this
+# rather than re-spelling the regex, so the shape has a single owner.
+# (deploy/migrate.sh's is_semver carries its own copy by necessity — it
+# is an executable script, never sourced as a library; see the cross-ref
+# comment there.)
+bv_is_clean_semver() {
+    printf '%s' "$1" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
+}
+
 # bv_bump_semver <current> <major|minor|patch> [pre]
 #
 # Echoes the bumped version on stdout. With a non-empty [pre] label, a
@@ -29,7 +47,7 @@ bv_bump_semver() {
 
     # Core = everything before the first '-' (pre-release) or '+' (build).
     local core="${current%%[-+]*}"
-    if ! printf '%s' "$core" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+    if ! bv_is_clean_semver "$core"; then
         printf 'bv_bump_semver: no valid X.Y.Z core in %s\n' "$current" >&2
         return 1
     fi
@@ -75,12 +93,11 @@ bv_bump_semver() {
 # `-dev`/`-rc.N` value is a caller bug, not a silent "they're equal".
 bv_semver_compare() {
     local a="$1" b="$2"
-    local re='^[0-9]+\.[0-9]+\.[0-9]+$'
-    if ! printf '%s' "$a" | grep -Eq "$re"; then
+    if ! bv_is_clean_semver "$a"; then
         printf 'bv_semver_compare: not a clean X.Y.Z version: %s\n' "$a" >&2
         return 1
     fi
-    if ! printf '%s' "$b" | grep -Eq "$re"; then
+    if ! bv_is_clean_semver "$b"; then
         printf 'bv_semver_compare: not a clean X.Y.Z version: %s\n' "$b" >&2
         return 1
     fi
