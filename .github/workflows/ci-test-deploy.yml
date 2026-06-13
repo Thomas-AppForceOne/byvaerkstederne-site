@@ -14,7 +14,7 @@ on:
 
 # Cancel superseded runs on the same PR head / branch.
 concurrency:
-  group: ci-test-deploy-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 # Read-only: this workflow never needs a write- or deploy-scoped token.
@@ -23,6 +23,10 @@ permissions:
 
 jobs:
   test-deploy:
+    # Explicit; equals the key and the spec's required-check string.
+    # Required status check — must match the `main`/`develop` ruleset
+    # string; do not rename (a silent rename freezes PRs on a pending check).
+    name: test-deploy
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

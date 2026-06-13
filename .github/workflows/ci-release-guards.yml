@@ -27,7 +27,7 @@ on:
     branches: [main]
 
 concurrency:
-  group: ci-release-guards-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 # Read-only: these jobs only inspect refs, versions and tags.
@@ -36,6 +36,10 @@ permissions:
 
 jobs:
   release-pr-guard:
+    # Explicit; equals the key and the spec's required-check string.
+    # Required status check — must match the `main` ruleset string; do
+    # not rename (a silent rename freezes PRs on a pending check).
+    name: release-pr-guard
     runs-on: ubuntu-latest
     steps:
       - name: Checkout PR head
