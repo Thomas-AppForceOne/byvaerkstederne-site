@@ -90,6 +90,16 @@ Move the release invariants that today live only in the local `make` tooling "le
 
 **Exit criteria:** `make test-deploy` runs as a required check on PRs; PRs into `main` from a non-`release/*`/`hotfix/*` head, with an unbumped or pre-release version, or with an already-existing tag, are refused with a specific message; the back-merge advisory reports the gap without ever failing; the introducing PR is not self-gated; the flaky `tests/deploy/migrate.sh` mtime assertion is hardened so the required `test-deploy` check is deterministic.
 
+### 8. Member account creation & login hardening — Planned (independent track)
+
+**Spec:** [member_auth_hardening_specification.md](member_auth_hardening_specification.md)
+
+Close the seven findings from the June 2026 review of the self-service member registration and login flow. The stock `login` (v3.8.0) and `email` (v4.2.2) plugins are configured and themed, not patched — the work is configuration, theme templates, secrets-handling, and tests. Seven self-contained work items: a working themed password-reset flow with real SMTP transport (today reset is broken — no email transport, unstyled routes); email verification before access plus removal of instant auto-login; removing the committed `security.yaml` salt from git and rotating it; an explicit hardened session-cookie block (`Secure`/`HttpOnly`/`SameSite`); pinning `pwd_regex`/`username_regex` in the repo instead of inheriting Grav-core defaults; Playwright coverage of the custom auth surface on both success and failure paths; and registration UX/localisation polish (confirmed password, Danish validation messages, no hotlinked third-party image).
+
+This is **not** part of the data-lifecycle/deploy chain (steps 2–6) and does not block or depend on it. Its only structural dependency — per-tier secret provisioning for SMTP creds and the salt — is satisfied by the already-shipped atomic-deploy per-tier state layout (step 3). It can be scheduled at any time. Work items WI-1 → WI-2 are ordered (email transport before the verification gate); the rest are independent and may land as separate PRs.
+
+**Exit criteria:** password reset works end-to-end inside the themed site shell; new accounts are disabled until email-verified and are no longer auto-logged-in; no auth secret is tracked in git and the exposed salt is rotated on every tier that used it; the session cookie carries `Secure`/`HttpOnly`/`SameSite=Lax` on TLS tiers with login still working through the proxy; `pwd_regex`/`username_regex` are pinned and agree with the client-side checks; the registration/login/activation/reset surface has green success- and failure-path Playwright coverage that skips cleanly without credentials.
+
 ---
 
 ## Out-of-order risks
