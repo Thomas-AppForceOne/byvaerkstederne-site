@@ -86,14 +86,16 @@ jobs:
           set -uo pipefail
           . deploy/lib/release-pr-guard.sh
           rc=0
-          bv_release_pr_guard "$HEAD_REF" "$GITHUB_WORKSPACE" "origin/main" 2>guard.err || rc=$?
-          cat guard.err
+          # Capture combined output in-memory (matching the back-merge advisory
+          # step's variable idiom) rather than via a workspace-relative file:
+          # `out` always exists, so the reads below can never hit a "No such
+          # file" error, and a failed `. source` above surfaces its real error
+          # via `out`/`rc` instead of a spurious missing-capture-file message.
+          out="$(bv_release_pr_guard "$HEAD_REF" "$GITHUB_WORKSPACE" "origin/main" 2>&1)" || rc=$?
+          printf '%s\n' "$out"
           {
             if [ "$rc" -eq 0 ]; then echo "### ✅ release-pr-guard passed"; else echo "### ❌ release-pr-guard failed"; fi
-            echo ''
-            echo '```'
-            cat guard.err
-            echo '```'
+            printf '\n```\n%s\n```\n' "$out"
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$rc"
 
