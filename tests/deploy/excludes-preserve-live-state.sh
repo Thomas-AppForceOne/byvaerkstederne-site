@@ -112,7 +112,11 @@ for f in "${LIVE_FILES[@]}"; do
     cp -p "$DATA_DIR/$f" "$SNAPSHOT/$f"
 done
 
-DATA_MTIME_BEFORE="$(stat -f '%m' "$DATA_DIR" 2>/dev/null || stat -c '%Y' "$DATA_DIR")"
+# Portable mtime: GNU `stat -c %Y` FIRST, BSD `stat -f %m` as fallback.
+# Order matters — on Linux `stat -f` is --file-system (not a format),
+# so it prints fs-status to stdout AND exits non-zero, concatenating
+# garbage onto the fallback. GNU-first fails cleanly (stderr only) on macOS.
+DATA_MTIME_BEFORE="$(stat -c '%Y' "$DATA_DIR" 2>/dev/null || stat -f '%m' "$DATA_DIR")"
 
 # Build the deploy package (mimics what deploy.sh assembles in
 # $STAGING_DIR — application code only, no live state).
@@ -138,7 +142,7 @@ else
     check "atomic rsync into fresh release dir succeeds" fail
 fi
 
-DATA_MTIME_AFTER="$(stat -f '%m' "$DATA_DIR" 2>/dev/null || stat -c '%Y' "$DATA_DIR")"
+DATA_MTIME_AFTER="$(stat -c '%Y' "$DATA_DIR" 2>/dev/null || stat -f '%m' "$DATA_DIR")"
 if [ "$DATA_MTIME_BEFORE" = "$DATA_MTIME_AFTER" ]; then
     check "<tier>data/ mtime unchanged across rsync (structural invariant)" ok
 else

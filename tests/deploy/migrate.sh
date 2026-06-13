@@ -877,8 +877,12 @@ fi
 # flaked across a second boundary. META >= DOCROOT is both correct and a
 # stronger freshness check: a STALE meta left from an earlier deploy
 # would be OLDER than this deploy's docroot and now fails loudly.)
-META_MTIME="$(stat -f %m "$META" 2>/dev/null || stat -c %Y "$META" 2>/dev/null)"
-DOCROOT_MTIME="$(stat -f %m "$DOCROOT" 2>/dev/null || stat -c %Y "$DOCROOT" 2>/dev/null)"
+# Portable mtime: GNU `stat -c %Y` FIRST, BSD `stat -f %m` as fallback.
+# Order matters — on Linux `stat -f` is --file-system (not a format),
+# so it prints fs-status to stdout AND exits non-zero, concatenating
+# garbage onto the fallback. GNU-first fails cleanly (stderr only) on macOS.
+META_MTIME="$(stat -c %Y "$META" 2>/dev/null || stat -f %m "$META" 2>/dev/null)"
+DOCROOT_MTIME="$(stat -c %Y "$DOCROOT" 2>/dev/null || stat -f %m "$DOCROOT" 2>/dev/null)"
 if [ -n "$META_MTIME" ] && [ -n "$DOCROOT_MTIME" ] && [ "$META_MTIME" -ge "$DOCROOT_MTIME" ]; then
     check "release-meta.yaml mtime is >= docroot symlink mtime (post-swap audit fields appended after swap)" ok
 else
@@ -911,7 +915,7 @@ echo ""
 echo "Test 8: idempotence guard — re-run refused, backup not called"
 
 PRE_RERUN_SHA="$(find "$T_OK_PARENT/${TIER}-releases" "$T_OK_PARENT/${TIER}data" -type f -print0 2>/dev/null | sort -z | xargs -0 shasum 2>/dev/null | shasum)"
-PRE_RERUN_DATA_MTIME="$(stat -f %m "$T_OK_PARENT/${TIER}data" 2>/dev/null || stat -c %Y "$T_OK_PARENT/${TIER}data" 2>/dev/null)"
+PRE_RERUN_DATA_MTIME="$(stat -c %Y "$T_OK_PARENT/${TIER}data" 2>/dev/null || stat -f %m "$T_OK_PARENT/${TIER}data" 2>/dev/null)"
 
 RERUN_BAK_MARKER="$WORK/t-rerun-backup-invoked"
 T_RERUN_ERR="$WORK/t-rerun.err"
@@ -943,7 +947,7 @@ if [ "$PRE_RERUN_SHA" = "$POST_RERUN_SHA" ]; then
 else
     check "re-run did not corrupt on-disk content" fail
 fi
-POST_RERUN_DATA_MTIME="$(stat -f %m "$T_OK_PARENT/${TIER}data" 2>/dev/null || stat -c %Y "$T_OK_PARENT/${TIER}data" 2>/dev/null)"
+POST_RERUN_DATA_MTIME="$(stat -c %Y "$T_OK_PARENT/${TIER}data" 2>/dev/null || stat -f %m "$T_OK_PARENT/${TIER}data" 2>/dev/null)"
 if [ "$PRE_RERUN_DATA_MTIME" = "$POST_RERUN_DATA_MTIME" ]; then
     check "re-run did not change <tier>data/ mtime" ok
 else
