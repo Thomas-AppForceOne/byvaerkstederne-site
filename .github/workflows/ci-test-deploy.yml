@@ -32,6 +32,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install deploy-test tool dependencies
+        # The hermetic suite shells out to a few external tools. ubuntu-latest
+        # already ships bash, coreutils, git, make, rsync, curl, python3 and
+        # xxd; `age`/`age-keygen` — used by the real-mode backup.sh probe in
+        # tests/deploy/migrate.sh — is the only one not preinstalled. Without
+        # it that probe records a failure instead of exercising encryption.
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y age
+
       - name: Run deploy regression suite
         # `make test-deploy` is hermetic — default checkout depth is
         # sufficient. The job fails iff any probe fails.
