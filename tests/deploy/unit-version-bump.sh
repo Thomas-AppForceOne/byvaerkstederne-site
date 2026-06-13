@@ -81,6 +81,16 @@ err "build metadata → error" bv_semver_compare "1.2.0+build" "1.2.0"
 err "two-part version → error" bv_semver_compare "1.2" "1.2.0"
 err "non-numeric → error" bv_semver_compare "x.y.z" "1.2.3"
 
+# Regression (I-008): the `for pair in …` control variable must be `local`
+# to bv_semver_compare. Bash does not localize loop variables at the `for`
+# keyword, so a missing `local pair` would leak the last "a:b" value into the
+# caller. Set a sentinel here, call the comparator, and assert the sentinel
+# SURVIVES — it fails against the pre-fix `local x y` (pair clobbers it) and
+# passes once `pair` is folded into the local declaration.
+pair="SENTINEL"
+bv_semver_compare 1.2.3 1.2.3 >/dev/null
+eq "bv_semver_compare does not leak loop var 'pair'" "SENTINEL" "$pair"
+
 echo "---"
 echo "Unit test: version-bump.sh (bv_is_clean_semver)"
 echo "---"

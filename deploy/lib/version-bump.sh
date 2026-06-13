@@ -109,7 +109,7 @@ bv_semver_compare() {
     a1=$((10#$a1)); a2=$((10#$a2)); a3=$((10#$a3))
     b1=$((10#$b1)); b2=$((10#$b2)); b3=$((10#$b3))
 
-    local x y
+    local x y pair
     for pair in "$a1:$b1" "$a2:$b2" "$a3:$b3"; do
         x="${pair%:*}"; y="${pair#*:}"
         if   [ "$x" -lt "$y" ]; then printf '%s\n' -1; return 0
