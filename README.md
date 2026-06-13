@@ -370,28 +370,102 @@ Data files live in `config/www/user/data/flex-objects/`. Templates pull from Fle
 ## Branching Model
 
 ```
-main              ← production releases only — protected, no direct PRs
+main              ← production line — protected, PRs only from release/* (or hotfix/*)
+release/*         ← per-release staging branch (off develop, version bumped)
 develop           ← integration branch, deployed to /test
 feature/*         ← working branches (includes gan/<run-id> from /gan)
+
+Release flow:  develop → release/* → main → develop (back-merge)
 ```
 
-PRs from feature branches always target `develop`. `main` is updated only via a release PR from `develop`, after the change has been verified on `/test`. Agent rules for this are in [CLAUDE.md](CLAUDE.md#git-workflow--branching-and-prs).
+Feature PRs always target `develop`. A release is cut as a `release/*` branch off `develop` (`make release-start`), merged to `main` via PR, then **merged back to `develop`** so develop carries the released version. `main` is never updated directly. Agent rules for this are in [CLAUDE.md](CLAUDE.md#git-workflow--branching-and-prs).
 
 | Action | Commands |
 |--------|---------|
 | Start new feature | `git checkout -b feature/my-feature develop` |
+| Bump version (no tag) | `make bump-version part=patch` — edits `config/www/VERSION`, commits, dev/test/staging only |
 | Deploy feature to dev | `make deploy tier=dev` |
 | Merge to test | `git checkout develop && git merge feature/my-feature` then `make deploy tier=test` |
-| Release to production | `git checkout main && git merge develop` then `make deploy tier=prod` |
+| Start a release | `make release-start version=X.Y.Z` — `release/vX.Y.Z` off develop, version bumped |
+| Release to production | merge release PR `release/* → main`; then `make tag-release push=1` + `make deploy tier=prod`; back-merge `main → develop` (see below) |
+
+### Bumping the version
+
+Three operations, increasing in ceremony — pick by intent:
+
+| Want | Command | Branch | Tag |
+|---|---|---|---|
+| Advance the dev/test/staging number | `make bump-version part=major\|minor\|patch` | feature branch (refuses on develop/main) | no |
+| Open the next dev iteration (pre-release) | `make bump-version part=minor pre=dev` → `…-dev` | feature/chore branch | no |
+| Cut a release toward prod | `make release-start version=X.Y.Z` | new `release/*` off develop | later, via `make tag-release` |
+
+`make bump-version part=patch` reads `config/www/VERSION` (or `apex/VERSION` with `component=landing`), increments the numeric core — dropping any existing pre-release/build suffix (`1.3.0-dev` → `1.3.1`) — writes it back, and commits. **No tag, no branch.** `no_commit=1` edits without committing.
+
+Add `pre=<label>` to re-apply a pre-release suffix: `make bump-version part=minor pre=dev` turns `1.2.0` into `1.2.0`→`1.3.0-dev`. That's how you **open the next development iteration** so develop never reads the same version as prod (the SemVer `-SNAPSHOT`/`-dev` convention). A pre-release version is blocked at the prod gate (no matching tag), so it rides dev/test/staging but can't reach prod.
+
+### Releasing to production
+
+**Staging and production are both gated** — `make deploy tier=staging` and `tier=prod` (i.e. `deploy/deploy.sh`) refuse anything that isn't the production line:
+
+- **staging** (main-promoted): must be on `main`, clean. Staging is a faithful prod rehearsal, so it runs the *same* `main` commit prod will.
+- **prod**: must be on `main`, clean, **and** `HEAD` carries an **annotated** tag `v<config/www/VERSION>`.
+
+Each branch/clean check has a loud per-tier escape hatch (`ALLOW_PROD_DEPLOY_OFF_MAIN=1`, `ALLOW_STAGING_DEPLOY_DIRTY=1`, …). The prod tag requirement is hard — no override: every production artifact must be reproducible from a tag, and tagging is one command. dev/test stay ungated (deploy any branch).
+
+The full flow is **develop → release/\* → main**, with staging and prod both promoted from the same tagged `main` commit:
+
+```
+# 1. Cut the release branch off develop (bumps the version):
+make release-start version=1.2.0          # → release/v1.2.0, config/www/VERSION = 1.2.0
+#    (component=landing bumps apex/VERSION on release/landing-v1.2.0 instead)
+# 2. Push it, open a PR to main, merge it:
+git push -u origin release/v1.2.0 && gh pr create --base main
+# 3. On main (after pulling the merge), tag the release:
+make tag-release push=1                   # annotated v1.2.0 at main HEAD, pushed
+# 4. Rehearse on staging — the SAME main commit, against prod-like data:
+make deploy tier=staging
+# 5. Promote the IDENTICAL commit to prod:
+make deploy tier=prod
+# 6. Back-merge main → develop (PR) so develop carries 1.2.0:
+gh pr create --base develop --head main
+# 7. Open the next dev iteration (chore branch → PR to develop):
+make bump-version part=minor pre=dev      # develop → 1.3.0-dev (never equal to prod)
+```
+
+`make release-start` refuses to cut a new release while the previous one hasn't been back-merged (i.e. `main` is ahead of `develop`); `make release-status` shows that gap at any time. Override for emergencies: `ALLOW_PENDING_BACKMERGE=1`.
+
+The two components version independently, so they tag independently:
+
+| Component | VERSION file | Tag | Command |
+|---|---|---|---|
+| Grav site | `config/www/VERSION` | `v1.2.3` | `make tag-release` (default) |
+| Landing page | `apex/VERSION` | `landing-v0.2.0` | `make tag-release component=landing` |
+
+`make tag-release` refuses an unbumped version (the tag already exists), a dirty tree, or a `main` that is out of sync with `origin/main`. The gate logic lives in `deploy/lib/release-gate.sh` and is unit-tested under `tests/deploy/` (`make test-deploy`).
+
+#### The `main → develop` back-merge
+
+After a release lands on `main`, `main` is *ahead* of `develop` until you merge it back — so develop silently falls behind the released code. `make release-status` reports this gap and `make release-start` refuses to start a new release until it's closed. Open a `main → develop` PR after every release.
+
+`make` enforces what it can locally — release-branch creation, the version bump, the staging/prod gates, and the back-merge guard. Protect the rest with a GitHub **ruleset on `main`**: require PRs (no direct pushes) and restrict the PR source branch to `release/*` and `hotfix/*`. That is the part only the server can enforce: who is allowed to merge into `main`.
+
+#### Version surfaces in `version.json`
+
+Every deploy writes a `version.json` manifest to the tier. Alongside the existing `version` (the `VERSION` file) and `build` (the integer `git rev-list --count HEAD`, stable across tiers for a given commit), each deploy now also records two machine-readable build-identity fields:
+
+- `git_describe` — the tag-relative identity, e.g. `v1.0.1-3-gda85dfb` (component-scoped: `v*` for the Grav site, `landing-v*` for the apex), or the bare short SHA when no annotated tag is reachable. A `-dirty` suffix means the deploy shipped uncommitted changes.
+- `semver` — a full [SemVer 2.0.0](https://semver.org) string with build metadata: `<version>+<build>.g<sha>[.dirty]`, e.g. `1.0.0+109.gda85dfb`.
+
+`BUILD` itself stays a plain integer — the footer's `site-version` plugin and `backup-meta.schema.yaml` depend on that contract (see `specifications/archive/semantic_versioning_specification.md`). The two fields above are additive; helpers live in `deploy/lib/build-id.sh` (unit-tested in `tests/deploy/unit-build-id.sh`). If `git_describe` and `version`/`semver` disagree (e.g. `git_describe: v1.0.1` but `version: 1.0.0`), the `VERSION` file has drifted from the tags — reconcile before releasing.
 
 ## Environments
 
 | Environment | URL | Deploy command | Branch |
 |------------|-----|---------------|--------|
-| **Production** | hackersbychoice.dk | `make deploy tier=prod` | `main` |
+| **Production** | hackersbychoice.dk | `make deploy tier=prod` | `main` (gated: clean + tagged) |
 | **Test** | hackersbychoice.dk/test | `make deploy tier=test` | `develop` |
 | **Dev** | hackersbychoice.dk/dev | `make deploy tier=dev` | `feature/*` |
-| **Staging** | hackersbychoice.dk/staging | `make deploy tier=staging` | `main` + prod data |
+| **Staging** | hackersbychoice.dk/staging | `make deploy tier=staging` | `main` (gated: clean) + prod data |
 | **Local** | localhost:8080 | `make start` | any branch |
 
 Credentials are in `.env.deploy` (git-ignored). Copy `.env.deploy.example` to get started.
