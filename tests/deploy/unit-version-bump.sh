@@ -49,5 +49,38 @@ err "invalid pre label (leading dot) → error" bv_bump_semver "1.2.3" patch ".b
 err "invalid pre label (trailing dash) → error" bv_bump_semver "1.2.3" patch "dev-"
 
 echo "---"
+echo "Unit test: version-bump.sh (bv_semver_compare)"
+echo "---"
+
+# Equal
+eq "equal: 1.2.3 == 1.2.3 → 0" "0" "$(bv_semver_compare 1.2.3 1.2.3)"
+eq "equal: 0.0.0 == 0.0.0 → 0" "0" "$(bv_semver_compare 0.0.0 0.0.0)"
+
+# Greater (a > b → 1) across each component
+eq "patch greater: 1.2.4 > 1.2.3 → 1" "1" "$(bv_semver_compare 1.2.4 1.2.3)"
+eq "minor greater: 1.3.0 > 1.2.9 → 1" "1" "$(bv_semver_compare 1.3.0 1.2.9)"
+eq "major greater: 2.0.0 > 1.9.9 → 1" "1" "$(bv_semver_compare 2.0.0 1.9.9)"
+
+# Lower (a < b → -1)
+eq "patch lower: 1.2.3 < 1.2.4 → -1" "-1" "$(bv_semver_compare 1.2.3 1.2.4)"
+eq "minor lower: 1.2.9 < 1.3.0 → -1" "-1" "$(bv_semver_compare 1.2.9 1.3.0)"
+eq "major lower: 1.9.9 < 2.0.0 → -1" "-1" "$(bv_semver_compare 1.9.9 2.0.0)"
+
+# Numeric (not lexicographic) ordering: 0.10.0 > 0.2.0
+eq "numeric not lexical: 0.10.0 > 0.2.0 → 1" "1" "$(bv_semver_compare 0.10.0 0.2.0)"
+eq "numeric not lexical: 0.2.0 < 0.10.0 → -1" "-1" "$(bv_semver_compare 0.2.0 0.10.0)"
+
+# Leading zero handled base-10 (08 == 8, not octal error)
+eq "leading zero: 1.0.08 == 1.0.8 → 0" "0" "$(bv_semver_compare 1.0.08 1.0.8)"
+
+# Failure paths: a pre-release / malformed value must ERROR, never be
+# silently treated as equal (rule 4 must screen via rule 3 first).
+err "pre-release on a → error" bv_semver_compare "1.2.0-dev" "1.2.0"
+err "pre-release on b → error" bv_semver_compare "1.2.0" "1.2.0-rc.1"
+err "build metadata → error" bv_semver_compare "1.2.0+build" "1.2.0"
+err "two-part version → error" bv_semver_compare "1.2" "1.2.0"
+err "non-numeric → error" bv_semver_compare "x.y.z" "1.2.3"
+
+echo "---"
 echo "version-bump: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

@@ -6,10 +6,16 @@ Depends on:
 - The release-safety tooling shipped in `1.1.0` — `deploy/lib/release-flow.sh`
   (`bv_count_commits_ahead`), `deploy/lib/release-gate.sh` (`bv_promotion_gate`),
   `deploy/lib/version-bump.sh` (`bv_bump_semver`), and `make test-deploy`.
+- A SemVer **comparison** primitive for `release-pr-guard` rule 4. The repo's
+  only comparator today, `semver_compare`, lives *inside* `deploy/migrate.sh`
+  and is not separately sourceable; `bv_bump_semver` bumps but cannot compare.
+  Part 1 therefore extracts a sourceable `bv_semver_compare` (prints `-1|0|1`)
+  into `deploy/lib/` (e.g. `version-bump.sh`), with unit coverage for
+  lower/equal/higher, callable only on clean `X.Y.Z` values.
 - GitHub Actions (already in use — see `.github/workflows/migrations.yml`).
 
-Scope: A no-secrets GitHub Actions workflow that (a) runs the deploy
-test suite on every pull request and (b) enforces the release-branch,
+Scope: Two no-secrets GitHub Actions workflows that (a) run the deploy
+test suite on every pull request and (b) enforce the release-branch,
 version, and tag invariants on PRs **into `main`** — moving the cheap
 checks that today live only in the local `make` tooling "left" to the
 PR, so they hold regardless of who merges or how. This is the first of
@@ -21,9 +27,9 @@ merge, and deploys) is deliberately deferred to Parts 2 and 3.
 > make this safe: (1) the back-merge check is **advisory only** — it
 > reports, it never fails — because a pending `main → develop`
 > back-merge is a real condition that must not block unrelated work;
-> (2) the PR that *introduces* this workflow is not gated by it, because
-> for `pull_request` events GitHub reads the workflow from the **base**
-> branch, which won't carry it until this spec merges. See
+> (2) the PR that *introduces* these workflows is not gated by them,
+> because for `pull_request` events GitHub reads the workflow files from
+> the **base** branch, which won't carry them until this spec merges. See
 > [Deadlock safety](#deadlock-safety).
 
 ---
@@ -76,15 +82,25 @@ land immediately.
 
 ## The workflow
 
-A single workflow file, `.github/workflows/ci-release-guards.yml`, on a
-standard Linux runner, with three jobs. No job uses `secrets`, a
-deploy credential, or Docker.
+Two workflow files under `.github/workflows/`, both on a standard Linux
+runner. No job uses `secrets`, a deploy credential, or Docker.
 
-| Job | Runs on | Purpose | Can be required? |
-|---|---|---|---|
-| `test-deploy` | `pull_request` (any base) + `push` to `develop`/`main` | Runs `make test-deploy` | **Yes** |
-| `release-pr-guard` | `pull_request` with **base = `main`** | Enforces the release invariants | **Yes** |
-| `backmerge-advisory` | `pull_request` with base = `main` | Reports the `main`↔`develop` gap | **No — always informational** |
+| Job | File | Runs on | Purpose | Can be required? |
+|---|---|---|---|---|
+| `test-deploy` | `ci-test-deploy.yml` | `pull_request` (any base) + `push` to `develop`/`main` | Runs `make test-deploy` | **Yes** |
+| `release-pr-guard` | `ci-release-guards.yml` | `pull_request` scoped to **base = `main`** | Enforces the release invariants | **Yes — on `main` only** |
+| `backmerge-advisory` | `ci-release-guards.yml` | `pull_request` scoped to base = `main` | Reports the `main`↔`develop` gap | **No — always informational** |
+
+The two-file split is deliberate. The `main`-only guards must be
+**absent** — not merely *skipped* — on a `feature → develop` PR, so they
+live in their own file scoped at the **trigger**: `on: pull_request:
+branches: [main]`, which filters on the PR's *base* branch and so does
+not run the workflow at all for a `develop`-based PR. A single file with
+a job-level `if: github.base_ref == 'main'` would instead surface a
+*skipped* check named `release-pr-guard` on every `develop` PR — clutter
+that also muddies required-check configuration (a skipped required check
+reads as neutral, but it still appears in the list). `test-deploy` runs
+on PRs of any base, so it sits in its own always-on file.
 
 ### `test-deploy`
 
@@ -97,34 +113,65 @@ deploy credential, or Docker.
 
 ### `release-pr-guard`
 
-Runs only when the PR's base branch is `main`. Reads the PR's head
-branch name and the PR head's `VERSION` files, compares against the
-base (`main`), and asserts **all** of the following, reporting every
-failure (not just the first) before exiting non-zero:
+Runs only on PRs whose base branch is `main` (enforced at the trigger —
+see the two-file split above). Reads the PR head's branch name and
+`VERSION` files, compares against the base (`main`), and asserts the
+following, reporting every *applicable* failure (not just the first)
+before exiting non-zero:
 
 1. **Head is a release branch.** `github.head_ref` matches
    `release/*` or `hotfix/*`. Anything else (a feature branch, a bare
    `develop`, `main` itself) fails with a message naming the rule.
-2. **Component resolves from the branch.** `release/v*` /
-   `hotfix/v*` → the Grav site (`config/www/VERSION`, tag namespace
-   `v*`); `release/landing-v*` / `hotfix/landing-v*` → the landing page
-   (`apex/VERSION`, tag namespace `landing-v*`).
+2. **Component resolves from the branch.** The head matches one of two
+   component globs — matched as **shell globs**, so the `[0-9]` pins the
+   character right after `v` (rejecting e.g. `release/version-foo`)
+   while `*` absorbs the dotted SemVer remainder: `release/v[0-9]*` /
+   `hotfix/v[0-9]*` → the Grav site (`config/www/VERSION`, tag namespace
+   `v*`); `release/landing-v[0-9]*` / `hotfix/landing-v[0-9]*` → the
+   landing page (`apex/VERSION`, tag namespace `landing-v*`). A
+   `release/*`/`hotfix/*` head that matches neither glob fails with a
+   "cannot resolve component" message. The globs are a coarse gate; the
+   strict SemVer shape is rule 3. (Implement the match in the job's
+   shell — `case`/`[[ == ]]` — not as a regex; under regex semantics
+   `[0-9]*` means "zero or more digits" and the pattern means something
+   else entirely.)
 3. **Version is a clean release SemVer.** The resolved `VERSION` file on
    the PR head matches `^[0-9]+\.[0-9]+\.[0-9]+$` — i.e. it carries **no
    pre-release suffix**. A `-dev`/`-rc.N` version is a development
    value and must be finalised before it reaches `main`.
 4. **Version is bumped.** The PR head's `VERSION` is strictly greater
    (SemVer-ordered) than the base `main`'s current `VERSION` for the
-   same component.
+   same component. This rule **presupposes rule 3**: it is evaluated
+   only when the head `VERSION` is a clean release SemVer, so the
+   comparator never sees a `-dev`/`-rc.N` value (it handles only the
+   `X.Y.Z` numeric core and would error on a suffix). If rule 3 failed
+   for the component, rule 4 is reported as "not evaluated — version is
+   not a clean release SemVer" rather than run on bad input.
 5. **Tag is free.** No tag (annotated or lightweight) named
    `<prefix><VERSION>` already exists on the remote — so a version that
    has already shipped cannot be re-released.
 
+**Checkout requirements.** Unlike `test-deploy`, this job is *not*
+hermetic: rule 4 needs the base `main`'s `VERSION` and rule 5 needs the
+remote tag list. The default `actions/checkout` for a `pull_request`
+event is a shallow checkout of the merge ref **with no tags**, which
+provides neither. Check out with `fetch-depth: 0` (or fetch explicitly:
+`git fetch origin main` and `git fetch --tags`).
+
+`hotfix/*` is accepted as a convention. No command creates hotfix
+branches today — a maintainer cuts one by hand off `main` — but the
+guard only ever *validates* the head a PR presents, so Part 1 needs no
+hotfix-creation tooling.
+
 ### `backmerge-advisory`
 
-- Computes `bv_count_commits_ahead origin/develop origin/main` (commits
-  on `main` not yet in `develop` — the pending back-merge count) using
-  the shipped helper.
+- Computes `bv_count_commits_ahead <repo> origin/develop origin/main`
+  (commits on `main` not yet in `develop` — the pending back-merge
+  count) using the shipped helper. Note the helper takes the repo path
+  as its first argument (`bv_count_commits_ahead <repo> <base> <tip>`),
+  so pass the checkout dir (e.g. `"$GITHUB_WORKSPACE"` or `.`); this
+  also means the job must `git fetch` `origin/develop` and `origin/main`
+  first, as they are not present in the default `pull_request` checkout.
 - Posts the result to the job summary. **Always exits 0.** It surfaces
   the condition `release-start` refuses on locally, without ever
   blocking a PR — see [Deadlock safety](#deadlock-safety).
@@ -150,37 +197,58 @@ condition. Part 1 is designed so this cannot happen.
   existing tag. It only runs on PRs into `main`, so no feature→develop
   PR is affected.
 - **The introducing PR is not self-gated.** For `pull_request` events
-  GitHub evaluates the workflow file from the **base** branch. Until
+  GitHub evaluates the workflow files from the **base** branch. Until
   this spec merges to `develop` (and later `main`), neither carries the
-  workflow, so the PR that adds it runs no new checks. After it merges,
-  subsequent PRs are evaluated against the merged result. There is no
-  bootstrap cycle.
+  workflows, so the PR that adds them runs no new checks. After it
+  merges, subsequent PRs are evaluated against the merged result. There
+  is no bootstrap cycle.
 
 ---
 
 ## Determinism precondition (before any check is marked "required")
 
 A required check must be deterministic; a flaky required check is a
-deadlock vector. `tests/deploy/migrate.sh` currently contains a
-timing-sensitive assertion that compares `release-meta.yaml`'s mtime to
-the docroot symlink's mtime at 1-second granularity, and fails
-intermittently when the two land in different seconds. **Part 1
-includes hardening that assertion** (compare with a tolerance, or order
-the writes deterministically) so `make test-deploy` is reproducibly
-green before the `test-deploy` job is promoted to a required check.
+deadlock vector. `tests/deploy/migrate.sh` asserts the ordering of
+`release-meta.yaml`'s mtime against the docroot symlink's mtime
+(`META_MTIME <= DOCROOT_MTIME`). The assertion has been observed to fail
+intermittently — but the cause is **not** the obvious "1-second
+granularity". The check is already inclusive (`<=`), and because the
+meta file is written before the swap, `floor(meta) <= floor(docroot)`
+holds across any second boundary; granularity alone cannot make it fail.
+The likely real mechanism is that an atomic symlink swap stamps the
+symlink's mtime at **creation** (the `ln -s`), which can precede the
+meta write, so `DOCROOT_MTIME` lands *before* `META_MTIME` — an ordering
+inversion that only surfaces when the two cross a whole-second boundary.
+
+**Part 1 includes hardening this assertion, but the implementer must
+first reproduce the flake and capture the actual failing values**
+(`meta=… docroot=…`); the correct fix depends on the true cause, and a
+blind "add a tolerance" would either be a no-op (the check is already
+`<=`) or silently weaken a real invariant. Acceptable fixes once the
+cause is confirmed: compare against the recorded swap timestamp rather
+than the symlink's inode mtime, have the writer touch `release-meta.yaml`
+after the swap, or stat the swap event itself. The bar is the acceptance
+criterion below — `make test-deploy` green 20× in a row — and that bar
+is met by a fix grounded in the captured evidence, not by guesswork.
 
 ---
 
 ## Rollout (staged, so nothing is surprised by a new gate)
 
-1. **Land non-required.** Merge the workflow. All three jobs run on new
-   PRs and report status, but none is a *required* status check, so no
-   merge is blocked.
+1. **Land non-required.** Merge both workflows. All three jobs run on
+   new PRs and report status, but none is a *required* status check, so
+   no merge is blocked.
 2. **Observe green.** Confirm `test-deploy` and `release-pr-guard` pass
    on real PRs across the active branches.
 3. **Flip to required.** A maintainer marks `test-deploy` and
-   `release-pr-guard` as required status checks in the `main` (and, for
-   `test-deploy`, `develop`) branch protection / ruleset.
+   `release-pr-guard` as required status checks on `main`, and
+   `test-deploy` (only) on `develop`. **Do not mark `release-pr-guard`
+   required on `develop`:** its workflow is trigger-scoped to
+   `branches: [main]`, so it never runs on a `develop`-based PR, and
+   GitHub leaves a required-but-never-reported check pending forever —
+   freezing every `develop` PR. That is the same deadlock class the rest
+   of this spec guards against, surfacing in the branch-protection
+   config rather than in a workflow.
 4. **`backmerge-advisory` stays non-required permanently.**
 
 The required-status configuration in step 3, and the complementary
@@ -201,9 +269,12 @@ spec specifies them but a workflow cannot enforce them on itself.
 - [ ] The job uses no `secrets`, no Docker, and no network beyond the
       `actions/checkout` of the repo (greppable: the job's steps
       reference neither `secrets.` nor a deploy host).
-- [ ] `tests/deploy/migrate.sh`'s mtime-ordering assertion no longer
-      depends on 1-second wall-clock granularity: running
-      `make test-deploy` 20 times in a row is green every time.
+- [ ] `tests/deploy/migrate.sh`'s mtime-ordering assertion is
+      deterministic regardless of where the meta write and the symlink
+      swap fall relative to a wall-clock second boundary: running
+      `make test-deploy` 20 times in a row is green every time. The fix
+      is justified by captured failing values, not guesswork (see
+      [Determinism precondition](#determinism-precondition-before-any-check-is-marked-required)).
 
 ### `release-pr-guard` job
 
@@ -222,10 +293,25 @@ spec specifies them but a workflow cannot enforce them on itself.
 - [ ] A `release/landing-v0.3.0 → main` PR is evaluated against
       `apex/VERSION` and the `landing-v*` tag namespace (not the Grav
       site's).
-- [ ] The guard reports *all* violations of a multiply-broken PR in one
-      run, then exits non-zero.
-- [ ] The guard does not run on PRs whose base is `develop` (a
-      `feature → develop` PR shows no `release-pr-guard` check).
+- [ ] A `hotfix/v1.2.4 → main` PR resolves the Grav component
+      (`config/www/VERSION`, `v*` tag namespace) exactly as a
+      `release/v*` head does.
+- [ ] A `release/version-foo → main` PR (a `release/*` head that matches
+      neither component glob) fails with a "cannot resolve component"
+      message.
+- [ ] The rule-4 bump check uses a sourceable `deploy/lib` SemVer
+      comparator with unit tests for lower, equal, and higher inputs,
+      and is never invoked on a pre-release value (rule 4 is reported
+      "not evaluated" when rule 3 fails for that component).
+- [ ] The job fetches the base ref and tags rather than relying on the
+      default shallow merge-ref checkout — it catches an already-used
+      tag that the default tag-less checkout would miss.
+- [ ] The guard reports *all* applicable violations of a multiply-broken
+      PR in one run, then exits non-zero.
+- [ ] The guard does not run on PRs whose base is `develop`: a
+      `feature → develop` PR shows **no `release-pr-guard` check at all**
+      — not even a skipped one — because the guards workflow is
+      trigger-scoped to base `main`.
 
 ### `backmerge-advisory` job
 
@@ -238,14 +324,17 @@ spec specifies them but a workflow cannot enforce them on itself.
 
 ### Deadlock safety & rollout
 
-- [ ] The PR that introduces `ci-release-guards.yml` is itself not
-      evaluated by `release-pr-guard` or `test-deploy` (the base branch
-      — `develop` — does not yet carry the workflow).
-- [ ] With the workflow merged but no check marked required, a PR can
+- [ ] The PR that introduces `ci-test-deploy.yml` / `ci-release-guards.yml`
+      is itself not evaluated by `release-pr-guard` or `test-deploy` (the
+      base branch — `develop` — does not yet carry the workflows).
+- [ ] With the workflows merged but no check marked required, a PR can
       still be merged even if a job reports failure (jobs are advisory
       until a maintainer flips them).
-- [ ] Documentation in the workflow or repo records the exact branch
-      protection / ruleset settings a maintainer must apply for step 3
+- [ ] `release-pr-guard` is not marked a required check on `develop` (it
+      never runs there; a required-but-unreported check would freeze
+      every `develop` PR).
+- [ ] Documentation in a workflow file or the repo records the exact
+      branch protection / ruleset settings a maintainer must apply for step 3
       of the rollout (required checks + `release/*`/`hotfix/*`-only
       merges into `main`).
 
