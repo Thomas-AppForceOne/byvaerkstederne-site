@@ -62,11 +62,8 @@ set_head() {
 
 # run_guard <head_ref> — captures stderr to GUARD_ERR, exit to GUARD_RC.
 run_guard() {
-    set +e
     GUARD_ERR="$(bv_release_pr_guard "$1" "$R" main 2>&1)"
     GUARD_RC=$?
-    set -e
-    set +e   # keep set -e off; we branch on RC explicitly
 }
 
 # pass_case <name> <head_ref>
@@ -116,7 +113,7 @@ fail_case "1.0.0 < base 1.1.0 → rule 4 (not bumped)" "release/v1.0.0" "[rule 4
 
 # ── Rule 5: tag already exists (annotated grav, lightweight landing) ──
 set_head grav 2.0.0
-git -C "$R" tag v2.0.0 2>/dev/null || true          # lightweight, bumped & clean
+git -C "$R" tag v2.0.0                              # lightweight, bumped & clean
 fail_case "v2.0.0 tag exists (lightweight) → rule 5 (tag already exists)" "release/v2.0.0" "[rule 5]" "already exists"
 
 set_head landing 0.2.0
