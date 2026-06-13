@@ -1,4 +1,4 @@
-.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy rollback migrate-atomic backup list-backups restore restore-scratch test test-headed test-auth test-install test-deploy test-backup-restore add-age-key list-age-keys retire-age-key
+.PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy rollback migrate-atomic backup list-backups restore restore-scratch release-start release-status bump-version tag-release test test-headed test-auth test-install test-deploy test-backup-restore add-age-key list-age-keys retire-age-key
 
 # Default target
 help: ## Show this help
@@ -97,12 +97,45 @@ status: ## Show container status
 #   make backup tier=prod
 #   make restore tier=dev from=<id>   # add RESTORE_TO_TIER_ENABLED=1 to actually wipe
 
-deploy: ## Atomic deploy (tier=dev|test|staging|prod|landing)
+deploy: ## Atomic deploy (tier=dev|test|staging|prod|landing). prod is gated: clean main, tagged v<VERSION>
 	@t="$(tier)"; \
 	case "$$t" in \
 	  dev|test|staging|prod|landing) ./deploy/deploy.sh "$$t" ;; \
 	  "") echo "❌  Usage: make deploy tier=<dev|test|staging|prod|landing>"; exit 1 ;; \
 	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging|prod|landing)"; exit 1 ;; \
+	esac
+
+release-start: ## Cut a release branch off develop + bump version (version=X.Y.Z [component=grav|landing])
+	@v="$(version)"; \
+	if [ -z "$$v" ]; then echo "❌  Usage: make release-start version=X.Y.Z [component=grav|landing]"; exit 1; fi; \
+	comp="$(component)"; [ -z "$$comp" ] && comp="grav"; \
+	case "$$comp" in \
+	  grav|landing) ./deploy/release-start.sh "$$v" "$$comp" ;; \
+	  *) echo "❌  Invalid component '$$comp' (allowed: grav|landing)"; exit 1 ;; \
+	esac
+
+release-status: ## Show develop↔main divergence (pending back-merge / unreleased commits)
+	@./deploy/release-status.sh
+
+bump-version: ## Bump version core, no tag (part=major|minor|patch [component=grav|landing] [pre=<label>] [no_commit=1])
+	@p="$(part)"; \
+	if [ -z "$$p" ]; then echo "❌  Usage: make bump-version part=major|minor|patch [component=grav|landing] [pre=<label>] [no_commit=1]"; exit 1; fi; \
+	comp="$(component)"; [ -z "$$comp" ] && comp="grav"; \
+	args="$$p $$comp"; \
+	if [ "$(no_commit)" = "1" ]; then args="$$args --no-commit"; fi; \
+	if [ -n "$(pre)" ]; then args="$$args --pre=$(pre)"; fi; \
+	case "$$comp" in \
+	  grav|landing) ./deploy/bump-version.sh $$args ;; \
+	  *) echo "❌  Invalid component '$$comp' (allowed: grav|landing)"; exit 1 ;; \
+	esac
+
+tag-release: ## Tag the current (main) commit as a release (component=grav|landing [push=1])
+	@comp="$(component)"; [ -z "$$comp" ] && comp="grav"; \
+	args="$$comp"; \
+	if [ "$(push)" = "1" ]; then args="$$args --push"; fi; \
+	case "$$comp" in \
+	  grav|landing) ./deploy/tag-release.sh $$args ;; \
+	  *) echo "❌  Invalid component '$$comp' (allowed: grav|landing)"; exit 1 ;; \
 	esac
 
 rollback: ## Roll back a tier to its previous release (tier=dev|test|staging|prod)
@@ -268,7 +301,7 @@ retire-age-key: ## Remove an age key from deploy/age-recipients.txt (NAME=<label
 		./deploy/manage-age-keys.sh retire $(NAME); \
 	fi
 
-test-deploy: ## Run deploy-script regression tests (lint + unit + atomic-layout + rollback + migration probes)
+test-deploy: ## Run deploy-script regression tests (lint + unit + atomic-layout + rollback + migration + release-gate probes)
 	@bash tests/deploy/lint-remote-ssh.sh
 	@bash tests/deploy/unit-remote-run.sh
 	@bash tests/deploy/unit-ssh-auth.sh
@@ -277,6 +310,13 @@ test-deploy: ## Run deploy-script regression tests (lint + unit + atomic-layout 
 	@bash tests/deploy/atomic-layout.sh
 	@bash tests/deploy/rollback.sh
 	@bash tests/deploy/migrate.sh
+	@bash tests/deploy/unit-release-gate.sh
+	@bash tests/deploy/tag-release.sh
+	@bash tests/deploy/unit-build-id.sh
+	@bash tests/deploy/unit-release-flow.sh
+	@bash tests/deploy/release-start.sh
+	@bash tests/deploy/unit-version-bump.sh
+	@bash tests/deploy/bump-version.sh
 
 test-backup-restore: ## Run backup/restore tooling tests (bats)
 	@command -v bats >/dev/null 2>&1 || { echo "❌  bats not installed. Run: brew install bats-core"; exit 1; }

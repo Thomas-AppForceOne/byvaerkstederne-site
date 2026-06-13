@@ -64,6 +64,19 @@ GRAV_URL="https://github.com/getgrav/grav/releases/download/${GRAV_VERSION}/grav
 # and acceptance criterion deploy_sh_invokes_migration_runner_on_schema_bump.
 . "$SCRIPT_DIR/lib/migrate-integration.sh"
 
+# shellcheck source=deploy/lib/release-gate.sh
+# Provides bv_promotion_gate — refuses a staging/prod deploy unless it
+# ships from a clean `main` (prod additionally requires the annotated
+# v<VERSION> tag). Pure function; invoked once below, after the release
+# metadata is captured.
+. "$SCRIPT_DIR/lib/release-gate.sh"
+
+# shellcheck source=deploy/lib/build-id.sh
+# Provides bv_compute_git_describe / bv_compute_semver — the additive
+# git_describe + semver fields emitted into version.json. BUILD itself
+# stays the integer commit count (see the lib header).
+. "$SCRIPT_DIR/lib/build-id.sh"
+
 # Require GNU coreutils for ms-resolution swap_duration_ms timing.
 # Fail loud BEFORE we touch any path or read .env.deploy. macOS needs
 # `brew install coreutils` (the script's PATH prepend brings in
@@ -225,11 +238,15 @@ if ! printf '%s' "$BUILD" | grep -Eq '^[0-9]+$'; then
     exit 1
 fi
 
-# 4. Pick the component-scoped VERSION file based on env kind.
+# 4. Pick the component-scoped VERSION file + tag glob based on env kind.
+# The tag glob scopes git_describe to this component's annotated tags
+# (the two components version independently — see deploy/tag-release.sh).
 if [ "$ENV_KIND" = "landing" ]; then
     VERSION_SRC="$PROJECT_DIR/apex/VERSION"
+    TAG_GLOB="landing-v[0-9]*"
 else
     VERSION_SRC="$PROJECT_DIR/config/www/VERSION"
+    TAG_GLOB="v[0-9]*"
 fi
 
 VERSION="$(cat "$VERSION_SRC" 2>/dev/null | tr -d '[:space:]')"
@@ -254,6 +271,14 @@ else
     DEPLOYED_IS_DIRTY="true"
 fi
 
+# Additive, machine-readable version surfaces for version.json. BUILD
+# stays the integer commit count (the footer + backup schema depend on
+# that); these enrich the manifest with the git-describe build identity
+# and a full SemVer string carrying build metadata.
+GIT_DESCRIBE="$(bv_compute_git_describe "$PROJECT_DIR" "$TAG_GLOB")"
+GIT_DESCRIBE="${GIT_DESCRIBE:-$GIT_SHA}"
+SEMVER="$(bv_compute_semver "$VERSION" "$BUILD" "$GIT_SHA" "$DEPLOYED_IS_DIRTY")"
+
 # Compute the release id once. It's used as a path component on the
 # remote, so we validate it through the strict regex BEFORE using it.
 RELEASE_ID="$(bv_compute_release_id "$GIT_SHA")"
@@ -265,6 +290,21 @@ fi
 if ! bv_validate_release_id "$RELEASE_ID"; then
     echo "❌  Refusing to use computed release id '$RELEASE_ID' as a path component." >&2
     exit 1
+fi
+
+# ── Promotion gate (staging + prod) ─────────────────────────
+# staging and prod ship from a clean `main`; prod additionally requires
+# the annotated v<VERSION> tag. dev/test/landing are unaffected. Skipped
+# under --dry-run so a build can be rehearsed from any branch (the gate
+# fires on the real deploy). All metadata the gate inspects (GIT_BRANCH,
+# DEPLOYED_IS_DIRTY, VERSION) is already captured above; the tag check
+# reads HEAD directly.
+if [ "$DRY_RUN" != "1" ]; then
+    if ! bv_promotion_gate "$ENV" "$GIT_BRANCH" "$DEPLOYED_IS_DIRTY" "$VERSION" "$PROJECT_DIR"; then
+        echo "" >&2
+        echo "    Aborting ${ENV} deploy — see the refusal(s) above." >&2
+        exit 1
+    fi
 fi
 
 draw_banner() {
@@ -427,12 +467,14 @@ cat > "$STAGING_DIR/version.json" << JSON
     "build": "${BUILD}",
     "deployed_at": "${DEPLOYED_AT}",
     "branch": "${GIT_BRANCH}",
-    "sha_short": "${GIT_SHA}"
+    "sha_short": "${GIT_SHA}",
+    "semver": "${SEMVER}",
+    "git_describe": "${GIT_DESCRIBE}"
 }
 JSON
 
 echo "  ✓ Package built ($(du -sh "$STAGING_DIR" | cut -f1))"
-echo "  ✓ Version: ${VERSION} · build ${BUILD}"
+echo "  ✓ Version: ${VERSION} · build ${BUILD}  (${SEMVER}, ${GIT_DESCRIBE})"
 
 # Refuse to deploy a bundle that still contains git-lfs pointer files —
 # they're tiny YAML-shaped placeholders that look like JPEGs to rsync,
