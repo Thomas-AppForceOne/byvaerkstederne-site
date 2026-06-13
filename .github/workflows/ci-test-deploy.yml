@@ -1,0 +1,48 @@
+name: ci-test-deploy
+
+# Runs the hermetic deploy regression suite (`make test-deploy`) on every
+# pull request and on pushes to the integration branches. No secrets, no
+# Docker, no deploy host — every probe builds its own throwaway git
+# fixtures (see specifications/ci_release_protection_part1_specification.md,
+# "test-deploy" job). This file is deliberately separate from
+# ci-release-guards.yml so it runs on PRs of ANY base, while the
+# main-only release guards stay scoped to their own trigger.
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+
+# Cancel superseded runs on the same PR head / branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+# Read-only: this workflow never needs a write- or deploy-scoped token.
+permissions:
+  contents: read
+
+jobs:
+  test-deploy:
+    # Explicit; equals the key and the spec's required-check string.
+    # Required status check — must match the `main`/`develop` ruleset
+    # string; do not rename (a silent rename freezes PRs on a pending check).
+    name: test-deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install deploy-test tool dependencies
+        # The hermetic suite shells out to a few external tools. ubuntu-latest
+        # already ships bash, coreutils, git, make, rsync, curl, python3 and
+        # xxd; `age`/`age-keygen` — used by the real-mode backup.sh probe in
+        # tests/deploy/migrate.sh — is the only one not preinstalled. Without
+        # it that probe records a failure instead of exercising encryption.
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y age
+
+      - name: Run deploy regression suite
+        # `make test-deploy` is hermetic — default checkout depth is
+        # sufficient. The job fails iff any probe fails.
+        run: make test-deploy

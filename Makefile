@@ -316,6 +316,7 @@ test-deploy: ## Run deploy-script regression tests (lint + unit + atomic-layout 
 	@bash tests/deploy/unit-release-flow.sh
 	@bash tests/deploy/release-start.sh
 	@bash tests/deploy/unit-version-bump.sh
+	@bash tests/deploy/unit-release-pr-guard.sh
 	@bash tests/deploy/bump-version.sh
 
 test-backup-restore: ## Run backup/restore tooling tests (bats)

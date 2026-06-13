@@ -340,7 +340,11 @@ case "$DOC_BEFORE" in
 esac
 
 # <tier>data/ mtime BEFORE the rollback.
-DATA_MTIME_BEFORE="$(stat -f '%m' "$T2/${TIER}data" 2>/dev/null || stat -c '%Y' "$T2/${TIER}data")"
+# Portable mtime: GNU `stat -c %Y` FIRST, BSD `stat -f %m` as fallback.
+# Order matters — on Linux `stat -f` is --file-system (not a format),
+# so it prints fs-status to stdout AND exits non-zero, concatenating
+# garbage onto the fallback. GNU-first fails cleanly (stderr only) on macOS.
+DATA_MTIME_BEFORE="$(stat -c '%Y' "$T2/${TIER}data" 2>/dev/null || stat -f '%m' "$T2/${TIER}data")"
 
 # Drive rollback. We expect:
 #   - exit 0
@@ -381,7 +385,7 @@ else
     check "after rollback: rolled-from release dir RID_B still on disk" fail
 fi
 # <tier>data/ mtime UNCHANGED across the rollback.
-DATA_MTIME_AFTER="$(stat -f '%m' "$T2/${TIER}data" 2>/dev/null || stat -c '%Y' "$T2/${TIER}data")"
+DATA_MTIME_AFTER="$(stat -c '%Y' "$T2/${TIER}data" 2>/dev/null || stat -f '%m' "$T2/${TIER}data")"
 if [ "$DATA_MTIME_BEFORE" = "$DATA_MTIME_AFTER" ]; then
     check "rollback: <tier>data/ mtime unchanged" ok
 else

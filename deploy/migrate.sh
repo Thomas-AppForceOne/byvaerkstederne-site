@@ -207,6 +207,11 @@ extract_data_version() {
 
 # Validate a value as SemVer (major.minor.patch, no pre-release tags
 # for our purposes). Returns 0 (true) iff the string matches.
+#
+# Canonical equivalent: bv_is_clean_semver in deploy/lib/version-bump.sh.
+# This copy is intentional — migrate.sh is an executable script, never
+# sourced as a library, so it cannot reach the shared predicate; keep the
+# two shapes in sync if the clean-SemVer rule ever changes.
 is_semver() {
     [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 }

@@ -211,8 +211,12 @@ fi
 # Record <tier>data/'s mtime BEFORE the rsync. This is the
 # load-bearing structural invariant for the entire spec — if this
 # changes during the rsync, we've re-introduced the April/May class.
-DATA_MTIME_BEFORE="$(stat -f '%m' "$DATA_DIR" 2>/dev/null || stat -c '%Y' "$DATA_DIR")"
-DATA_V0_USER_ACCOUNTS_MTIME_BEFORE="$(stat -f '%m' "$DATA_DIR/v0/user/accounts" 2>/dev/null || stat -c '%Y' "$DATA_DIR/v0/user/accounts")"
+# Portable mtime: GNU `stat -c %Y` FIRST, BSD `stat -f %m` as fallback.
+# Order matters — on Linux `stat -f` is --file-system (not a format),
+# so it prints fs-status to stdout AND exits non-zero, concatenating
+# garbage onto the fallback. GNU-first fails cleanly (stderr only) on macOS.
+DATA_MTIME_BEFORE="$(stat -c '%Y' "$DATA_DIR" 2>/dev/null || stat -f '%m' "$DATA_DIR")"
+DATA_V0_USER_ACCOUNTS_MTIME_BEFORE="$(stat -c '%Y' "$DATA_DIR/v0/user/accounts" 2>/dev/null || stat -f '%m' "$DATA_DIR/v0/user/accounts")"
 
 # Compute and validate a release id.
 sleep 1   # ensure any subsequent stat sees a different mtime if a write happens
@@ -238,8 +242,8 @@ fi
 # Verify the rsync did NOT touch <tier>data/. This is the load-bearing
 # assertion. We compare both <tier>data/ and a representative live-state
 # subdir mtime.
-DATA_MTIME_AFTER="$(stat -f '%m' "$DATA_DIR" 2>/dev/null || stat -c '%Y' "$DATA_DIR")"
-DATA_V0_USER_ACCOUNTS_MTIME_AFTER="$(stat -f '%m' "$DATA_DIR/v0/user/accounts" 2>/dev/null || stat -c '%Y' "$DATA_DIR/v0/user/accounts")"
+DATA_MTIME_AFTER="$(stat -c '%Y' "$DATA_DIR" 2>/dev/null || stat -f '%m' "$DATA_DIR")"
+DATA_V0_USER_ACCOUNTS_MTIME_AFTER="$(stat -c '%Y' "$DATA_DIR/v0/user/accounts" 2>/dev/null || stat -f '%m' "$DATA_DIR/v0/user/accounts")"
 if [ "$DATA_MTIME_BEFORE" = "$DATA_MTIME_AFTER" ]; then
     check "<tier>data/ mtime unchanged across the rsync" ok
 else
@@ -435,8 +439,8 @@ echo "Test 2: second deploy (atomic swap, previous left in place)"
 
 # On first run we recorded the previous mtimes; record them again
 # since these are now the "before" values for deploy #2.
-DATA_MTIME_BEFORE2="$(stat -f '%m' "$DATA_DIR" 2>/dev/null || stat -c '%Y' "$DATA_DIR")"
-DATA_V0_USER_ACCOUNTS_MTIME_BEFORE2="$(stat -f '%m' "$DATA_DIR/v0/user/accounts" 2>/dev/null || stat -c '%Y' "$DATA_DIR/v0/user/accounts")"
+DATA_MTIME_BEFORE2="$(stat -c '%Y' "$DATA_DIR" 2>/dev/null || stat -f '%m' "$DATA_DIR")"
+DATA_V0_USER_ACCOUNTS_MTIME_BEFORE2="$(stat -c '%Y' "$DATA_DIR/v0/user/accounts" 2>/dev/null || stat -f '%m' "$DATA_DIR/v0/user/accounts")"
 
 sleep 1
 RELEASE_ID_2="$(bv_compute_release_id "def5678")"
@@ -444,8 +448,8 @@ RELEASE_DIR_2="$RELEASES_DIR/$RELEASE_ID_2"
 bv_rsync_to_release_dir "$STAGING" "$RELEASE_DIR_2" >/dev/null 2>&1
 
 # Mtime invariance, second deploy:
-DATA_MTIME_AFTER2="$(stat -f '%m' "$DATA_DIR" 2>/dev/null || stat -c '%Y' "$DATA_DIR")"
-DATA_V0_USER_ACCOUNTS_MTIME_AFTER2="$(stat -f '%m' "$DATA_DIR/v0/user/accounts" 2>/dev/null || stat -c '%Y' "$DATA_DIR/v0/user/accounts")"
+DATA_MTIME_AFTER2="$(stat -c '%Y' "$DATA_DIR" 2>/dev/null || stat -f '%m' "$DATA_DIR")"
+DATA_V0_USER_ACCOUNTS_MTIME_AFTER2="$(stat -c '%Y' "$DATA_DIR/v0/user/accounts" 2>/dev/null || stat -f '%m' "$DATA_DIR/v0/user/accounts")"
 if [ "$DATA_MTIME_BEFORE2" = "$DATA_MTIME_AFTER2" ]; then
     check "second deploy: <tier>data/ mtime unchanged" ok
 else
@@ -501,7 +505,7 @@ COLLIDE_ID="$(bv_compute_release_id "deadbee")"
 COLLIDE_DIR="$RELEASES_DIR/$COLLIDE_ID"
 mkdir -p "$COLLIDE_DIR"
 echo "stale" > "$COLLIDE_DIR/stale.txt"
-COLLIDE_MTIME_BEFORE="$(stat -f '%m' "$COLLIDE_DIR" 2>/dev/null || stat -c '%Y' "$COLLIDE_DIR")"
+COLLIDE_MTIME_BEFORE="$(stat -c '%Y' "$COLLIDE_DIR" 2>/dev/null || stat -f '%m' "$COLLIDE_DIR")"
 
 set +e
 bv_rsync_to_release_dir "$STAGING" "$COLLIDE_DIR" >/dev/null 2>&1

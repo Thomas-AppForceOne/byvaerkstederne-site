@@ -18,7 +18,7 @@ on:
 
 # Concurrency: cancel superseded runs on the same PR head.
 concurrency:
-  group: migrations-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:

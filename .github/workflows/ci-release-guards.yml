@@ -1,0 +1,125 @@
+name: ci-release-guards
+
+# Enforces the release invariants on PRs INTO `main`, moving the checks
+# that today live only in the local `make` tooling "left" to the PR
+# (specifications/ci_release_protection_part1_specification.md).
+#
+# Trigger-scoped to base = main on purpose: a feature → develop PR must
+# show NO release-pr-guard check at all (not a skipped one), so these
+# main-only jobs live in their own file rather than behind a job-level
+# `if:` in ci-test-deploy.yml. No secrets, no Docker, no deploy host.
+#
+# ─── Maintainer settings the rollout needs (a workflow cannot apply
+#     these to itself — see the spec's "Rollout" section) ──────────────
+#   Step 3 "flip to required" — in the branch protection / ruleset for
+#   `main`, mark as REQUIRED status checks:
+#       • test-deploy        (from ci-test-deploy.yml)
+#       • release-pr-guard   (from this file)
+#   On `develop`, mark only `test-deploy` required. DO NOT mark
+#   `release-pr-guard` required on `develop`: it never runs there (this
+#   workflow is scoped to base main), and a required-but-unreported
+#   check stays pending forever, freezing every develop PR.
+#   `backmerge-advisory` stays NON-required permanently.
+#   Complementary ruleset: restrict `main` merges to PRs whose head is
+#   `release/*` / `hotfix/*`.
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+# Read-only: these jobs only inspect refs, versions and tags.
+permissions:
+  contents: read
+
+jobs:
+  release-pr-guard:
+    # Explicit; equals the key and the spec's required-check string.
+    # Required status check — must match the `main` ruleset string; do
+    # not rename (a silent rename freezes PRs on a pending check).
+    name: release-pr-guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          # The PR head itself, not the merge commit, and full history
+          # so base + tags resolve. Rule 4 needs base main's VERSION and
+          # rule 5 needs the tag list — neither is in the default shallow
+          # merge-ref checkout. fetch-depth: 0 (full history) is required
+          # here because the back-merge advisory step below walks the
+          # graph: bv_count_commits_ahead runs `git rev-list --count
+          # origin/develop..origin/main`, which must reach the
+          # develop/main merge-base. The guard itself reads only single
+          # blobs + the tag list, but the shared checkout serves both.
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Fetch refs and tags
+        # One hardened fetch feeds both the guard (origin/main + tags) and
+        # the back-merge advisory (origin/main + origin/develop). A
+        # required check must survive a transient network blip, so bound
+        # each remote call with `timeout` and retry with backoff rather
+        # than failing the PR on the first hiccup.
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          fetch() {
+            local i
+            for i in 1 2 3; do
+              if timeout 60 git fetch "$@"; then
+                return 0
+              fi
+              sleep $((i * 5))
+            done
+            return 1
+          }
+          fetch --no-tags origin \
+            '+refs/heads/main:refs/remotes/origin/main' \
+            '+refs/heads/develop:refs/remotes/origin/develop'
+          fetch --tags origin
+
+      - name: Release-PR guard
+        env:
+          # Pass the branch name via env, never inline ${{ }} into the
+          # script — a crafted branch name must not be able to inject.
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -uo pipefail
+          . deploy/lib/release-pr-guard.sh
+          rc=0
+          # Capture combined output in-memory (matching the back-merge advisory
+          # step's variable idiom) rather than via a workspace-relative file:
+          # `out` always exists, so the reads below can never hit a "No such
+          # file" error, and a failed `. source` above surfaces its real error
+          # via `out`/`rc` instead of a spurious missing-capture-file message.
+          out="$(bv_release_pr_guard "$HEAD_REF" "$GITHUB_WORKSPACE" "origin/main" 2>&1)" || rc=$?
+          printf '%s\n' "$out"
+          {
+            if [ "$rc" -eq 0 ]; then echo "### ✅ release-pr-guard passed"; else echo "### ❌ release-pr-guard failed"; fi
+            printf '\n```\n%s\n```\n' "$out"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+
+      - name: Back-merge advisory (informational — never fails)
+        # Folded into this job rather than run as a second VM: it reuses
+        # the shared checkout + fetch above instead of paying for its own.
+        # `if: always()` so it reports even when the guard above failed,
+        # and it ends `exit 0` so this step can never fail the job — the
+        # advisory reports, it never gates.
+        if: always()
+        run: |
+          set -uo pipefail
+          . deploy/lib/release-flow.sh
+          count="$(bv_count_commits_ahead "$GITHUB_WORKSPACE" origin/develop origin/main)"
+          if [ "$count" -gt 0 ]; then
+            msg="⚠️  main is ahead of develop by ${count} commit(s) — a main→develop back-merge is pending. (Advisory only; this never blocks the PR — the hard back-merge guard lives in \`release-start\`.)"
+          else
+            msg="✅  develop is up to date with main — 0 pending back-merge commits."
+          fi
+          echo "$msg"
+          echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          # Always succeed: this step reports, it never gates.
+          exit 0
