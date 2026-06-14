@@ -46,3 +46,55 @@ tests/fixtures/grav-seeds/playwright/apply.sh gan-my-worktree
 1. Pick a name that says what the bundle is *for*, not what it contains — e.g. `playwright`, `roadmap-voting-load`, `bug-report-fixtures`.
 2. Create the directory, write `README.md` (prerequisites + what's provisioned), write idempotent `apply.sh`.
 3. Reference it from the test suite's setup so the bundle's role is obvious at the call site.
+
+## Mail sink — Mailpit (WI-6, member auth hardening)
+
+The auth tests (`tests/anonymous/registration.js`, `tests/anonymous/password-reset.js`)
+verify email-bearing flows **end-to-end** against an API-queryable, non-delivering
+sink — **Mailpit** — rather than mocking at the Grav layer. The real `login` +
+`email` plugin path runs and sends over SMTP to Mailpit; the test reads the
+captured message over Mailpit's REST API, extracts the activation/reset link,
+and drives it to prove the token works.
+
+```
+Playwright ──drives──▶ Grav (worktree container) ──SMTP mailpit:1025──▶ Mailpit ◀──REST── Playwright
+```
+
+### Bring it up / tear it down
+
+```sh
+# Grav must already be running for this worktree (scripts/grav-up.sh . <port>).
+scripts/mailpit-up.sh .            # default host ports 1025 (SMTP) / 8025 (API)
+scripts/mailpit-up.sh . 1126 8126  # pick free host ports if those collide
+# ... run the suite with MAILPIT_URL exported (the script prints it) ...
+scripts/mailpit-down.sh .          # stop sink, restore committed config
+```
+
+`mailpit-up.sh`:
+- starts the `mailpit` service (under the `test` compose profile, so it never
+  runs under the plain dev `:8080` workflow) in this worktree's compose project,
+  on the same network as Grav;
+- points the running Grav's `config/plugins/email.yaml` at `mailpit:1025`
+  (Grav 1.7's env-config merge does **not** apply per-host overrides to plugin
+  configs, so the override targets the user config layer Grav actually reads);
+- relaxes `session.secure` to `false` so authenticated tests can hold a session
+  over the worktree container's plain HTTP (the committed `system.yaml` keeps
+  `secure: true` for the TLS tiers — WI-4).
+
+Both overrides are backed up to `.gan/` and restored by `mailpit-down.sh`; the
+committed config files are never modified. `MAILPIT_URL` (default
+`http://127.0.0.1:8025`) is what `tests/helpers/mail.js` queries; tests
+skip-with-reason when the sink is unreachable.
+
+The registration tests also need the `membership_signup` feature flag ON and
+(for `/roadmap` reachability) the `roadmap` flag ON in the target container.
+Both are OFF in the default local profile; enable them for the run.
+
+### Coverage boundary
+
+Mailpit proves **transport + token usability** (mail is generated, correctly
+addressed/From'd, and the activation/reset code drives the real state change).
+It does **not** prove real-world deliverability (SPF/DKIM/DMARC, spam-foldering),
+because Mailpit accepts everything. Per-tier deliverability stays the manual
+check in the spec's Prerequisites step 4. A green WI-6 run is not "prod mail
+lands".
