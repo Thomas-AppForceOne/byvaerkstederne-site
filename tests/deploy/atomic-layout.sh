@@ -780,6 +780,102 @@ if command -v realpath >/dev/null 2>&1; then
 fi
 
 # ─────────────────────────────────────────────────────────────────────
+# Test 9: versioned-data-dir SERVING — bv_wire_release_symlinks with an
+# explicit non-v0 vdir wires the FOUR versioned symlinks into
+# <tier>data/<vdir>/... while leaving logs UNVERSIONED (→ <tier>data/logs).
+# (ADR-005. 3-arg callers above stay v0; this asserts the 4-arg path.)
+# ─────────────────────────────────────────────────────────────────────
+echo ""
+echo "Test 9: bv_wire_release_symlinks honours an explicit vdir (versioned serving)"
+
+V9_PARENT="$WORK/v9-parent"
+V9_RELEASES="$V9_PARENT/${TIER}-releases"
+V9_DATA="$V9_PARENT/${TIER}data"
+mkdir -p "$V9_PARENT"
+
+# Bootstrap data dir, then build a v_0_2_0 data dir the release will bind to.
+bv_bootstrap_data_dir "$V9_DATA" "$TIER"
+mkdir -p "$V9_DATA/v_0_2_0/user/accounts" \
+         "$V9_DATA/v_0_2_0/user/data" \
+         "$V9_DATA/v_0_2_0/user/config" \
+         "$V9_DATA/v_0_2_0/user/env/$TIER/config"
+echo 'username: carol' > "$V9_DATA/v_0_2_0/user/accounts/carol.yaml"
+
+V9_RID="$(bv_compute_release_id "0f0f0f0")"
+V9_RDIR="$V9_RELEASES/$V9_RID"
+bv_rsync_to_release_dir "$STAGING" "$V9_RDIR" >/dev/null 2>&1
+
+# 4-arg call: wire into v_0_2_0.
+if bv_wire_release_symlinks "$V9_RDIR" "$V9_DATA" "$TIER" "v_0_2_0"; then
+    check "bv_wire_release_symlinks accepts a 4th vdir arg" ok
+else
+    check "bv_wire_release_symlinks accepts a 4th vdir arg" fail
+fi
+
+# The four versioned symlinks resolve into .../v_0_2_0/... (assert via the
+# readlink target string — it must contain the vdir path component).
+for sym in \
+    "user/accounts" \
+    "user/data" \
+    "user/config/security.yaml" \
+    "user/env/$TIER/config/security.yaml"
+do
+    target="$(readlink "$V9_RDIR/$sym" 2>/dev/null || echo "")"
+    case "$target" in
+        *"/${TIER}data/v_0_2_0/"*)
+            check "versioned symlink $sym targets .../v_0_2_0/... ('$target')" ok
+            ;;
+        *)
+            check "versioned symlink $sym targets .../v_0_2_0/... (got '$target')" fail
+            ;;
+    esac
+done
+
+# logs stays UNVERSIONED: it must target <tier>data/logs, NOT a vdir.
+logs_target="$(readlink "$V9_RDIR/logs" 2>/dev/null || echo "")"
+case "$logs_target" in
+    *"/${TIER}data/logs")
+        check "logs symlink stays unversioned (→ <tier>data/logs, got '$logs_target')" ok
+        ;;
+    *)
+        check "logs symlink stays unversioned (got '$logs_target')" fail
+        ;;
+esac
+
+# accounts symlink RESOLVES into the v_0_2_0 data dir (content reachable).
+if [ -f "$V9_RDIR/user/accounts/carol.yaml" ]; then
+    check "user/accounts symlink resolves into <tier>data/v_0_2_0/ (content reachable)" ok
+else
+    check "user/accounts symlink resolves into <tier>data/v_0_2_0/" fail
+fi
+
+# realpath cross-check: accounts resolves under <tier>data/v_0_2_0/.
+if command -v realpath >/dev/null 2>&1; then
+    rp="$(cd "$V9_RDIR" && realpath user/accounts 2>/dev/null || echo "")"
+    expected="$(realpath "$V9_DATA/v_0_2_0/user/accounts" 2>/dev/null || echo "")"
+    if [ -n "$rp" ] && [ "$rp" = "$expected" ]; then
+        check "user/accounts realpath == <tier>data/v_0_2_0/user/accounts" ok
+    else
+        check "user/accounts realpath (got '$rp', expected '$expected')" fail
+    fi
+fi
+
+# An unsafe vdir (containing '/') is rejected with non-zero.
+V9_RID2="$(bv_compute_release_id "0e0e0e0")"
+V9_RDIR2="$V9_RELEASES/$V9_RID2"
+bv_rsync_to_release_dir "$STAGING" "$V9_RDIR2" >/dev/null 2>&1
+if bv_wire_release_symlinks "$V9_RDIR2" "$V9_DATA" "$TIER" "v_0_2_0/../etc" 2>/dev/null; then
+    check "bv_wire_release_symlinks rejects an unsafe vdir (traversal)" fail
+else
+    check "bv_wire_release_symlinks rejects an unsafe vdir (traversal)" ok
+fi
+if bv_wire_release_symlinks "$V9_RDIR2" "$V9_DATA" "$TIER" "" 2>/dev/null; then
+    check "bv_wire_release_symlinks rejects an empty vdir" fail
+else
+    check "bv_wire_release_symlinks rejects an empty vdir" ok
+fi
+
+# ─────────────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────────────
 echo ""

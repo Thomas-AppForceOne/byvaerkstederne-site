@@ -11,7 +11,7 @@
 #   bv_atomic_release_excludes                                # echoes default excludes
 #   bv_rsync_to_release_dir       <staging-dir> <release-dir> [extra-rsync-flags…]
 #   bv_bootstrap_data_dir         <data-dir> <env>
-#   bv_wire_release_symlinks      <release-dir> <data-dir> <env>
+#   bv_wire_release_symlinks      <release-dir> <data-dir> <env> [vdir=v0]
 #   bv_write_release_meta_yaml    <release-dir> <release-id> <prev-release-id> <code-version> <build> <data-version> <deployed-at> <deployed-by>
 #   bv_write_release_meta_yaml_full <release-dir> <release-id> <prev-release-id> <code-version> <build> <data-version> <deployed-at> <deployed-by> <host> <cwd> <branch> <sha> <sha-short> <is-dirty> <previous-data-version>
 #   bv_append_post_swap_meta      <release-dir> <swapped-at> <swap-duration-ms> <probe-url> <probe-status> <probe-substring> <probe-matched>
@@ -249,17 +249,26 @@ bv_bootstrap_data_dir() {
 # is idempotent; missing data targets are tolerated (Grav regenerates
 # security.yaml on first request).
 #
+# The four versioned symlinks (accounts, data, and the two
+# security.yaml files) resolve into <tier>data/<vdir>/...; <vdir>
+# defaults to v0 (legacy behaviour, byte-identical for every existing
+# tier whose `current → v0`). A release binds to the data-version dir
+# the deploy chose at wire time, so its symlinks stay pinned to that
+# dir for the life of the release — this is what makes rollback safe
+# under the versioned-data-dir SERVING model (see ADR-005). The `logs`
+# symlink is UNVERSIONED — it always resolves to <tier>data/logs.
+#
 # Layout: <parent>/<tier>-releases/<release-id>/  contains the symlinks
-#         <parent>/<tier>data/v0/...              is what they point at
+#         <parent>/<tier>data/<vdir>/...          is what they point at
 #
 # Climb math (resolution is relative to each symlink's CONTAINING
 # directory, not the release-dir root):
 #
 #   symlink path                                 containing dir              climb to <parent>      target
-#   user/accounts                                <rel>/user/                 ../../../              <tier>data/v0/user/accounts
-#   user/data                                    <rel>/user/                 ../../../              <tier>data/v0/user/data
-#   user/config/security.yaml                    <rel>/user/config/          ../../../../          <tier>data/v0/user/config/security.yaml
-#   user/env/<env>/config/security.yaml          <rel>/user/env/<env>/config/  ../../../../../../  <tier>data/v0/user/env/<env>/config/security.yaml
+#   user/accounts                                <rel>/user/                 ../../../              <tier>data/<vdir>/user/accounts
+#   user/data                                    <rel>/user/                 ../../../              <tier>data/<vdir>/user/data
+#   user/config/security.yaml                    <rel>/user/config/          ../../../../          <tier>data/<vdir>/user/config/security.yaml
+#   user/env/<env>/config/security.yaml          <rel>/user/env/<env>/config/  ../../../../../../  <tier>data/<vdir>/user/env/<env>/config/security.yaml
 #   logs                                         <rel>/                      ../../                 <tier>data/logs
 #
 # Where <rel> = <parent>/<tier>-releases/<release-id>/ — three levels
@@ -272,10 +281,27 @@ bv_wire_release_symlinks() {
     local release_dir="${1:?release dir required}"
     local data_dir="${2:?data dir required}"
     local env="${3:?env required}"
+    # Optional 4th arg: the data-version dir the four versioned symlinks
+    # resolve into. ${4-v0} (NOT ${4:-v0}) defaults to v0 ONLY when the
+    # arg is UNSET — i.e. a 3-arg call — so existing callers are
+    # unchanged, while an EXPLICIT empty-string 4th arg is preserved and
+    # rejected by the validation below (empty is not a valid path
+    # component).
+    local vdir="${4-v0}"
 
     if ! bv_validate_tier_name "$env" >/dev/null; then
         return 1
     fi
+    # vdir becomes a path component in every versioned symlink target.
+    # Validate it is a single, safe path component BEFORE any path
+    # concatenation: reject empty, any '/' (so it can't be a multi-
+    # component path), and any '..' traversal sequence.
+    case "$vdir" in
+        ''|*/*|*..*)
+            echo "FATAL: bv_wire_release_symlinks vdir '$vdir' must be a single path component (no '/', no '..', non-empty)" >&2
+            return 1
+            ;;
+    esac
     if [ ! -d "$release_dir" ]; then
         echo "FATAL: release dir '$release_dir' does not exist" >&2
         return 1
@@ -293,11 +319,11 @@ bv_wire_release_symlinks() {
     # *containing directory*, not the release-dir root.
     #
     # symlink path                                            resolves from           target
-    # user/accounts                                           <release>/user/         ../../<datadirname>/v0/user/accounts/
-    # user/data                                               <release>/user/         ../../<datadirname>/v0/user/data/
-    # user/config/security.yaml                               <release>/user/config/  ../../../<datadirname>/v0/user/config/security.yaml
-    # user/env/<env>/config/security.yaml                     <release>/user/env/<env>/config/   ../../../../../<datadirname>/v0/user/env/<env>/config/security.yaml
-    # logs                                                    <release>/              ../<datadirname>/logs/
+    # user/accounts                                           <release>/user/         ../../<datadirname>/<vdir>/user/accounts/
+    # user/data                                               <release>/user/         ../../<datadirname>/<vdir>/user/data/
+    # user/config/security.yaml                               <release>/user/config/  ../../../<datadirname>/<vdir>/user/config/security.yaml
+    # user/env/<env>/config/security.yaml                     <release>/user/env/<env>/config/   ../../../../../<datadirname>/<vdir>/user/env/<env>/config/security.yaml
+    # logs                                                    <release>/              ../<datadirname>/logs/  (UNVERSIONED)
 
     # Make sure containing dirs exist; rsync may not have created
     # user/env/<env>/config/ if the staging tree was minimal (e.g.
@@ -327,13 +353,13 @@ bv_wire_release_symlinks() {
         fi
     done
 
-    ln -sfn "../../../$data_dir_name/v0/user/accounts" \
+    ln -sfn "../../../$data_dir_name/$vdir/user/accounts" \
         "$release_dir/user/accounts"
-    ln -sfn "../../../$data_dir_name/v0/user/data" \
+    ln -sfn "../../../$data_dir_name/$vdir/user/data" \
         "$release_dir/user/data"
-    ln -sfn "../../../../$data_dir_name/v0/user/config/security.yaml" \
+    ln -sfn "../../../../$data_dir_name/$vdir/user/config/security.yaml" \
         "$release_dir/user/config/security.yaml"
-    ln -sfn "../../../../../../$data_dir_name/v0/user/env/$env/config/security.yaml" \
+    ln -sfn "../../../../../../$data_dir_name/$vdir/user/env/$env/config/security.yaml" \
         "$release_dir/user/env/$env/config/security.yaml"
     ln -sfn "../../$data_dir_name/logs" \
         "$release_dir/logs"
