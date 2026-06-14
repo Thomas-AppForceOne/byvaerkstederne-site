@@ -881,6 +881,19 @@ bv_remote_run '
         mkdir -p "$DD/$VDIR/user/env/$DEPLOY_ENV/config"
         mv "$RD/user/env/$DEPLOY_ENV/config/security.yaml" "$DD/$VDIR/user/env/$DEPLOY_ENV/config/security.yaml"
     fi
+    # Per-tier email.yaml — operator-provisioned SMTP credentials (WI-1).
+    # Same first-deploy bootstrap as security.yaml: if the release carries a
+    # copy (it will not, since email.yaml is gitignored and never rsynced —
+    # but an operator may stage one) and the data dir does not yet hold one,
+    # move it into <tier>data so the symlink wired below has a valid target.
+    # On a tier that has never been provisioned, neither path exists and this
+    # is a no-op: the symlink is allowed to dangle (WARN, not fatal — see the
+    # ABSENT-FILE CONTRACT in config/www/user/config/plugins/email.yaml and
+    # the preflight WARN below).
+    if [ -f "$RD/user/env/$DEPLOY_ENV/config/email.yaml" ] && [ ! -f "$DD/$VDIR/user/env/$DEPLOY_ENV/config/email.yaml" ]; then
+        mkdir -p "$DD/$VDIR/user/env/$DEPLOY_ENV/config"
+        mv "$RD/user/env/$DEPLOY_ENV/config/email.yaml" "$DD/$VDIR/user/env/$DEPLOY_ENV/config/email.yaml"
+    fi
 ' RD="$RELEASE_DIR" DD="$DATA_DIR" DEPLOY_ENV="$ENV"
 
 # ── Step 5: Wire release symlinks ─────────────────────────────────────
@@ -904,13 +917,14 @@ bv_remote_run '
     VDIR="$(readlink "$DD/current" 2>/dev/null || echo v0)"; VDIR="$(basename "$VDIR")"
     case "$VDIR" in ""|*/*|*..*) echo "FATAL: refusing to wire symlinks against unsafe data-version dir: $VDIR" >&2; exit 1 ;; esac
     mkdir -p "$RD/user/config" "$RD/user/env/$E/config"
-    for p in "$RD/user/accounts" "$RD/user/data" "$RD/user/config/security.yaml" "$RD/user/env/$E/config/security.yaml" "$RD/logs"; do
+    for p in "$RD/user/accounts" "$RD/user/data" "$RD/user/config/security.yaml" "$RD/user/env/$E/config/security.yaml" "$RD/user/env/$E/config/email.yaml" "$RD/logs"; do
         if [ -e "$p" ] && [ ! -L "$p" ]; then rm -rf "$p"; fi
     done
     ln -sfn "../../../$DDN/$VDIR/user/accounts"                              "$RD/user/accounts"
     ln -sfn "../../../$DDN/$VDIR/user/data"                                  "$RD/user/data"
     ln -sfn "../../../../$DDN/$VDIR/user/config/security.yaml"               "$RD/user/config/security.yaml"
     ln -sfn "../../../../../../$DDN/$VDIR/user/env/$E/config/security.yaml"  "$RD/user/env/$E/config/security.yaml"
+    ln -sfn "../../../../../../$DDN/$VDIR/user/env/$E/config/email.yaml"     "$RD/user/env/$E/config/email.yaml"
     ln -sfn "../../$DDN/logs"                                                "$RD/logs"
 ' \
     RD="$RELEASE_DIR" \
@@ -919,6 +933,23 @@ bv_remote_run '
     E="$ENV"
 
 echo "  ✓ Symlinks wired"
+
+# Absent-file surfacing (WI-1): email.yaml is its own state category —
+# operator-provisioned, must-be-present-to-function, but NOT fatal-to-boot.
+# Grav does not regenerate SMTP credentials (unlike security.yaml's salt),
+# so an absent email.yaml silently degrades transactional mail to
+# non-sending — the exact WI-1 defect, on the fresh-tier / post-recovery
+# path. Emit a non-fatal WARN so the degrade is visible; the deploy still
+# proceeds and the tier still boots.
+bv_remote_run '
+    VDIR="$(readlink "$DD/current" 2>/dev/null || echo v0)"; VDIR="$(basename "$VDIR")"
+    case "$VDIR" in ""|*/*|*..*) VDIR="v0" ;; esac
+    if [ ! -e "$DD/$VDIR/user/env/$DEPLOY_ENV/config/email.yaml" ]; then
+        echo "WARN: no email.yaml provisioned for tier $DEPLOY_ENV (looked in $DD/$VDIR/user/env/$DEPLOY_ENV/config/email.yaml)." >&2
+        echo "WARN: transactional mail (activation/reset) will NOT send until this tier'"'"'s email.yaml is provisioned." >&2
+        echo "WARN: copy user/env/$DEPLOY_ENV/config/email.yaml.example to email.yaml on the tier with real SMTP creds." >&2
+    fi
+' RD="$RELEASE_DIR" DD="$DATA_DIR" DEPLOY_ENV="$ENV"
 
 # ── Step 6: Write release-meta.yaml (pre-swap fields) ────────────────
 #
