@@ -1,0 +1,18 @@
+# security.yaml — PROVISIONING TEMPLATE (inactive).
+#
+# This .example file is NOT read by Grav. The real security.yaml is gitignored
+# (WI-3): it carries the salt that feeds Grav's nonce generation and
+# remember-me token signing — an authentication secret that must never be
+# committed.
+#
+# YOU NORMALLY DO NOT NEED TO CREATE security.yaml BY HAND. When the file is
+# absent, Grav regenerates it with a fresh per-instance salt on the first
+# request. A clean checkout + `make start` just works.
+#
+# To pin a value (e.g. to keep remember-me cookies stable across a recreate),
+# copy this file to security.yaml and replace the placeholder with a random
+# string, for example:  openssl rand -base64 24
+#
+# ROTATION: the repo previously tracked a real salt (Wbd0yZKOPckagC). Rotate it
+# on every tier that used it — see README "Authentication secrets" (WI-3).
+salt: REPLACE_WITH_A_FRESH_RANDOM_SALT

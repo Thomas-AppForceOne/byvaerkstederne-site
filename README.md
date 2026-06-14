@@ -15,6 +15,42 @@ This will check dependencies, pull LFS files, start Docker, and prompt you to cr
 
 ## First-time setup
 
+### Authentication secrets (security.yaml salt + SMTP credentials)
+
+Two authentication secrets are **not** tracked in git and must be supplied per
+environment. Both follow the same rule: gitignored real file, tracked
+`.example` template.
+
+**`config/www/user/config/security.yaml` — the nonce/remember-me salt.**
+This file is gitignored (it previously committed a publicly-known salt — see the
+note below). You do **not** need to create it by hand: Grav regenerates
+`security.yaml` with a fresh per-instance salt on the first request when the
+file is absent. A clean checkout + `make start` produces a working site whose
+salt is unique to that checkout. If you want to pin a value, copy
+`config/www/user/config/security.yaml.example` to `security.yaml` and replace
+the placeholder.
+
+> **Salt rotation (operator action — WI-3).** The repo formerly tracked a real
+> salt (`Wbd0yZKOPckagC`). It is now untracked, but it leaked into git history
+> and into any tier that deployed before this change. **Rotate it on every tier
+> that used it:** for each live tier, check `user/env/<host>/config/security.yaml`
+> (and the root `user/config/security.yaml`) — wherever the salt equals
+> `Wbd0yZKOPckagC`, replace it with a freshly generated value (e.g. delete the
+> file and let Grav regenerate, or set a new random `salt:`). Rotating
+> invalidates existing remember-me cookies and in-flight nonces (users get
+> logged out once) — acceptable. Scrubbing the old salt from git history with
+> `git filter-repo` is optional follow-up, not required.
+
+**Per-tier `config/www/user/env/<host>/config/email.yaml` — SMTP credentials.**
+Also gitignored. Transactional mail (password reset, activation) needs a
+working SMTP transport per tier. Copy the tier's
+`email.yaml.example` to `email.yaml` and fill in the host/port/user/password.
+`deploy.sh` wires this file into each release (it lives in `<tier>data` and is
+symlinked in, exactly like `security.yaml`). If a tier has no `email.yaml`,
+deploy emits a non-fatal **WARN** and transactional mail degrades to
+non-sending until the file is provisioned — the tier still boots. Under local
+test/CI, mail is captured by a Mailpit sink (no real SMTP needed).
+
 ### Backup operator hygiene (macOS)
 
 `deploy/backup.sh` and `deploy/restore.sh` write encrypted archives and
