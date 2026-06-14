@@ -11,16 +11,43 @@ Scope: A single command that refreshes staging with the current code
 mirrors what prod is about to become. The third step of the
 data-lifecycle series.
 
-> **Interface with atomic-deploy.** This spec uses atomic-deploy's
-> machinery for the code-side mechanics — release dirs, symlink swap,
-> rollback. The data-push step does NOT rsync into the live `user/`
-> paths; instead it populates the new `<staging>data/v<target>/`
-> directory (created as `cp -a` of the prior version + migrations
-> applied) before the new release's symlinks point at it. The
-> blessing marker lives at the release-dir root (under
-> `<staging>-releases/<release-id>/`), not inside `user/`, so it's
-> covered by the release's atomicity guarantees and can't be wiped
-> by a stray data push.
+> **Interface with atomic-deploy and the migration runner.** This spec
+> uses atomic-deploy's machinery for the code-side mechanics — release
+> dirs, symlink swap, rollback. Migrations are run **locally** on the
+> restored scratch snapshot with the shipped runner `deploy/migrate.sh`
+> (there is no `bin/migrate`), so promotion pushes an *already-migrated*
+> snapshot rather than migrating on the tier — it therefore does **not**
+> depend on the still-unshipped remote-mode migration path in
+> `deploy/lib/migrate-integration.sh`. The data-push step does **not**
+> rsync into a release's live `user/` paths; it populates a fresh
+> `<staging>data/v<target>/` directory from the migrated scratch and
+> repoints `<staging>data/current` at it — the same
+> `<tier>data/v<N>/user/...` layout `push-data.sh` already writes to.
+> Because promote owns the data dir *and* the migration, it runs
+> `deploy.sh` with `--skip-data-migration` (a flag this spec adds, see
+> [Prerequisite](#implementation-prerequisite)) so deploy.sh's own
+> in-deploy schema-bump step — which would otherwise invoke the
+> unshipped remote runner and abort — stays out of the way. The
+> blessing marker lives at the deployed release's Grav root
+> (`config/www/staging-blessed.yaml`), outside `user/` and outside the
+> `<staging>data/` tree, so no data push can wipe it.
+
+## Implementation prerequisite
+
+`deploy/deploy.sh` today runs an in-deploy schema-bump step (its
+"Step 7.5", `bv_remote_run_migration_step` in
+`deploy/lib/migrate-integration.sh`): when the live tier's data version
+differs from the deployed bundle's, it tries to migrate the tier's data
+dir in place — over SSH for remote tiers, which is the deliberately
+**unshipped** remote-mode path that refuses and aborts the deploy.
+
+A promotion always presents that mismatch at deploy time (staging's
+live data is still the old version until step 7 pushes the new one), so
+this spec adds a **`--skip-data-migration` flag** to `deploy.sh` that
+suppresses Step 7.5. Promote then owns the migration (run locally,
+step 5) and the versioned data-dir population + `current` repoint
+(step 7). This is the single piece of new `deploy.sh` behaviour the
+spec requires; everything else reuses existing commands.
 
 ---
 
@@ -116,23 +143,39 @@ patterns justify it.
 4. Read the data_version from the scratch directory's metadata.
    Read the target data_version from the current code's
    config/www/user/data-version.yaml.
-5. If they differ, run ./bin/migrate ./deploy/staging-stage/
-   to migrate the snapshot forward. If migration fails, abort —
-   staging is untouched; the failed scratch dir is left for
-   inspection.
-6. Run ./deploy/deploy.sh staging — the existing code-only deploy.
-7. Push the migrated snapshot's state paths into staging:
-     - rsync -a --delete the scratch dir's user/accounts/ into
-       staging's user/accounts/, similarly for user/data/, user/pages/,
-       user/uploads/, and the data-version.yaml.
-     - **Forbidden:** the rsync MUST be per-subdirectory. A
-       `user/`-level rsync would wipe the blessing marker on the
-       very next promotion (it lives at `config/www/staging-blessed.yaml`
-       per step 9 — see below — but if a future edit ever moves
-       the marker back inside `user/`, this rule prevents the
-       footgun). The script itself enforces this by listing the
-       state paths as a fixed array; widening that array to `user/`
-       requires editing the script in a reviewable PR.
+5. If they differ, run
+   `deploy/migrate.sh ./deploy/staging-stage/ --to <target>`
+   (the shipped migration runner — note `./bin/migrate` does not
+   exist) to migrate the snapshot forward to the code's data version.
+   If migration fails, abort — staging is untouched; the failed
+   scratch dir is left for inspection.
+6. Run `./deploy/deploy.sh staging --skip-data-migration` — the
+   existing code-only deploy, with deploy.sh's in-deploy schema-bump
+   step suppressed (see [Implementation prerequisite](#implementation-prerequisite)).
+   Promote owns the migration (step 5) and the data-dir population
+   (step 7), so deploy.sh must not also try to migrate the remote
+   tier — which it can't, since the remote-mode runner is unshipped.
+7. Populate staging's versioned data dir from the migrated snapshot
+   and make it live:
+     - Create a fresh `<staging>data/v<target>/` on the tier (with
+       `<target>` the data version migrated to in step 5), then
+       rsync -a --delete the scratch dir's `user/accounts/` into
+       `<staging>data/v<target>/user/accounts/`, and likewise for
+       `user/data/`, `user/pages/`, `user/uploads/`, and
+       `user/data-version.yaml`. This is the same
+       `<tier>data/v<N>/user/...` layout `push-data.sh` already writes
+       to — promotion never rsyncs into a release's live `user/` paths.
+     - Repoint `<staging>data/current` → `v<target>` only after the
+       dir is fully populated. The new release's internal symlinks
+       resolve through `current`, so activating the refreshed data is
+       a symlink repoint, not an in-place overwrite.
+     - **Forbidden:** the rsync MUST be per-subdirectory against the
+       versioned data dir. The script enforces this by listing the
+       state paths as a fixed array; widening that array (e.g. to a
+       `user/`-level or release-dir-level sync) requires editing the
+       script in a reviewable PR. This keeps the blessing marker
+       (step 9, at the release Grav root, outside `<staging>data/`)
+       structurally unreachable by the data push.
 8. Clear staging's caches (existing deploy.sh post-step).
 9. Write a "blessing" marker on staging:
      config/www/staging-blessed.yaml  (Grav root, NOT inside user/)
@@ -257,7 +300,7 @@ re-promotion.
 | 4 (read versions) | Abort. Scratch dir intact. |
 | 5 (migration) | Abort. Scratch dir tainted but inspectable; staging untouched. |
 | 6 (deploy code) | Abort. Staging may have new code with old data — explicitly logged; operator must redeploy or revert. |
-| 7 (push data) | Abort. Staging may have partial new data — operator must re-run promote-to-staging once the underlying issue is fixed. |
+| 7 (push/activate data) | Abort. The new `<staging>data/v<target>/` may be partially populated, but `current` is repointed only after a complete sync, so a mid-sync failure leaves the prior data version live. Operator re-runs promote-to-staging to converge. |
 | 8 (clear cache) | Print warning, continue. Cache will refill naturally. |
 | 9 (write blessing) | Abort. No blessing written → prod cannot promote. |
 | 10 (smoke test) | Print warning, continue. Operator inspects. Blessing IS written; team decides whether to consume it. |
@@ -275,10 +318,12 @@ which case the operator re-runs to converge.
 - [ ] `./deploy/promote-to-staging.sh` from a clean state takes a
       backup, runs migrations as needed, deploys code, pushes data,
       writes blessing, exits 0.
-- [ ] After running, staging's `user/accounts/` contains the same
-      account list as prod's at backup time.
-- [ ] After running, staging's `data-version.yaml` matches the
-      target data version from the code.
+- [ ] After running, staging's live data (via `<staging>data/current
+      → v<target>`) contains the same `user/accounts/` list as prod's
+      at backup time.
+- [ ] After running, `<staging>data/v<target>/user/data-version.yaml`
+      matches the target data version from the code, and
+      `<staging>data/current` points at `v<target>`.
 - [ ] After running, `config/www/staging-blessed.yaml` (at Grav
       root, NOT inside `user/`) exists with all seven fields
       populated: `blessed_at`, `code_commit`, `code_version`,
@@ -307,6 +352,10 @@ which case the operator re-runs to converge.
 - [ ] Promoting when prod is at data_version 0.1.0 and code
       requires 0.2.0 applies the 0.2.0 migration; the resulting
       staging has data_version 0.2.0.
+- [ ] Migration is run locally via `deploy/migrate.sh` on the scratch
+      dir; the step-6 code deploy passes `--skip-data-migration` and
+      `deploy.sh` does not attempt its in-deploy (remote-mode)
+      migration during a promotion.
 - [ ] Promoting when no migration is needed (data and code already
       agree) skips the migration step (no-op message printed).
 - [ ] Promoting when a required migration is missing aborts with

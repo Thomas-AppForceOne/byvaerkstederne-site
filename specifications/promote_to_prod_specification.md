@@ -203,8 +203,12 @@ covered by the backup/restore spec.
     (./deploy/prod-stage/).
  4. Read the data_version from the scratch metadata.
  5. Read the target data_version from the local code's
-    data-version.yaml. If they differ, run ./bin/migrate
-    ./deploy/prod-stage/ to bring the snapshot forward.
+    data-version.yaml. If they differ, run
+    `deploy/migrate.sh ./deploy/prod-stage/ --to <target>` (the
+    shipped runner — `./bin/migrate` does not exist) to bring the
+    snapshot forward. Migration runs **locally** on the scratch
+    snapshot, so prod promotion does not depend on the still-unshipped
+    remote-mode migration path in `deploy/lib/migrate-integration.sh`.
  6. Sync the staging features.yaml to prod. The script copies
     config/www/user/env/staging.hackersbychoice.dk/config/features.yaml
     over config/www/user/env/www.byvaerkstederne.dk/config/features.yaml,
@@ -216,11 +220,24 @@ covered by the backup/restore spec.
     promotion's audit trail — a human can later see "for v0.2.0, the
     prod flags became X". Merging the release branch back to develop
     after deploy returns the commit to the integration line.
- 7. Deploy code to prod via the existing ./deploy/deploy.sh prod
-    path. (Which already gates behind DEPLOY_PROD_* credentials.)
-    This includes the new prod features.yaml from step 6.
- 8. Push the migrated snapshot's state paths into prod, same
-    rsync-with-delete pattern as the staging promote.
+ 7. Deploy code to prod via
+    `./deploy/deploy.sh prod --skip-data-migration` — the existing
+    path already gates behind DEPLOY_PROD_* credentials;
+    `--skip-data-migration` (the flag the staging spec adds, see its
+    *Implementation prerequisite*) suppresses deploy.sh's in-deploy
+    schema-bump step so it does not invoke the unshipped remote-mode
+    migration runner and abort. Promote owns the migration (step 5)
+    and the data-dir population (step 8) instead. This deploy includes
+    the new prod features.yaml from step 6.
+ 8. Populate prod's versioned data dir from the migrated snapshot and
+    make it live, exactly as the staging promote does: create a fresh
+    `<prod>data/v<target>/`, rsync -a --delete the scratch dir's
+    `user/accounts/`, `user/data/`, `user/pages/`, `user/uploads/`,
+    and `user/data-version.yaml` into `<prod>data/v<target>/user/...`
+    (the `push-data.sh` layout — never into a release's live `user/`),
+    then repoint `<prod>data/current` → `v<target>` once the sync is
+    complete. `prod-bypass-log.yaml` and any other prod-root markers
+    live outside `<prod>data/`, so the data push cannot reach them.
  9. Clear prod caches (existing deploy.sh post-step).
 10. Smoke-test prod against the same URL list as the staging spec
     (homepage, /login, /medlemmer, /begivenheder, /vaerksteder,
@@ -405,6 +422,13 @@ not a "do whatever you want" mode.
 - [ ] Promoting when prod is at data_version 0.1.0 and code
       requires 0.2.0 applies the 0.2.0 migration to the snapshot
       before push.
+- [ ] Migration is run locally via `deploy/migrate.sh` on the scratch
+      snapshot; the step-7 code deploy passes `--skip-data-migration`
+      and `deploy.sh` does not attempt its in-deploy (remote-mode)
+      migration during a promotion.
+- [ ] The migrated snapshot is pushed into `<prod>data/v<target>/` and
+      `<prod>data/current` is repointed to `v<target>`; the data push
+      never targets a release's live `user/` paths.
 - [ ] If a required migration is missing, the promotion aborts
       before pushing anything to prod.
 
