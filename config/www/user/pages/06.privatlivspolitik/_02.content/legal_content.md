@@ -31,6 +31,8 @@ Vi behandler dine personoplysninger til følgende formål: administration af dit
 
 Vi opbevarer dine personoplysninger, så længe du er medlem af foreningen. Ved udmeldelse slettes dine oplysninger senest seks måneder efter udmeldelsesdatoen, medmindre vi er forpligtet til at opbevare dem i længere tid i henhold til lovgivningen. Regnskabsmateriale opbevares i fem år i overensstemmelse med bogføringsloven.
 
+Til test- og udviklingsformål kan en kopi af medlemsdata blive replikeret til et ikke-offentligt testmiljø, så ny funktionalitet kan afprøves mod realistiske data, inden den sættes i drift. Testmiljøet er adgangsbeskyttet (HTTP basic auth) og kun tilgængeligt for foreningens driftsansvarlige. Data i testmiljøet overskrives fuldstændigt ved hver opdatering — typisk med få dages mellemrum — og opbevares ikke længere end den tilsvarende produktionsdata.
+
 ## Rettigheder {#rettigheder}
 
 Du har efter databeskyttelsesforordningen en række rettigheder i forhold til vores behandling af oplysninger om dig. Du har ret til indsigt i de oplysninger, vi behandler om dig, ret til at få urigtige oplysninger rettet, ret til sletning af dine oplysninger, ret til at begrænse behandlingen samt ret til dataportabilitet. Du kan gøre brug af dine rettigheder ved at kontakte os. Du har desuden ret til at klage til Datatilsynet.
