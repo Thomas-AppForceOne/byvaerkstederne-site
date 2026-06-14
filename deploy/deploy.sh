@@ -177,9 +177,9 @@ esac
 # skip-data-migration test asserts against without needing SSH.
 if [ "$DRY_RUN" = "1" ] && [ "$ENV_KIND" = "grav" ]; then
     if [ "$SKIP_DATA_MIGRATION" = "1" ]; then
-        echo "  ℹ dry-run: in-deploy data-migration (Step 7.5) would be SUPPRESSED (--skip-data-migration)"
+        echo "  ℹ dry-run [$ENV]: in-deploy data-migration (Step 7.5) would be SUPPRESSED (--skip-data-migration)"
     else
-        echo "  ℹ dry-run: in-deploy data-migration (Step 7.5) would run if the live data version differs"
+        echo "  ℹ dry-run [$ENV]: in-deploy data-migration (Step 7.5) would run if the live data version differs"
     fi
 fi
 
