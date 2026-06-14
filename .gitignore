@@ -119,3 +119,7 @@ config/www/user/env/*/config/security.yaml
 
 # spec-review-and-plan / spec-execute-fix-plan run artifacts (transient).
 .spec-review-runs/
+
+# promote-to-prod operator journal — operator-local audit trail, may carry
+# sensitive --reason context. Kept on the operator's machine, never committed.
+deploy/promotion-log.jsonl
