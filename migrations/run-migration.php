@@ -8,7 +8,7 @@
  * Loads the runner's autoload (Symfony YAML and friends), `require`s
  * the migration file (which `return`s the closure), invokes the
  * closure with $dataDir, then re-reads
- * <data-dir>/config/www/user/data-version.yaml so the caller can
+ * <data-dir>/user/data-version.yaml so the caller can
  * verify the post-condition.
  *
  * On success: exits 0, prints the post-migration data_version to
@@ -72,7 +72,7 @@ try {
     exit(70);
 }
 
-$markerPath = $dataDir . '/config/www/user/data-version.yaml';
+$markerPath = $dataDir . '/user/data-version.yaml';
 if (!is_file($markerPath)) {
     fwrite(STDERR, sprintf(
         "POST_CONDITION_FAIL: migration finished without writing %s\n",

@@ -80,9 +80,9 @@ export BV_MIGRATE_SH="$MIGRATE_SH"
 build_fixture() {
     local data_dir="$1"
     local live_version="$2"
-    mkdir -p "$data_dir/v0/config/www/user"
+    mkdir -p "$data_dir/v0/user"
     printf 'data_version: "%s"\n' "$live_version" \
-        > "$data_dir/v0/config/www/user/data-version.yaml"
+        > "$data_dir/v0/user/data-version.yaml"
     if [ -n "${3:-}" ]; then
         printf '%s\n' "$3" > "$data_dir/v0/.migrated-at-seed"
     fi
@@ -136,7 +136,7 @@ if bv_remote_run_migration_step "0.2.0" "$DATA" >"$log" 2>&1; then
     else
         # The new dir's data_version should be 0.2.0
         post="$(awk -F'"' '/^data_version:/ {print $2; exit}' \
-            "$DATA/v_0_2_0/config/www/user/data-version.yaml")"
+            "$DATA/v_0_2_0/user/data-version.yaml")"
         if [ "$post" = "0.2.0" ]; then
             report_pass "schema-bump: current advanced, data_version = 0.2.0"
         else
@@ -145,7 +145,7 @@ if bv_remote_run_migration_step "0.2.0" "$DATA" >"$log" 2>&1; then
         # The OLD dir's data_version should still be 0.1.0 — the
         # cp -a preserves it as a rollback target.
         old="$(awk -F'"' '/^data_version:/ {print $2; exit}' \
-            "$DATA/v0/config/www/user/data-version.yaml")"
+            "$DATA/v0/user/data-version.yaml")"
         if [ "$old" = "0.1.0" ]; then
             report_pass "schema-bump: v0 (rollback target) untouched"
         else

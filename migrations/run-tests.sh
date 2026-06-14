@@ -289,13 +289,13 @@ miss_tmp="$(mktemp -d)"
 miss_migrations="$(mktemp -d)"
 # Synthetic migrations dir contains ONLY 0.3.0_step.php — no 0.4.0
 # script. Asking for --to 0.4.0 from a fixture at 0.2.0 must refuse.
-mkdir -p "$miss_tmp/config/www/user"
-printf 'data_version: "0.2.0"\n' > "$miss_tmp/config/www/user/data-version.yaml"
+mkdir -p "$miss_tmp/user"
+printf 'data_version: "0.2.0"\n' > "$miss_tmp/user/data-version.yaml"
 cat > "$miss_migrations/0.3.0_step.php" <<'PHP'
 <?php
 return function (string $dataDir): void {
     file_put_contents(
-        $dataDir . '/config/www/user/data-version.yaml',
+        $dataDir . '/user/data-version.yaml',
         "data_version: \"0.3.0\"\n"
     );
 };
@@ -308,7 +308,7 @@ else
     if grep -q "no migration to 0.4.0 found" "$miss_log"; then
         # Per spec: data dir must be untouched on refusal. The synthetic
         # fixture was at 0.2.0; check the marker still says that.
-        post="$(awk '/^data_version:/ {gsub(/"/,""); print $2}' "$miss_tmp/config/www/user/data-version.yaml")"
+        post="$(awk '/^data_version:/ {gsub(/"/,""); print $2}' "$miss_tmp/user/data-version.yaml")"
         if [ "$post" = "0.2.0" ]; then
             report_pass "missing-migration: runner refused with expected message; data dir untouched"
         else
@@ -328,8 +328,8 @@ rm -rf "$miss_tmp" "$miss_migrations" "$miss_log"
 echo "→ test: SemVer sort (0.2.0 before 0.10.0, not lex)"
 sort_tmp="$(mktemp -d)"
 sort_migrations="$(mktemp -d)"
-mkdir -p "$sort_tmp/config/www/user"
-printf 'data_version: "0.1.0"\n' > "$sort_tmp/config/www/user/data-version.yaml"
+mkdir -p "$sort_tmp/user"
+printf 'data_version: "0.1.0"\n' > "$sort_tmp/user/data-version.yaml"
 # The runner picks up run-migration.php + vendor/ from
 # $BV_MIGRATE_BOOTSTRAP_DIR (default = the main migrations/ dir),
 # so the synthetic dir only needs the migration .php files.
@@ -337,7 +337,7 @@ cat > "$sort_migrations/0.2.0_alpha.php" <<'PHP'
 <?php
 return function (string $dataDir): void {
     file_put_contents(
-        $dataDir . '/config/www/user/data-version.yaml',
+        $dataDir . '/user/data-version.yaml',
         "data_version: \"0.2.0\"\n"
     );
 };
@@ -346,7 +346,7 @@ cat > "$sort_migrations/0.10.0_beta.php" <<'PHP'
 <?php
 return function (string $dataDir): void {
     file_put_contents(
-        $dataDir . '/config/www/user/data-version.yaml',
+        $dataDir . '/user/data-version.yaml',
         "data_version: \"0.10.0\"\n"
     );
 };
@@ -376,8 +376,8 @@ rm -rf "$sort_tmp" "$sort_migrations" "$sort_log"
 echo "→ test: throwing migration → runner exits non-zero, dir left as-is"
 throw_tmp="$(mktemp -d)"
 throw_migrations="$(mktemp -d)"
-mkdir -p "$throw_tmp/config/www/user"
-printf 'data_version: "0.1.0"\n' > "$throw_tmp/config/www/user/data-version.yaml"
+mkdir -p "$throw_tmp/user"
+printf 'data_version: "0.1.0"\n' > "$throw_tmp/user/data-version.yaml"
 # Migration mutates the dir BEFORE throwing so we can verify the runner
 # left the partial state in place.
 cat > "$throw_migrations/0.2.0_bad.php" <<'PHP'
@@ -407,8 +407,8 @@ rm -rf "$throw_tmp" "$throw_migrations" "$throw_log"
 # =============================================================================
 echo "→ test: no-op when already at target"
 noop_tmp="$(mktemp -d)"
-mkdir -p "$noop_tmp/config/www/user"
-printf 'data_version: "0.2.0"\n' > "$noop_tmp/config/www/user/data-version.yaml"
+mkdir -p "$noop_tmp/user"
+printf 'data_version: "0.2.0"\n' > "$noop_tmp/user/data-version.yaml"
 noop_log="$(mktemp)"
 if BV_MIGRATIONS_DIR="$MIGRATIONS_DIR" bash "$MIGRATE_SH" "$noop_tmp" --to 0.2.0 >"$noop_log" 2>&1; then
     if grep -q "already at 0.2.0" "$noop_log"; then
@@ -452,8 +452,8 @@ rm -rf "$prespec_tmp" "$prespec_log"
 # =============================================================================
 echo "→ test: forward-only — runner refuses when from-version is ahead of target"
 fwd_tmp="$(mktemp -d)"
-mkdir -p "$fwd_tmp/config/www/user"
-printf 'data_version: "0.5.0"\n' > "$fwd_tmp/config/www/user/data-version.yaml"
+mkdir -p "$fwd_tmp/user"
+printf 'data_version: "0.5.0"\n' > "$fwd_tmp/user/data-version.yaml"
 fwd_log="$(mktemp)"
 set +e
 BV_MIGRATIONS_DIR="$MIGRATIONS_DIR" bash "$MIGRATE_SH" "$fwd_tmp" --to 0.2.0 >"$fwd_log" 2>&1
@@ -477,15 +477,15 @@ rm -rf "$fwd_tmp" "$fwd_log"
 echo "→ test: post-condition — migration that writes the wrong data_version is rejected"
 post_tmp="$(mktemp -d)"
 post_migrations="$(mktemp -d)"
-mkdir -p "$post_tmp/config/www/user"
-printf 'data_version: "0.1.0"\n' > "$post_tmp/config/www/user/data-version.yaml"
+mkdir -p "$post_tmp/user"
+printf 'data_version: "0.1.0"\n' > "$post_tmp/user/data-version.yaml"
 # Migration claims to target 0.2.0 but writes 0.99.0 — the runner
 # verifies the post-condition and must refuse.
 cat > "$post_migrations/0.2.0_liar.php" <<'PHP'
 <?php
 return function (string $dataDir): void {
     file_put_contents(
-        $dataDir . '/config/www/user/data-version.yaml',
+        $dataDir . '/user/data-version.yaml',
         "data_version: \"0.99.0\"\n"
     );
 };
