@@ -22,6 +22,10 @@
     {% endblock %}
 
     <main class="bv-main blueprint-grid">
+        {# Flash messages (login/email plugin notices: activation pending,
+           activation confirmed, reset sent, form errors). Rendered site-wide
+           so flashes redirected to `/` (WI-2) are visible inside the shell. #}
+        {% block flash %}{% include 'partials/messages.html.twig' %}{% endblock %}
         {% block hero %}{% endblock %}
         {% block body %}
             {{ content|raw }}

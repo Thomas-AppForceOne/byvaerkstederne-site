@@ -1,0 +1,63 @@
+{# Themed override of the login plugin's login.html.twig.
+   Renders the /login route inside the site shell instead of the unstyled
+   plugin fallback (built_in_css is false). The login <form> mirrors the one
+   in partials/login_overlay.html.twig — same field names (username/password),
+   same task (login.login), same nonce field name (login-form / login-form-nonce)
+   — so the existing auth.js overlay path and this direct page path both POST a
+   valid CSRF-protected login. No plugin PHP is touched. (WI-1)
+
+   When already authenticated, show a short confirmation rather than the form. #}
+{% extends 'partials/base.html.twig' %}
+
+{% block body %}
+{% set user = grav.user %}
+<section class="bv-auth-page" style="min-height: 60vh; display: flex; align-items: center; justify-content: center; padding: var(--space-12) var(--space-4);">
+    <div class="bv-auth-card" style="max-width: 36rem; width: 100%;">
+        <div style="margin-bottom: var(--space-8);">
+            <h1 class="bv-display" style="margin-bottom: var(--space-4);">Medlemslogin</h1>
+            <div style="width: 6rem; height: 0.5rem; background: var(--primary); margin-bottom: var(--space-6);"></div>
+        </div>
+
+        {% if user.authenticated and user.authorized %}
+            <div class="bv-auth-form" style="background: var(--surface-container-lowest); border-left: 8px solid var(--primary); padding: var(--space-8);">
+                <p class="bv-body-lg">Du er logget ind som <strong>{{ user.fullname ?: user.username }}</strong>.</p>
+                <p style="margin-top: var(--space-4);"><a class="bv-label" style="text-decoration: underline;" href="{{ uri.addNonce(base_url_relative ~ uri.path ~ '/task' ~ config.system.param_sep ~ 'login.logout', 'logout-form', 'logout-nonce')|e }}">Log ud</a></p>
+            </div>
+        {% else %}
+            <div class="bv-auth-form" style="background: var(--surface-container-lowest); border-left: 8px solid var(--primary); padding: var(--space-8);">
+                <form action="{{ base_url_relative }}{{ uri.path }}" method="post" style="display: flex; flex-direction: column; gap: var(--space-6);">
+                    {{ nonce_field('login-form', 'login-form-nonce')|raw }}
+                    <input type="hidden" name="task" value="login.login"/>
+
+                    <div>
+                        <label class="bv-form-label" style="color: var(--outline);">Brugernavn / E-mail</label>
+                        <input class="bv-input" type="text" name="username" placeholder="Indtast brugernavn" autocomplete="username" required style="margin-top: var(--space-2);"/>
+                    </div>
+
+                    <div>
+                        <label class="bv-form-label" style="color: var(--outline);">Adgangskode</label>
+                        <input class="bv-input" type="password" name="password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password" required style="margin-top: var(--space-2);"/>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <label style="display: flex; align-items: center; gap: var(--space-3); cursor: pointer;">
+                            <input type="checkbox" name="rememberme" value="1" class="bv-checkbox" />
+                            <span class="bv-label" style="color: var(--on-surface-variant);">Husk mig</span>
+                        </label>
+                        <a href="/forgot_password" class="bv-label" style="color: var(--tertiary);">Glemt adgangskode</a>
+                    </div>
+
+                    <button type="submit" class="bv-btn bv-btn--primary bv-btn--lg bv-btn--full">Log ind</button>
+                </form>
+
+                {% if feature_enabled('membership_signup') %}
+                <div style="margin-top: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--surface-container-highest);">
+                    <p class="bv-label" style="color: var(--outline); margin-bottom: var(--space-3);">Ikke medlem endnu?</p>
+                    <a href="/opret-medlemskab" style="font-family: var(--font-headline); font-weight: 700; text-transform: uppercase; color: var(--secondary);">Bliv medlem af foreningen</a>
+                </div>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

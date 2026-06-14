@@ -1,0 +1,44 @@
+# Email plugin — repo-tracked, NON-SECRET defaults only.
+#
+# This file carries the transport ENGINE and the non-prod From identity.
+# It deliberately contains NO host / username / password literals.
+#
+# The SMTP transport block (server/port/user/password/encryption) is
+# provisioned PER TIER, out of band, in the tier's gitignored
+#   config/www/user/env/<host>/config/email.yaml
+# exactly as security.yaml is. deploy.sh wires that per-tier file into
+# each release via the §Symlink contract (see deploy/deploy.sh and
+# deploy/lib/atomic-release.sh). An operator- or hand-placed env email.yaml
+# that deploy.sh does not know about is never linked into a release, so the
+# deploy.sh automation — not manual placement — is the supported path.
+#
+# From identity is PER TIER (see the spec Prerequisites table):
+#   dev / test / staging  -> noreply@hackersbychoice.dk   (this default)
+#   prod                  -> noreply@byvaerkstederne.dk   (overridden in
+#                            user/env/www.byvaerkstederne.dk/config/email.yaml)
+# The site contact address kontakt@byvaerkstederne.dk (site.yaml) is NOT the
+# transactional From — transactional mail keeps its own noreply@ identity.
+#
+# ABSENT-FILE CONTRACT: if a tier's env email.yaml is missing, transactional
+# mail degrades to non-sending (the engine below points at an SMTP host that
+# only the env override supplies). deploy/preflight emits a non-fatal WARN so
+# the silent degrade becomes visible; the tier still boots.
+#
+# UNDER TEST (CI / local Playwright): the test environment's email.yaml
+# overrides the mailer block to point SMTP at Mailpit (mailpit:1025, no auth)
+# so the real login + email plugin path runs against an API-queryable sink.
+# See tests/fixtures/grav-seeds/README.md.
+enabled: true
+from: 'noreply@hackersbychoice.dk'
+from_name: 'Byværkstederne'
+charset: utf-8
+content_type: text/html
+debug: false
+mailer:
+  engine: smtp
+  # The smtp block below is intentionally credential-free. The per-tier
+  # env email.yaml supplies server/port/user/password/encryption. Without
+  # it, no real transport is configured and mail does not send (WARN at
+  # deploy/preflight; see ABSENT-FILE CONTRACT above).
+  smtp:
+    encryption: tls

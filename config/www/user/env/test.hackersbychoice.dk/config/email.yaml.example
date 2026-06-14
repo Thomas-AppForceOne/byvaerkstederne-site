@@ -1,0 +1,21 @@
+# Per-tier email transport — PROVISIONING TEMPLATE (inactive).
+#
+# Copy to `email.yaml` to activate; the real file is gitignored and provisioned
+# as per-tier state by deploy.sh. Never commit the real file or credentials.
+#
+# This block OVERRIDES the credential-free mailer.smtp block in the
+# repo-tracked config/www/user/config/plugins/email.yaml.
+#
+# Test tier (test.hackersbychoice.dk) on one.com:
+#   From identity: noreply@hackersbychoice.dk  (inherits repo default).
+#   Delivery posture: sink — Mailpit under CI; do NOT point test at a real
+#   inbox. If you must rehearse the live SMTP path, use a Mailtrap sandbox
+#   (captured, never delivered).
+mailer:
+  engine: smtp
+  smtp:
+    server: 'mailpit'            # CI sink; for a Mailtrap sandbox use its host
+    port: 1025
+    encryption: none
+    user: ''
+    password: ''
