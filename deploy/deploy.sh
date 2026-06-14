@@ -98,11 +98,22 @@ bv_rsync_progress_flag() {
 # remaining positional arg is the env. DEPLOY_DRY_RUN=1 in the
 # environment is also honoured.
 DRY_RUN="${DEPLOY_DRY_RUN:-0}"
+# --skip-data-migration suppresses the in-deploy schema-bump step (Step 7.5).
+# It exists for orchestrators that own data migration out of band — notably
+# deploy/promote-to-staging.sh, which migrates a snapshot locally and then
+# populates the versioned data dir itself. Without it, deploy.sh would detect
+# the version gap a promotion presents at deploy time and invoke the
+# (unshipped) remote-mode migration runner, which refuses and aborts. See the
+# promote-to-staging spec's "Implementation prerequisite".
+SKIP_DATA_MIGRATION="${DEPLOY_SKIP_DATA_MIGRATION:-0}"
 POSITIONAL=()
 for arg in "$@"; do
     case "$arg" in
         --dry-run|--staging-only)
             DRY_RUN=1
+            ;;
+        --skip-data-migration)
+            SKIP_DATA_MIGRATION=1
             ;;
         *)
             POSITIONAL+=("$arg")
@@ -123,7 +134,7 @@ set -- "${POSITIONAL[@]}"
 
 ENV_RAW="${1:-landing}"
 if ! ENV="$(bv_validate_tier_name "$ENV_RAW")"; then
-    echo "    Usage: $0 [landing|dev|test|staging|prod]" >&2
+    echo "    Usage: $0 [landing|dev|test|staging|prod] [--dry-run] [--skip-data-migration]" >&2
     exit 1
 fi
 
@@ -159,6 +170,18 @@ case "$ENV" in
         ENV_KIND="landing"
         ;;
 esac
+
+# Dry-run preview of the data-migration posture. A real deploy prints
+# the actual decision at Step 7.5, but --dry-run exits after Step 3, so
+# surface here what Step 7.5 *would* do — this is also the hook the
+# skip-data-migration test asserts against without needing SSH.
+if [ "$DRY_RUN" = "1" ] && [ "$ENV_KIND" = "grav" ]; then
+    if [ "$SKIP_DATA_MIGRATION" = "1" ]; then
+        echo "  ℹ dry-run: in-deploy data-migration (Step 7.5) would be SUPPRESSED (--skip-data-migration)"
+    else
+        echo "  ℹ dry-run: in-deploy data-migration (Step 7.5) would run if the live data version differs"
+    fi
+fi
 
 # Load credentials. Skipped under --dry-run.
 ENV_FILE="$PROJECT_DIR/.env.deploy"
@@ -929,7 +952,12 @@ echo "→ Step 7.5/8: Data-schema migration runner..."
 # that is missing data-version.yaml is a regression, not a quiet
 # skip — refuse the deploy rather than ship code against unstamped
 # data.
-if [ ! -d "$STAGING_DIR/user" ]; then
+if [ "$SKIP_DATA_MIGRATION" = "1" ]; then
+    echo "  ⏭  --skip-data-migration set: in-deploy migration suppressed."
+    echo "     The caller owns migration and the versioned data-dir population"
+    echo "     + 'current' repoint out of band (e.g. promote-to-staging.sh)."
+    echo "     deploy.sh leaves <tier>data/ untouched in this run."
+elif [ ! -d "$STAGING_DIR/user" ]; then
     echo "  ✓ apex deploy: no user/ in staging; migration step does not apply"
 else
     BUNDLE_DATA_VERSION="$(awk '

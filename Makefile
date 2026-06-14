@@ -310,6 +310,7 @@ test-deploy: ## Run deploy-script regression tests (lint + unit + atomic-layout 
 	@bash tests/deploy/atomic-layout.sh
 	@bash tests/deploy/rollback.sh
 	@bash tests/deploy/migrate.sh
+	@bash tests/deploy/skip-data-migration.sh
 	@bash tests/deploy/unit-release-gate.sh
 	@bash tests/deploy/tag-release.sh
 	@bash tests/deploy/unit-build-id.sh
