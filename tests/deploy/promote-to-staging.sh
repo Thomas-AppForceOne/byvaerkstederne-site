@@ -9,12 +9,18 @@
 # config/www/user/data-version.yaml — a no-bump scenario, so step 5
 # short-circuits the migration entirely.
 #
-# Coverage:
+# Coverage (versioned-data-dir SERVING model — ADR-005):
 #   Success path:
-#     * accounts/data/pages/uploads refreshed in the served dir
-#       (stagingdata/v0/user/...), deny-listed cache/ excluded
-#     * a pre-existing per-tier secret (user/config/security.yaml) is preserved
-#     * stale staging data is removed (wholesale --delete refresh)
+#     * promote BUILDS a COMPLETE v_<target> data dir (cp -a of the
+#       current dir + overlay of the migrated snapshot) and repoints
+#       stagingdata/current → v_<target> BEFORE the code deploy
+#     * accounts/data/pages/uploads overlaid into v_<target>/user/...,
+#       deny-listed cache/ excluded
+#     * a pre-existing per-tier secret (v0/user/config/security.yaml) is
+#       INHERITED into v_<target>/user/config/security.yaml via cp -a,
+#       never overwritten by the overlay
+#     * stale staging data does not leak into v_<target>'s accounts dir
+#       (the per-subdir rsync --delete overlay wins over the cp -a copy)
 #     * staging-blessed.yaml exists with all seven fields populated,
 #       data_version == target, source_backup_id == the produced backup id
 #     * exit 0
@@ -61,10 +67,11 @@ TARGET_DV="$(awk '
         sub(/[[:space:]]+#.*$/,"",v); gsub(/^[[:space:]]+|[[:space:]]+$/,"",v); print v; exit
     }' "$REPO_ROOT/config/www/user/data-version.yaml")"
 [ -n "$TARGET_DV" ] || { echo "FATAL: could not read target data_version from repo marker" >&2; exit 1; }
-# Served dir is v0 — release symlinks are hardcoded to <tier>data/v0/, so the
-# risk-mitigated promote refreshes v0 in place (no new versioned dir, no
-# current repoint). Per-tier secrets under v0/user/config/ must survive.
-EXPECT_VDIR="v0"
+# Versioned-data-dir SERVING model: promote builds a COMPLETE v_<target>
+# dir and repoints stagingdata/current at it. The vdir name is
+# bv_version_to_dirname(TARGET_DV) — 0.1.0 → v_0_1_0. Computed inline here
+# (same transform the lib uses) so the test has no extra source dependency.
+EXPECT_VDIR="v_${TARGET_DV//./_}"
 
 echo "→ promote-to-staging: local-mode orchestration probe (target data_version=$TARGET_DV, vdir=$EXPECT_VDIR)"
 
@@ -118,12 +125,18 @@ export PROMOTE_ENV_FILE="$TMP/no-such-env-file"
 echo "→ success path: clean local-mode promote"
 TIER_DIR="$TMP/tier"; mkdir -p "$TIER_DIR"
 
-# Pre-seed the served dir (v0) with a per-tier SECRET that must be preserved
-# and STALE data that the wholesale refresh must delete.
+# Pre-seed the CURRENT data-version dir (v0) with:
+#   * a per-tier SECRET that cp -a must INHERIT into the new v_<target> dir
+#   * STALE data that the per-subdir rsync --delete overlay must remove
+#     from v_<target>/user/accounts (cp -a copies it in, the overlay
+#     deletes it).
+# v0 is the CURRENT_VDIR the promote reads from stagingdata/current.
 mkdir -p "$TIER_DIR/stagingdata/v0/user/config" \
          "$TIER_DIR/stagingdata/v0/user/accounts"
 echo 'salt: keep-me'  > "$TIER_DIR/stagingdata/v0/user/config/security.yaml"
 echo 'username: stale' > "$TIER_DIR/stagingdata/v0/user/accounts/stale.yaml"
+# Bootstrap the current pointer the promote reads (existing tiers have it).
+ln -sfn v0 "$TIER_DIR/stagingdata/current"
 
 OUT_LOG="$TMP/promote-success.out"
 set +e
@@ -176,20 +189,39 @@ else
     report_fail "versioned data dir's data-version.yaml missing or wrong"
 fi
 
-# Per-tier secret under v0/user/config/ is PRESERVED (the refresh touches
-# only accounts/data/pages/uploads, never user/config).
-SEC="$TIER_DIR/stagingdata/v0/user/config/security.yaml"
-if [ -f "$SEC" ] && grep -q 'keep-me' "$SEC"; then
-    report_pass "per-tier secret (user/config/security.yaml) preserved across refresh"
+# A COMPLETE v_<target> dir was built (cp -a of the current dir, so it
+# carries the inherited config/ tree alongside the overlaid state).
+if [ -d "$TIER_DIR/stagingdata/$EXPECT_VDIR/user/config" ]; then
+    report_pass "complete v_<target> data dir built ($EXPECT_VDIR exists with user/config inherited)"
 else
-    report_fail "per-tier secret was clobbered by the refresh"
+    report_fail "v_<target> data dir incomplete (no user/config in $EXPECT_VDIR)"
 fi
 
-# Stale pre-existing account is GONE (wholesale --delete overwrite of accounts/).
-if [ ! -e "$TIER_DIR/stagingdata/v0/user/accounts/stale.yaml" ]; then
-    report_pass "stale staging account removed (wholesale --delete refresh)"
+# Per-tier secret is INHERITED into v_<target>/user/config/ via cp -a from
+# the current (v0) dir — the overlay touches only accounts/data/pages/uploads,
+# never user/config, so the secret survives in the NEW served dir.
+SEC="$TIER_DIR/stagingdata/$EXPECT_VDIR/user/config/security.yaml"
+if [ -f "$SEC" ] && grep -q 'keep-me' "$SEC"; then
+    report_pass "per-tier secret inherited into $EXPECT_VDIR/user/config/security.yaml via cp -a"
 else
-    report_fail "stale staging account survived the wholesale refresh"
+    report_fail "per-tier secret was NOT inherited into $EXPECT_VDIR (cp -a / overlay clobbered it)"
+fi
+
+# stagingdata/current was repointed at v_<target> (so the next code deploy
+# binds its release symlinks to this dir).
+CUR_LINK="$(readlink "$TIER_DIR/stagingdata/current" 2>/dev/null || echo "")"
+if [ "$CUR_LINK" = "$EXPECT_VDIR" ]; then
+    report_pass "stagingdata/current → $EXPECT_VDIR (versioned dir activated before code deploy)"
+else
+    report_fail "stagingdata/current → '$CUR_LINK' (expected '$EXPECT_VDIR')"
+fi
+
+# Stale pre-existing account is GONE from v_<target>: cp -a copied it in,
+# then the per-subdir rsync --delete overlay of accounts/ removed it.
+if [ ! -e "$TIER_DIR/stagingdata/$EXPECT_VDIR/user/accounts/stale.yaml" ]; then
+    report_pass "stale account removed from $EXPECT_VDIR (overlay rsync --delete won over cp -a)"
+else
+    report_fail "stale account survived in $EXPECT_VDIR (overlay did not --delete it)"
 fi
 
 # Blessing marker exists with all seven fields populated.

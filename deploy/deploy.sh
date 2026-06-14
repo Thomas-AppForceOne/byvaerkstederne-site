@@ -735,6 +735,25 @@ bv_remote_run '
     fi
 ' DATA="$DATA_DIR" DEPLOY_ENV="$ENV"
 
+# 3e′. Resolve the LIVE data-version dir — the dir <tier>data/current
+# points at AT DEPLOY TIME. This release binds to it: its symlinks
+# (step 5) wire into <tier>data/<LIVE_VDIR>/..., and release-meta.yaml
+# (step 6) records it as data_version so rollback can resolve which
+# data dir this release was deployed against. Bootstrap (step 3e) just
+# guaranteed current exists, so the readlink succeeds; v0 is the
+# fallback. We re-resolve VDIR INSIDE the step-4/5 remote bodies too
+# (defence in depth — current lives on the remote), but capturing it
+# here is what lets the locally-written meta record the true value.
+LIVE_VDIR="$(bv_remote_run 'VDIR="$(readlink "$DATA/current" 2>/dev/null || echo v0)"; basename "$VDIR"' DATA="$DATA_DIR" 2>/dev/null || echo "v0")"
+LIVE_VDIR="$(basename "$LIVE_VDIR")"
+case "$LIVE_VDIR" in
+    ''|*/*|*..*)
+        echo "  ⚠️  resolved live data-version dir '${LIVE_VDIR}' is unsafe; falling back to v0" >&2
+        LIVE_VDIR="v0"
+        ;;
+esac
+echo "  ✓ Live data-version dir: ${LIVE_VDIR} (release binds to <tier>data/${LIVE_VDIR}/)"
+
 # 3f. read previous release id (target of existing <tier> symlink), if any.
 PREV_RELEASE_ID=""
 if [ "$DOCROOT_STATE" = "symlink" ]; then
@@ -845,13 +864,22 @@ bv_remote_run '
 # symlink without needing to rm anything. Idempotent on second
 # deploy: the `! -f $DD/...` guard skips if data-dir already holds
 # the live operator-modified copy.
+#
+# The data-version dir is whatever <tier>data/current points at AT
+# DEPLOY TIME — the live pointer. VDIR is resolved INSIDE the remote
+# body (current lives on the remote), falling back to v0 if current is
+# absent (first deploy / fresh tier). For every existing tier whose
+# current → v0, VDIR=v0 and this mv dance is byte-identical to before.
 bv_remote_run '
-    if [ -f "$RD/user/config/security.yaml" ] && [ ! -f "$DD/v0/user/config/security.yaml" ]; then
-        mv "$RD/user/config/security.yaml" "$DD/v0/user/config/security.yaml"
+    VDIR="$(readlink "$DD/current" 2>/dev/null || echo v0)"; VDIR="$(basename "$VDIR")"
+    case "$VDIR" in ""|*/*|*..*) echo "FATAL: refusing to move security.yaml into unsafe data-version dir: $VDIR" >&2; exit 1 ;; esac
+    if [ -f "$RD/user/config/security.yaml" ] && [ ! -f "$DD/$VDIR/user/config/security.yaml" ]; then
+        mkdir -p "$DD/$VDIR/user/config"
+        mv "$RD/user/config/security.yaml" "$DD/$VDIR/user/config/security.yaml"
     fi
-    if [ -f "$RD/user/env/$DEPLOY_ENV/config/security.yaml" ] && [ ! -f "$DD/v0/user/env/$DEPLOY_ENV/config/security.yaml" ]; then
-        mkdir -p "$DD/v0/user/env/$DEPLOY_ENV/config"
-        mv "$RD/user/env/$DEPLOY_ENV/config/security.yaml" "$DD/v0/user/env/$DEPLOY_ENV/config/security.yaml"
+    if [ -f "$RD/user/env/$DEPLOY_ENV/config/security.yaml" ] && [ ! -f "$DD/$VDIR/user/env/$DEPLOY_ENV/config/security.yaml" ]; then
+        mkdir -p "$DD/$VDIR/user/env/$DEPLOY_ENV/config"
+        mv "$RD/user/env/$DEPLOY_ENV/config/security.yaml" "$DD/$VDIR/user/env/$DEPLOY_ENV/config/security.yaml"
     fi
 ' RD="$RELEASE_DIR" DD="$DATA_DIR" DEPLOY_ENV="$ENV"
 
@@ -859,21 +887,34 @@ bv_remote_run '
 echo "→ Step 5/8: Wiring release symlinks (per §Symlink contract)..."
 
 # Symlink-wiring on the remote side. Values flow as printf %q-quoted
-# remote-side env exports (rd, ddn, e); the body uses them via "$rd"
+# remote-side env exports (RD, DD, DDN, E); the body uses them via "$RD"
 # etc. so no operator-controlled metacharacter can land in the command
 # line.
+#
+# The four versioned symlinks resolve into <tier>data/<VDIR>/...; VDIR
+# is the dir <tier>data/current points at AT DEPLOY TIME (resolved
+# inside the remote body — current lives on the remote — with a v0
+# fallback). The release binds to that dir for its whole life; rollback
+# stays safe because each release keeps its own pinned symlinks. The
+# `logs` symlink is UNVERSIONED — always <tier>data/logs. For every
+# existing tier whose current → v0, VDIR=v0 and the wiring is byte-
+# identical to before; it only diverges once `current` moves (post-
+# promote). This mirrors bv_wire_release_symlinks (single contract).
 bv_remote_run '
+    VDIR="$(readlink "$DD/current" 2>/dev/null || echo v0)"; VDIR="$(basename "$VDIR")"
+    case "$VDIR" in ""|*/*|*..*) echo "FATAL: refusing to wire symlinks against unsafe data-version dir: $VDIR" >&2; exit 1 ;; esac
     mkdir -p "$RD/user/config" "$RD/user/env/$E/config"
     for p in "$RD/user/accounts" "$RD/user/data" "$RD/user/config/security.yaml" "$RD/user/env/$E/config/security.yaml" "$RD/logs"; do
         if [ -e "$p" ] && [ ! -L "$p" ]; then rm -rf "$p"; fi
     done
-    ln -sfn "../../../$DDN/v0/user/accounts"                              "$RD/user/accounts"
-    ln -sfn "../../../$DDN/v0/user/data"                                  "$RD/user/data"
-    ln -sfn "../../../../$DDN/v0/user/config/security.yaml"               "$RD/user/config/security.yaml"
-    ln -sfn "../../../../../../$DDN/v0/user/env/$E/config/security.yaml"  "$RD/user/env/$E/config/security.yaml"
-    ln -sfn "../../$DDN/logs"                                             "$RD/logs"
+    ln -sfn "../../../$DDN/$VDIR/user/accounts"                              "$RD/user/accounts"
+    ln -sfn "../../../$DDN/$VDIR/user/data"                                  "$RD/user/data"
+    ln -sfn "../../../../$DDN/$VDIR/user/config/security.yaml"               "$RD/user/config/security.yaml"
+    ln -sfn "../../../../../../$DDN/$VDIR/user/env/$E/config/security.yaml"  "$RD/user/env/$E/config/security.yaml"
+    ln -sfn "../../$DDN/logs"                                                "$RD/logs"
 ' \
     RD="$RELEASE_DIR" \
+    DD="$DATA_DIR" \
     DDN="${LAYOUT_NAME}data" \
     E="$ENV"
 
@@ -890,6 +931,31 @@ echo "  ✓ Symlinks wired"
 # APPENDED after step 8 + 10 below, via bv_append_post_swap_meta.
 echo "→ Step 6/8: Writing release-meta.yaml (pre-swap fields)..."
 
+# data_version records the data-version dir THIS release binds to —
+# i.e. LIVE_VDIR, the dir <tier>data/current pointed at when we wired
+# the symlinks (step 5). rollback.sh resolves a rolled-back release's
+# data dir from this field via bv_version_to_dirname / the symlink
+# target, so it must reflect what the symlinks actually point at.
+#
+# previous_data_version is best-effort audit context: the data-version
+# dir the immediately-previous release bound to. Read it out of that
+# release's own meta when we can; fall back to LIVE_VDIR otherwise (in
+# the steady state both are v0).
+PREV_DATA_VERSION="$LIVE_VDIR"
+if [ -n "$PREV_RELEASE_ID" ]; then
+    _prev_meta_dv="$(bv_remote_run '
+        m="$RDIR/$PREV/release-meta.yaml"
+        if [ -f "$m" ]; then
+            grep -E "^data_version:" "$m" | head -n1 \
+                | sed -E "s/^data_version:[[:space:]]*//; s/^\"//; s/\"$//"
+        fi
+    ' RDIR="$RELEASES_DIR" PREV="$PREV_RELEASE_ID" 2>/dev/null || echo "")"
+    if [ -n "$_prev_meta_dv" ]; then
+        PREV_DATA_VERSION="$_prev_meta_dv"
+    fi
+    unset _prev_meta_dv
+fi
+
 # Write the YAML locally to the staging dir, then rsync that single
 # file up. This keeps the YAML-emitter on the local side so it can be
 # unit-tested without ssh.
@@ -900,7 +966,7 @@ bv_write_release_meta_yaml_full \
     "$PREV_RELEASE_ID" \
     "$VERSION" \
     "$BUILD" \
-    "v0" \
+    "$LIVE_VDIR" \
     "$DEPLOYED_AT_ISO" \
     "$DEPLOYED_BY" \
     "$DEPLOYED_FROM_HOST" \
@@ -909,7 +975,7 @@ bv_write_release_meta_yaml_full \
     "$GIT_SHA_FULL" \
     "$GIT_SHA" \
     "$DEPLOYED_IS_DIRTY" \
-    "v0"
+    "$PREV_DATA_VERSION"
 
 _rsync_e="$(bv_rsync_ssh_e "$DEPLOY_PORT")" \
     || { echo "❌  could not build rsync ssh-cmd (sshpass missing?)" >&2; exit 1; }
