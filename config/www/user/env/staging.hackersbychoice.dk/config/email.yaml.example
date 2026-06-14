@@ -1,0 +1,23 @@
+# Per-tier email transport — PROVISIONING TEMPLATE (inactive).
+#
+# Copy to `email.yaml` to activate; the real file is gitignored and provisioned
+# as per-tier state by deploy.sh. Never commit the real file or credentials.
+#
+# This block OVERRIDES the credential-free mailer.smtp block in the
+# repo-tracked config/www/user/config/plugins/email.yaml.
+#
+# Staging tier (staging.hackersbychoice.dk) on one.com:
+#   From identity: noreply@hackersbychoice.dk  (inherits repo default).
+#   Delivery posture: FULL SANDBOX — staging carries real prod member data
+#   (ADR-002) and MUST NEVER deliver to a real inbox. Use a Mailtrap *sandbox*
+#   so the real one.com SMTP/DKIM path is exercised but every message is
+#   captured, not delivered. Do NOT point staging at the live one.com send
+#   host with real delivery enabled.
+mailer:
+  engine: smtp
+  smtp:
+    server: 'sandbox.smtp.mailtrap.io'   # Mailtrap sandbox — captures, never delivers
+    port: 587
+    encryption: tls
+    user: 'REPLACE_WITH_MAILTRAP_SANDBOX_USER'
+    password: 'REPLACE_WITH_MAILTRAP_SANDBOX_PASSWORD'

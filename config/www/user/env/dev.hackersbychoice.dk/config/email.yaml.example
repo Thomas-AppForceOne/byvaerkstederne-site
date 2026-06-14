@@ -1,0 +1,26 @@
+# Per-tier email transport — PROVISIONING TEMPLATE (inactive).
+#
+# This `.example` file is NOT read by Grav. To activate on this tier, copy it
+# to `email.yaml` (drop the `.example` suffix). The real `email.yaml` is
+# gitignored (see /.gitignore) and provisioned as per-tier state — deploy.sh
+# moves it into <tier>data and symlinks it into every release, exactly like
+# security.yaml. Never commit the real file; never put credentials here.
+#
+# SECRETS LIVE ONLY IN THE REAL email.yaml, NEVER IN THIS .example.
+#
+# This block OVERRIDES the credential-free mailer.smtp block in the
+# repo-tracked config/www/user/config/plugins/email.yaml.
+#
+# Dev tier (dev.hackersbychoice.dk) on one.com:
+#   From identity: noreply@hackersbychoice.dk  (inherits repo default; no
+#   override needed here).
+#   Delivery posture: sink in CI (Mailpit). On the deployed dev surface,
+#   provision real one.com SMTP only if you want dev to send.
+mailer:
+  engine: smtp
+  smtp:
+    server: 'send.one.com'        # confirm with one.com SMTP docs
+    port: 587
+    encryption: tls
+    user: 'noreply@hackersbychoice.dk'
+    password: 'REPLACE_WITH_REAL_SMTP_PASSWORD'
