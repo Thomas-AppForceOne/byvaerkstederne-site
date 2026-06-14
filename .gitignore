@@ -116,3 +116,6 @@ config/www/user/env/*/config/security.yaml
 # review-and-plan / execute-fix-plan run artifacts (per-diff scratch — not
 # project artefacts; regenerated each run).
 .review-runs/
+
+# spec-review-and-plan / spec-execute-fix-plan run artifacts (transient).
+.spec-review-runs/
