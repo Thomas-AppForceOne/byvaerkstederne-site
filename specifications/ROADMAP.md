@@ -100,6 +100,14 @@ This is **not** part of the data-lifecycle/deploy chain (steps 2–6) and does n
 
 **Exit criteria:** password reset works end-to-end inside the themed site shell; new accounts are disabled until email-verified and are no longer auto-logged-in; no auth secret is tracked in git and the exposed salt is rotated on every tier that used it; the session cookie carries `Secure`/`HttpOnly`/`SameSite=Lax` on TLS tiers with login still working through the proxy; `pwd_regex`/`username_regex` are pinned and agree with the client-side checks; the registration/login/activation/reset surface has green success- and failure-path Playwright coverage that skips cleanly without credentials.
 
+### 9. Event-card template unification — IMPLEMENTED (independent frontend track)
+
+**Spec:** [archive/event_card_template_unification_specification.md](archive/event_card_template_unification_specification.md)
+
+Unify every event-card rendering path (`event_list`, `atelier_sessions`, `calendar_featured`, `event_highlight`) onto a single canonical Twig partial (`partials/event_card.html.twig`) driven by `inList`/`featured` flags, replacing the bespoke per-template markup and CSS with one container-query-based component. Shipped across two sprints in **v1.1.0** (merge `a8d0b7d`): sprint 1 introduced the partial and migrated the list templates; sprint 2 migrated the two modular/featured templates and deleted the dead `.bv-featured-event*` / `.bv-event-highlight*` / `.bv-event-date*` classes, with Playwright mobile + desktop visual-parity coverage on both.
+
+**Independent of the data-lifecycle chain (steps 2–6) and the CI/auth tracks.** A pure theme/template refactor; depends only on the `.bv-event-row` structure from PR #35. Listed here so the roadmap reflects everything that has shipped.
+
 ---
 
 ## Out-of-order risks
