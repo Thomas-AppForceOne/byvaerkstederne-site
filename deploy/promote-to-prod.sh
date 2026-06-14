@@ -634,19 +634,31 @@ build_activate_local() {
     current_vdir="$(basename "$(readlink "$data_root/current" 2>/dev/null || echo v0)")"
     note "current data-version dir: $current_vdir → building $VDIR"
 
-    if [ -d "$data_root/$VDIR" ]; then
-        # String-rooted under DATA_ROOT; VDIR validated single-component.
-        note "  $VDIR already exists — removing before rebuild"
-        rm -rf "$data_root/$VDIR"
-    fi
-    if [ -d "$data_root/$current_vdir" ]; then
-        note "  cp -a $current_vdir → $VDIR (inherit per-tier secrets/config/env)"
-        cp -a "$data_root/$current_vdir" "$data_root/$VDIR" \
-            || fail_after_prod_touched "cp -a $current_vdir → $VDIR failed" 7
+    if [ "$current_vdir" = "$VDIR" ]; then
+        # current ALREADY points at the target dir — a re-promote at the same
+        # data_version (the steady-state code-only release). rm -rf'ing it
+        # would delete the LIVE prod data dir AND, with no source to cp -a
+        # from, destroy the per-tier secrets in user/config (Grav's salt etc.,
+        # which are gitignored and never shipped in the bundle). Refresh IN
+        # PLACE: the dir already holds the secrets; the trailing mkdir + the
+        # overlay below touch only user/ and the four state subdirs.
+        note "  $VDIR is already current — refreshing in place (secrets preserved)"
     else
-        note "  fresh tier ($current_vdir absent) — creating $VDIR/user skeleton"
-        mkdir -p "$data_root/$VDIR/user" \
-            || fail_after_prod_touched "could not create $data_root/$VDIR/user" 7
+        # Distinct target dir; a pre-existing <VDIR> is a stale build (current
+        # points elsewhere), so the rm -rf is safe and string-rooted.
+        if [ -d "$data_root/$VDIR" ]; then
+            note "  $VDIR already exists (stale, not current) — removing before rebuild"
+            rm -rf "$data_root/$VDIR"
+        fi
+        if [ -d "$data_root/$current_vdir" ]; then
+            note "  cp -a $current_vdir → $VDIR (inherit per-tier secrets/config/env)"
+            cp -a "$data_root/$current_vdir" "$data_root/$VDIR" \
+                || fail_after_prod_touched "cp -a $current_vdir → $VDIR failed" 7
+        else
+            note "  fresh tier ($current_vdir absent) — creating $VDIR/user skeleton"
+            mkdir -p "$data_root/$VDIR/user" \
+                || fail_after_prod_touched "could not create $data_root/$VDIR/user" 7
+        fi
     fi
 
     mkdir -p "$data_root/$VDIR/user"
@@ -689,19 +701,26 @@ else
 
     # (c) build a COMPLETE v_<target> over SSH. VDIR + CURRENT_VDIR are
     # validated single components; DATA_ROOT is operator-config. Each path
-    # is printf %q-quoted into the remote command. The rm -rf is
-    # string-rooted under DATA_ROOT/<VDIR> and only fires on a pre-existing
-    # rebuild of the SAME target dir.
-    if ! ssh_prod "
-        set -e
-        if [ -d $(printf %q "$DATA_ROOT/$VDIR") ]; then rm -rf $(printf %q "$DATA_ROOT/$VDIR"); fi
-        if [ -d $(printf %q "$DATA_ROOT/$CURRENT_VDIR") ]; then
-            cp -a $(printf %q "$DATA_ROOT/$CURRENT_VDIR") $(printf %q "$DATA_ROOT/$VDIR")
-        else
-            mkdir -p $(printf %q "$DATA_ROOT/$VDIR/user")
+    # is printf %q-quoted into the remote command.
+    if [ "$CURRENT_VDIR" = "$VDIR" ]; then
+        # Target is already current — refresh in place. rm -rf'ing it would
+        # delete the live prod data dir and (no cp source) destroy user/config
+        # secrets; the overlay below refreshes only the four state subdirs.
+        note "  $VDIR is already current — refreshing in place (secrets preserved)"
+    else
+        # Distinct target dir; a pre-existing <VDIR> is a stale build (current
+        # points elsewhere), so the rm -rf is safe and string-rooted.
+        if ! ssh_prod "
+            set -e
+            if [ -d $(printf %q "$DATA_ROOT/$VDIR") ]; then rm -rf $(printf %q "$DATA_ROOT/$VDIR"); fi
+            if [ -d $(printf %q "$DATA_ROOT/$CURRENT_VDIR") ]; then
+                cp -a $(printf %q "$DATA_ROOT/$CURRENT_VDIR") $(printf %q "$DATA_ROOT/$VDIR")
+            else
+                mkdir -p $(printf %q "$DATA_ROOT/$VDIR/user")
+            fi
+        "; then
+            fail_after_prod_touched "building $VDIR on prod (rm/cp -a) failed" 7
         fi
-    "; then
-        fail_after_prod_touched "building $VDIR on prod (rm/cp -a) failed" 7
     fi
     ssh_prod "mkdir -p $(printf %q "$DATA_ROOT/$VDIR/user")" \
         || fail_after_prod_touched "could not create $DATA_ROOT/$VDIR/user on prod" 7

@@ -33,17 +33,29 @@ release.
 
 1. `CURRENT_VDIR = basename(readlink current)` (`v0` fallback).
 2. `VDIR = bv_version_to_dirname(TARGET_VERSION)` (`0.2.0` → `v_0_2_0`).
-3. `cp -a <CURRENT_VDIR> <VDIR>` to inherit the per-tier
-   secrets/config/env, then overlay the migrated `accounts/data/pages/
-   uploads` via per-subdir `rsync --delete`. (Fresh tier with no
-   `<CURRENT_VDIR>`: `mkdir` the `<VDIR>/user` skeleton instead.)
+3. Build `<VDIR>` so it carries the per-tier secrets/config/env, then
+   overlay the migrated `accounts/data/pages/uploads` via per-subdir
+   `rsync --delete`. Three cases by how `<VDIR>` relates to the live dir:
+   - **`CURRENT_VDIR == VDIR`** (a re-promote at the same `data_version`
+     — the steady-state code-only release): the target IS the live dir,
+     so it is refreshed **in place**. It is never `rm`'d (doing so would
+     delete the live data dir and, with no source left to copy from,
+     destroy `user/config`'s secrets); the overlay touches only the four
+     state subdirs, so the secrets are preserved untouched.
+   - **`CURRENT_VDIR != VDIR`, `<CURRENT_VDIR>` exists**: `cp -a
+     <CURRENT_VDIR> <VDIR>` to inherit the secrets, then overlay. Any
+     pre-existing `<VDIR>` here is a stale build (not what `current`
+     points at), so it is `rm`'d first.
+   - **Fresh tier** (no `<CURRENT_VDIR>`): `mkdir` the `<VDIR>/user`
+     skeleton, then overlay.
 4. `ln -sfn <VDIR> current`.
 5. `deploy.sh staging --skip-data-migration` — wires the new release to
    `<VDIR>`.
 
 Rollback is safe because each release keeps its own symlinks pinned to
-the dir it deployed with (those dirs are preserved, never deleted by a
-later promote unless the same target is being rebuilt). Data rollback is
+the dir it deployed with. A later promote only ever `rm`s a `<VDIR>`
+that `current` does NOT point at (a stale build); the dir `current`
+points at is refreshed in place, never deleted. Data rollback is
 therefore automatic on the docroot swap; `rollback.sh` additionally
 repoints `current` for bookkeeping, resolving the rolled-back release's
 vdir from its `user/accounts` symlink target (authoritative) or, failing
@@ -83,14 +95,17 @@ This supersedes the interim "refresh `v0` in place" behaviour in
   `v0`); 3-arg callers are unchanged. `deploy.sh` resolves `VDIR` inside
   its remote bodies (the pointer lives on the remote) and records the
   bound dir as `release-meta.yaml` `data_version`.
-- Promote's destructive operations (`rm -rf` of a pre-existing rebuild
-  target, per-subdir `rsync --delete` overlay) are string-rooted under
-  `DATA_ROOT` with `VDIR` validated non-empty, quoted, and never run
-  against an empty variable — the wipe-class invariants from the
-  atomic-release library are preserved.
+- Promote's destructive operations (`rm -rf` of a stale `<VDIR>` that
+  `current` does NOT point at, per-subdir `rsync --delete` overlay) are
+  string-rooted under `DATA_ROOT` with `VDIR` validated non-empty,
+  quoted, and never run against an empty variable — the wipe-class
+  invariants from the atomic-release library are preserved. The dir
+  `current` points at is never `rm`'d.
 - The per-tier secrets in `<vdir>/user/config` and
-  `<vdir>/user/env/<env>/config` are inherited by the `cp -a` and never
-  overwritten by the overlay (which touches only the four state subdirs).
+  `<vdir>/user/env/<env>/config` are preserved across every promote: by
+  the `cp -a` when building a new dir, and by the in-place refresh when
+  the target is already current. The overlay touches only the four state
+  subdirs, never `user/config`.
 - Versioned data dirs accumulate; retention/pruning of old
   `<tier>data/v_*` dirs remains out of scope (still deferred, as noted in
   `bv_prune_old_releases`).

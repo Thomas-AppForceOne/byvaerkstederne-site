@@ -267,6 +267,63 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────────
+# REGRESSION (CURRENT_VDIR == VDIR): a re-promote at the SAME data_version
+# — the steady-state code-only release — must NOT destroy the per-tier
+# secret. The success-path run above left stagingdata/current → $EXPECT_VDIR,
+# so a second promote now resolves CURRENT_VDIR == VDIR. The pre-fix code did
+# `rm -rf <VDIR>` (the LIVE dir) and, with no cp -a source left, rebuilt an
+# empty skeleton — silently dropping user/config/security.yaml. The fix
+# refreshes the dir IN PLACE. A fresh fake-clock epoch gives the second run
+# its own backup archive (full pipeline, no --from-backup shortcut).
+# ──────────────────────────────────────────────────────────────────────
+echo "→ regression: re-promote at same data_version (CURRENT_VDIR == VDIR) preserves secrets"
+# Stamp a distinct sentinel into the LIVE served dir's secret and plant a new
+# stale account, so we prove run 2 preserved THIS dir's user/config and still
+# ran the overlay --delete over accounts/.
+echo 'salt: survive-round-2' > "$TIER_DIR/stagingdata/$EXPECT_VDIR/user/config/security.yaml"
+echo 'username: stale2'       > "$TIER_DIR/stagingdata/$EXPECT_VDIR/user/accounts/stale2.yaml"
+
+OUT_LOG2="$TMP/promote-success-2.out"
+set +e
+BACKUP_FAKE_NOW_EPOCH="1777466100" PROMOTE_LOCAL_TIER_DIR="$TIER_DIR" \
+    "$PROMOTE_SH" --yes >"$OUT_LOG2" 2>&1
+RC2=$?
+set -e
+if [ "$RC2" -eq 0 ]; then
+    report_pass "second promote (same data_version) exits 0"
+else
+    report_fail "second promote exited $RC2 (expected 0)"
+    tail -40 "$OUT_LOG2" >&2
+fi
+# The in-place refresh path was taken (no rm -rf of the live dir).
+if grep -q "is already current — refreshing in place" "$OUT_LOG2"; then
+    report_pass "second promote took the in-place refresh path (CURRENT_VDIR == VDIR)"
+else
+    report_fail "second promote did not report the in-place refresh path"
+fi
+# THE BUG CATCHER: the per-tier secret in the live served dir survived.
+SEC2="$TIER_DIR/stagingdata/$EXPECT_VDIR/user/config/security.yaml"
+if [ -f "$SEC2" ] && grep -q 'survive-round-2' "$SEC2"; then
+    report_pass "per-tier secret preserved across a same-version re-promote"
+else
+    report_fail "per-tier secret DESTROYED by the same-version re-promote (regression)"
+fi
+# Data still refreshed: real accounts present, the planted stale account gone.
+if [ -f "$TIER_DIR/stagingdata/$EXPECT_VDIR/user/accounts/alice.yaml" ] \
+    && [ ! -e "$TIER_DIR/stagingdata/$EXPECT_VDIR/user/accounts/stale2.yaml" ]; then
+    report_pass "in-place overlay still refreshes state (alice present, planted stale removed)"
+else
+    report_fail "in-place overlay did not refresh accounts as expected"
+fi
+# current still points at the target dir.
+CUR_LINK2="$(readlink "$TIER_DIR/stagingdata/current" 2>/dev/null || echo "")"
+if [ "$CUR_LINK2" = "$EXPECT_VDIR" ]; then
+    report_pass "stagingdata/current still → $EXPECT_VDIR after the re-promote"
+else
+    report_fail "stagingdata/current → '$CUR_LINK2' after re-promote (expected '$EXPECT_VDIR')"
+fi
+
+# ──────────────────────────────────────────────────────────────────────
 # FAILURE PATH (a): --from-backup <nonexistent> → non-zero, no blessing,
 # and a pre-existing stale blessing is removed (no false positive).
 # ──────────────────────────────────────────────────────────────────────

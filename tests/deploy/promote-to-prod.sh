@@ -607,6 +607,61 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────────
+# REGRESSION (CURRENT_VDIR == VDIR): a re-promote at the SAME data_version
+# — the steady-state code-only prod release — must NOT destroy the prod
+# per-tier secret. The build run above left proddata/current → $EXPECT_VDIR,
+# so a second promote now resolves CURRENT_VDIR == VDIR. The pre-fix code did
+# `rm -rf <VDIR>` (the LIVE prod dir) and rebuilt an empty skeleton — dropping
+# user/config/security.yaml (Grav's salt etc., gitignored + never shipped in
+# the bundle). The fix refreshes the dir IN PLACE. A fresh fake-clock epoch
+# gives the second run its own pre-promotion backup archive.
+# ──────────────────────────────────────────────────────────────────────
+echo "→ regression: re-promote at same data_version (CURRENT_VDIR == VDIR) preserves the prod secret"
+# Sentinel into the LIVE served dir's secret + a planted stale account.
+echo 'salt: survive-round-2' > "$TIER_BUILD/proddata/$EXPECT_VDIR/user/config/security.yaml"
+echo 'username: stale2'       > "$TIER_BUILD/proddata/$EXPECT_VDIR/user/accounts/stale2.yaml"
+git -C "$WORK_REPO" checkout -q release/v9.9.9
+# Run 1's flag-sync moved HEAD; rebuild the matching blessing. The prod
+# features are already == staging, so run 2's flag sync is a no-op (HEAD
+# stays put and the blessing stays valid through the run).
+regen_good_bless
+set +e
+out="$(BACKUP_FAKE_NOW_EPOCH="1781136900" \
+    PROMOTE_PROD_LOCAL_TIER_DIR="$TIER_BUILD" \
+    PROMOTE_PROD_LOCAL_BLESSING_FILE="$GOOD_BLESS" \
+    PROMOTE_PROD_LOCAL_PROD_FEATURES="$PROD_LIVE_NODRIFT" \
+    PROMOTE_PROD_LOG_FILE="$JRNL_BUILD" \
+    "$PROMOTE_WR" --reason "regression: same-version re-promote" 2>&1)"
+rc=$?
+set -e
+if [ "$rc" -eq 0 ]; then
+    report_pass "second prod promote (same data_version) exits 0"
+else
+    report_fail "second prod promote exited $rc (expected 0)"
+    printf '%s\n' "$out" | tail -25 >&2
+fi
+# The in-place refresh path was taken (no rm -rf of the live prod dir).
+if printf '%s' "$out" | grep -q "is already current — refreshing in place"; then
+    report_pass "second prod promote took the in-place refresh path (CURRENT_VDIR == VDIR)"
+else
+    report_fail "second prod promote did not report the in-place refresh path"
+fi
+# THE BUG CATCHER: the live served dir's per-tier secret survived.
+SEC2="$TIER_BUILD/proddata/$EXPECT_VDIR/user/config/security.yaml"
+if [ -f "$SEC2" ] && grep -q 'survive-round-2' "$SEC2"; then
+    report_pass "prod per-tier secret preserved across a same-version re-promote"
+else
+    report_fail "prod per-tier secret DESTROYED by the same-version re-promote (regression)"
+fi
+# Data still refreshed: real accounts present, the planted stale account gone.
+if [ -f "$TIER_BUILD/proddata/$EXPECT_VDIR/user/accounts/alice.yaml" ] \
+    && [ ! -e "$TIER_BUILD/proddata/$EXPECT_VDIR/user/accounts/stale2.yaml" ]; then
+    report_pass "prod in-place overlay still refreshes state (alice present, planted stale removed)"
+else
+    report_fail "prod in-place overlay did not refresh accounts as expected"
+fi
+
+# ──────────────────────────────────────────────────────────────────────
 # ROLLBACK-PROD — refuse-without-flag + local-mode restore (wipe+replace).
 # Reuses the throwaway repo's deploy/ and the backup fixture in $STORE.
 # The build run above produced at least one prod-*.tar.gz.age archive; we

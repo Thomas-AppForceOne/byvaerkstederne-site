@@ -416,21 +416,31 @@ if [ "$LOCAL_MODE" = "1" ]; then
     note "current data-version dir: $CURRENT_VDIR → building $VDIR"
 
     # (c) build a COMPLETE v_<target> inheriting per-tier secrets/config/env.
-    if [ -d "$DATA_ROOT/$VDIR" ]; then
-        # String-rooted under DATA_ROOT; VDIR validated non-empty + single
-        # component above. Quoted. Rebuilding the target's own dir is the
-        # only case we rm — a stale partial build from a prior failed promote.
-        note "  $VDIR already exists — removing before rebuild"
-        rm -rf "$DATA_ROOT/$VDIR"
-    fi
-    if [ -d "$DATA_ROOT/$CURRENT_VDIR" ]; then
-        note "  cp -a $CURRENT_VDIR → $VDIR (inherit per-tier secrets/config/env)"
-        cp -a "$DATA_ROOT/$CURRENT_VDIR" "$DATA_ROOT/$VDIR" \
-            || fail_with_scratch "cp -a $CURRENT_VDIR → $VDIR failed" 6
+    if [ "$CURRENT_VDIR" = "$VDIR" ]; then
+        # current ALREADY points at the target dir — a re-promote at the same
+        # data_version (the steady-state code-only release). rm -rf'ing it
+        # would delete the LIVE data dir AND, because there is then no source
+        # to cp -a from, destroy the per-tier secrets in user/config. Refresh
+        # IN PLACE: the dir already holds the secrets; the trailing mkdir +
+        # the overlay below touch only user/ and the four state subdirs. This
+        # is the ONLY safe path when the target is already current.
+        note "  $VDIR is already current — refreshing in place (secrets preserved)"
     else
-        note "  fresh tier ($CURRENT_VDIR absent) — creating $VDIR/user skeleton"
-        mkdir -p "$DATA_ROOT/$VDIR/user" \
-            || fail_with_scratch "could not create $DATA_ROOT/$VDIR/user" 6
+        # Distinct target dir. Any pre-existing <VDIR> here is NOT what current
+        # points at (CURRENT_VDIR != VDIR), so it is a stale build, safe to rm.
+        if [ -d "$DATA_ROOT/$VDIR" ]; then
+            note "  $VDIR already exists (stale, not current) — removing before rebuild"
+            rm -rf "$DATA_ROOT/$VDIR"
+        fi
+        if [ -d "$DATA_ROOT/$CURRENT_VDIR" ]; then
+            note "  cp -a $CURRENT_VDIR → $VDIR (inherit per-tier secrets/config/env)"
+            cp -a "$DATA_ROOT/$CURRENT_VDIR" "$DATA_ROOT/$VDIR" \
+                || fail_with_scratch "cp -a $CURRENT_VDIR → $VDIR failed" 6
+        else
+            note "  fresh tier ($CURRENT_VDIR absent) — creating $VDIR/user skeleton"
+            mkdir -p "$DATA_ROOT/$VDIR/user" \
+                || fail_with_scratch "could not create $DATA_ROOT/$VDIR/user" 6
+        fi
     fi
 
     # (d) overlay the migrated snapshot — accounts/data/pages/uploads only.
@@ -472,19 +482,26 @@ else
 
     # (c) build a COMPLETE v_<target> over SSH. Both VDIR and CURRENT_VDIR
     # are validated single components; DATA_ROOT is operator-config. Each
-    # path is printf %q-quoted into the remote command. The rm -rf is
-    # string-rooted under DATA_ROOT/<VDIR> and only fires on a pre-existing
-    # rebuild of the SAME target dir.
-    if ! ssh_run "
-        set -e
-        if [ -d $(printf %q "$DATA_ROOT/$VDIR") ]; then rm -rf $(printf %q "$DATA_ROOT/$VDIR"); fi
-        if [ -d $(printf %q "$DATA_ROOT/$CURRENT_VDIR") ]; then
-            cp -a $(printf %q "$DATA_ROOT/$CURRENT_VDIR") $(printf %q "$DATA_ROOT/$VDIR")
-        else
-            mkdir -p $(printf %q "$DATA_ROOT/$VDIR/user")
+    # path is printf %q-quoted into the remote command.
+    if [ "$CURRENT_VDIR" = "$VDIR" ]; then
+        # Target is already current — refresh in place. rm -rf'ing it would
+        # delete the live data dir and (no cp source) destroy user/config
+        # secrets; the overlay below refreshes only the four state subdirs.
+        note "  $VDIR is already current — refreshing in place (secrets preserved)"
+    else
+        # Distinct target dir; a pre-existing <VDIR> is a stale build (current
+        # points elsewhere), so the rm -rf is safe and string-rooted.
+        if ! ssh_run "
+            set -e
+            if [ -d $(printf %q "$DATA_ROOT/$VDIR") ]; then rm -rf $(printf %q "$DATA_ROOT/$VDIR"); fi
+            if [ -d $(printf %q "$DATA_ROOT/$CURRENT_VDIR") ]; then
+                cp -a $(printf %q "$DATA_ROOT/$CURRENT_VDIR") $(printf %q "$DATA_ROOT/$VDIR")
+            else
+                mkdir -p $(printf %q "$DATA_ROOT/$VDIR/user")
+            fi
+        "; then
+            fail_with_scratch "building $VDIR on staging (rm/cp -a) failed" 6
         fi
-    "; then
-        fail_with_scratch "building $VDIR on staging (rm/cp -a) failed" 6
     fi
     ssh_run "mkdir -p $(printf %q "$DATA_ROOT/$VDIR/user")" \
         || fail_with_scratch "could not create $DATA_ROOT/$VDIR/user on staging" 6
