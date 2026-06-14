@@ -41,14 +41,15 @@ elif command -v git >/dev/null 2>&1; then
   git -C "$WORKTREE_ABS" checkout -- config/www/user/config/plugins/email.yaml 2>/dev/null || true
 fi
 
-# Restore the hardened session.secure: true (WI-4) relaxed by mailpit-up.sh.
+# Legacy cleanup: older mailpit-up.sh relaxed session.secure and backed
+# system.yaml up to .gan/. That relaxation is gone (system.yaml no longer
+# hard-forces secure), but restore any stale backup left by an old run so the
+# working tree can't be left modified.
 SYSTEM_CFG="$WORKTREE_ABS/config/www/user/config/system.yaml"
 SYSTEM_BAK="$WORKTREE_ABS/.gan/system.yaml.committed.bak"
 if [ -f "$SYSTEM_BAK" ]; then
   cp "$SYSTEM_BAK" "$SYSTEM_CFG"
   rm -f "$SYSTEM_BAK"
-elif command -v git >/dev/null 2>&1; then
-  git -C "$WORKTREE_ABS" checkout -- config/www/user/config/system.yaml 2>/dev/null || true
 fi
 if docker ps --filter "name=^${GRAV_CONTAINER_NAME}\$" --format '{{.Names}}' | grep -qx "$GRAV_CONTAINER_NAME"; then
   docker exec -u abc -w /app/www/public "$GRAV_CONTAINER_NAME" bin/grav clearcache >/dev/null 2>&1 || true

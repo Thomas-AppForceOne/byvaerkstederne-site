@@ -97,8 +97,10 @@ test.describe('Login (WI-6)', () => {
   });
 
   test('failure: repeated wrong passwords hit the rate limiter', async ({ page }) => {
-    // Use a throwaway username so we trip the per-username limiter without
-    // locking out pw-test-user for any sibling/subsequent test.
+    // Use a throwaway username for the attempts. The limiter is IP-keyed (see
+    // resetLoginRateLimit above), so this doesn't spare pw-test-user on its
+    // own — the beforeEach reset + serial mode is what keeps the sibling
+    // success-path test from being locked out.
     const victim = `pwratelimit${Math.random().toString(36).slice(2, 6)}`;
     let limited = false;
     // The limiter is 5 / 10 min; fire past the threshold and look for the

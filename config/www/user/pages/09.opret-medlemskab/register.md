@@ -13,6 +13,16 @@ form:
           autocomplete: name
           validate:
             required: true
+            # Forbid angle brackets so the name cannot inject markup. The login
+            # plugin interpolates fullname into the activation flash
+            # (PLUGIN_LOGIN.ACTIVATION_NOTICE_MSG), which the site renders via
+            # partials/messages.html.twig with |raw — without this gate a name
+            # like "<img onerror=…>" would execute on the post-register redirect.
+            # [^<>] still allows every real name (Unicode letters, spaces,
+            # hyphens, apostrophes, periods); enforced server-side by the forms
+            # plugin and client-side via the HTML5 pattern attribute.
+            pattern: "^[^<>]{1,80}$"
+            message: "Navnet må ikke indeholde tegnene < eller >."
 
         - name: email
           type: email

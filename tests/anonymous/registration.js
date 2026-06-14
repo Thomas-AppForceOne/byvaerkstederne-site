@@ -152,6 +152,28 @@ test.describe('Registration & activation (WI-2/WI-6)', () => {
     expect(page.url(), 'invalid username must keep us on the form').toContain('/opret-medlemskab');
   });
 
+  test('failure: fullname containing angle brackets is rejected server-side (XSS gate)', async ({
+    page,
+  }) => {
+    const who = uniqueSignup('x');
+    await page.goto('/opret-medlemskab');
+    await disableClientValidation(page); // force the markup-bearing name to the server
+    // A name that would inject markup into the |raw activation flash.
+    await page.fill('input[name="data[fullname]"]', '<img src=x onerror=alert(1)>');
+    await page.fill('input[name="data[email]"]', who.email);
+    await page.fill('input[name="data[username]"]', who.username);
+    await page.fill('input[name="data[password1]"]', who.password);
+    await page.fill('input[name="data[password2]"]', who.password);
+    await Promise.all([
+      page.waitForLoadState('networkidle'),
+      page.click('button[type="submit"], input[type="submit"]'),
+    ]);
+    expect(
+      accountExists(who.username),
+      'a fullname with < > must be rejected by the server pattern (no account)',
+    ).toBe(false);
+  });
+
   test('failure: mismatched password confirmation is rejected (WI-7, no account)', async ({ page }) => {
     const who = uniqueSignup('e');
     await page.goto('/opret-medlemskab');
@@ -227,8 +249,13 @@ test.describe('Registration & activation (WI-2/WI-6)', () => {
     const link = extractLink(msg, /\/activate_user\/[^\s"'<>)]+/);
     expect(link).not.toBeNull();
 
-    // Mutate one hex character of the token.
-    const bad = /** @type {string} */ (link).replace(/token:([a-f0-9]{31})[a-f0-9]/, 'token:$1f');
+    // Mutate the token's last hex character to a guaranteed-different value.
+    // (A fixed replacement char would be a no-op ~1/16 of the time, when the
+    // original char already equals it — flaky. Map f->e, everything else ->f.)
+    const bad = /** @type {string} */ (link).replace(
+      /(token:[a-f0-9]{31})([a-f0-9])/,
+      (_m, prefix, last) => prefix + (last === 'f' ? 'e' : 'f'),
+    );
     expect(bad, 'tampered link must differ from the real one').not.toBe(link);
     await page.goto(bad);
     expect(accountState(who.username), 'tampered token must leave the account disabled').toBe('disabled');

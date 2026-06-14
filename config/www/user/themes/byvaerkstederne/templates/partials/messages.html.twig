@@ -21,6 +21,13 @@
     {% for m in bv_all_messages %}
         {% set bg = m.scope == 'error' ? '#ffdad6' : (m.scope == 'success' ? '#d8f3dc' : (m.scope == 'warning' ? '#fff3cd' : '#e7f0fd')) %}
         {% set fg = m.scope == 'error' ? '#93000a' : (m.scope == 'success' ? '#1b4332' : '#1f2933') %}
+        {# |raw matches Grav's stock messages partial (flashes may carry
+           intentional markup, e.g. links). Any USER-CONTROLLED value that
+           reaches a flash must therefore be gated at the source: the only such
+           value on the auth surface is the registration fullname, which is
+           constrained to exclude angle brackets in register.md so it cannot
+           inject markup here. Do not interpolate unsanitised user input into a
+           flash rendered by this partial. #}
         <div class="bv-message bv-message--{{ m.scope }}" style="background: {{ bg }}; color: {{ fg }}; padding: var(--space-4) var(--space-5); margin-bottom: var(--space-3); font-weight: 600; border-left: 6px solid currentColor;">
             {{ m.message|raw }}
         </div>

@@ -276,9 +276,9 @@ fi
 # (WI-1). This is the operator-provisioned SMTP-credentials file. The
 # symlink wired below must point at it and resolve, and it must survive
 # subsequent deploys exactly as the security.yaml pair does.
-mkdir -p "$DATA_DIR/v0/user/env/$TIER/config"
+mkdir -p "$DATA_DIR/v0/user/env/$TIER/config/plugins"
 printf 'mailer:\n  smtp:\n    server: mailpit\n    port: 1025\n' \
-    > "$DATA_DIR/v0/user/env/$TIER/config/email.yaml"
+    > "$DATA_DIR/v0/user/env/$TIER/config/plugins/email.yaml"
 
 # Step 5: wire symlinks.
 bv_wire_release_symlinks "$RELEASE_DIR" "$DATA_DIR" "$TIER"
@@ -288,7 +288,7 @@ for sym in \
     "user/data" \
     "user/config/security.yaml" \
     "user/env/$TIER/config/security.yaml" \
-    "user/env/$TIER/config/email.yaml" \
+    "user/env/$TIER/config/plugins/email.yaml" \
     "logs"
 do
     if [ -L "$RELEASE_DIR/$sym" ]; then
@@ -339,8 +339,8 @@ fi
 # deploy preservation — same property the security.yaml line asserts,
 # extended to email.yaml). Reading through the symlink must yield the
 # provisioned content.
-if [ -f "$RELEASE_DIR/user/env/$TIER/config/email.yaml" ] \
-   && grep -q '^    server: mailpit$' "$RELEASE_DIR/user/env/$TIER/config/email.yaml"; then
+if [ -f "$RELEASE_DIR/user/env/$TIER/config/plugins/email.yaml" ] \
+   && grep -q '^    server: mailpit$' "$RELEASE_DIR/user/env/$TIER/config/plugins/email.yaml"; then
     check "email.yaml symlink resolves to the provisioned per-tier file (WI-1)" ok
 else
     check "email.yaml symlink resolves to the provisioned per-tier file (WI-1)" fail
@@ -488,8 +488,8 @@ bv_wire_release_symlinks "$RELEASE_DIR_2" "$DATA_DIR" "$TIER"
 # new release, and the rsync (which excludes the data dir) never touched
 # it. Read through the second release's symlink and confirm the content is
 # byte-identical to what deploy #1 saw.
-if [ -f "$RELEASE_DIR_2/user/env/$TIER/config/email.yaml" ] \
-   && grep -q '^    server: mailpit$' "$RELEASE_DIR_2/user/env/$TIER/config/email.yaml"; then
+if [ -f "$RELEASE_DIR_2/user/env/$TIER/config/plugins/email.yaml" ] \
+   && grep -q '^    server: mailpit$' "$RELEASE_DIR_2/user/env/$TIER/config/plugins/email.yaml"; then
     check "second deploy preserves the per-tier email.yaml (WI-1)" ok
 else
     check "second deploy preserves the per-tier email.yaml (WI-1)" fail
@@ -925,20 +925,20 @@ ABSENT_DATA="$ABSENT_PARENT/${TIER}data"
 ABSENT_RELEASES="$ABSENT_PARENT/${TIER}-releases"
 mkdir -p "$ABSENT_PARENT"
 bv_bootstrap_data_dir "$ABSENT_DATA" "$TIER"
-# Deliberately do NOT create $ABSENT_DATA/v0/user/env/$TIER/config/email.yaml.
+# Deliberately do NOT create $ABSENT_DATA/v0/user/env/$TIER/config/plugins/email.yaml.
 ABSENT_REL_ID="$(bv_compute_release_id "ab5en70")"
 ABSENT_REL_DIR="$ABSENT_RELEASES/$ABSENT_REL_ID"
 mkdir -p "$ABSENT_REL_DIR"
 bv_wire_release_symlinks "$ABSENT_REL_DIR" "$ABSENT_DATA" "$TIER"
 
 # (a) The email.yaml symlink exists as a symlink ...
-if [ -L "$ABSENT_REL_DIR/user/env/$TIER/config/email.yaml" ]; then
+if [ -L "$ABSENT_REL_DIR/user/env/$TIER/config/plugins/email.yaml" ]; then
     check "absent-tier: email.yaml symlink is created even when target missing" ok
 else
     check "absent-tier: email.yaml symlink is created even when target missing" fail
 fi
 # ... and dangles (target does not exist) — allowed, not fatal.
-if [ ! -e "$ABSENT_REL_DIR/user/env/$TIER/config/email.yaml" ]; then
+if [ ! -e "$ABSENT_REL_DIR/user/env/$TIER/config/plugins/email.yaml" ]; then
     check "absent-tier: email.yaml symlink dangles (allowed, not fatal)" ok
 else
     check "absent-tier: email.yaml symlink should dangle when unprovisioned" fail

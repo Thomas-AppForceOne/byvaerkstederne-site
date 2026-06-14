@@ -63,13 +63,15 @@ for i in $(seq 1 30); do
 done
 
 # Inject the test SMTP override so the real login + email plugin path sends
-# captured mail to Mailpit. We override the USER config_plugins email.yaml in
-# place — Grav 1.7's env-config merge does not apply per-host overrides to
-# plugin configs, so the env path (user/env/<host>/config/email.yaml) that
-# WI-1 uses for production tier secrets is not honoured for the SMTP block at
-# runtime; the user config_plugins file is. This is the "test environment's
-# email.yaml overrides the SMTP block" from WI-6, applied at the layer Grav
-# actually reads.
+# captured mail to Mailpit. We override the BASE user/config/plugins/email.yaml
+# in place rather than a per-tier env override: the local container is reached
+# at 127.0.0.1 / localhost, which has no user/env/<host>/ directory, so Grav's
+# environment merge contributes nothing and only the base plugins.email config
+# applies. (On a real tier the per-tier override lives at
+# user/env/<host>/config/plugins/email.yaml and DOES merge into plugins.email —
+# same namespace, just supplied by the environment layer.) This is the "test
+# environment's email.yaml overrides the SMTP block" from WI-6, applied at the
+# layer Grav actually reads for the local host.
 #
 # Because /config is volume-mounted, this write touches the host tree. We back
 # up the committed credential-free file first; scripts/mailpit-down.sh restores
@@ -100,29 +102,15 @@ mailer:
     password: ''
 YAML
 
-# Relax the hardened session cookie for LOCAL HTTP testing (WI-4). The
-# committed system.yaml sets session.secure: true for the TLS tiers; over the
-# worktree container's plain HTTP a Secure cookie is set but never sent back by
-# the browser, so authenticated flows can't hold a session. Flip secure -> false
-# in the container's system.yaml for the test run only. Backed up to .gan/ and
-# restored by scripts/mailpit-down.sh. The production hardening in the repo file
-# is unchanged. (The X-Forwarded-Proto: https cookie-flag assertions still run
-# against the committed value via a probe request, before this relaxation
-# matters — see tests/anonymous/session-cookie.js, which reads the live header.)
-SYSTEM_CFG="$WORKTREE_ABS/config/www/user/config/system.yaml"
-SYSTEM_BAK="$WORKTREE_ABS/.gan/system.yaml.committed.bak"
-if [ -f "$SYSTEM_CFG" ] && [ ! -f "$SYSTEM_BAK" ]; then
-  cp "$SYSTEM_CFG" "$SYSTEM_BAK"
-fi
-# Only rewrite the secure: true line inside the session: block.
-if grep -qE '^\s*secure:\s*true' "$SYSTEM_CFG"; then
-  # macOS/BSD sed in-place
-  sed -i.tmp -E 's/^([[:space:]]*)secure:[[:space:]]*true/\1secure: false/' "$SYSTEM_CFG"
-  rm -f "$SYSTEM_CFG.tmp"
-fi
+# NOTE: no session.secure relaxation is needed. The committed system.yaml no
+# longer hard-forces secure: true — Grav emits the Secure flag per-scheme
+# (secure_https + X-Forwarded-Proto), so over the worktree container's plain
+# HTTP (no XFP) the session cookie is NOT Secure and authenticated flows hold a
+# session out of the box. session-cookie.js still proves the TLS-tier Secure
+# behaviour via an X-Forwarded-Proto: https probe.
 
 if docker ps --filter "name=^${GRAV_CONTAINER_NAME}\$" --format '{{.Names}}' | grep -qx "$GRAV_CONTAINER_NAME"; then
-  echo "Pointed email.yaml at mailpit:1025 and relaxed session.secure for HTTP tests (backups in .gan/); clearing Grav cache..."
+  echo "Pointed email.yaml at mailpit:1025 (backup in .gan/); clearing Grav cache..."
   docker exec -u abc -w /app/www/public "$GRAV_CONTAINER_NAME" bin/grav clearcache >/dev/null 2>&1 || true
 else
   echo "⚠️  Grav container $GRAV_CONTAINER_NAME not running — start it first with scripts/grav-up.sh" >&2

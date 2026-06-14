@@ -5,17 +5,21 @@
 #
 # The SMTP transport block (server/port/user/password/encryption) is
 # provisioned PER TIER, out of band, in the tier's gitignored
-#   config/www/user/env/<host>/config/email.yaml
-# exactly as security.yaml is. deploy.sh wires that per-tier file into
-# each release via the §Symlink contract (see deploy/deploy.sh and
-# deploy/lib/atomic-release.sh). An operator- or hand-placed env email.yaml
-# that deploy.sh does not know about is never linked into a release, so the
-# deploy.sh automation — not manual placement — is the supported path.
+#   config/www/user/env/<host>/config/plugins/email.yaml
+# It sits under config/plugins/ (NOT directly under config/) so Grav's
+# environment merge folds it into the plugins.email namespace and it actually
+# overrides this file at runtime; a file directly under env/<host>/config/
+# would map to a dead top-level `email` namespace the plugin never reads.
+# deploy.sh wires that per-tier file into each release via the §Symlink
+# contract (see deploy/deploy.sh and deploy/lib/atomic-release.sh). An
+# operator- or hand-placed env email.yaml that deploy.sh does not know about
+# is never linked into a release, so the deploy.sh automation — not manual
+# placement — is the supported path.
 #
 # From identity is PER TIER (see the spec Prerequisites table):
 #   dev / test / staging  -> noreply@hackersbychoice.dk   (this default)
 #   prod                  -> noreply@byvaerkstederne.dk   (overridden in
-#                            user/env/www.byvaerkstederne.dk/config/email.yaml)
+#                            user/env/www.byvaerkstederne.dk/config/plugins/email.yaml)
 # The site contact address kontakt@byvaerkstederne.dk (site.yaml) is NOT the
 # transactional From — transactional mail keeps its own noreply@ identity.
 #

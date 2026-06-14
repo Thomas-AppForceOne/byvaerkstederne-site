@@ -121,10 +121,12 @@ config/www/user/config/security.yaml
 
 # Per-tier SMTP transport credentials. Like security.yaml, these belong to
 # each runtime tier, not the repo (WI-1). Provisioned out of band and wired
-# into each release by deploy.sh. The `.example` provisioning templates are
-# tracked (the negation below keeps them visible).
-config/www/user/env/*/config/email.yaml
-!config/www/user/env/*/config/email.yaml.example
+# into each release by deploy.sh. They live under config/plugins/ so Grav's
+# environment merge folds them into the `plugins.email` namespace (the email
+# plugin's config); a sibling-of-config/ file would land in a dead namespace.
+# The `.example` provisioning templates are tracked (the negation keeps them).
+config/www/user/env/*/config/plugins/email.yaml
+!config/www/user/env/*/config/plugins/email.yaml.example
 
 # review-and-plan / execute-fix-plan run artifacts (per-diff scratch — not
 # project artefacts; regenerated each run).

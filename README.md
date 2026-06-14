@@ -41,12 +41,15 @@ the placeholder.
 > logged out once) — acceptable. Scrubbing the old salt from git history with
 > `git filter-repo` is optional follow-up, not required.
 
-**Per-tier `config/www/user/env/<host>/config/email.yaml` — SMTP credentials.**
+**Per-tier `config/www/user/env/<host>/config/plugins/email.yaml` — SMTP credentials.**
 Also gitignored. Transactional mail (password reset, activation) needs a
-working SMTP transport per tier. Copy the tier's
-`email.yaml.example` to `email.yaml` and fill in the host/port/user/password.
+working SMTP transport per tier. The file lives under `config/plugins/` so
+Grav's environment merge folds it into the `plugins.email` namespace (the email
+plugin's own config) — a file directly under `config/` would land in a dead
+namespace and never take effect. Copy the tier's
+`email.yaml.example` to `email.yaml` (same directory) and fill in the host/port/user/password.
 `deploy.sh` wires this file into each release (it lives in `<tier>data` and is
-symlinked in, exactly like `security.yaml`). If a tier has no `email.yaml`,
+symlinked in, like `security.yaml` but one level deeper). If a tier has no `email.yaml`,
 deploy emits a non-fatal **WARN** and transactional mail degrades to
 non-sending until the file is provisioned — the tier still boots. Under local
 test/CI, mail is captured by a Mailpit sink (no real SMTP needed).

@@ -882,17 +882,20 @@ bv_remote_run '
         mv "$RD/user/env/$DEPLOY_ENV/config/security.yaml" "$DD/$VDIR/user/env/$DEPLOY_ENV/config/security.yaml"
     fi
     # Per-tier email.yaml — operator-provisioned SMTP credentials (WI-1).
-    # Same first-deploy bootstrap as security.yaml: if the release carries a
-    # copy (it will not, since email.yaml is gitignored and never rsynced —
-    # but an operator may stage one) and the data dir does not yet hold one,
-    # move it into <tier>data so the symlink wired below has a valid target.
-    # On a tier that has never been provisioned, neither path exists and this
-    # is a no-op: the symlink is allowed to dangle (WARN, not fatal — see the
-    # ABSENT-FILE CONTRACT in config/www/user/config/plugins/email.yaml and
-    # the preflight WARN below).
-    if [ -f "$RD/user/env/$DEPLOY_ENV/config/email.yaml" ] && [ ! -f "$DD/$VDIR/user/env/$DEPLOY_ENV/config/email.yaml" ]; then
-        mkdir -p "$DD/$VDIR/user/env/$DEPLOY_ENV/config"
-        mv "$RD/user/env/$DEPLOY_ENV/config/email.yaml" "$DD/$VDIR/user/env/$DEPLOY_ENV/config/email.yaml"
+    # Lives under env/<tier>/config/plugins/ so Grav's environment merge folds
+    # it into the plugins.email namespace (the email plugin's own config); a
+    # file directly under config/ would land in a dead `email` namespace and
+    # never reach the plugin. Same first-deploy bootstrap as security.yaml: if
+    # the release carries a copy (it will not, since email.yaml is gitignored
+    # and never rsynced — but an operator may stage one) and the data dir does
+    # not yet hold one, move it into <tier>data so the symlink wired below has
+    # a valid target. On a tier that has never been provisioned, neither path
+    # exists and this is a no-op: the symlink is allowed to dangle (WARN, not
+    # fatal — see the ABSENT-FILE CONTRACT in
+    # config/www/user/config/plugins/email.yaml and the preflight WARN below).
+    if [ -f "$RD/user/env/$DEPLOY_ENV/config/plugins/email.yaml" ] && [ ! -f "$DD/$VDIR/user/env/$DEPLOY_ENV/config/plugins/email.yaml" ]; then
+        mkdir -p "$DD/$VDIR/user/env/$DEPLOY_ENV/config/plugins"
+        mv "$RD/user/env/$DEPLOY_ENV/config/plugins/email.yaml" "$DD/$VDIR/user/env/$DEPLOY_ENV/config/plugins/email.yaml"
     fi
 ' RD="$RELEASE_DIR" DD="$DATA_DIR" DEPLOY_ENV="$ENV"
 
@@ -916,16 +919,17 @@ echo "→ Step 5/8: Wiring release symlinks (per §Symlink contract)..."
 bv_remote_run '
     VDIR="$(readlink "$DD/current" 2>/dev/null || echo v0)"; VDIR="$(basename "$VDIR")"
     case "$VDIR" in ""|*/*|*..*) echo "FATAL: refusing to wire symlinks against unsafe data-version dir: $VDIR" >&2; exit 1 ;; esac
-    mkdir -p "$RD/user/config" "$RD/user/env/$E/config"
-    for p in "$RD/user/accounts" "$RD/user/data" "$RD/user/config/security.yaml" "$RD/user/env/$E/config/security.yaml" "$RD/user/env/$E/config/email.yaml" "$RD/logs"; do
+    mkdir -p "$RD/user/config" "$RD/user/env/$E/config" "$RD/user/env/$E/config/plugins"
+    for p in "$RD/user/accounts" "$RD/user/data" "$RD/user/config/security.yaml" "$RD/user/env/$E/config/security.yaml" "$RD/user/env/$E/config/plugins/email.yaml" "$RD/logs"; do
         if [ -e "$p" ] && [ ! -L "$p" ]; then rm -rf "$p"; fi
     done
-    ln -sfn "../../../$DDN/$VDIR/user/accounts"                              "$RD/user/accounts"
-    ln -sfn "../../../$DDN/$VDIR/user/data"                                  "$RD/user/data"
-    ln -sfn "../../../../$DDN/$VDIR/user/config/security.yaml"               "$RD/user/config/security.yaml"
-    ln -sfn "../../../../../../$DDN/$VDIR/user/env/$E/config/security.yaml"  "$RD/user/env/$E/config/security.yaml"
-    ln -sfn "../../../../../../$DDN/$VDIR/user/env/$E/config/email.yaml"     "$RD/user/env/$E/config/email.yaml"
-    ln -sfn "../../$DDN/logs"                                                "$RD/logs"
+    ln -sfn "../../../$DDN/$VDIR/user/accounts"                                   "$RD/user/accounts"
+    ln -sfn "../../../$DDN/$VDIR/user/data"                                       "$RD/user/data"
+    ln -sfn "../../../../$DDN/$VDIR/user/config/security.yaml"                    "$RD/user/config/security.yaml"
+    ln -sfn "../../../../../../$DDN/$VDIR/user/env/$E/config/security.yaml"       "$RD/user/env/$E/config/security.yaml"
+    # email.yaml sits one level deeper (config/plugins/), so the climb is 7 (../x7).
+    ln -sfn "../../../../../../../$DDN/$VDIR/user/env/$E/config/plugins/email.yaml" "$RD/user/env/$E/config/plugins/email.yaml"
+    ln -sfn "../../$DDN/logs"                                                     "$RD/logs"
 ' \
     RD="$RELEASE_DIR" \
     DD="$DATA_DIR" \
@@ -944,10 +948,10 @@ echo "  ✓ Symlinks wired"
 bv_remote_run '
     VDIR="$(readlink "$DD/current" 2>/dev/null || echo v0)"; VDIR="$(basename "$VDIR")"
     case "$VDIR" in ""|*/*|*..*) VDIR="v0" ;; esac
-    if [ ! -e "$DD/$VDIR/user/env/$DEPLOY_ENV/config/email.yaml" ]; then
-        echo "WARN: no email.yaml provisioned for tier $DEPLOY_ENV (looked in $DD/$VDIR/user/env/$DEPLOY_ENV/config/email.yaml)." >&2
+    if [ ! -e "$DD/$VDIR/user/env/$DEPLOY_ENV/config/plugins/email.yaml" ]; then
+        echo "WARN: no email.yaml provisioned for tier $DEPLOY_ENV (looked in $DD/$VDIR/user/env/$DEPLOY_ENV/config/plugins/email.yaml)." >&2
         echo "WARN: transactional mail (activation/reset) will NOT send until this tier'"'"'s email.yaml is provisioned." >&2
-        echo "WARN: copy user/env/$DEPLOY_ENV/config/email.yaml.example to email.yaml on the tier with real SMTP creds." >&2
+        echo "WARN: copy user/env/$DEPLOY_ENV/config/plugins/email.yaml.example to email.yaml on the tier with real SMTP creds." >&2
     fi
 ' RD="$RELEASE_DIR" DD="$DATA_DIR" DEPLOY_ENV="$ENV"
 

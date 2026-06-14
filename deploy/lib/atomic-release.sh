@@ -315,7 +315,7 @@ bv_wire_release_symlinks() {
     local data_dir_name
     data_dir_name="$(basename "$data_dir")"
 
-    # The five symlinks. Targets are written relative to the symlink's
+    # The six symlinks. Targets are written relative to the symlink's
     # *containing directory*, not the release-dir root.
     #
     # symlink path                                            resolves from           target
@@ -323,6 +323,7 @@ bv_wire_release_symlinks() {
     # user/data                                               <release>/user/         ../../<datadirname>/<vdir>/user/data/
     # user/config/security.yaml                               <release>/user/config/  ../../../<datadirname>/<vdir>/user/config/security.yaml
     # user/env/<env>/config/security.yaml                     <release>/user/env/<env>/config/   ../../../../../<datadirname>/<vdir>/user/env/<env>/config/security.yaml
+    # user/env/<env>/config/plugins/email.yaml                <release>/user/env/<env>/config/plugins/   ../../../../../../<datadirname>/<vdir>/user/env/<env>/config/plugins/email.yaml
     # logs                                                    <release>/              ../<datadirname>/logs/  (UNVERSIONED)
 
     # Make sure containing dirs exist; rsync may not have created
@@ -330,6 +331,7 @@ bv_wire_release_symlinks() {
     # under the local fixture).
     mkdir -p "$release_dir/user/config"
     mkdir -p "$release_dir/user/env/$env/config"
+    mkdir -p "$release_dir/user/env/$env/config/plugins"
 
     # Remove any plain dirs/files at the symlink targets first so
     # ln -sfn can replace them. (Plain dirs would block ln; ln -sfn
@@ -342,7 +344,7 @@ bv_wire_release_symlinks() {
         "$release_dir/user/data" \
         "$release_dir/user/config/security.yaml" \
         "$release_dir/user/env/$env/config/security.yaml" \
-        "$release_dir/user/env/$env/config/email.yaml" \
+        "$release_dir/user/env/$env/config/plugins/email.yaml" \
         "$release_dir/logs"
     do
         if [ -e "$target_path" ] && [ ! -L "$target_path" ]; then
@@ -362,14 +364,17 @@ bv_wire_release_symlinks() {
         "$release_dir/user/config/security.yaml"
     ln -sfn "../../../../../../$data_dir_name/$vdir/user/env/$env/config/security.yaml" \
         "$release_dir/user/env/$env/config/security.yaml"
-    # email.yaml — per-tier SMTP credentials (WI-1). Same depth and climb as
-    # the env security.yaml. Allowed to dangle on an unprovisioned tier: it is
-    # operator-provisioned, must-be-present-to-function but NOT fatal-to-boot
-    # (Grav does not regenerate SMTP creds the way it regenerates the salt).
-    # bv_check_previous_release_data_symlinks deliberately excludes it from the
-    # must-resolve set; deploy.sh emits a non-fatal WARN when it is absent.
-    ln -sfn "../../../../../../$data_dir_name/$vdir/user/env/$env/config/email.yaml" \
-        "$release_dir/user/env/$env/config/email.yaml"
+    # email.yaml — per-tier SMTP credentials (WI-1). It lives under
+    # env/<env>/config/plugins/ (one level deeper than the env security.yaml)
+    # so Grav's environment merge folds it into the plugins.email namespace;
+    # hence the climb is 7 (../x7), not 6. Allowed to dangle on an
+    # unprovisioned tier: it is operator-provisioned, must-be-present-to-
+    # function but NOT fatal-to-boot (Grav does not regenerate SMTP creds the
+    # way it regenerates the salt). bv_check_previous_release_data_symlinks
+    # deliberately excludes it from the must-resolve set; deploy.sh emits a
+    # non-fatal WARN when it is absent.
+    ln -sfn "../../../../../../../$data_dir_name/$vdir/user/env/$env/config/plugins/email.yaml" \
+        "$release_dir/user/env/$env/config/plugins/email.yaml"
     ln -sfn "../../$data_dir_name/logs" \
         "$release_dir/logs"
 }

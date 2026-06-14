@@ -74,15 +74,21 @@ scripts/mailpit-down.sh .          # stop sink, restore committed config
 - starts the `mailpit` service (under the `test` compose profile, so it never
   runs under the plain dev `:8080` workflow) in this worktree's compose project,
   on the same network as Grav;
-- points the running Grav's `config/plugins/email.yaml` at `mailpit:1025`
-  (Grav 1.7's env-config merge does **not** apply per-host overrides to plugin
-  configs, so the override targets the user config layer Grav actually reads);
-- relaxes `session.secure` to `false` so authenticated tests can hold a session
-  over the worktree container's plain HTTP (the committed `system.yaml` keeps
-  `secure: true` for the TLS tiers — WI-4).
+- points the running Grav's base `config/plugins/email.yaml` at `mailpit:1025`
+  (the local container is reached at `127.0.0.1`/`localhost`, which has no
+  `user/env/<host>/` dir, so only the base `plugins.email` config applies — the
+  per-tier env override at `env/<host>/config/plugins/email.yaml` is the
+  production layer, same namespace, supplied by the environment merge).
 
-Both overrides are backed up to `.gan/` and restored by `mailpit-down.sh`; the
-committed config files are never modified. `MAILPIT_URL` (default
+No `session.secure` relaxation is needed: the committed `system.yaml` no longer
+hard-forces `secure: true`. Grav emits the Secure flag per-scheme
+(`secure_https` + `X-Forwarded-Proto`), so over the container's plain HTTP the
+cookie is not Secure and authenticated tests hold a session; the TLS-tier Secure
+behaviour is still proven by `session-cookie.js`'s `X-Forwarded-Proto: https`
+probe (WI-4).
+
+The email override is backed up to `.gan/` and restored by `mailpit-down.sh`;
+the committed config files are never modified. `MAILPIT_URL` (default
 `http://127.0.0.1:8025`) is what `tests/helpers/mail.js` queries; tests
 skip-with-reason when the sink is unreachable.
 

@@ -234,24 +234,25 @@ fi
 #    these silently reopens the WI-1 defect (transactional mail falls back
 #    to non-sending with no warning), so the lint locks them in.
 #
-# 8a. deploy.sh symlinks the per-tier email.yaml into the release.
-if grep -Eq 'ln -sfn .*\$VDIR/user/env/\$E/config/email\.yaml' "$DEPLOY_DIR/deploy.sh"; then
+# 8a. deploy.sh symlinks the per-tier email.yaml into the release. It lives
+#     under config/plugins/ so Grav's env merge folds it into plugins.email.
+if grep -Eq 'ln -sfn .*\$VDIR/user/env/\$E/config/plugins/email\.yaml' "$DEPLOY_DIR/deploy.sh"; then
     check "deploy.sh wires the per-tier email.yaml symlink (WI-1)" ok
 else
     check "deploy.sh must wire the per-tier email.yaml symlink (WI-1)" fail
 fi
 
-# 8b. The same symlink line uses the env-security.yaml climb depth
-#     (six ../) — email.yaml lives at the same path depth, so a wrong
+# 8b. The symlink sits one level deeper than the env security.yaml
+#     (config/plugins/email.yaml), so its climb is SEVEN (../ x7). A wrong
 #     climb count would dangle the link even when the file exists.
-if grep -Eq 'ln -sfn "\.\./\.\./\.\./\.\./\.\./\.\./\$DDN/\$VDIR/user/env/\$E/config/email\.yaml"' "$DEPLOY_DIR/deploy.sh"; then
-    check "deploy.sh email.yaml symlink uses the correct 6-level climb" ok
+if grep -Eq 'ln -sfn "\.\./\.\./\.\./\.\./\.\./\.\./\.\./\$DDN/\$VDIR/user/env/\$E/config/plugins/email\.yaml"' "$DEPLOY_DIR/deploy.sh"; then
+    check "deploy.sh email.yaml symlink uses the correct 7-level climb" ok
 else
-    check "deploy.sh email.yaml symlink must use the 6-level climb (../ x6)" fail
+    check "deploy.sh email.yaml symlink must use the 7-level climb (../ x7)" fail
 fi
 
 # 8c. The lib's bv_wire_release_symlinks (fixture/local path) wires it too.
-if grep -Eq 'ln -sfn "\.\./\.\./\.\./\.\./\.\./\.\./\$data_dir_name/\$vdir/user/env/\$env/config/email\.yaml"' "$DEPLOY_DIR/lib/atomic-release.sh"; then
+if grep -Eq 'ln -sfn "\.\./\.\./\.\./\.\./\.\./\.\./\.\./\$data_dir_name/\$vdir/user/env/\$env/config/plugins/email\.yaml"' "$DEPLOY_DIR/lib/atomic-release.sh"; then
     check "bv_wire_release_symlinks wires the per-tier email.yaml symlink (WI-1)" ok
 else
     check "bv_wire_release_symlinks must wire the per-tier email.yaml symlink (WI-1)" fail
