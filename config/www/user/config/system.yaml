@@ -2,6 +2,33 @@ absolute_urls: false
 
 reverse_proxy_setup: true
 
+# WI-5: pin the password and username policy in this repo so a Grav-core
+# upgrade or a differently-configured tier cannot silently weaken them. These
+# must agree exactly with the client-side checks (register.html.twig) and the
+# page-level validate.pattern (register.md):
+#   - username_regex string-equals register.md's username validate.pattern and
+#     the JS literal in register.html.twig.
+#   - pwd_regex (>=8 chars, >=1 upper, >=1 lower, >=1 digit) is proven
+#     equivalent to the imperative client-side JS chain by the shared
+#     accept/reject truth-table fixture (tests/anonymous/password-policy.js).
+username_regex: '^[a-z0-9_-]{3,16}$'
+pwd_regex: '(?=.*[A-Z])(?=.*[0-9])(?=.*[a-z]).{8,}'
+
+# WI-4: harden the session cookie for the TLS tiers. TLS is terminated at an
+# upstream reverse proxy (reverse_proxy_setup: true above), which forwards
+# X-Forwarded-Proto: https — Grav then treats the request as HTTPS and emits a
+# Secure cookie. SameSite=Lax (not Strict) so activation/reset links arriving
+# as top-level navigations from email still carry the cookie, while cross-site
+# POST is blocked.
+# MANUAL RELEASE GATE (WI-4): on the first deploy to a real TLS tier, capture
+# the live Set-Cookie and confirm Secure is present and a login completes
+# through the proxy. The localhost X-Forwarded-Proto substitute only proves
+# Grav EMITS Secure when told HTTPS, not that the real proxy doesn't strip it.
+session:
+  secure: true
+  httponly: true
+  samesite: 'Lax'
+
 home:
   alias: '/home'
 

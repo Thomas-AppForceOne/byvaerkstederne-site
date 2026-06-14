@@ -1,0 +1,29 @@
+{# Site-shell flash-message renderer.
+   Surfaces Grav's session messages (login/email plugin flashes such as the
+   activation-pending and activation-confirmed notices, reset confirmations,
+   and form errors) inside the themed shell. Without this, the stock plugin
+   page templates' `{% include 'partials/messages.html.twig' %}` would fall
+   back to the unstyled admin-theme partial, and flashes redirected to `/`
+   (WI-2) would not render at all because the site layout never emitted them.
+
+   `grav.messages.fetch(scope)` is read-once: fetching clears the queue, so
+   each flash shows exactly once. Scopes Grav uses: 'error', 'warning',
+   'info', 'success'. #}
+{% set bv_message_scopes = ['error', 'warning', 'info', 'success'] %}
+{% set bv_all_messages = [] %}
+{% for scope in bv_message_scopes %}
+    {% for message in grav.messages.fetch(scope) %}
+        {% set bv_all_messages = bv_all_messages|merge([{ 'scope': scope, 'message': message.message }]) %}
+    {% endfor %}
+{% endfor %}
+{% if bv_all_messages|length %}
+<div class="bv-messages" role="status" aria-live="polite" style="max-width: 48rem; margin: var(--space-6) auto 0; padding: 0 var(--space-4);">
+    {% for m in bv_all_messages %}
+        {% set bg = m.scope == 'error' ? '#ffdad6' : (m.scope == 'success' ? '#d8f3dc' : (m.scope == 'warning' ? '#fff3cd' : '#e7f0fd')) %}
+        {% set fg = m.scope == 'error' ? '#93000a' : (m.scope == 'success' ? '#1b4332' : '#1f2933') %}
+        <div class="bv-message bv-message--{{ m.scope }}" style="background: {{ bg }}; color: {{ fg }}; padding: var(--space-4) var(--space-5); margin-bottom: var(--space-3); font-weight: 600; border-left: 6px solid currentColor;">
+            {{ m.message|raw }}
+        </div>
+    {% endfor %}
+</div>
+{% endif %}

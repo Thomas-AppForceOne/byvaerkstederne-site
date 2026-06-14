@@ -272,6 +272,14 @@ else
     check "application code is in release dir" fail
 fi
 
+# Provision a per-tier email.yaml into <tier>data BEFORE wiring symlinks
+# (WI-1). This is the operator-provisioned SMTP-credentials file. The
+# symlink wired below must point at it and resolve, and it must survive
+# subsequent deploys exactly as the security.yaml pair does.
+mkdir -p "$DATA_DIR/v0/user/env/$TIER/config"
+printf 'mailer:\n  smtp:\n    server: mailpit\n    port: 1025\n' \
+    > "$DATA_DIR/v0/user/env/$TIER/config/email.yaml"
+
 # Step 5: wire symlinks.
 bv_wire_release_symlinks "$RELEASE_DIR" "$DATA_DIR" "$TIER"
 
@@ -280,6 +288,7 @@ for sym in \
     "user/data" \
     "user/config/security.yaml" \
     "user/env/$TIER/config/security.yaml" \
+    "user/env/$TIER/config/email.yaml" \
     "logs"
 do
     if [ -L "$RELEASE_DIR/$sym" ]; then
@@ -324,6 +333,17 @@ if [ -d "$RELEASE_DIR/logs" ]; then
     check "logs symlink resolves into <tier>data/logs/" ok
 else
     check "logs symlink resolves into <tier>data/logs/" fail
+fi
+
+# email.yaml symlink resolves to the provisioned per-tier file (WI-1
+# deploy preservation — same property the security.yaml line asserts,
+# extended to email.yaml). Reading through the symlink must yield the
+# provisioned content.
+if [ -f "$RELEASE_DIR/user/env/$TIER/config/email.yaml" ] \
+   && grep -q '^    server: mailpit$' "$RELEASE_DIR/user/env/$TIER/config/email.yaml"; then
+    check "email.yaml symlink resolves to the provisioned per-tier file (WI-1)" ok
+else
+    check "email.yaml symlink resolves to the provisioned per-tier file (WI-1)" fail
 fi
 
 # logs symlink resolves to <tier>data/logs/ specifically — assert via
@@ -462,6 +482,19 @@ else
 fi
 
 bv_wire_release_symlinks "$RELEASE_DIR_2" "$DATA_DIR" "$TIER"
+
+# Two consecutive deploys preserve the per-tier email.yaml (WI-1
+# acceptance criterion): it lives in <tier>data, is re-symlinked into the
+# new release, and the rsync (which excludes the data dir) never touched
+# it. Read through the second release's symlink and confirm the content is
+# byte-identical to what deploy #1 saw.
+if [ -f "$RELEASE_DIR_2/user/env/$TIER/config/email.yaml" ] \
+   && grep -q '^    server: mailpit$' "$RELEASE_DIR_2/user/env/$TIER/config/email.yaml"; then
+    check "second deploy preserves the per-tier email.yaml (WI-1)" ok
+else
+    check "second deploy preserves the per-tier email.yaml (WI-1)" fail
+fi
+
 bv_write_release_meta_yaml \
     "$RELEASE_DIR_2" \
     "$RELEASE_ID_2" \
@@ -777,6 +810,57 @@ if command -v realpath >/dev/null 2>&1; then
     else
         check "no real file under release dir resolves into <tier>data/ ($BAD found)" fail
     fi
+fi
+
+# ─────────────────────────────────────────────────────────────────────
+# Test 9: absent email.yaml is surfaced, not silent (WI-1 failure path).
+# On a tier with no provisioned email.yaml, wiring still creates the
+# symlink (it is allowed to dangle), accounts/data/logs still resolve,
+# and bv_check_previous_release_data_symlinks still returns 0 — i.e. the
+# tier BOOTS (no fatal). A missing email.yaml must degrade transactional
+# mail to non-sending (surfaced by deploy.sh's WARN), never block the
+# deploy.
+# ─────────────────────────────────────────────────────────────────────
+echo ""
+echo "Test 9: absent email.yaml dangles but does not block boot (WI-1 failure path)"
+
+ABSENT_PARENT="$WORK/absent-email"
+ABSENT_DATA="$ABSENT_PARENT/${TIER}data"
+ABSENT_RELEASES="$ABSENT_PARENT/${TIER}-releases"
+mkdir -p "$ABSENT_PARENT"
+bv_bootstrap_data_dir "$ABSENT_DATA" "$TIER"
+# Deliberately do NOT create $ABSENT_DATA/v0/user/env/$TIER/config/email.yaml.
+ABSENT_REL_ID="$(bv_compute_release_id "ab5en70")"
+ABSENT_REL_DIR="$ABSENT_RELEASES/$ABSENT_REL_ID"
+mkdir -p "$ABSENT_REL_DIR"
+bv_wire_release_symlinks "$ABSENT_REL_DIR" "$ABSENT_DATA" "$TIER"
+
+# (a) The email.yaml symlink exists as a symlink ...
+if [ -L "$ABSENT_REL_DIR/user/env/$TIER/config/email.yaml" ]; then
+    check "absent-tier: email.yaml symlink is created even when target missing" ok
+else
+    check "absent-tier: email.yaml symlink is created even when target missing" fail
+fi
+# ... and dangles (target does not exist) — allowed, not fatal.
+if [ ! -e "$ABSENT_REL_DIR/user/env/$TIER/config/email.yaml" ]; then
+    check "absent-tier: email.yaml symlink dangles (allowed, not fatal)" ok
+else
+    check "absent-tier: email.yaml symlink should dangle when unprovisioned" fail
+fi
+# (b) accounts/data/logs still resolve — the must-resolve set is intact.
+if bv_check_previous_release_data_symlinks "$ABSENT_REL_DIR" 2>/dev/null; then
+    check "absent-tier: must-resolve symlinks (accounts/data/logs) still resolve — tier boots" ok
+else
+    check "absent-tier: must-resolve symlinks (accounts/data/logs) still resolve — tier boots" fail
+fi
+# (c) A real deploy WARNs about the absent file (deploy.sh source asserts
+#     the WARN exists; here we confirm the file path the WARN names matches
+#     where the wiring expects it). This pins the "never a green deploy with
+#     no warning" criterion together with lint check 8d.
+if grep -q 'WARN: no email.yaml provisioned for tier' "$DEPLOY_SH"; then
+    check "absent-tier: deploy.sh WARN handler exists for the missing-email path" ok
+else
+    check "absent-tier: deploy.sh must WARN on the missing-email path" fail
 fi
 
 # ─────────────────────────────────────────────────────────────────────

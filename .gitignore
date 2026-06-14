@@ -113,6 +113,19 @@ test-results/
 # production values on the next deploy.
 config/www/user/env/*/config/security.yaml
 
+# Root security.yaml — same class of secret. Grav regenerates it with a
+# fresh per-instance salt on first request when absent (WI-3). The committed
+# copy pinned a publicly-known salt into the repo / local dev / the initial
+# release window; it is now untracked. See README setup notes.
+config/www/user/config/security.yaml
+
+# Per-tier SMTP transport credentials. Like security.yaml, these belong to
+# each runtime tier, not the repo (WI-1). Provisioned out of band and wired
+# into each release by deploy.sh. The `.example` provisioning templates are
+# tracked (the negation below keeps them visible).
+config/www/user/env/*/config/email.yaml
+!config/www/user/env/*/config/email.yaml.example
+
 # review-and-plan / execute-fix-plan run artifacts (per-diff scratch — not
 # project artefacts; regenerated each run).
 .review-runs/

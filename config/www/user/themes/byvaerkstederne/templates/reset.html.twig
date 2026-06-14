@@ -1,0 +1,26 @@
+{# Themed override of the login plugin's reset.html.twig.
+   Renders the password-reset form (reached from the link in the reset email)
+   inside the site shell. Reuses the plugin's partials/reset-form.html.twig so
+   the token/nonce handling and field rendering are unchanged — no plugin PHP
+   is touched. (WI-1) #}
+{% extends 'partials/base.html.twig' %}
+
+{% block body %}
+<section class="bv-auth-page" style="min-height: 60vh; display: flex; align-items: center; justify-content: center; padding: var(--space-12) var(--space-4);">
+    <div class="bv-auth-card" style="max-width: 36rem; width: 100%;">
+        <div style="margin-bottom: var(--space-8);">
+            <h1 class="bv-display" style="margin-bottom: var(--space-4);">Nulstil adgangskode</h1>
+            <div style="width: 6rem; height: 0.5rem; background: var(--primary); margin-bottom: var(--space-6);"></div>
+            <p class="bv-body-lg">V&aelig;lg en ny adgangskode. Mindst 8 tegn, med mindst &eacute;t tal, &eacute;t stort og &eacute;t lille bogstav.</p>
+        </div>
+
+        <div class="bv-auth-form" style="background: var(--surface-container-lowest); border-left: 8px solid var(--primary); padding: var(--space-8);">
+            {% include 'partials/reset-form.html.twig' %}
+        </div>
+
+        <div style="text-align: center; padding-top: var(--space-8);">
+            <a href="/login" class="bv-label" style="color: var(--outline); text-decoration: underline; text-underline-offset: 4px;">Tilbage til login</a>
+        </div>
+    </div>
+</section>
+{% endblock %}

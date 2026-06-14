@@ -8,7 +8,10 @@
 
         {# Left: Image + branding #}
         <div class="bv-login-overlay__image">
-            <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuDWT86Oh-mwD2qZPsPKoZLsIJP_nhOvx1qmXBat4v3kqG0FsNm6PenpAPoqLAmqNyZI_YISM-cU8T-KsVupYERiGXh9Pv-Dbdqv9lkfcIzSgSpT-AZgThXdLn3PvW5D0fRLWuTRnBbBAuN5Z40d2eG1hbZh9QtFsvQej7RY8Bp_0tlnNyFM0No-Ad4bY2A3kUJYJMyA3_AolkyLMxfweR71WflssZ8jmcZPnMi4-iIfD9h_dChfrJlKxYq1wosI30NfgpNgwZBWhv0" alt="V&aelig;rksted" />
+            {# WI-7: locally hosted asset. Previously hotlinked a
+               googleusercontent.com image — fragile and leaked visitor IPs to
+               Google. Served from the theme so no external request is made. #}
+            <img src="{{ url('theme://images/login-panel.svg') }}" alt="V&aelig;rksted" />
             <div class="bv-login-overlay__image-content">
                 <span class="bv-badge bv-badge--primary">Medlemsportal</span>
                 <h2 class="bv-headline" style="color: #fff; margin-top: var(--space-4);">F&aelig;llesskab gennem h&aring;ndv&aelig;rk.</h2>

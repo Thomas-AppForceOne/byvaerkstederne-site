@@ -1,0 +1,54 @@
+# Site-level language overrides (WI-2, WI-7).
+#
+# The site runs single-language with Grav's active translation language "en"
+# (site.yaml default_lang: da sets the content fallback, not the active UI
+# language, and system.languages.supported is unset). The stock login plugin
+# emits its flash/validation messages via PLUGIN_LOGIN.* translation keys in
+# English. Grav merges user/languages/<active>.yaml OVER plugin language
+# files, so overriding the keys here re-localises the auth surface to Danish
+# WITHOUT modifying any plugin PHP or plugin language file (per the spec's
+# non-goal: stock plugins stay unpatched).
+#
+# Covers:
+#   WI-2 — registration "check your inbox to activate" notice, activation
+#          confirmed/expired, and the disabled-account login rejection.
+#   WI-7 — Danish password rejection and password-mismatch messages.
+#   WI-1 — themed auth-page button labels.
+PLUGIN_LOGIN:
+  # WI-2: registration success now means "account created, verify your email".
+  # %s is the member's full name. Must contain "aktiver" / "tjek din indbakke"
+  # (the WI-2 acceptance criterion asserts this substring on the / redirect).
+  ACTIVATION_NOTICE_MSG: "Hej %s, din konto er oprettet. Tjek din indbakke og klik på linket for at aktivere din konto, før du kan logge ind."
+  # Kept localised in case a tier runs with the gate off (welcome path).
+  WELCOME_NOTICE_MSG: "Hej %s, din konto er oprettet."
+
+  # WI-2: activation outcomes (flash on / after following the link).
+  USER_ACTIVATED_SUCCESSFULLY: "Din konto er nu aktiveret. Du kan logge ind."
+  USER_ACTIVATED_SUCCESSFULLY_NOT_ENABLED: "Din konto er aktiveret, men afventer godkendelse."
+  ACTIVATION_LINK_EXPIRED: "Aktiveringslinket er udløbet. Prøv at oprette medlemskab igen."
+
+  # WI-2: a disabled / not-yet-activated account cannot log in.
+  USER_ACCOUNT_DISABLED: "Din konto er deaktiveret eller endnu ikke aktiveret. Tjek din indbakke for aktiveringslinket."
+
+  # WI-7: password validation rejections (Danish, not the English RuntimeException).
+  PASSWORD_NOT_VALID: "Adgangskoden skal indeholde mindst ét tal, ét stort og ét lille bogstav samt være mindst 8 tegn."
+  PASSWORD_VALIDATION_MESSAGE: "Adgangskoden skal indeholde mindst ét tal, ét stort og ét lille bogstav samt være mindst 8 tegn."
+  PASSWORDS_DO_NOT_MATCH: "Adgangskoderne er ikke ens. Kontrollér at du har indtastet den samme adgangskode i begge felter."
+
+  # WI-1: password reset / forgot flow flashes.
+  FORGOT_INSTRUCTIONS_SENT_VIA_EMAIL: "Hvis der findes en konto, er der sendt en vejledning til nulstilling af adgangskode på e-mail."
+  FORGOT_FAILED_TO_EMAIL: "Kunne ikke sende vejledningen. Prøv igen senere."
+  FORGOT_EMAIL_NOT_CONFIGURED: "Kan ikke nulstille adgangskoden. Dette miljø er ikke konfigureret til at sende e-mail."
+  RESET_PASSWORD_RESET: "Din adgangskode er nulstillet. Du kan nu logge ind med den nye adgangskode."
+  RESET_LINK_EXPIRED: "Nulstillingslinket er udløbet. Prøv igen."
+  RESET_INVALID_LINK: "Ugyldigt nulstillingslink. Prøv igen."
+
+  # Login rate-limit and failure.
+  TOO_MANY_LOGIN_ATTEMPTS: "For mange mislykkede loginforsøg inden for det tilladte tidsrum (%s minutter). Prøv igen senere."
+  LOGIN_FAILED: "Login mislykkedes. Tjek brugernavn og adgangskode."
+
+  # WI-1: auth-page button labels (themed forgot/reset pages reuse plugin partials).
+  BTN_SEND_INSTRUCTIONS: "Send nulstillingslink"
+  BTN_RESET_PASSWORD: "Nulstil adgangskode"
+  BTN_FORGOT: "Glemt adgangskode"
+  ENTER_NEW_PASSWORD: "Indtast ny adgangskode"

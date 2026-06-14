@@ -28,6 +28,15 @@ require('./anonymous/feature-flags-html');
 require('./anonymous/feature-flags-plugins');
 require('./anonymous/feature-flags-link-hiding');
 require('./anonymous/version-footer');
+// Member auth hardening (WI-4/WI-5/WI-6). password-policy + session-cookie run
+// always (pure source/logic + the X-Forwarded-Proto cookie probe); the login
+// round-trip, registration, and password-reset gate on TEST_PASSWORD, the
+// membership_signup feature, and a reachable Mailpit sink — skipping-with-
+// reason otherwise.
+require('./anonymous/password-policy');
+require('./anonymous/session-cookie');
+require('./anonymous/registration');
+require('./anonymous/password-reset');
 
 // Visual-parity tests live at tests/anonymous/event-card-visual-parity.js
 // and are picked up directly by the chromium project's testMatch (see

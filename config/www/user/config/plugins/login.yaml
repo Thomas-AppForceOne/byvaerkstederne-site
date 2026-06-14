@@ -13,7 +13,8 @@ user_registration:
   enabled: true
   fields:
     - username
-    - password
+    - password1
+    - password2
     - email
     - fullname
   default_values:
@@ -23,10 +24,26 @@ user_registration:
       login: true
   redirect_after_registration: '/'
   options:
-    validate_password1_and_password2: false
-    set_user_disabled: false
-    login_after_registration: true
-    send_activation_email: false
+    # WI-7: require a confirmed password (password1 must equal password2).
+    # The plugin handler enforces the match (login.php:858-871).
+    validate_password1_and_password2: true
+    # WI-2: email verification required before access. A new account is created
+    # DISABLED, an activation email is sent, and there is NO instant auto-login.
+    # The account cannot log in or reach member-only content until the
+    # activation link enables it.
+    #   - set_user_disabled: true  -> account YAML written with state: disabled
+    #   - send_activation_email: true -> activation mail with /activate_user token
+    #   - login_after_registration: false -> no implicit session post-register
+    #     (the handler already skips auto-login for a disabled account at
+    #      login.php:947; this makes the intent explicit)
+    # PER-TIER ROLLOUT: do NOT enable this gate on a tier until that tier has
+    # confirmed mail delivery (spec Prerequisites step 4). On a tier without
+    # working mail this locks new members out (they register, never receive the
+    # link, cannot log in). Stage the flip per tier via the per-environment
+    # login.yaml override if any target tier cannot yet deliver.
+    set_user_disabled: true
+    send_activation_email: true
+    login_after_registration: false
     send_notification_email: false
     send_welcome_email: false
 

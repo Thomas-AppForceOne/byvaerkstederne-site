@@ -316,6 +316,7 @@ bv_wire_release_symlinks() {
         "$release_dir/user/data" \
         "$release_dir/user/config/security.yaml" \
         "$release_dir/user/env/$env/config/security.yaml" \
+        "$release_dir/user/env/$env/config/email.yaml" \
         "$release_dir/logs"
     do
         if [ -e "$target_path" ] && [ ! -L "$target_path" ]; then
@@ -335,6 +336,14 @@ bv_wire_release_symlinks() {
         "$release_dir/user/config/security.yaml"
     ln -sfn "../../../../../../$data_dir_name/v0/user/env/$env/config/security.yaml" \
         "$release_dir/user/env/$env/config/security.yaml"
+    # email.yaml — per-tier SMTP credentials (WI-1). Same depth and climb as
+    # the env security.yaml. Allowed to dangle on an unprovisioned tier: it is
+    # operator-provisioned, must-be-present-to-function but NOT fatal-to-boot
+    # (Grav does not regenerate SMTP creds the way it regenerates the salt).
+    # bv_check_previous_release_data_symlinks deliberately excludes it from the
+    # must-resolve set; deploy.sh emits a non-fatal WARN when it is absent.
+    ln -sfn "../../../../../../$data_dir_name/v0/user/env/$env/config/email.yaml" \
+        "$release_dir/user/env/$env/config/email.yaml"
     ln -sfn "../../$data_dir_name/logs" \
         "$release_dir/logs"
 }
@@ -847,7 +856,13 @@ bv_spinner_while() {
 # Per §Symlink contract: accounts/, user/data/, logs/ MUST resolve
 # (Phase 2 will gate this on data-version matching). The two
 # security.yaml symlinks are allowed to dangle — Grav regenerates them
-# on first request.
+# on first request. The per-tier email.yaml symlink (WI-1) is ALSO not in
+# the must-resolve set: it is operator-provisioned and may legitimately be
+# absent on an unprovisioned tier. Unlike security.yaml it does not
+# self-heal, so its absence is surfaced as a non-fatal WARN by deploy.sh
+# rather than regenerated here — it is must-be-present-to-function but not
+# fatal-to-boot, a third state category distinct from must-resolve and the
+# self-healing may-dangle salt.
 #
 # Caller passes the release dir path. Returns 0 if all three resolve;
 # non-zero with diagnostic on stderr if any dangle.
@@ -860,8 +875,8 @@ bv_check_previous_release_data_symlinks() {
     fi
 
     local sym path bad=0
-    # Note the security.yaml pair are explicitly NOT in this list —
-    # they're allowed to dangle.
+    # Note the security.yaml pair AND the per-tier email.yaml are explicitly
+    # NOT in this list — they're allowed to dangle.
     for sym in "user/accounts" "user/data" "logs"; do
         path="$release_dir/$sym"
         if [ ! -L "$path" ]; then

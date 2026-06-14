@@ -1,0 +1,27 @@
+{# Themed override of the login plugin's forgot.html.twig.
+   The plugin ships an unstyled forgot.html.twig and built_in_css is false,
+   so without this override /forgot_password renders bare. This extends the
+   site shell (header + footer via base) and reuses the plugin's
+   partials/forgot-form.html.twig so the form keeps its nonce/CSRF and
+   field rendering — no plugin PHP is touched. (WI-1) #}
+{% extends 'partials/base.html.twig' %}
+
+{% block body %}
+<section class="bv-auth-page" style="min-height: 60vh; display: flex; align-items: center; justify-content: center; padding: var(--space-12) var(--space-4);">
+    <div class="bv-auth-card" style="max-width: 36rem; width: 100%;">
+        <div style="margin-bottom: var(--space-8);">
+            <h1 class="bv-display" style="margin-bottom: var(--space-4);">Glemt adgangskode</h1>
+            <div style="width: 6rem; height: 0.5rem; background: var(--primary); margin-bottom: var(--space-6);"></div>
+            <p class="bv-body-lg">Indtast din e-mail, s&aring; sender vi dig et link til at nulstille din adgangskode.</p>
+        </div>
+
+        <div class="bv-auth-form" style="background: var(--surface-container-lowest); border-left: 8px solid var(--primary); padding: var(--space-8);">
+            {% include 'partials/forgot-form.html.twig' %}
+        </div>
+
+        <div style="text-align: center; padding-top: var(--space-8);">
+            <a href="/login" class="bv-label" style="color: var(--outline); text-decoration: underline; text-underline-offset: 4px;">Tilbage til login</a>
+        </div>
+    </div>
+</section>
+{% endblock %}
