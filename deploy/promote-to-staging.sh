@@ -38,21 +38,21 @@
 # When PROMOTE_LOCAL_TIER_DIR=<absolute-path> is set, the script
 # operates against that local directory instead of SSH: it skips the
 # reachability probes, skips the real code deploy, skips the curl
-# smoke-test, and performs the data push as local rsync/ln into
-# $PROMOTE_LOCAL_TIER_DIR/stagingdata/... — the same versioned-data-dir
-# layout the live path writes over SSH. This is the testable analogue
-# of the operator's SSH path; the live SSH path is reviewed, not run in
-# CI (no SSH; ADR-002 also gates a real run).
+# smoke-test, and performs the data refresh as local rsync into
+# $PROMOTE_LOCAL_TIER_DIR/stagingdata/v0/... — the dir the live release
+# serves. This is the testable analogue of the operator's SSH path; the
+# live SSH path is reviewed, not run in CI (no SSH; ADR-002 also gates a
+# real run).
 #
 # Override points (env vars, all optional):
 #   PROMOTE_SCRATCH_DIR   absolute path for the restore scratch dir
 #                         (default: a mktemp dir under $TMPDIR).
 #
-# The live path's destructive operations (per-subdirectory
-# rsync --delete into the versioned data dir, the current symlink
-# repoint, the blessing write) are gated on $PROMOTE_LOCAL_TIER_DIR
-# being unset; they are implemented by analogy to restore.sh /
-# push-data.sh.
+# The live path's only destructive operation (per-subdirectory
+# rsync --delete over accounts/data/pages/uploads into the served data
+# dir, preserving user/config secrets) plus the blessing write are gated
+# on $PROMOTE_LOCAL_TIER_DIR being unset; they are implemented by analogy
+# to restore.sh / push-data.sh.
 
 set -euo pipefail
 
@@ -109,10 +109,6 @@ fi
 readonly LOCAL_MODE LOCAL_TIER_DIR
 
 # ── 3. Load credentials + helpers ────────────────────────────────────
-# bv_version_to_dirname (used by both modes) lives in migrate-integration.sh.
-# shellcheck source=deploy/lib/migrate-integration.sh
-. "$SCRIPT_DIR/lib/migrate-integration.sh"
-
 # Live mode needs the SSH helpers + .env.deploy. Local mode never makes
 # an SSH call, so we don't require the env file there (matches restore.sh's
 # RESTORE_LOCAL_TIER_DIR idiom, which still sources it harmlessly if present).
@@ -365,81 +361,89 @@ fi
 echo ""
 
 # ──────────────────────────────────────────────────────────────────────
-# STEP 7 — populate the versioned data dir, then repoint current.
-# Per-subdirectory rsync against <dataroot>/<VDIR>/user/<sub>/ — never a
-# user/-level or release-level sync, so the blessing marker (step 9, at
-# the staging Grav root) stays structurally unreachable by the push.
-# Widening STATE_SUBDIRS to a user/-level entry requires a reviewable
-# edit here.
+# STEP 7 — overwrite staging's SERVED data wholesale (risk-mitigated).
+#
+# RISK-MITIGATION CHOICE (operator-selected): a new versioned dir +
+# `current` repoint would have NO live effect, because release symlinks are
+# wired to <tier>data/v0/ (hardcoded in deploy.sh Step 5 AND
+# bv_wire_release_symlinks), not to `current`. Rather than rewrite that
+# wiring — the April-2026 accounts-wipe code path — we write the migrated
+# snapshot straight into the dir the live release actually serves:
+# <tier>data/v0/. Immediately live-effective, zero changes to the symlink /
+# deploy / rollback machinery.
+#
+# Staging data is disposable (overwritten wholesale every promote, per spec
+# §"no preserved test entries"); rollback insurance is the prod backup taken
+# in step 2. Per-subdir rsync --delete over accounts/data/pages/uploads ONLY
+# — never the whole user/ tree — so per-tier secrets provisioned in v0
+# (user/config/security.yaml, user/env/<env>/config/security.yaml) are
+# preserved, and the blessing marker (step 9, at the Grav root) is never
+# reachable by the push.
+#
+# When the versioned-data-dir SERVING model is completed (releases bind to
+# their deployed data-version dir — see PR/ADR for the deferred fix), this
+# step changes to build v_<target> + repoint current. Until then v0 is the
+# served dir, so v0 is what we refresh.
 # ──────────────────────────────────────────────────────────────────────
-VDIR="$(bv_version_to_dirname "$TARGET_VERSION")"
-readonly VDIR
-STATE_SUBDIRS=(accounts data pages uploads)   # FIXED list — see header note
+SERVED_VDIR="v0"   # the dir release symlinks resolve to (hardcoded in wiring)
+readonly SERVED_VDIR
+STATE_SUBDIRS=(accounts data pages uploads)   # FIXED list — secrets/config untouched
 
-log "Step 7/11: populating $DATA_ROOT/$VDIR and repointing current"
-note "versioned data dir: $VDIR"
+log "Step 7/11: overwriting staging's served data ($DATA_ROOT/$SERVED_VDIR)"
+note "served data dir: $SERVED_VDIR (user/config secrets preserved)"
 
 if [ "$LOCAL_MODE" = "1" ]; then
-    # Local rsync/ln equivalent of the live SSH path below.
-    mkdir -p "$DATA_ROOT/$VDIR/user"
+    # Local rsync equivalent of the live SSH path below.
+    mkdir -p "$DATA_ROOT/$SERVED_VDIR/user"
     for sub in "${STATE_SUBDIRS[@]}"; do
         src="$SCRATCH/user/$sub"
         if [ ! -d "$src" ]; then
             note "  skip user/$sub (absent in scratch)"
             continue
         fi
-        dst="$DATA_ROOT/$VDIR/user/$sub"
+        dst="$DATA_ROOT/$SERVED_VDIR/user/$sub"
         mkdir -p "$dst"
         note "  rsync --delete user/$sub/"
         rsync -a --delete -- "$src/" "$dst/" \
             || fail_with_scratch "local rsync of user/$sub into $dst failed" 7
     done
-    # Copy the data-version marker alongside the state dirs.
+    # Stamp the served dir's data-version marker.
     if [ -f "$SCRATCH_MARKER" ]; then
-        cp "$SCRATCH_MARKER" "$DATA_ROOT/$VDIR/user/data-version.yaml" \
-            || fail_with_scratch "copying data-version.yaml into $VDIR failed" 7
+        cp "$SCRATCH_MARKER" "$DATA_ROOT/$SERVED_VDIR/user/data-version.yaml" \
+            || fail_with_scratch "copying data-version.yaml into $SERVED_VDIR failed" 7
     fi
-    # Repoint current → VDIR only after a complete population. Relative
-    # target so the symlink survives a move of the parent tree.
-    ln -sfn "$VDIR" "$DATA_ROOT/current" \
-        || fail_with_scratch "repointing $DATA_ROOT/current → $VDIR failed" 7
-    note "  current → $VDIR"
+    note "  served data refreshed in place ($SERVED_VDIR); current symlink unchanged"
 else
     rsync_e="$(bv_rsync_ssh_e "$DEPLOY_PORT")" \
         || fail_with_scratch "could not build rsync ssh-cmd (sshpass missing?)" 7
-    # Ensure the versioned data dir's user/ exists on the remote before
-    # the per-subdir syncs.
-    ssh_run "mkdir -p $(printf %q "$DATA_ROOT/$VDIR/user")" \
-        || fail_with_scratch "could not create $DATA_ROOT/$VDIR/user on staging" 7
+    ssh_run "mkdir -p $(printf %q "$DATA_ROOT/$SERVED_VDIR/user")" \
+        || fail_with_scratch "could not create $DATA_ROOT/$SERVED_VDIR/user on staging" 7
     for sub in "${STATE_SUBDIRS[@]}"; do
         src="$SCRATCH/user/$sub"
         if [ ! -d "$src" ]; then
             note "  skip user/$sub (absent in scratch)"
             continue
         fi
-        remote_dst="$DATA_ROOT/$VDIR/user/$sub"
+        remote_dst="$DATA_ROOT/$SERVED_VDIR/user/$sub"
         ssh_run "mkdir -p $(printf %q "$remote_dst")" \
             || fail_with_scratch "could not create $remote_dst on staging" 7
         note "  rsync --delete user/$sub/ → staging"
-        # Per-subdirectory rsync --delete into the versioned data dir.
-        # This is the ONLY destructive write to staging state. It can
-        # never touch the blessing marker (different tree) or a release's
-        # live user/ paths (we write to stagingdata/<VDIR>/, not the
-        # docroot). bv_rsync_via_ssh exports SSHPASS for the child.
+        # Per-subdirectory rsync --delete into the served data dir. This is
+        # the ONLY destructive write to staging state. It touches exactly the
+        # four data subdirs — never user/config (secrets), never the blessing
+        # marker (Grav root, different tree), never a release's docroot.
+        # bv_rsync_via_ssh exports SSHPASS for the child.
         bv_rsync_via_ssh -az --delete -e "$rsync_e" \
             "$src/" "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_dst}/" \
             || fail_with_scratch "rsync of user/$sub to staging failed" 7
     done
-    # Copy the data-version marker into the versioned dir.
+    # Stamp the served dir's data-version marker.
     if [ -f "$SCRATCH_MARKER" ]; then
         bv_rsync_via_ssh -az -e "$rsync_e" \
-            "$SCRATCH_MARKER" "${DEPLOY_USER}@${DEPLOY_HOST}:${DATA_ROOT}/${VDIR}/user/data-version.yaml" \
+            "$SCRATCH_MARKER" "${DEPLOY_USER}@${DEPLOY_HOST}:${DATA_ROOT}/${SERVED_VDIR}/user/data-version.yaml" \
             || fail_with_scratch "rsync of data-version.yaml to staging failed" 7
     fi
-    # Repoint current → VDIR (relative target) only after a complete sync.
-    ssh_run "ln -sfn $(printf %q "$VDIR") $(printf %q "$DATA_ROOT/current")" \
-        || fail_with_scratch "repointing staging $DATA_ROOT/current → $VDIR failed" 7
-    note "  current → $VDIR"
+    note "  served data refreshed in place ($SERVED_VDIR); current symlink unchanged"
 fi
 echo ""
 
@@ -573,7 +577,7 @@ else
     echo "    migrations:       $SOURCE_VERSION → $TARGET_VERSION"
 fi
 echo "    code version:     $CODE_VERSION (commit $CODE_COMMIT, build $CODE_BUILD)"
-echo "    data version:     $TARGET_VERSION (live via $DATA_ROOT/current → $VDIR)"
+echo "    data version:     $TARGET_VERSION (served from $DATA_ROOT/$SERVED_VDIR)"
 echo "    features sha256:  $FEATURES_SHA"
 echo "    blessed_at:       $BLESSED_AT"
 echo ""

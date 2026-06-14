@@ -11,8 +11,10 @@
 #
 # Coverage:
 #   Success path:
-#     * accounts content lands at stagingdata/<VDIR>/user/accounts/
-#     * stagingdata/current resolves to <VDIR>
+#     * accounts/data/pages/uploads refreshed in the served dir
+#       (stagingdata/v0/user/...), deny-listed cache/ excluded
+#     * a pre-existing per-tier secret (user/config/security.yaml) is preserved
+#     * stale staging data is removed (wholesale --delete refresh)
 #     * staging-blessed.yaml exists with all seven fields populated,
 #       data_version == target, source_backup_id == the produced backup id
 #     * exit 0
@@ -59,8 +61,10 @@ TARGET_DV="$(awk '
         sub(/[[:space:]]+#.*$/,"",v); gsub(/^[[:space:]]+|[[:space:]]+$/,"",v); print v; exit
     }' "$REPO_ROOT/config/www/user/data-version.yaml")"
 [ -n "$TARGET_DV" ] || { echo "FATAL: could not read target data_version from repo marker" >&2; exit 1; }
-# Expected versioned-dir name: 0.1.0 → v_0_1_0.
-EXPECT_VDIR="v_${TARGET_DV//./_}"
+# Served dir is v0 — release symlinks are hardcoded to <tier>data/v0/, so the
+# risk-mitigated promote refreshes v0 in place (no new versioned dir, no
+# current repoint). Per-tier secrets under v0/user/config/ must survive.
+EXPECT_VDIR="v0"
 
 echo "→ promote-to-staging: local-mode orchestration probe (target data_version=$TARGET_DV, vdir=$EXPECT_VDIR)"
 
@@ -114,6 +118,13 @@ export PROMOTE_ENV_FILE="$TMP/no-such-env-file"
 echo "→ success path: clean local-mode promote"
 TIER_DIR="$TMP/tier"; mkdir -p "$TIER_DIR"
 
+# Pre-seed the served dir (v0) with a per-tier SECRET that must be preserved
+# and STALE data that the wholesale refresh must delete.
+mkdir -p "$TIER_DIR/stagingdata/v0/user/config" \
+         "$TIER_DIR/stagingdata/v0/user/accounts"
+echo 'salt: keep-me'  > "$TIER_DIR/stagingdata/v0/user/config/security.yaml"
+echo 'username: stale' > "$TIER_DIR/stagingdata/v0/user/accounts/stale.yaml"
+
 OUT_LOG="$TMP/promote-success.out"
 set +e
 PROMOTE_LOCAL_TIER_DIR="$TIER_DIR" "$PROMOTE_SH" --yes >"$OUT_LOG" 2>&1
@@ -165,12 +176,20 @@ else
     report_fail "versioned data dir's data-version.yaml missing or wrong"
 fi
 
-# current symlink resolves to the versioned dir.
-CUR="$TIER_DIR/stagingdata/current"
-if [ -L "$CUR" ] && [ "$(readlink "$CUR")" = "$EXPECT_VDIR" ]; then
-    report_pass "stagingdata/current → $EXPECT_VDIR (relative symlink)"
+# Per-tier secret under v0/user/config/ is PRESERVED (the refresh touches
+# only accounts/data/pages/uploads, never user/config).
+SEC="$TIER_DIR/stagingdata/v0/user/config/security.yaml"
+if [ -f "$SEC" ] && grep -q 'keep-me' "$SEC"; then
+    report_pass "per-tier secret (user/config/security.yaml) preserved across refresh"
 else
-    report_fail "stagingdata/current does not resolve to $EXPECT_VDIR (got: $(readlink "$CUR" 2>/dev/null || echo '<none>'))"
+    report_fail "per-tier secret was clobbered by the refresh"
+fi
+
+# Stale pre-existing account is GONE (wholesale --delete overwrite of accounts/).
+if [ ! -e "$TIER_DIR/stagingdata/v0/user/accounts/stale.yaml" ]; then
+    report_pass "stale staging account removed (wholesale --delete refresh)"
+else
+    report_fail "stale staging account survived the wholesale refresh"
 fi
 
 # Blessing marker exists with all seven fields populated.
@@ -256,11 +275,12 @@ else
     report_fail "stale blessing survived a failed promote (false-positive risk)"
 fi
 
-# No versioned data dir should have been created by the aborted run.
+# No served data dir should have been written by the aborted run (it fails at
+# restore, well before the step-7 data refresh).
 if [ ! -d "$TIER_FAIL/stagingdata/$EXPECT_VDIR" ]; then
-    report_pass "no versioned data dir created by the aborted run"
+    report_pass "no served data dir written by the aborted run"
 else
-    report_fail "aborted run created a versioned data dir"
+    report_fail "aborted run wrote to the served data dir"
 fi
 
 # ──────────────────────────────────────────────────────────────────────
