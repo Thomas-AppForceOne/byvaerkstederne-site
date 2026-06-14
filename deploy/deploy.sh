@@ -882,8 +882,8 @@ bv_remote_run '
         mv "$RD/user/env/$DEPLOY_ENV/config/security.yaml" "$DD/$VDIR/user/env/$DEPLOY_ENV/config/security.yaml"
     fi
     # Per-tier email.yaml — operator-provisioned SMTP credentials (WI-1).
-    # Lives under env/<tier>/config/plugins/ so Grav's environment merge folds
-    # it into the plugins.email namespace (the email plugin's own config); a
+    # Lives under env/<tier>/config/plugins/ so the Grav environment merge folds
+    # it into the plugins.email namespace (the email plugin config); a
     # file directly under config/ would land in a dead `email` namespace and
     # never reach the plugin. Same first-deploy bootstrap as security.yaml: if
     # the release carries a copy (it will not, since email.yaml is gitignored
