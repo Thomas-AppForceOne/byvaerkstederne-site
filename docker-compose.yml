@@ -11,3 +11,27 @@ services:
     ports:
       - "${GRAV_PORT:-8080}:80"
     restart: unless-stopped
+
+  # WI-6 — API-queryable, non-delivering mail sink. Scoped to the `test`
+  # compose profile so it ONLY runs when explicitly requested (e.g.
+  # scripts/mailpit-up.sh / `docker compose --profile test up`), never under
+  # the plain dev `make start` / `:8080` workflow.
+  #
+  # The Grav container reaches it as `mailpit:1025` on the shared default
+  # compose network (same compose project). Email-bearing tests then read the
+  # captured message over Mailpit's REST API at MAILPIT_URL (host-side port
+  # below) to extract the activation/reset token and drive it.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: ${MAILPIT_CONTAINER:-mailpit}
+    profiles: ["test"]
+    environment:
+      - TZ=Europe/Copenhagen
+      - MP_SMTP_AUTH_ACCEPT_ANY=1
+      - MP_SMTP_AUTH_ALLOW_INSECURE=1
+    ports:
+      # Host-side ports are parameterised so multiple worktrees don't collide.
+      # 1025 = SMTP, 8025 = REST API / web UI.
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_API_PORT:-8025}:8025"
+    restart: unless-stopped

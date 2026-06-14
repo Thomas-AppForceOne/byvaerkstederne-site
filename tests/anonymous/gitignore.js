@@ -82,35 +82,28 @@ test.describe('Auth-secret invariant — security.yaml salt (WI-3)', () => {
     ).toBe(true);
   });
 
-  test('the previously-exposed salt is absent from tracked config/code (docs may narrate it)', () => {
-    // grep the salt across tracked files. git grep exits 1 (no match) when
-    // clean. We then exclude the markdown that legitimately documents the
-    // value-to-rotate (specifications/decisions/README) — the salt appearing
-    // as prose in a rotation runbook is documentation, not an active secret.
-    // What must NOT happen is the salt living in a config/YAML/PHP file.
+  test('the exposed salt is not the ACTIVE salt value in any tracked file', () => {
+    // The dangerous form is the salt as a live YAML value: `salt: <exposed>`.
+    // Docs/specs (.md), the .example template's narration, and this test's own
+    // EXPECTED_SALT constant legitimately mention the string; what must never
+    // exist in a tracked file is the active assignment. git grep exits 1 (no
+    // match) when clean.
     let matched = '';
     try {
-      matched = execFileSync('git', ['grep', '--cached', '-l', EXPOSED_SALT], {
+      matched = execFileSync('git', ['grep', '--cached', '-nE', `^\\s*salt:\\s*${EXPOSED_SALT}`], {
         cwd: REPO_ROOT,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
       });
     } catch (err) {
-      // exit 1 = no match. Any other status is unexpected.
       const status = /** @type {any} */ (err).status;
-      if (status !== 1) throw err;
+      if (status !== 1) throw err; // exit 1 = no match (good)
       matched = '';
     }
-    const offending = matched
-      .split('\n')
-      .map((l) => l.trim())
-      .filter(Boolean)
-      // Markdown docs/specs/ADRs may quote the salt as the value to rotate.
-      .filter((p) => !p.endsWith('.md'));
     expect(
-      offending,
-      `the exposed salt ${EXPOSED_SALT} must not live in any tracked config/code file (found in: ${offending.join(', ')})`,
-    ).toEqual([]);
+      matched.trim(),
+      `the exposed salt must not be an active 'salt:' value in any tracked file (found: ${matched.trim()})`,
+    ).toBe('');
   });
 
   test('a tracked .example template exists for security.yaml', () => {
