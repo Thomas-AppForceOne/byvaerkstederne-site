@@ -34,6 +34,13 @@ module.exports = defineConfig({
   testDir: './tests',
   timeout: 60_000,
   retries: 1,
+  // Serial execution (one worker). The suite runs against a SINGLE shared Grav
+  // container, and some tests mutate global state on it — notably
+  // feature-flags-plugins.js flips flags + runs `bin/grav clearcache`, which
+  // nukes the cache for every other in-flight test. Under parallel workers that
+  // races and produces spurious failures (sessions/nonces invalidated mid-test).
+  // One worker removes the race; correctness over wall-clock for a shared backend.
+  workers: 1,
   reporter: [['list'], ['html', { open: 'never' }]],
   globalSetup: require.resolve('./tests/global-setup.js'),
   globalTeardown: require.resolve('./tests/global-teardown.js'),

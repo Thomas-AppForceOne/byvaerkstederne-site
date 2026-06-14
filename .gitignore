@@ -83,6 +83,13 @@ config/www/user/data/rememberme/
 # Feed cache
 config/www/user/data/feed/
 
+# Bug-report uploaded screenshots — runtime user uploads (the bug-report tests
+# also create these). Keep the access-control infra (.htaccess + index.html);
+# never track the uploaded images themselves.
+config/www/user/data/bug-report-images/*
+!config/www/user/data/bug-report-images/.htaccess
+!config/www/user/data/bug-report-images/index.html
+
 # Claude Code — ignore by default, but track project-level settings + hooks.
 # Local per-operator state (permissions, worktree registry, transient
 # scratch files) stays ignored via the patterns below.

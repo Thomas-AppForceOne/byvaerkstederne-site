@@ -122,6 +122,27 @@ function appendIfMissing(path, key, yaml) {
 }
 
 /**
+ * Clear Grav's cache so freshly-seeded fixtures become visible everywhere.
+ *
+ * Appending a row to a flex-objects YAML at runtime does NOT invalidate Grav's
+ * compiled flex index. The front-end re-reads the file, but the ADMIN
+ * flex-objects view serves the cached index — so an item seeded after the cache
+ * warmed reads back as `object.exists == false` (e.g. the admin roadmap edit
+ * page then never renders the release_nonce, failing the admin smoke test).
+ * Clearing the cache once after seeding makes the seed visible to every read
+ * path. `-w /app/www/public` is mandatory (the image's default WORKDIR lacks
+ * bin/grav); `clearcache` is the single-word form (no hyphen).
+ */
+function clearGravCache() {
+  try {
+    execFileSync('docker', ['exec', '-w', '/app/www/public', gravContainer(), 'bin/grav', 'clearcache'], {
+      stdio: ['ignore', 'ignore', 'ignore'],
+      timeout: 30_000,
+    });
+  } catch (_) { /* non-fatal */ }
+}
+
+/**
  * Remove the locked-roadmap fixture. Safe to call when the entry is gone.
  * Uses sed with the fixture key allowlisted — never accepts untrusted input.
  */
@@ -175,4 +196,5 @@ module.exports = {
   removeLockedRoadmapItem,
   removeReleasableRoadmapItem,
   removeUnpromotedBugReport,
+  clearGravCache,
 };

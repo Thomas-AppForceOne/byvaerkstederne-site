@@ -24,6 +24,7 @@ const {
   ensureLockedRoadmapItem,
   ensureReleasableRoadmapItem,
   ensureUnpromotedBugReport,
+  clearGravCache,
 } = require('./helpers/fixtures');
 
 module.exports = async function globalSetup() {
@@ -35,11 +36,19 @@ module.exports = async function globalSetup() {
     const password = process.env.TEST_ADMIN_PASSWORD || '';
     await ensureAccount(TEST_ADMIN, password);
   }
+  let seeded = false;
   if (hasUserPassword) {
-    try { ensureLockedRoadmapItem(); } catch (_) { /* non-fatal */ }
+    try { seeded = ensureLockedRoadmapItem().seeded || seeded; } catch (_) { /* non-fatal */ }
   }
   if (hasAdminPassword) {
-    try { ensureReleasableRoadmapItem(); } catch (_) { /* non-fatal */ }
-    try { ensureUnpromotedBugReport(); } catch (_) { /* non-fatal */ }
+    try { seeded = ensureReleasableRoadmapItem().seeded || seeded; } catch (_) { /* non-fatal */ }
+    try { seeded = ensureUnpromotedBugReport().seeded || seeded; } catch (_) { /* non-fatal */ }
+  }
+  // Make the freshly-seeded flex fixtures visible to Grav's cached admin flex
+  // index (appending YAML at runtime doesn't invalidate it). Without this the
+  // admin roadmap edit page reads the seeded item as non-existent and never
+  // renders the release_nonce, failing the admin smoke test non-deterministically.
+  if (seeded) {
+    clearGravCache();
   }
 };

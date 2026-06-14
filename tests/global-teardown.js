@@ -14,6 +14,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 const {
   TEST_USER,
   TEST_ADMIN,
@@ -55,4 +56,16 @@ module.exports = async function globalTeardown() {
   for (const rel of GENERATED_ENV_SECURITY_FILES) {
     try { fs.rmSync(path.join(repoRoot, rel), { force: true }); } catch (_) { /* non-fatal */ }
   }
+
+  // Restore the tracked flex-objects data files. The authenticated suite mutates
+  // them as a side effect (roadmap voting changes vote counts; bug-report tests
+  // append records), which would otherwise leave them dirty in `git status`.
+  // `git checkout --` restores the committed content; it's a no-op for the
+  // anonymous suite (which never touches these) and for an already-clean file.
+  try {
+    execFileSync('git', ['checkout', '--', 'config/www/user/data/flex-objects'], {
+      cwd: repoRoot,
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+  } catch (_) { /* non-fatal — not a git checkout or nothing to restore */ }
 };
