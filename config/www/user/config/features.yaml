@@ -2,13 +2,14 @@
 #
 # This file is active when no env-specific `user/env/<host>/config/features.yaml`
 # overrides it — i.e., local development, CI containers probed directly by
-# IP/127.0.0.1, and any host without a dedicated env directory. Local dev
-# must see every feature surface so existing tests, demos, and manual
-# walkthroughs keep working — so every flag is ON here. The real tiers narrow
-# this down via their own host-scoped profiles:
-#   - user/env/test.hackersbychoice.dk/config/features.yaml     → all off
-#   - user/env/staging.hackersbychoice.dk/config/features.yaml  → all on (explicit)
-#   - user/env/dev.hackersbychoice.dk/config/features.yaml      → all on (explicit)
+# IP/127.0.0.1, and any host without a dedicated env directory. The local dev
+# machine is the "dev" environment, which sees every feature surface so existing
+# tests, demos, and manual walkthroughs keep working — so every flag is ON here.
+# The deployed tiers narrow this down via their own host-scoped profiles, and
+# ONLY the dev tier is all-on (staging and test default to all-off):
+#   - user/env/dev.hackersbychoice.dk/config/features.yaml      → all ON
+#   - user/env/staging.hackersbychoice.dk/config/features.yaml  → all OFF
+#   - user/env/test.hackersbychoice.dk/config/features.yaml     → all OFF
 #
 # Values MUST be the literal quoted strings `"true"` or `"false"`. Any
 # other shape (bare YAML boolean, `TRUE`, integer, null) resolves to
