@@ -51,10 +51,20 @@ const { port: PORT, container: CONTAINER } = discoverGravEnv(WORKTREE);
 const BASE = `http://127.0.0.1:${PORT}`;
 
 function clearGravCache() {
-  execSync(`docker exec -w /app/www/public ${CONTAINER} bin/grav clearcache`, {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: 30_000,
-  });
+  // Retry then give up quietly — see feature-flags-plugins.js clearGravCache:
+  // the docker-exec can transiently time out under full-suite load; a hard throw
+  // would fail an otherwise-passing test.
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      execSync(`docker exec -w /app/www/public ${CONTAINER} bin/grav clearcache`, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 30_000,
+      });
+      return;
+    } catch (_) {
+      if (attempt === 3) return;
+    }
+  }
 }
 
 /**

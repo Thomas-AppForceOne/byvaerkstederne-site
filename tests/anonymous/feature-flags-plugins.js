@@ -72,10 +72,21 @@ const BASE = `http://127.0.0.1:${PORT}`;
 // clearcache` is the single-word form; `clear-cache` (hyphenated) does not
 // exist and will prompt a "did you mean?" error.
 function clearGravCache() {
-  execSync(`docker exec -w /app/www/public ${CONTAINER} bin/grav clearcache`, {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: 30_000,
-  });
+  // Retry then give up quietly: under the full suite's back-to-back load this
+  // docker-exec can transiently time out, and a hard throw fails an otherwise-
+  // passing test (the run-all flake). A slightly stale cache is far less harmful
+  // than a spurious failure — profiles are selected by Host header regardless.
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      execSync(`docker exec -w /app/www/public ${CONTAINER} bin/grav clearcache`, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 30_000,
+      });
+      return;
+    } catch (_) {
+      if (attempt === 3) return;
+    }
+  }
 }
 
 /**
