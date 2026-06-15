@@ -47,9 +47,9 @@ returned closure, and invokes it with the data-dir path.
 <?php
 /**
  * @param string $dataDir Absolute path to a directory containing
- *                        the data tree (`accounts/`, `data/`,
- *                        `pages/`, `uploads/`,
- *                        `config/www/user/data-version.yaml`). The
+ *                        the data tree (`user/accounts/`, `user/data/`,
+ *                        `user/pages/`, `user/uploads/`,
+ *                        `user/data-version.yaml`). The
  *                        closure mutates this directory in place.
  *
  * @return void           Throws on failure. Idempotent on success.
@@ -57,7 +57,7 @@ returned closure, and invokes it with the data-dir path.
 return function (string $dataDir): void {
     // 1. Read from $dataDir, transform as needed, write back.
     // 2. Finish by writing the new data_version into
-    //    $dataDir/config/www/user/data-version.yaml.
+    //    $dataDir/user/data-version.yaml.
 };
 ```
 
@@ -76,7 +76,7 @@ both:
    `$dataDir` is a pure data tree and contains no `vendor/` of
    its own.
 3. **Finish by writing `data-version.yaml`.** The closure must
-   write `$dataDir/config/www/user/data-version.yaml` with the
+   write `$dataDir/user/data-version.yaml` with the
    new `data_version` value matching the file's
    `<target_version>` prefix. The runner verifies this after the
    closure returns and refuses to continue if the file is missing
@@ -97,10 +97,10 @@ Every migration ships with a paired fixture under
 ```
 migrations/tests/<target_version>_<slug>/
   before/        # representative data shaped at the from-version
-    config/www/user/data-version.yaml   # contains "<from_version>"
+    user/data-version.yaml   # contains "<from_version>"
     <…the bits the migration cares about…>
   after/         # what the migration must produce
-    config/www/user/data-version.yaml   # contains "<target_version>"
+    user/data-version.yaml   # contains "<target_version>"
     <…the post-migration shape…>
 ```
 
@@ -129,15 +129,15 @@ Backups produced before this spec shipped carry no `data_version`
 field (most have no metadata file at all). The runner treats those
 inputs as `data_version: "0.1.0"` by convention, and prints a
 warning each time it does so. Concretely, if
-`<data-dir>/config/www/user/data-version.yaml` is missing or is
+`<data-dir>/user/data-version.yaml` is missing or is
 present without a parseable `data_version` field, the from-version
 is taken to be `0.1.0`. If that assumption is wrong for a given
 backup, stamp the unpacked snapshot manually before invoking the
 runner:
 
 ```sh
-mkdir -p <scratch>/config/www/user
-echo 'data_version: "X.Y.Z"' > <scratch>/config/www/user/data-version.yaml
+mkdir -p <scratch>/user
+echo 'data_version: "X.Y.Z"' > <scratch>/user/data-version.yaml
 deploy/migrate.sh <scratch> --to <target>
 ```
 

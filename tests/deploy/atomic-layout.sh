@@ -272,6 +272,14 @@ else
     check "application code is in release dir" fail
 fi
 
+# Provision a per-tier email.yaml into <tier>data BEFORE wiring symlinks
+# (WI-1). This is the operator-provisioned SMTP-credentials file. The
+# symlink wired below must point at it and resolve, and it must survive
+# subsequent deploys exactly as the security.yaml pair does.
+mkdir -p "$DATA_DIR/v0/user/env/$TIER/config/plugins"
+printf 'mailer:\n  smtp:\n    server: mailpit\n    port: 1025\n' \
+    > "$DATA_DIR/v0/user/env/$TIER/config/plugins/email.yaml"
+
 # Step 5: wire symlinks.
 bv_wire_release_symlinks "$RELEASE_DIR" "$DATA_DIR" "$TIER"
 
@@ -280,6 +288,7 @@ for sym in \
     "user/data" \
     "user/config/security.yaml" \
     "user/env/$TIER/config/security.yaml" \
+    "user/env/$TIER/config/plugins/email.yaml" \
     "logs"
 do
     if [ -L "$RELEASE_DIR/$sym" ]; then
@@ -324,6 +333,17 @@ if [ -d "$RELEASE_DIR/logs" ]; then
     check "logs symlink resolves into <tier>data/logs/" ok
 else
     check "logs symlink resolves into <tier>data/logs/" fail
+fi
+
+# email.yaml symlink resolves to the provisioned per-tier file (WI-1
+# deploy preservation — same property the security.yaml line asserts,
+# extended to email.yaml). Reading through the symlink must yield the
+# provisioned content.
+if [ -f "$RELEASE_DIR/user/env/$TIER/config/plugins/email.yaml" ] \
+   && grep -q '^    server: mailpit$' "$RELEASE_DIR/user/env/$TIER/config/plugins/email.yaml"; then
+    check "email.yaml symlink resolves to the provisioned per-tier file (WI-1)" ok
+else
+    check "email.yaml symlink resolves to the provisioned per-tier file (WI-1)" fail
 fi
 
 # logs symlink resolves to <tier>data/logs/ specifically — assert via
@@ -462,6 +482,19 @@ else
 fi
 
 bv_wire_release_symlinks "$RELEASE_DIR_2" "$DATA_DIR" "$TIER"
+
+# Two consecutive deploys preserve the per-tier email.yaml (WI-1
+# acceptance criterion): it lives in <tier>data, is re-symlinked into the
+# new release, and the rsync (which excludes the data dir) never touched
+# it. Read through the second release's symlink and confirm the content is
+# byte-identical to what deploy #1 saw.
+if [ -f "$RELEASE_DIR_2/user/env/$TIER/config/plugins/email.yaml" ] \
+   && grep -q '^    server: mailpit$' "$RELEASE_DIR_2/user/env/$TIER/config/plugins/email.yaml"; then
+    check "second deploy preserves the per-tier email.yaml (WI-1)" ok
+else
+    check "second deploy preserves the per-tier email.yaml (WI-1)" fail
+fi
+
 bv_write_release_meta_yaml \
     "$RELEASE_DIR_2" \
     "$RELEASE_ID_2" \
@@ -777,6 +810,153 @@ if command -v realpath >/dev/null 2>&1; then
     else
         check "no real file under release dir resolves into <tier>data/ ($BAD found)" fail
     fi
+fi
+
+# ─────────────────────────────────────────────────────────────────────
+# Test 9: versioned-data-dir SERVING — bv_wire_release_symlinks with an
+# explicit non-v0 vdir wires the FOUR versioned symlinks into
+# <tier>data/<vdir>/... while leaving logs UNVERSIONED (→ <tier>data/logs).
+# (ADR-005. 3-arg callers above stay v0; this asserts the 4-arg path.)
+# ─────────────────────────────────────────────────────────────────────
+echo ""
+echo "Test 9: bv_wire_release_symlinks honours an explicit vdir (versioned serving)"
+
+V9_PARENT="$WORK/v9-parent"
+V9_RELEASES="$V9_PARENT/${TIER}-releases"
+V9_DATA="$V9_PARENT/${TIER}data"
+mkdir -p "$V9_PARENT"
+
+# Bootstrap data dir, then build a v_0_2_0 data dir the release will bind to.
+bv_bootstrap_data_dir "$V9_DATA" "$TIER"
+mkdir -p "$V9_DATA/v_0_2_0/user/accounts" \
+         "$V9_DATA/v_0_2_0/user/data" \
+         "$V9_DATA/v_0_2_0/user/config" \
+         "$V9_DATA/v_0_2_0/user/env/$TIER/config"
+echo 'username: carol' > "$V9_DATA/v_0_2_0/user/accounts/carol.yaml"
+
+V9_RID="$(bv_compute_release_id "0f0f0f0")"
+V9_RDIR="$V9_RELEASES/$V9_RID"
+bv_rsync_to_release_dir "$STAGING" "$V9_RDIR" >/dev/null 2>&1
+
+# 4-arg call: wire into v_0_2_0.
+if bv_wire_release_symlinks "$V9_RDIR" "$V9_DATA" "$TIER" "v_0_2_0"; then
+    check "bv_wire_release_symlinks accepts a 4th vdir arg" ok
+else
+    check "bv_wire_release_symlinks accepts a 4th vdir arg" fail
+fi
+
+# The four versioned symlinks resolve into .../v_0_2_0/... (assert via the
+# readlink target string — it must contain the vdir path component).
+for sym in \
+    "user/accounts" \
+    "user/data" \
+    "user/config/security.yaml" \
+    "user/env/$TIER/config/security.yaml"
+do
+    target="$(readlink "$V9_RDIR/$sym" 2>/dev/null || echo "")"
+    case "$target" in
+        *"/${TIER}data/v_0_2_0/"*)
+            check "versioned symlink $sym targets .../v_0_2_0/... ('$target')" ok
+            ;;
+        *)
+            check "versioned symlink $sym targets .../v_0_2_0/... (got '$target')" fail
+            ;;
+    esac
+done
+
+# logs stays UNVERSIONED: it must target <tier>data/logs, NOT a vdir.
+logs_target="$(readlink "$V9_RDIR/logs" 2>/dev/null || echo "")"
+case "$logs_target" in
+    *"/${TIER}data/logs")
+        check "logs symlink stays unversioned (→ <tier>data/logs, got '$logs_target')" ok
+        ;;
+    *)
+        check "logs symlink stays unversioned (got '$logs_target')" fail
+        ;;
+esac
+
+# accounts symlink RESOLVES into the v_0_2_0 data dir (content reachable).
+if [ -f "$V9_RDIR/user/accounts/carol.yaml" ]; then
+    check "user/accounts symlink resolves into <tier>data/v_0_2_0/ (content reachable)" ok
+else
+    check "user/accounts symlink resolves into <tier>data/v_0_2_0/" fail
+fi
+
+# realpath cross-check: accounts resolves under <tier>data/v_0_2_0/.
+if command -v realpath >/dev/null 2>&1; then
+    rp="$(cd "$V9_RDIR" && realpath user/accounts 2>/dev/null || echo "")"
+    expected="$(realpath "$V9_DATA/v_0_2_0/user/accounts" 2>/dev/null || echo "")"
+    if [ -n "$rp" ] && [ "$rp" = "$expected" ]; then
+        check "user/accounts realpath == <tier>data/v_0_2_0/user/accounts" ok
+    else
+        check "user/accounts realpath (got '$rp', expected '$expected')" fail
+    fi
+fi
+
+# An unsafe vdir (containing '/') is rejected with non-zero.
+V9_RID2="$(bv_compute_release_id "0e0e0e0")"
+V9_RDIR2="$V9_RELEASES/$V9_RID2"
+bv_rsync_to_release_dir "$STAGING" "$V9_RDIR2" >/dev/null 2>&1
+if bv_wire_release_symlinks "$V9_RDIR2" "$V9_DATA" "$TIER" "v_0_2_0/../etc" 2>/dev/null; then
+    check "bv_wire_release_symlinks rejects an unsafe vdir (traversal)" fail
+else
+    check "bv_wire_release_symlinks rejects an unsafe vdir (traversal)" ok
+fi
+if bv_wire_release_symlinks "$V9_RDIR2" "$V9_DATA" "$TIER" "" 2>/dev/null; then
+    check "bv_wire_release_symlinks rejects an empty vdir" fail
+else
+    check "bv_wire_release_symlinks rejects an empty vdir" ok
+fi
+
+# ─────────────────────────────────────────────────────────────────────
+# Test 10: absent email.yaml is surfaced, not silent (WI-1 failure path).
+# On a tier with no provisioned email.yaml, wiring still creates the
+# symlink (it is allowed to dangle), accounts/data/logs still resolve,
+# and bv_check_previous_release_data_symlinks still returns 0 — i.e. the
+# tier BOOTS (no fatal). A missing email.yaml must degrade transactional
+# mail to non-sending (surfaced by deploy.sh's WARN), never block the
+# deploy.
+# ─────────────────────────────────────────────────────────────────────
+echo ""
+echo "Test 10: absent email.yaml dangles but does not block boot (WI-1 failure path)"
+
+ABSENT_PARENT="$WORK/absent-email"
+ABSENT_DATA="$ABSENT_PARENT/${TIER}data"
+ABSENT_RELEASES="$ABSENT_PARENT/${TIER}-releases"
+mkdir -p "$ABSENT_PARENT"
+bv_bootstrap_data_dir "$ABSENT_DATA" "$TIER"
+# Deliberately do NOT create $ABSENT_DATA/v0/user/env/$TIER/config/plugins/email.yaml.
+ABSENT_REL_ID="$(bv_compute_release_id "ab5en70")"
+ABSENT_REL_DIR="$ABSENT_RELEASES/$ABSENT_REL_ID"
+mkdir -p "$ABSENT_REL_DIR"
+bv_wire_release_symlinks "$ABSENT_REL_DIR" "$ABSENT_DATA" "$TIER"
+
+# (a) The email.yaml symlink exists as a symlink ...
+if [ -L "$ABSENT_REL_DIR/user/env/$TIER/config/plugins/email.yaml" ]; then
+    check "absent-tier: email.yaml symlink is created even when target missing" ok
+else
+    check "absent-tier: email.yaml symlink is created even when target missing" fail
+fi
+# ... and dangles (target does not exist) — allowed, not fatal.
+if [ ! -e "$ABSENT_REL_DIR/user/env/$TIER/config/plugins/email.yaml" ]; then
+    check "absent-tier: email.yaml symlink dangles (allowed, not fatal)" ok
+else
+    check "absent-tier: email.yaml symlink should dangle when unprovisioned" fail
+fi
+# (b) accounts/data/logs still resolve — the must-resolve set is intact.
+if bv_check_previous_release_data_symlinks "$ABSENT_REL_DIR" 2>/dev/null; then
+    check "absent-tier: must-resolve symlinks (accounts/data/logs) still resolve — tier boots" ok
+else
+    check "absent-tier: must-resolve symlinks (accounts/data/logs) still resolve — tier boots" fail
+fi
+# (c) A real deploy WARNs about the absent file (deploy.sh source asserts
+#     the WARN exists; here we confirm the file path the WARN names matches
+#     where the wiring expects it). This pins the "never a green deploy with
+#     no warning" criterion together with lint check 8d.
+if grep -q 'WARN: no email.yaml provisioned for tier' "$DEPLOY_SH"; then
+    check "absent-tier: deploy.sh WARN handler exists for the missing-email path" ok
+else
+    check "absent-tier: deploy.sh must WARN on the missing-email path" fail
 fi
 
 # ─────────────────────────────────────────────────────────────────────

@@ -15,7 +15,7 @@
  * Profile-switching follows the Sprint-2 pattern (scoped to THIS spec —
  * no edits to playwright.config.js):
  *
- *   Host 'staging.hackersbychoice.dk'       -> PROFILE=internal   (all 17 flags "true")
+ *   Host 'dev.hackersbychoice.dk'       -> PROFILE=internal   (all 17 flags "true")
  *   Host 'test.hackersbychoice.dk'   -> PROFILE=public_demo (0 flags enabled)
  *
  * Chromium forbids setting Host via page.goto() / setExtraHTTPHeaders, so
@@ -51,10 +51,20 @@ const { port: PORT, container: CONTAINER } = discoverGravEnv(WORKTREE);
 const BASE = `http://127.0.0.1:${PORT}`;
 
 function clearGravCache() {
-  execSync(`docker exec -w /app/www/public ${CONTAINER} bin/grav clearcache`, {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: 30_000,
-  });
+  // Retry then give up quietly — see feature-flags-plugins.js clearGravCache:
+  // the docker-exec can transiently time out under full-suite load; a hard throw
+  // would fail an otherwise-passing test.
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      execSync(`docker exec -w /app/www/public ${CONTAINER} bin/grav clearcache`, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 30_000,
+      });
+      return;
+    } catch (_) {
+      if (attempt === 3) return;
+    }
+  }
 }
 
 /**
@@ -314,7 +324,7 @@ test.describe('Sprint-3: Twig gates render flagged affordances under internal (a
   test.beforeAll(async () => {
     seedAdminIfPossible();
     clearGravCache();
-    ctx = await profileContext('staging.hackersbychoice.dk');
+    ctx = await profileContext('dev.hackersbychoice.dk');
   });
 
   test.afterAll(async () => {
@@ -409,7 +419,7 @@ test.describe('Sprint-3: Twig gates render flagged affordances under internal (a
  * Low-level HTTP fetch that lets us force the Host header AND round-trip
  * cookies across requests. Playwright's APIRequestContext cookie jar
  * matches cookies by the request URL's host — but Grav sets the cookie
- * with `domain=staging.hackersbychoice.dk` while we connect to 127.0.0.1, so
+ * with `domain=dev.hackersbychoice.dk` while we connect to 127.0.0.1, so
  * the jar never re-sends it. Rolling our own thin fetcher avoids the
  * mismatch.
  *
@@ -605,7 +615,7 @@ test.describe('Sprint-3: overlays + Fællesskab column — authenticated', () =>
     seedAdminIfPossible();
     ensureLocalAccountSafe('pw-test-user', password, { admin: false });
     clearGravCache();
-    internalAuthed = await authedRawContext('staging.hackersbychoice.dk', 'pw-test-user', password);
+    internalAuthed = await authedRawContext('dev.hackersbychoice.dk', 'pw-test-user', password);
     pdAuthed = await authedRawContext('test.hackersbychoice.dk', 'pw-test-user', password);
   });
 

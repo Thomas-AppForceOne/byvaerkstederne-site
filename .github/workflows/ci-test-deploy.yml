@@ -42,6 +42,29 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y age
 
+      - name: Syntax-check deploy scripts (bash -n)
+        # Parse every deploy/test script in full. `make test-deploy` exercises
+        # behaviour, but its --dry-run paths can exit BEFORE a syntactically
+        # broken block executes (e.g. an unescaped apostrophe in a comment
+        # inside a single-quoted bv_remote_run body), so a syntax error there
+        # slips through. `bash -n` parses each file end-to-end and catches it.
+        # Runs before the suite so a parse error fails fast with a clear pointer.
+        run: |
+          fail=0
+          for f in deploy/*.sh deploy/lib/*.sh tests/deploy/*.sh; do
+            [ -f "$f" ] || continue
+            if ! bash -n "$f" 2>/tmp/bn.err; then
+              echo "::error file=$f::bash -n syntax check failed"
+              cat /tmp/bn.err
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "One or more deploy scripts failed bash -n (see annotations above)." >&2
+            exit 1
+          fi
+          echo "✓ all deploy scripts parse clean"
+
       - name: Run deploy regression suite
         # `make test-deploy` is hermetic — default checkout depth is
         # sufficient. The job fails iff any probe fails.

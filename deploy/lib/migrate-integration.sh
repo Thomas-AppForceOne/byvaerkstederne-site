@@ -7,7 +7,7 @@
 #
 # Public functions:
 #   bv_remote_read_data_version <data_dir_root_var_name>
-#       Echoes the data_version field from <data_dir>/v<N>/config/www/user/
+#       Echoes the data_version field from <data_dir>/v<N>/user/
 #       data-version.yaml where v<N> is the current symlink target of
 #       <data_dir>/current. Defaults to "0.1.0" (pre-spec convention)
 #       when the file is missing.
@@ -70,7 +70,7 @@ bv_remote_read_data_version() {
     local data_dir="$1"
     local mode="${BV_MIGRATE_LOCAL_MODE:-0}"
     if [ "$mode" = "1" ]; then
-        local marker="$data_dir/current/config/www/user/data-version.yaml"
+        local marker="$data_dir/current/user/data-version.yaml"
         local v
         v="$(bv_local_extract_data_version "$marker")"
         if [ -z "$v" ]; then v="0.1.0"; fi
@@ -83,7 +83,7 @@ bv_remote_read_data_version() {
     # version parser used in local mode is too quote-heavy to embed
     # in a bv_remote_run heredoc without bash parser issues.
     bv_remote_run '
-        marker="$DD/current/config/www/user/data-version.yaml"
+        marker="$DD/current/user/data-version.yaml"
         if [ -f "$marker" ]; then
             v=$(grep -E "^data_version:" "$marker" \
                 | head -n1 \

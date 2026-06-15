@@ -5,7 +5,7 @@
 # Usage:
 #     deploy/migrate.sh <data-dir> [--to <version>]
 #
-# Reads the from-version from <data-dir>/config/www/user/data-version.yaml
+# Reads the from-version from <data-dir>/user/data-version.yaml
 # (falling back to "0.1.0" with a warning when the file is missing or
 # lacks a parseable `data_version` field — see spec §Pre-spec backups).
 # Computes the to-version from --to, or from the deploy bundle's
@@ -313,7 +313,7 @@ check_no_duplicate_targets() {
 # ----------------------------------------------------------------------
 
 PRE_SPEC_FALLBACK=0
-MARKER_PATH="$DATA_DIR_ABS/config/www/user/data-version.yaml"
+MARKER_PATH="$DATA_DIR_ABS/user/data-version.yaml"
 FROM_VERSION="$(extract_data_version "$MARKER_PATH")"
 if [ -z "$FROM_VERSION" ]; then
     PRE_SPEC_FALLBACK=1

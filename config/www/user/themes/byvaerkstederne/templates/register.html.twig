@@ -65,8 +65,13 @@
                         }
                     }
 
-                    // Password validation
-                    var pwd = form.querySelector('input[type="password"]');
+                    // Password strength validation (WI-5/WI-7). Target the
+                    // first password field (password1) explicitly now that the
+                    // form has a confirmation field (password2). This .length +
+                    // /[a-z]/ + /[A-Z]/ + /[0-9]/ chain is the canonical
+                    // client-side policy proven equivalent to the server-side
+                    // pwd_regex by the shared truth-table fixture/test.
+                    var pwd = form.querySelector('input[name="data[password1]"]') || form.querySelector('input[type="password"]');
                     if (pwd) {
                         var val = pwd.value;
                         var errors = [];
@@ -77,6 +82,14 @@
                         if (errors.length > 0) {
                             showError(pwd, 'Adgangskoden mangler: ' + errors.join(', ') + '.');
                         }
+                    }
+
+                    // Password confirmation match (WI-7). Mirror the server-side
+                    // validate_password1_and_password2 enforcement client-side so
+                    // a typo is caught before submit.
+                    var pwd2 = form.querySelector('input[name="data[password2]"]');
+                    if (pwd && pwd2 && pwd.value !== pwd2.value) {
+                        showError(pwd2, 'Adgangskoderne er ikke ens. Skriv den samme adgangskode i begge felter.');
                     }
 
                     if (hasError) {

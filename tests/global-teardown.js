@@ -14,6 +14,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 const {
   TEST_USER,
   TEST_ADMIN,
@@ -55,4 +56,25 @@ module.exports = async function globalTeardown() {
   for (const rel of GENERATED_ENV_SECURITY_FILES) {
     try { fs.rmSync(path.join(repoRoot, rel), { force: true }); } catch (_) { /* non-fatal */ }
   }
+
+  // Restore tracked files the suites mutate as a side effect, so the working
+  // tree stays clean in `git status`:
+  //   - flex-objects data: roadmap voting changes vote counts; bug-report tests
+  //     append records.
+  //   - the dev tier's features.yaml: the feature-flags cache-flip test flips a
+  //     flag in it and restores it in afterAll, but this backstops a killed run.
+  // `git checkout --` restores committed content; it's a no-op for an
+  // already-clean file (e.g. the anonymous flex paths on a pure-anonymous run).
+  try {
+    execFileSync(
+      'git',
+      [
+        'checkout',
+        '--',
+        'config/www/user/data/flex-objects',
+        'config/www/user/env/dev.hackersbychoice.dk/config/features.yaml',
+      ],
+      { cwd: repoRoot, stdio: ['ignore', 'ignore', 'ignore'] },
+    );
+  } catch (_) { /* non-fatal — not a git checkout or nothing to restore */ }
 };

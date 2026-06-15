@@ -79,6 +79,16 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 . "$SCRIPT_DIR/lib/atomic-release.sh"
 # shellcheck source=deploy/lib/banner.sh
 . "$SCRIPT_DIR/lib/banner.sh"
+# shellcheck source=deploy/lib/migrate-integration.sh
+# Provides bv_version_to_dirname (0.2.0 → v_0_2_0) — used by the
+# post-swap bookkeeping step to map a rolled-back release's recorded
+# data_version onto its versioned-data-dir name. Pure shell; no ssh.
+. "$SCRIPT_DIR/lib/migrate-integration.sh"
+
+# Non-fatal warning to stderr (the bookkeeping step is best-effort:
+# a failure to repoint current must never abort a rollback whose docroot
+# swap already succeeded).
+warn() { printf '⚠  %s\n' "$*" >&2; }
 
 # Require GNU coreutils for ms-resolution swap_duration_ms timing in
 # the rollback audit row. Fail loud BEFORE we touch any path. macOS
@@ -214,6 +224,7 @@ if [ "$LOCAL_MODE" = "0" ]; then
 fi
 
 RELEASES_DIR="${DEPLOY_DOCROOT_PARENT}/${LAYOUT_NAME}-releases"
+DATA_DIR="${DEPLOY_DOCROOT_PARENT}/${LAYOUT_NAME}data"
 
 # Wrappers around remote vs local execution. The remote case dispatches
 # through bv_remote_run (in deploy/lib/atomic-release.sh) — values flow
@@ -472,6 +483,119 @@ SWAP_DURATION_MS=$(( SWAP_END_MS - SWAP_START_MS ))
 ROLLED_BACK_AT_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 echo "  ✓ Swapped back (${SWAP_DURATION_MS} ms)"
+
+# =============================================================================
+# Step 4b — Bookkeeping: repoint <tier>data/current at the rolled-back
+# release's data-version dir.
+# =============================================================================
+#
+# Under the versioned-data-dir SERVING model (ADR-005) each release is
+# pinned to its own data-version dir via its OWN symlinks (preserved
+# across deploys), so DATA rollback is automatic — the swap above is
+# already serving the right data dir. This step is pure bookkeeping: it
+# keeps <tier>data/current consistent with what is now live, so the next
+# forward deploy binds to the same dir the rolled-back release uses.
+#
+# We resolve the target vdir from the rolled-back release WITHOUT
+# guessing:
+#   1. parse the <vdir> path component out of that release's
+#      user/accounts symlink target (the authoritative source — it is
+#      what the release actually serves), else
+#   2. read its release-meta.yaml data_version (a bare dir name like
+#      v0/v_… is used as-is; a SemVer is mapped via bv_version_to_dirname).
+# If neither yields a safe single-component dir name, we WARN and SKIP —
+# never repoint current at a guessed/unsafe dir. The docroot swap already
+# succeeded; leaving current stale is strictly safer than mispointing it.
+
+# read_symlink_target <path> → echoes `readlink` of a symlink (local or remote)
+read_symlink_target() {
+    local p="$1"
+    if [ "$LOCAL_MODE" = "1" ]; then
+        readlink "$p" 2>/dev/null || true
+    else
+        bv_remote_run 'readlink "$P" 2>/dev/null || true' P="$p" 2>/dev/null || true
+    fi
+}
+
+# Extract the <vdir> component from an accounts symlink target of the
+# shape "…/<tier>data/<vdir>/user/accounts". Echoes the vdir or nothing.
+extract_vdir_from_accounts_target() {
+    local target="$1"
+    case "$target" in
+        */user/accounts)
+            local head="${target%/user/accounts}"   # strip trailing /user/accounts
+            printf '%s' "${head##*/}"                # basename = the <vdir>
+            ;;
+        *) : ;;  # unexpected shape → echo nothing
+    esac
+}
+
+RESOLVED_VDIR=""
+ACCOUNTS_TARGET="$(read_symlink_target "$PREV_RELEASE_DIR/user/accounts")"
+if [ -n "$ACCOUNTS_TARGET" ]; then
+    RESOLVED_VDIR="$(extract_vdir_from_accounts_target "$ACCOUNTS_TARGET")"
+fi
+
+# Fallback: the release-meta data_version field (already fetched into
+# META_TMP for the CURRENT release; for the PREVIOUS release we read it
+# fresh). Only consulted if the symlink parse failed.
+if [ -z "$RESOLVED_VDIR" ]; then
+    PREV_META_DV=""
+    if [ "$LOCAL_MODE" = "1" ]; then
+        if [ -f "$PREV_RELEASE_DIR/release-meta.yaml" ]; then
+            PREV_META_DV="$(grep -E '^data_version:' "$PREV_RELEASE_DIR/release-meta.yaml" \
+                | head -n1 | sed -E 's/^data_version:[[:space:]]*//; s/^"//; s/"$//')"
+        fi
+    else
+        PREV_META_DV="$(bv_remote_run '
+            m="$RD/release-meta.yaml"
+            if [ -f "$m" ]; then
+                grep -E "^data_version:" "$m" | head -n1 \
+                    | sed -E "s/^data_version:[[:space:]]*//; s/^\"//; s/\"$//"
+            fi
+        ' RD="$PREV_RELEASE_DIR" 2>/dev/null || echo "")"
+    fi
+    if [ -n "$PREV_META_DV" ]; then
+        case "$PREV_META_DV" in
+            v0|v_*) RESOLVED_VDIR="$PREV_META_DV" ;;          # already a dir name
+            *)      RESOLVED_VDIR="$(bv_version_to_dirname "$PREV_META_DV")" ;;  # SemVer → dir
+        esac
+    fi
+fi
+
+# Final safety gate: a single, non-empty, traversal-free path component.
+case "$RESOLVED_VDIR" in
+    ''|*/*|*..*)
+        warn "could not safely resolve the rolled-back release's data-version dir (got: '${RESOLVED_VDIR:-<none>}') — leaving ${DATA_DIR}/current unchanged"
+        RESOLVED_VDIR=""
+        ;;
+esac
+
+if [ -n "$RESOLVED_VDIR" ]; then
+    # Only repoint when current actually differs — a redundant ln -sfn
+    # would still rewrite the symlink and bump <tier>data/'s mtime for no
+    # behavioural change, which is both wasteful and would trip the
+    # "<tier>data/ mtime unchanged across the rollback" invariant.
+    CURRENT_NOW="$(read_symlink_target "$DATA_DIR/current")"
+    CURRENT_NOW="$(basename "${CURRENT_NOW:-}")"
+    if [ "$CURRENT_NOW" = "$RESOLVED_VDIR" ]; then
+        echo "  ✓ ${DATA_DIR}/current already → ${RESOLVED_VDIR} (bookkeeping no-op)"
+    elif [ "$LOCAL_MODE" = "1" ]; then
+        # ln -sfn is the only mutation; relative target; RESOLVED_VDIR
+        # validated single-component above; DATA_DIR is config-derived.
+        if ln -sfn "$RESOLVED_VDIR" "$DATA_DIR/current" 2>/dev/null; then
+            echo "  ✓ ${DATA_DIR}/current → ${RESOLVED_VDIR} (bookkeeping)"
+        else
+            warn "could not repoint ${DATA_DIR}/current → ${RESOLVED_VDIR} (continuing; docroot already swapped)"
+        fi
+    else
+        if bv_remote_run 'ln -sfn "$VDIR" "$DD/current"' VDIR="$RESOLVED_VDIR" DD="$DATA_DIR" 2>/dev/null; then
+            echo "  ✓ ${DATA_DIR}/current → ${RESOLVED_VDIR} (bookkeeping)"
+        else
+            warn "could not repoint ${DATA_DIR}/current → ${RESOLVED_VDIR} on remote (continuing; docroot already swapped)"
+        fi
+    fi
+fi
 
 # =============================================================================
 # Step 5 — Smoke probe (same contract as deploy.sh) + audit row
