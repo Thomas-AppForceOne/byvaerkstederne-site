@@ -266,6 +266,60 @@ else
     check "deploy.sh must WARN when a tier's email.yaml is absent (WI-1)" fail
 fi
 
+# 9. Per-tier env-config dir name must be the canonical HOST, not the short
+#    tier name. Grav resolves its environment from the request hostname (no
+#    setup.php / GRAV_ENVIRONMENT — the generated .htaccess only sets
+#    X-Forwarded-Proto), so user/env/<X>/ is loaded ONLY when <X> is the host.
+#    deploy.sh historically passed the short tier name ($ENV) into the remote
+#    blocks that build user/env/<X>/, landing per-tier security.yaml/email.yaml
+#    in a dir Grav never reads — silently degrading transactional mail to
+#    non-sending. The promote scripts already use the host path; this locks
+#    deploy.sh onto the same convention. (ADR-004 §Consequences: this lint
+#    extension is the discharge for the remote-mode change.)
+#
+# 9a. deploy.sh derives the env-dir name from ENV_URL (single source of truth).
+if grep -qF 'ENV_HOST="${ENV_URL#https://}"' "$DEPLOY_DIR/deploy.sh"; then
+    check "deploy.sh derives ENV_HOST from ENV_URL (host = Grav env name)" ok
+else
+    check "deploy.sh must derive ENV_HOST from ENV_URL" fail
+fi
+
+# 9b. Every remote block that builds user/env/<X>/ is passed the HOST
+#     (ENV_HOST), never the bare short tier name. The buggy short-name form
+#     (DEPLOY_ENV="$ENV" / E="$ENV") must not reappear — this is the
+#     regression guard for the silent-mail-degrade defect.
+if grep -qF 'DEPLOY_ENV="$ENV_HOST"' "$DEPLOY_DIR/deploy.sh" \
+   && grep -qF 'E="$ENV_HOST"' "$DEPLOY_DIR/deploy.sh"; then
+    check "deploy.sh passes ENV_HOST into the env-dir remote blocks" ok
+else
+    check "deploy.sh must pass ENV_HOST (not \$ENV) into the env-dir remote blocks" fail
+fi
+SHORT_NAME_HITS="$(grep -nE '(DEPLOY_ENV|[[:space:]]E)="\$ENV"' "$DEPLOY_DIR/deploy.sh" 2>/dev/null \
+                   | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' \
+                   || true)"
+if [ -z "$SHORT_NAME_HITS" ]; then
+    check "deploy.sh never passes the short tier name \$ENV as the env-dir component" ok
+else
+    check "deploy.sh must not pass \$ENV (short tier name) as the env-dir component" fail
+    printf '%s\n' "$SHORT_NAME_HITS" | sed 's/^/      /' >&2
+fi
+
+# 9c. Each Grav tier's host (the value ENV_HOST resolves to) has a matching
+#     user/env/<host>/ dir in the repo — i.e. the derivation lands on a dir
+#     Grav actually reads, and deploy.sh's ENV_URL agrees with it.
+for host in dev.hackersbychoice.dk test.hackersbychoice.dk staging.hackersbychoice.dk www.byvaerkstederne.dk; do
+    if [ -d "$PROJECT_ROOT/config/www/user/env/$host/config" ]; then
+        check "repo ships a Grav-readable env dir for $host" ok
+    else
+        check "repo must ship user/env/$host/config (Grav reads env by hostname)" fail
+    fi
+    if grep -qF "ENV_URL=\"https://$host\"" "$DEPLOY_DIR/deploy.sh"; then
+        check "deploy.sh maps a tier to host $host" ok
+    else
+        check "deploy.sh must map a tier to host $host (ENV_URL)" fail
+    fi
+done
+
 echo ""
 echo "─────────────────────────────────────"
 echo "  Pass: $PASS    Fail: $FAIL"

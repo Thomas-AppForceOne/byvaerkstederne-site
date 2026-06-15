@@ -171,6 +171,19 @@ case "$ENV" in
         ;;
 esac
 
+# Grav resolves its environment from the request HOSTNAME — there is no
+# setup.php and no GRAV_ENVIRONMENT override (the generated .htaccess only
+# sets X-Forwarded-Proto). Per-tier config under user/env/<X>/ is therefore
+# loaded ONLY when <X> is the tier's canonical host, NOT the short tier name.
+# The tracked per-tier overrides (features.yaml/system.yaml) already live
+# under the host-named dir, and the promote scripts already sync features.yaml
+# by host path; per-tier SECRET state (security.yaml, email.yaml) must be
+# provisioned and symlinked under the SAME host-named dir or Grav never reads
+# it. Under the short tier name, email.yaml's SMTP creds (which have no
+# repo-default fallback) land in a dir Grav ignores and mail silently degrades
+# to non-sending. Derive the host from ENV_URL (single source of truth).
+ENV_HOST="${ENV_URL#https://}"
+
 # Dry-run preview of the data-migration posture. A real deploy prints
 # the actual decision at Step 7.5, but --dry-run exits after Step 3, so
 # surface here what Step 7.5 *would* do — this is also the hook the
@@ -723,7 +736,9 @@ esac
 # 3e. bootstrap <tier>data/v0/ on first run.
 # Remote env var is named DEPLOY_ENV, not ENV — bv_remote_run's denylist
 # forbids ENV (POSIX bash reads its rc from $ENV; setting it on the
-# remote side is a footgun).
+# remote side is a footgun). Its VALUE is ENV_HOST (the tier's canonical
+# host = the Grav environment name), NOT the short tier name — see the
+# ENV_HOST note above.
 bv_remote_run '
     mkdir -p "$DATA/v0/user/accounts" \
              "$DATA/v0/user/data" \
@@ -733,7 +748,7 @@ bv_remote_run '
     if [ ! -e "$DATA/current" ] || [ -L "$DATA/current" ]; then
         ln -sfn v0 "$DATA/current"
     fi
-' DATA="$DATA_DIR" DEPLOY_ENV="$ENV"
+' DATA="$DATA_DIR" DEPLOY_ENV="$ENV_HOST"
 
 # 3e′. Resolve the LIVE data-version dir — the dir <tier>data/current
 # points at AT DEPLOY TIME. This release binds to it: its symlinks
@@ -882,7 +897,7 @@ bv_remote_run '
         mv "$RD/user/env/$DEPLOY_ENV/config/security.yaml" "$DD/$VDIR/user/env/$DEPLOY_ENV/config/security.yaml"
     fi
     # Per-tier email.yaml — operator-provisioned SMTP credentials (WI-1).
-    # Lives under env/<tier>/config/plugins/ so the Grav environment merge folds
+    # Lives under env/<host>/config/plugins/ so the Grav environment merge folds
     # it into the plugins.email namespace (the email plugin config); a
     # file directly under config/ would land in a dead `email` namespace and
     # never reach the plugin. Same first-deploy bootstrap as security.yaml: if
@@ -897,7 +912,7 @@ bv_remote_run '
         mkdir -p "$DD/$VDIR/user/env/$DEPLOY_ENV/config/plugins"
         mv "$RD/user/env/$DEPLOY_ENV/config/plugins/email.yaml" "$DD/$VDIR/user/env/$DEPLOY_ENV/config/plugins/email.yaml"
     fi
-' RD="$RELEASE_DIR" DD="$DATA_DIR" DEPLOY_ENV="$ENV"
+' RD="$RELEASE_DIR" DD="$DATA_DIR" DEPLOY_ENV="$ENV_HOST"
 
 # ── Step 5: Wire release symlinks ─────────────────────────────────────
 echo "→ Step 5/8: Wiring release symlinks (per §Symlink contract)..."
@@ -934,7 +949,7 @@ bv_remote_run '
     RD="$RELEASE_DIR" \
     DD="$DATA_DIR" \
     DDN="${LAYOUT_NAME}data" \
-    E="$ENV"
+    E="$ENV_HOST"
 
 echo "  ✓ Symlinks wired"
 
@@ -953,7 +968,7 @@ bv_remote_run '
         echo "WARN: transactional mail (activation/reset) will NOT send until this tier'"'"'s email.yaml is provisioned." >&2
         echo "WARN: copy user/env/$DEPLOY_ENV/config/plugins/email.yaml.example to email.yaml on the tier with real SMTP creds." >&2
     fi
-' RD="$RELEASE_DIR" DD="$DATA_DIR" DEPLOY_ENV="$ENV"
+' RD="$RELEASE_DIR" DD="$DATA_DIR" DEPLOY_ENV="$ENV_HOST"
 
 # ── Step 6: Write release-meta.yaml (pre-swap fields) ────────────────
 #
