@@ -320,6 +320,55 @@ for host in dev.hackersbychoice.dk test.hackersbychoice.dk staging.hackersbychoi
     fi
 done
 
+# 10. push-email.sh — per-tier SMTP credential push. Secret-bearing and it
+#     writes to live tiers, so lock in its load-bearing safety properties.
+PUSH_EMAIL="$DEPLOY_DIR/push-email.sh"
+if [ -f "$PUSH_EMAIL" ]; then
+    # 10a. Goes through the SSH helpers (password-auth-aware), never bare ssh.
+    if grep -q 'lib/ssh-auth.sh' "$PUSH_EMAIL" \
+       && grep -q 'bv_ssh_cmd' "$PUSH_EMAIL" \
+       && grep -q 'bv_rsync_via_ssh' "$PUSH_EMAIL"; then
+        check "push-email.sh uses bv_ssh_cmd / bv_rsync_via_ssh (not bare ssh)" ok
+    else
+        check "push-email.sh must use the ssh-auth helpers, not bare ssh" fail
+    fi
+    bare="$(grep -nE 'ssh -o BatchMode=yes|rsync.*-e[[:space:]]+"ssh ' "$PUSH_EMAIL" 2>/dev/null \
+            | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' || true)"
+    if [ -z "$bare" ]; then
+        check "push-email.sh has no bare ssh/rsync invocation" ok
+    else
+        check "push-email.sh must not invoke bare ssh/rsync" fail
+        printf '%s\n' "$bare" | sed 's/^/      /' >&2
+    fi
+
+    # 10b. The SMTP password must never be printed/diffed — compare by hash.
+    if grep -qE 'sha256sum|shasum' "$PUSH_EMAIL"; then
+        check "push-email.sh compares email.yaml by hash (no secret content printed)" ok
+    else
+        check "push-email.sh must compare by hash, never print email.yaml content" fail
+    fi
+    leak="$(grep -nE 'cat "\$local_file"|diff .*email\.yaml' "$PUSH_EMAIL" 2>/dev/null \
+            | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' || true)"
+    if [ -z "$leak" ]; then
+        check "push-email.sh does not cat/diff the email.yaml body" ok
+    else
+        check "push-email.sh must not cat/diff the email.yaml body (secret leak)" fail
+        printf '%s\n' "$leak" | sed 's/^/      /' >&2
+    fi
+
+    # 10c. prod gated by --i-mean-it; staging guarded against real delivery.
+    if grep -q 'Refusing to push prod without --i-mean-it' "$PUSH_EMAIL"; then
+        check "push-email.sh gates prod behind --i-mean-it" ok
+    else
+        check "push-email.sh must gate prod behind --i-mean-it" fail
+    fi
+    if grep -qi 'mailtrap' "$PUSH_EMAIL" && grep -qi 'sandbox' "$PUSH_EMAIL"; then
+        check "push-email.sh guards staging against real delivery (sandbox-only)" ok
+    else
+        check "push-email.sh must guard staging against real delivery (ADR-002)" fail
+    fi
+fi
+
 echo ""
 echo "─────────────────────────────────────"
 echo "  Pass: $PASS    Fail: $FAIL"
