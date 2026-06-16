@@ -159,6 +159,26 @@ push-data: ## Push local flex-objects YAML to a tier (tier=dev|test|staging|prod
 	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
+delete-user: ## Delete a member account from a tier (tier=dev|test|staging|prod user=<username>, dry_run=1, yes=1, i_mean_it=1)
+	@t="$(tier)"; u="$(user)"; \
+	args=""; \
+	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
+	if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
+	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
+	if [ -z "$$t" ] || [ -z "$$u" ]; then \
+	  echo "❌  delete-user: missing required argument(s).  Got: tier='$$t' user='$$u'"; \
+	  [ -z "$$t" ] && echo "    → 'tier' is empty (required: dev|test|staging|prod)"; \
+	  [ -z "$$u" ] && echo "    → 'user' is empty (the account username to delete)"; \
+	  echo "    Usage:   make delete-user tier=<dev|test|staging|prod> user=<username> [dry_run=1] [yes=1] [i_mean_it=1]"; \
+	  echo "    Example: make delete-user tier=dev user=thomas"; \
+	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/delete-user.sh "$$t" "$$u" $$args ;; \
+	  *) echo "❌  delete-user: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
 migrate-atomic: ## Migrate a tier to atomic layout — one-time supervised (tier=dev|test|staging; prod refused)
 	@t="$(tier)"; \
 	case "$$t" in \

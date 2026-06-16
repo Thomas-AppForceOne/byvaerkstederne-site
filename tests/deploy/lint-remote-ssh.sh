@@ -369,6 +369,28 @@ if [ -f "$PUSH_EMAIL" ]; then
     fi
 fi
 
+# 11. delete-user.sh — destructive (removes a member account YAML on a tier).
+#     Lock in its safety properties.
+DELETE_USER="$DEPLOY_DIR/delete-user.sh"
+if [ -f "$DELETE_USER" ]; then
+    if grep -q 'lib/ssh-auth.sh' "$DELETE_USER" && grep -q 'bv_ssh_cmd' "$DELETE_USER"; then
+        check "delete-user.sh uses the ssh-auth helpers (not bare ssh)" ok
+    else
+        check "delete-user.sh must use the ssh-auth helpers" fail
+    fi
+    if grep -q 'Refusing to delete a prod account without --i-mean-it' "$DELETE_USER"; then
+        check "delete-user.sh gates prod behind --i-mean-it" ok
+    else
+        check "delete-user.sh must gate prod behind --i-mean-it" fail
+    fi
+    # username becomes a remote path component — must reject traversal.
+    if grep -q 'Refusing unsafe username' "$DELETE_USER"; then
+        check "delete-user.sh validates username against path traversal" ok
+    else
+        check "delete-user.sh must validate username against traversal" fail
+    fi
+fi
+
 echo ""
 echo "─────────────────────────────────────"
 echo "  Pass: $PASS    Fail: $FAIL"
