@@ -1,0 +1,5 @@
+# Per-tier login override (tracked config, not secret).
+# site_host = absolute base URL for the login plugin's activation/reset email
+# links (Email.php). Without it the links are root-relative and render as
+# file:///activate_user/... in mail clients. Mirror this tier's custom_base_url.
+site_host: 'https://test.hackersbychoice.dk'
