@@ -179,6 +179,20 @@ delete-user: ## Delete a member account from a tier (tier=dev|test|staging|prod 
 	  *) echo "❌  delete-user: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
+list-users: ## List member accounts on a tier (tier=dev|test|staging|prod)
+	@t="$(tier)"; \
+	if [ -z "$$t" ]; then \
+	  echo "❌  list-users: missing 'tier'.  Got: tier='$$t'"; \
+	  echo "    Usage:   make list-users tier=<dev|test|staging|prod>"; \
+	  echo "    Example: make list-users tier=dev"; \
+	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/list-users.sh "$$t" ;; \
+	  *) echo "❌  list-users: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
 migrate-atomic: ## Migrate a tier to atomic layout — one-time supervised (tier=dev|test|staging; prod refused)
 	@t="$(tier)"; \
 	case "$$t" in \

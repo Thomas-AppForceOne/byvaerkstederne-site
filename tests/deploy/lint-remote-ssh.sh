@@ -391,6 +391,24 @@ if [ -f "$DELETE_USER" ]; then
     fi
 fi
 
+# 12. list-users.sh — read-only account listing; must still go through the
+#     ssh-auth helpers (no bare ssh).
+LIST_USERS="$DEPLOY_DIR/list-users.sh"
+if [ -f "$LIST_USERS" ]; then
+    if grep -q 'lib/ssh-auth.sh' "$LIST_USERS" && grep -q 'bv_ssh_cmd' "$LIST_USERS"; then
+        check "list-users.sh uses the ssh-auth helpers (not bare ssh)" ok
+    else
+        check "list-users.sh must use the ssh-auth helpers" fail
+    fi
+    lbare="$(grep -nE 'ssh -o BatchMode=yes' "$LIST_USERS" 2>/dev/null \
+             | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' || true)"
+    if [ -z "$lbare" ]; then
+        check "list-users.sh has no bare ssh invocation" ok
+    else
+        check "list-users.sh must not invoke bare ssh" fail
+    fi
+fi
+
 echo ""
 echo "─────────────────────────────────────"
 echo "  Pass: $PASS    Fail: $FAIL"
