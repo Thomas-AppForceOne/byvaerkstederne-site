@@ -409,6 +409,34 @@ if [ -f "$LIST_USERS" ]; then
     fi
 fi
 
+# 13. cleanup-unverified-users.sh — destructive auto-cleanup (deletes accounts).
+#     Lock in: ssh-auth helpers, dry-run default, prod --apply gate, and the
+#     narrow target set (only state:disabled accounts with a pending token).
+CLEANUP="$DEPLOY_DIR/cleanup-unverified-users.sh"
+if [ -f "$CLEANUP" ]; then
+    if grep -q 'lib/ssh-auth.sh' "$CLEANUP" && grep -q 'bv_ssh_cmd' "$CLEANUP"; then
+        check "cleanup-unverified-users.sh uses the ssh-auth helpers" ok
+    else
+        check "cleanup-unverified-users.sh must use the ssh-auth helpers" fail
+    fi
+    if grep -q 'APPLY=0' "$CLEANUP"; then
+        check "cleanup-unverified-users.sh defaults to dry-run (APPLY=0)" ok
+    else
+        check "cleanup-unverified-users.sh must default to dry-run" fail
+    fi
+    if grep -q 'Refusing to --apply on prod without --i-mean-it' "$CLEANUP"; then
+        check "cleanup-unverified-users.sh gates prod --apply behind --i-mean-it" ok
+    else
+        check "cleanup-unverified-users.sh must gate prod --apply behind --i-mean-it" fail
+    fi
+    # Must only ever target unconfirmed accounts: state:disabled AND a token.
+    if grep -q 'activation_token' "$CLEANUP" && grep -qE '= disabled|disabled ' "$CLEANUP"; then
+        check "cleanup-unverified-users.sh targets only disabled accounts with a pending token" ok
+    else
+        check "cleanup-unverified-users.sh must restrict to disabled + activation_token" fail
+    fi
+fi
+
 echo ""
 echo "─────────────────────────────────────"
 echo "  Pass: $PASS    Fail: $FAIL"

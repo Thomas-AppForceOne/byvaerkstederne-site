@@ -193,6 +193,25 @@ list-users: ## List member accounts on a tier (tier=dev|test|staging|prod)
 	  *) echo "❌  list-users: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
+cleanup-unverified: ## Remove unconfirmed accounts older than N min (tier=dev|test|staging|prod, max_age=10, apply=1, i_mean_it=1). Dry-run unless apply=1.
+	@t="$(tier)"; \
+	args=""; \
+	if [ -n "$(max_age)" ]; then args="$$args --max-age=$(max_age)"; fi; \
+	if [ "$(apply)" = "1" ]; then args="$$args --apply"; fi; \
+	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
+	if [ -z "$$t" ]; then \
+	  echo "❌  cleanup-unverified: missing 'tier'.  Got: tier='$$t'"; \
+	  echo "    Usage:   make cleanup-unverified tier=<dev|test|staging|prod> [max_age=10] [apply=1] [i_mean_it=1]"; \
+	  echo "    Dry-run: make cleanup-unverified tier=dev max_age=10"; \
+	  echo "    Delete:  make cleanup-unverified tier=dev max_age=10 apply=1"; \
+	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/cleanup-unverified-users.sh "$$t" $$args ;; \
+	  *) echo "❌  cleanup-unverified: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
 migrate-atomic: ## Migrate a tier to atomic layout — one-time supervised (tier=dev|test|staging; prod refused)
 	@t="$(tier)"; \
 	case "$$t" in \
