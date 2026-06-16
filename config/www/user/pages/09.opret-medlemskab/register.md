@@ -71,6 +71,14 @@ form:
             required: true
             message: "Bekræft din adgangskode ved at skrive den igen."
 
+        # Honeypot anti-spam field. Hidden from humans (CSS .form-honeybear in
+        # register.html.twig), but bots fill every field. The forms plugin
+        # rejects the submission server-side when a honeypot-type field is
+        # non-empty (form.php onFormValidationProcessed). It is NOT in the
+        # register_user process fields below, so it never reaches the account.
+        - name: website
+          type: honeypot
+
     buttons:
         - type: submit
           value: Opret Medlemskab

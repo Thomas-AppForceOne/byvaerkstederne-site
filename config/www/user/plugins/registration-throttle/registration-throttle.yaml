@@ -1,0 +1,20 @@
+# Per-IP rate limit on the membership registration form — a backstop to the
+# honeypot for honeypot-aware bots. Reuses the login plugin's RateLimiter and
+# its proxy-aware client-IP key (Login::getIpKey -> Uri::ip), so it keys on the
+# real visitor IP behind the one.com reverse proxy, not the proxy itself.
+#
+# SHIPPED DISABLED. Enable per tier only AFTER confirming the plugin parses and
+# the site renders (php -l + load /opret-medlemskab). With enabled: false Grav
+# does not even load the plugin file, so an unverified change cannot affect the
+# live site.
+#
+# max_count/interval = "N registrations per IP per interval-minutes". 10/hour is
+# a backstop, not a tight gate — the honeypot stops naive bots; this bounds the
+# honeypot-aware worst case. Raise max_count if a shared-IP signup event (a class
+# on one wifi) is expected; set max_count: 0 to switch the limit off while
+# leaving the plugin loaded.
+enabled: false
+form_name: registration
+max_count: 10
+interval: 60
+message: 'For mange medlemskaber er oprettet fra din forbindelse for nylig. Vent venligst et øjeblik og prøv igen.'
