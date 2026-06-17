@@ -1,4 +1,4 @@
-# Enable the registration throttle on this tier (dev.hackersbychoice.dk).
+# Enable the registration throttle on this tier (prod — www.byvaerkstederne.dk).
 # Throttle kicks in after the 5th registration from an IP: attempts 1–5 pass,
 # the 6th and beyond are blocked until older attempts age out of the 60-minute
 # window (~1-hour cooldown). The same limits are set on every tier
