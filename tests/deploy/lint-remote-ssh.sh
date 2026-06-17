@@ -437,6 +437,22 @@ if [ -f "$CLEANUP" ]; then
     fi
 fi
 
+# 14. throttle.sh — live on/off toggle for the registration throttle. Goes
+#     through the ssh-auth helpers and gates prod behind --i-mean-it.
+THROTTLE="$DEPLOY_DIR/throttle.sh"
+if [ -f "$THROTTLE" ]; then
+    if grep -q 'lib/ssh-auth.sh' "$THROTTLE" && grep -q 'bv_ssh_cmd' "$THROTTLE"; then
+        check "throttle.sh uses the ssh-auth helpers (not bare ssh)" ok
+    else
+        check "throttle.sh must use the ssh-auth helpers" fail
+    fi
+    if grep -q "Toggling prod's registration throttle" "$THROTTLE"; then
+        check "throttle.sh gates prod behind --i-mean-it" ok
+    else
+        check "throttle.sh must gate prod behind --i-mean-it" fail
+    fi
+fi
+
 echo ""
 echo "─────────────────────────────────────"
 echo "  Pass: $PASS    Fail: $FAIL"

@@ -212,6 +212,22 @@ cleanup-unverified: ## Remove unconfirmed accounts older than N min (tier=dev|te
 	  *) echo "❌  cleanup-unverified: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
+registration-throttle: ## Toggle the registration throttle on a tier, live/no-redeploy (tier=dev|test|staging|prod state=on|off [i_mean_it=1])
+	@t="$(tier)"; s="$(state)"; \
+	args=""; \
+	if [ "$(i_mean_it)" = "1" ]; then args="--i-mean-it"; fi; \
+	if [ -z "$$t" ] || [ -z "$$s" ]; then \
+	  echo "❌  registration-throttle: need both tier and state.  Got: tier='$$t' state='$$s'"; \
+	  echo "    Usage:   make registration-throttle tier=<dev|test|staging|prod> state=<on|off> [i_mean_it=1]"; \
+	  echo "    Example: make registration-throttle tier=dev state=on"; \
+	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/throttle.sh "$$t" "$$s" $$args ;; \
+	  *) echo "❌  registration-throttle: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
 migrate-atomic: ## Migrate a tier to atomic layout — one-time supervised (tier=dev|test|staging; prod refused)
 	@t="$(tier)"; \
 	case "$$t" in \
