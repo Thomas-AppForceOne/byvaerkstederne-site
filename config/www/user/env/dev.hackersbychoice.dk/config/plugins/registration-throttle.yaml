@@ -1,0 +1,10 @@
+# Registration throttle on dev — OFF by default.
+# dev keeps it disabled so it doesn't interfere with routine registration
+# testing. The limits below (5 per IP, ~1-hour cooldown) are pre-set, so to
+# verify the throttle just flip `enabled: true` and redeploy — or use
+# `make registration-throttle tier=dev state=on` for a no-redeploy toggle (reverts on the
+# next deploy). staging/prod stay enabled; the plugin's repo default is also
+# disabled, so local dev (make start) and CI are never throttled.
+enabled: false
+max_count: 5
+interval: 60

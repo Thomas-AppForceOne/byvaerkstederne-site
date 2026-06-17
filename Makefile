@@ -1,13 +1,33 @@
 .PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy rollback migrate-atomic backup list-backups restore restore-scratch release-start release-status bump-version tag-release test test-headed test-auth test-install test-deploy test-backup-restore add-age-key list-age-keys retire-age-key
 
-# Default target
+# Help menu groups. Each group lists its target NAMES; the descriptions are
+# pulled live from each target's `## ` annotation so they never drift. A
+# documented target missing from every group still shows under "Other", so a new
+# command is never silently hidden from the menu.
+GRP_DEV   := setup start stop restart status logs open admin cache-clear clean create-admin check-deps lfs-pull
+GRP_TEST  := test test-headed test-auth test-deploy test-backup-restore test-install test-registration-throttle
+GRP_SHIP  := release-start release-status bump-version tag-release deploy rollback migrate-atomic
+GRP_TIER  := list-users delete-user cleanup-unverified registration-throttle push-data
+GRP_DATA  := backup list-backups restore restore-scratch add-age-key list-age-keys retire-age-key
+GRP_RESET := reset-users reset-admin reset-data reset-cache reset-all
+
+# Default target — grouped help menu
 help: ## Show this help
-	@echo ""
-	@echo "  Byværkstederne — Development Commands"
-	@echo "  ══════════════════════════════════════"
-	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
-	@echo ""
+	@printf '\n  \033[1mByværkstederne — make commands\033[0m\n'
+	@printf '  ══════════════════════════════════════\n'
+	@d() { grep -E "^$$1:.*## " $(MAKEFILE_LIST) | head -1 | sed -E 's/.*## //'; }; \
+	g() { printf '\n  \033[1m%s\033[0m\n' "$$1"; shift; for t in "$$@"; do printf '    \033[36m%-28s\033[0m %s\n' "$$t" "$$(d "$$t")"; done; }; \
+	g "Local development"          $(GRP_DEV); \
+	g "Testing"                    $(GRP_TEST); \
+	g "Release & deploy"           $(GRP_SHIP); \
+	g "Tier ops — members & data"  $(GRP_TIER); \
+	g "Backup, restore & keys"     $(GRP_DATA); \
+	g "Local reset (destructive)"  $(GRP_RESET); \
+	all=$$(grep -oE '^[a-zA-Z][a-zA-Z0-9_-]*:' $(MAKEFILE_LIST) | sed 's/://' | sort -u); \
+	known=" $(GRP_DEV) $(GRP_TEST) $(GRP_SHIP) $(GRP_TIER) $(GRP_DATA) $(GRP_RESET) help "; \
+	other=""; for t in $$all; do case "$$known" in *" $$t "*) ;; *) grep -qE "^$$t:.*## " $(MAKEFILE_LIST) && other="$$other $$t" ;; esac; done; \
+	[ -n "$$other" ] && g "Other" $$other; \
+	printf '\n'
 
 # ── Setup ──────────────────────────────────────────────
 
@@ -157,6 +177,95 @@ push-data: ## Push local flex-objects YAML to a tier (tier=dev|test|staging|prod
 	  dev|test|staging|prod) ./deploy/push-data.sh "$$t" $$args ;; \
 	  "") echo "❌  Usage: make push-data tier=<dev|test|staging|prod> [files=<a.yaml,b.yaml>] [dry_run=1] [yes=1]"; exit 1 ;; \
 	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
+delete-user: ## Delete a member account from a tier (tier=dev|test|staging|prod user=<username>, dry_run=1, yes=1, i_mean_it=1)
+	@t="$(tier)"; u="$(user)"; \
+	args=""; \
+	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
+	if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
+	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
+	if [ -z "$$t" ] || [ -z "$$u" ]; then \
+	  echo "❌  delete-user: missing required argument(s).  Got: tier='$$t' user='$$u'"; \
+	  [ -z "$$t" ] && echo "    → 'tier' is empty (required: dev|test|staging|prod)"; \
+	  [ -z "$$u" ] && echo "    → 'user' is empty (the account username to delete)"; \
+	  echo "    Usage:   make delete-user tier=<dev|test|staging|prod> user=<username> [dry_run=1] [yes=1] [i_mean_it=1]"; \
+	  echo "    Example: make delete-user tier=dev user=thomas"; \
+	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/delete-user.sh "$$t" "$$u" $$args ;; \
+	  *) echo "❌  delete-user: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
+list-users: ## List member accounts on a tier (tier=dev|test|staging|prod)
+	@t="$(tier)"; \
+	if [ -z "$$t" ]; then \
+	  echo "❌  list-users: missing 'tier'.  Got: tier='$$t'"; \
+	  echo "    Usage:   make list-users tier=<dev|test|staging|prod>"; \
+	  echo "    Example: make list-users tier=dev"; \
+	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/list-users.sh "$$t" ;; \
+	  *) echo "❌  list-users: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
+cleanup-unverified: ## Remove unconfirmed accounts older than N min (tier=dev|test|staging|prod, max_age=10, apply=1, i_mean_it=1). Dry-run unless apply=1.
+	@t="$(tier)"; \
+	args=""; \
+	if [ -n "$(max_age)" ]; then args="$$args --max-age=$(max_age)"; fi; \
+	if [ "$(apply)" = "1" ]; then args="$$args --apply"; fi; \
+	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
+	if [ -z "$$t" ]; then \
+	  echo "❌  cleanup-unverified: missing 'tier'.  Got: tier='$$t'"; \
+	  echo "    Usage:   make cleanup-unverified tier=<dev|test|staging|prod> [max_age=10] [apply=1] [i_mean_it=1]"; \
+	  echo "    Dry-run: make cleanup-unverified tier=dev max_age=10"; \
+	  echo "    Delete:  make cleanup-unverified tier=dev max_age=10 apply=1"; \
+	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/cleanup-unverified-users.sh "$$t" $$args ;; \
+	  *) echo "❌  cleanup-unverified: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
+registration-throttle: ## Toggle the registration throttle on a tier, live/no-redeploy (tier=dev|test|staging|prod state=on|off [i_mean_it=1])
+	@t="$(tier)"; s="$(state)"; \
+	args=""; \
+	if [ "$(i_mean_it)" = "1" ]; then args="--i-mean-it"; fi; \
+	if [ -z "$$t" ] || [ -z "$$s" ]; then \
+	  echo "❌  registration-throttle: need both tier and state.  Got: tier='$$t' state='$$s'"; \
+	  echo "    Usage:   make registration-throttle tier=<dev|test|staging|prod> state=<on|off> [i_mean_it=1]"; \
+	  echo "    Example: make registration-throttle tier=dev state=on"; \
+	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/throttle.sh "$$t" "$$s" $$args ;; \
+	  *) echo "❌  registration-throttle: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
+test-registration-throttle: ## Check the throttle's current state on a tier — read-only burst, changes nothing (tier=dev|test|staging|prod [attempts=N] [i_mean_it=1 for prod])
+	@t="$(tier)"; a="$(attempts)"; \
+	if [ -z "$$t" ]; then \
+	  echo "❌  test-registration-throttle: need a tier.  Got: tier='$$t'"; \
+	  echo "    Usage:   make test-registration-throttle tier=<dev|test|staging|prod> [attempts=N]"; \
+	  echo "    Example: make test-registration-throttle tier=staging   (expect THROTTLE ACTIVE)"; \
+	  echo "             make test-registration-throttle tier=dev        (expect THROTTLE INACTIVE)"; \
+	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging) ./scripts/registration-throttle-burst.sh "$$t" $$a ;; \
+	  prod) \
+	    if [ "$(i_mean_it)" != "1" ]; then \
+	      echo "❌  prod check fires real registrations at LIVE prod and will throttle your own IP there for ~1h. Re-run with i_mean_it=1."; exit 1; \
+	    fi; \
+	    PROD_OK=1 ./scripts/registration-throttle-burst.sh prod $$a ;; \
+	  *) echo "❌  test-registration-throttle: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
 migrate-atomic: ## Migrate a tier to atomic layout — one-time supervised (tier=dev|test|staging; prod refused)

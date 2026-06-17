@@ -1,6 +1,13 @@
 {% extends 'partials/base.html.twig' %}
 
 {% block body %}
+<style>
+  /* Honeypot anti-spam field (form field "website", type: honeypot). Hidden
+     from humans; bots fill it and the forms plugin rejects the submission
+     server-side. The field also carries aria-hidden + tabindex=-1; this rule
+     hides it visually regardless of the form plugin's inline_css setting. */
+  .form-honeybear { position: absolute !important; left: -10000px !important; width: 1px; height: 1px; overflow: hidden; }
+</style>
 <section style="min-height: 70vh; display: flex; align-items: center; justify-content: center; padding: var(--space-12) var(--space-4);">
     <div style="max-width: 36rem; width: 100%;">
         {# Header #}
