@@ -249,7 +249,7 @@ registration-throttle: ## Toggle the registration throttle on a tier, live/no-re
 	esac
 
 test-registration-throttle: ## Verify the throttle locally in one shot: enable→burst→cleanup (needs `make start`) [attempts=N]
-	@./scripts/registration-throttle-test.sh $(attempts)
+	@./scripts/test-registration-throttle.sh $(attempts)
 
 migrate-atomic: ## Migrate a tier to atomic layout — one-time supervised (tier=dev|test|staging; prod refused)
 	@t="$(tier)"; \
