@@ -36,6 +36,7 @@ require('./anonymous/version-footer');
 require('./anonymous/password-policy');
 require('./anonymous/session-cookie');
 require('./anonymous/registration');
+require('./anonymous/registration-honeypot');
 require('./anonymous/password-reset');
 
 // Visual-parity tests live at tests/anonymous/event-card-visual-parity.js
