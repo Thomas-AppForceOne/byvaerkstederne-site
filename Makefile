@@ -5,7 +5,7 @@
 # documented target missing from every group still shows under "Other", so a new
 # command is never silently hidden from the menu.
 GRP_DEV   := setup start stop restart status logs open admin cache-clear clean create-admin check-deps lfs-pull
-GRP_TEST  := test test-headed test-auth test-deploy test-backup-restore test-install registration-throttle-test
+GRP_TEST  := test test-headed test-auth test-deploy test-backup-restore test-install test-registration-throttle
 GRP_SHIP  := release-start release-status bump-version tag-release deploy rollback migrate-atomic
 GRP_TIER  := list-users delete-user cleanup-unverified registration-throttle push-data
 GRP_DATA  := backup list-backups restore restore-scratch add-age-key list-age-keys retire-age-key
@@ -248,7 +248,7 @@ registration-throttle: ## Toggle the registration throttle on a tier, live/no-re
 	  *) echo "❌  registration-throttle: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
-registration-throttle-test: ## Verify the throttle locally in one shot: enable→burst→cleanup (needs `make start`) [attempts=N]
+test-registration-throttle: ## Verify the throttle locally in one shot: enable→burst→cleanup (needs `make start`) [attempts=N]
 	@./scripts/registration-throttle-test.sh $(attempts)
 
 migrate-atomic: ## Migrate a tier to atomic layout — one-time supervised (tier=dev|test|staging; prod refused)
