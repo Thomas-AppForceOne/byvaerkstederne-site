@@ -3,9 +3,10 @@
 # dev tier (Grav reads env/<host>/ by hostname). Inherits the Danish throttle
 # message from the plugin default; pins the rate here so it's explicit.
 #
-# 10 per 60 minutes per IP is a backstop to the honeypot, not a tight gate.
-# Raise max_count if you expect a shared-IP signup burst; set max_count: 0 to
-# leave the plugin loaded but switch the limit off.
+# Throttle kicks in after the 5th registration from an IP: attempts 1–5 pass,
+# the 6th (and beyond) are blocked until older attempts age out of the
+# 60-minute window — i.e. a ~1-hour cooldown. Set max_count: 0 to leave the
+# plugin loaded but switch the limit off.
 enabled: true
-max_count: 10
+max_count: 5
 interval: 60
