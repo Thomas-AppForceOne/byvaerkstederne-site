@@ -228,6 +228,9 @@ registration-throttle: ## Toggle the registration throttle on a tier, live/no-re
 	  *) echo "❌  registration-throttle: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
+registration-throttle-test: ## Verify the throttle locally in one shot: enable→burst→cleanup (needs `make start`) [attempts=N]
+	@./scripts/registration-throttle-test.sh $(attempts)
+
 migrate-atomic: ## Migrate a tier to atomic layout — one-time supervised (tier=dev|test|staging; prod refused)
 	@t="$(tier)"; \
 	case "$$t" in \
