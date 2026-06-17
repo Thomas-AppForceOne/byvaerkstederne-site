@@ -18,6 +18,11 @@ Tiers ship far more than the running site needs. Determine the necessary file se
 
 One floating-card identity for login, account creation, and forgotten-password, plus a single consistent centred success/error feedback component. Theme/config only — no plugin PHP, no behaviour change.
 
+### Frontend event CRUD
+**Spec:** [frontend_event_crud_specification.md](frontend_event_crud_specification.md)
+
+Let approved members ("arrangører") create/read/update/delete events from the public site via themed forms, instead of the admin panel. Builds on the existing `begivenheder` Flex Directory; a new `event-manager` plugin enforces a single handler authorization contract (authn + `admin.events.*` capability + per-object ownership), owner-stamping, and moderation via `published`. Complete CRUD is the release gate.
+
 ---
 
 ## Backlog (spec pending)
