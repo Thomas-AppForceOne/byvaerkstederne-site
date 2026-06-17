@@ -15,16 +15,16 @@
 #   no real inbox is mailed. Clean up the one account afterwards:
 #       make delete-user tier=<tier> user=<username>
 #
-# PREREQUISITE
-#   The throttle plugin ships DISABLED. Enable it on the target tier (or
-#   locally) with a low enough max_count first, or every attempt just passes
-#   and nothing is throttled.
+# READ-ONLY — changes NO config. It reports the throttle's CURRENT state on the
+# target: throttle on → THROTTLE ACTIVE (attempts blocked); throttle off →
+# THROTTLE INACTIVE (all pass). Use it both ways — to confirm the trip-wire
+# fires where it should be on, and that it's off where it should be off.
 #
 # USAGE
 #   scripts/registration-throttle-burst.sh <tier|url> [attempts] [username]
 #     tier|url : dev | test | staging | prod  OR a full base URL
 #                (e.g. http://localhost:8080 for a local `make start`).
-#     attempts : number of submissions (default 12).
+#     attempts : number of submissions (default 6 — one past a 5/window limit).
 #     username : fixed signup username, ^[a-z0-9_-]{3,16}$ (default throttletest).
 #   Env:
 #     THROTTLE_MATCH : substring that marks the throttle message
@@ -38,7 +38,7 @@
 set -euo pipefail
 
 ARG_URL="${1:-}"
-ATTEMPTS="${2:-12}"
+ATTEMPTS="${2:-6}"
 USERNAME="${3:-throttletest}"
 THROTTLE_MATCH="${THROTTLE_MATCH:-For mange medlemskaber}"
 
@@ -129,10 +129,11 @@ echo ""
 echo "─────────────────────────────────────"
 echo "  passed: $passed    throttled: $throttled"
 if [ -n "$first_throttled" ]; then
-    echo "  ✓ throttle engaged at attempt #$first_throttled (configured limit ≈ $((first_throttled - 1)) per window)"
+    echo "  → THROTTLE ACTIVE on this target — first blocked at attempt #$first_throttled (limit ≈ $((first_throttled - 1))/window)"
 else
-    echo "  ⚠ no throttling observed — is the plugin enabled with a low enough max_count?"
+    echo "  → THROTTLE INACTIVE on this target — no throttling across $ATTEMPTS attempts"
 fi
+echo "  (read-only: changes no config; reports the target's CURRENT state)"
 echo "─────────────────────────────────────"
 echo "  Cleanup the one account this created:"
 case "$ARG_URL" in

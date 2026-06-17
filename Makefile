@@ -248,8 +248,25 @@ registration-throttle: ## Toggle the registration throttle on a tier, live/no-re
 	  *) echo "❌  registration-throttle: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
-test-registration-throttle: ## Verify the throttle locally in one shot: enable→burst→cleanup (needs `make start`) [attempts=N]
-	@./scripts/test-registration-throttle.sh $(attempts)
+test-registration-throttle: ## Check the throttle's current state on a tier — read-only burst, changes nothing (tier=dev|test|staging|prod [attempts=N] [i_mean_it=1 for prod])
+	@t="$(tier)"; a="$(attempts)"; \
+	if [ -z "$$t" ]; then \
+	  echo "❌  test-registration-throttle: need a tier.  Got: tier='$$t'"; \
+	  echo "    Usage:   make test-registration-throttle tier=<dev|test|staging|prod> [attempts=N]"; \
+	  echo "    Example: make test-registration-throttle tier=staging   (expect THROTTLE ACTIVE)"; \
+	  echo "             make test-registration-throttle tier=dev        (expect THROTTLE INACTIVE)"; \
+	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging) ./scripts/registration-throttle-burst.sh "$$t" $$a ;; \
+	  prod) \
+	    if [ "$(i_mean_it)" != "1" ]; then \
+	      echo "❌  prod check fires real registrations at LIVE prod and will throttle your own IP there for ~1h. Re-run with i_mean_it=1."; exit 1; \
+	    fi; \
+	    PROD_OK=1 ./scripts/registration-throttle-burst.sh prod $$a ;; \
+	  *) echo "❌  test-registration-throttle: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
 
 migrate-atomic: ## Migrate a tier to atomic layout — one-time supervised (tier=dev|test|staging; prod refused)
 	@t="$(tier)"; \
