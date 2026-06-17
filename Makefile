@@ -1,13 +1,33 @@
 .PHONY: setup start stop restart logs status clean check-deps lfs-pull open admin help reset-users reset-admin reset-data reset-cache reset-all create-admin deploy rollback migrate-atomic backup list-backups restore restore-scratch release-start release-status bump-version tag-release test test-headed test-auth test-install test-deploy test-backup-restore add-age-key list-age-keys retire-age-key
 
-# Default target
+# Help menu groups. Each group lists its target NAMES; the descriptions are
+# pulled live from each target's `## ` annotation so they never drift. A
+# documented target missing from every group still shows under "Other", so a new
+# command is never silently hidden from the menu.
+GRP_DEV   := setup start stop restart status logs open admin cache-clear clean create-admin check-deps lfs-pull
+GRP_TEST  := test test-headed test-auth test-deploy test-backup-restore test-install registration-throttle-test
+GRP_SHIP  := release-start release-status bump-version tag-release deploy rollback migrate-atomic
+GRP_TIER  := list-users delete-user cleanup-unverified registration-throttle push-data
+GRP_DATA  := backup list-backups restore restore-scratch add-age-key list-age-keys retire-age-key
+GRP_RESET := reset-users reset-admin reset-data reset-cache reset-all
+
+# Default target — grouped help menu
 help: ## Show this help
-	@echo ""
-	@echo "  Byværkstederne — Development Commands"
-	@echo "  ══════════════════════════════════════"
-	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
-	@echo ""
+	@printf '\n  \033[1mByværkstederne — make commands\033[0m\n'
+	@printf '  ══════════════════════════════════════\n'
+	@d() { grep -E "^$$1:.*## " $(MAKEFILE_LIST) | head -1 | sed -E 's/.*## //'; }; \
+	g() { printf '\n  \033[1m%s\033[0m\n' "$$1"; shift; for t in "$$@"; do printf '    \033[36m%-28s\033[0m %s\n' "$$t" "$$(d "$$t")"; done; }; \
+	g "Local development"          $(GRP_DEV); \
+	g "Testing"                    $(GRP_TEST); \
+	g "Release & deploy"           $(GRP_SHIP); \
+	g "Tier ops — members & data"  $(GRP_TIER); \
+	g "Backup, restore & keys"     $(GRP_DATA); \
+	g "Local reset (destructive)"  $(GRP_RESET); \
+	all=$$(grep -oE '^[a-zA-Z][a-zA-Z0-9_-]*:' $(MAKEFILE_LIST) | sed 's/://' | sort -u); \
+	known=" $(GRP_DEV) $(GRP_TEST) $(GRP_SHIP) $(GRP_TIER) $(GRP_DATA) $(GRP_RESET) help "; \
+	other=""; for t in $$all; do case "$$known" in *" $$t "*) ;; *) grep -qE "^$$t:.*## " $(MAKEFILE_LIST) && other="$$other $$t" ;; esac; done; \
+	[ -n "$$other" ] && g "Other" $$other; \
+	printf '\n'
 
 # ── Setup ──────────────────────────────────────────────
 
