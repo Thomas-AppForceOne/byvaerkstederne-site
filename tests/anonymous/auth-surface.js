@@ -106,6 +106,23 @@ test.describe('Auth surface UI/UX', () => {
     ).toBeVisible();
   });
 
+  test('flash messages auto-dismiss after 5 seconds', async ({ page }) => {
+    await page.goto('/forgot_password');
+    const email = page.locator('#grav-login input[name="email"], #grav-login input[type="email"]').first();
+    await email.fill('definitely-not-a-user@example.invalid');
+    await Promise.all([
+      page.waitForLoadState('networkidle'),
+      page.locator('#grav-login form button[type="submit"]').first().click(),
+    ]);
+    await expect(page.locator('.bv-message').first(), 'flash visible after submit').toBeVisible();
+    // Still shown during the 5s hold...
+    await page.waitForTimeout(1500);
+    expect(await page.locator('.bv-message').count(), 'still shown during the 5s hold').toBeGreaterThan(0);
+    // ...and gone after the hold + fade.
+    await page.waitForTimeout(4500);
+    expect(await page.locator('.bv-message').count(), 'auto-dismissed after ~5s + fade').toBe(0);
+  });
+
   test('forgot presents the shared card with no English boilerplate', async ({ page }) => {
     const res = await page.goto('/forgot_password');
     expect(res?.status()).toBe(200);
