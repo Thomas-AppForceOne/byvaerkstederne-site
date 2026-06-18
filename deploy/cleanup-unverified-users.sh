@@ -105,7 +105,10 @@ else
     PORT_SSH="$DEPLOY_PORT"; PATH_SSH="$DEPLOY_PATH"
 fi
 export DEPLOY_PASS
-DEPLOY_PASS="$(bv_resolve_ssh_password)"
+if ! DEPLOY_PASS="$(bv_resolve_ssh_password)"; then
+    # bv_resolve_ssh_password already printed an actionable Keychain error.
+    exit 1
+fi
 
 TIER_DIR="$PATH_SSH/$TIER"
 ACCOUNTS_DIR="$TIER_DIR/user/accounts"
@@ -147,7 +150,9 @@ out="$(bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" "
 
 # ── 4. Report ────────────────────────────────────────────────────────
 if printf '%s' "$out" | grep -q '__SSHFAIL__'; then
-    echo "✗ SSH failed (auth / host / network)." >&2; exit 1
+    echo "✗ SSH to $USER_SSH@$HOST_SSH:$PORT_SSH failed." >&2
+    bv_ssh_diagnose "$USER_SSH" "$HOST_SSH" "$PORT_SSH"
+    exit 1
 fi
 if printf '%s' "$out" | grep -q '__NODIR__'; then
     echo "No accounts dir on $TIER — nothing to clean."; exit 0

@@ -79,7 +79,10 @@ else
     PORT_SSH="$DEPLOY_PORT"; PATH_SSH="$DEPLOY_PATH"
 fi
 export DEPLOY_PASS
-DEPLOY_PASS="$(bv_resolve_ssh_password)"
+if ! DEPLOY_PASS="$(bv_resolve_ssh_password)"; then
+    # bv_resolve_ssh_password already printed an actionable Keychain error.
+    exit 1
+fi
 
 host="$(tier_host "$TIER")"
 TIER_DIR="$PATH_SSH/$TIER"
@@ -101,7 +104,8 @@ case "$out" in
         echo "    Deploy the branch to $TIER first (make deploy tier=$TIER)." >&2
         exit 1 ;;
     __SSHFAIL__)
-        echo "✗ SSH failed (auth / host / network)." >&2
+        echo "✗ SSH to $USER_SSH@$HOST_SSH:$PORT_SSH failed." >&2
+        bv_ssh_diagnose "$USER_SSH" "$HOST_SSH" "$PORT_SSH"
         exit 1 ;;
     *)
         echo "✓ $TIER throttle is now '$out' (live; reverts to the committed value on next deploy)." ;;
