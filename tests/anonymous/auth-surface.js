@@ -69,19 +69,41 @@ test.describe('Auth surface UI/UX', () => {
     ).toBeGreaterThan(0);
   });
 
-  test('auth pages float over a dimmed backdrop with a close affordance', async ({ page }) => {
-    await page.goto('/forgot_password');
-    const authPage = page.locator('.bv-auth-page');
-    await expect(authPage).toBeVisible();
-    const style = await authPage.evaluate((el) => {
+  test('signup + recover open as modals over the current page (dimmed real site)', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/home');
+    // The nav "Bliv medlem" / login-modal links call bvOpenOverlay().
+    await page.evaluate(() => bvOpenOverlay('bv-register-overlay'));
+    const reg = page.locator('#bv-register-overlay');
+    await expect(reg).toHaveClass(/is-open/);
+    // Fixed, dimmed modal over the page (NOT a standalone gray page).
+    const style = await reg.evaluate((el) => {
       const cs = getComputedStyle(el);
       return { position: cs.position, bg: cs.backgroundColor };
     });
-    expect(style.position, 'auth surface is a fixed overlay').toBe('fixed');
-    // Dimmed translucent backdrop (not an opaque/solid background).
-    expect(style.bg, 'dimmed translucent backdrop').toMatch(/rgba\(26,\s*28,\s*28,\s*0?\.5\)/);
-    // Close affordance returns to the site (the dimmed header behind isn't clickable).
-    await expect(page.locator('.bv-auth-card__close')).toHaveAttribute('href', '/');
+    expect(style.position).toBe('fixed');
+    expect(style.bg, 'dims the real page behind').toMatch(/rgba\(26,\s*28,\s*28,\s*0?\.5\)/);
+    expect(await reg.locator('.bv-register-card form').count(), 'registration form in the modal').toBeGreaterThan(0);
+    // One at a time: opening recover closes signup.
+    await page.evaluate(() => bvOpenOverlay('bv-forgot-overlay'));
+    await expect(page.locator('#bv-forgot-overlay')).toHaveClass(/is-open/);
+    await expect(reg).not.toHaveClass(/is-open/);
+    await expect(page.locator('#bv-forgot-overlay input[name="email"]')).toBeVisible();
+  });
+
+  test('recover modal submits from the current page (no-enumeration success)', async ({ page }) => {
+    await page.goto('/home');
+    await page.evaluate(() => bvOpenOverlay('bv-forgot-overlay'));
+    await page.locator('#bv-forgot-overlay input[name="email"]').fill('definitely-not-a-user@example.invalid');
+    await Promise.all([
+      page.waitForLoadState('networkidle'),
+      page.locator('#bv-forgot-overlay button[type="submit"]').click(),
+    ]);
+    // Proves task=login.forgot is processed from the homepage (not only /forgot_password).
+    await expect(
+      page.locator('.bv-message--success').first(),
+      'forgot confirmation flash renders after submitting from the modal',
+    ).toBeVisible();
   });
 
   test('forgot presents the shared card with no English boilerplate', async ({ page }) => {

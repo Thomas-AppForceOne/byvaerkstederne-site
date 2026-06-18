@@ -1,0 +1,42 @@
+{# Forgot-password modal — opens over the current page like the login overlay,
+   reusing the .bv-login-overlay chrome. The form posts task=login.forgot to the
+   CURRENT page; the login plugin processes that task globally (same as
+   login.login from the login modal) and flashes the no-enumeration confirmation
+   via partials/messages.html.twig on the reloaded page. Field name is `email`
+   to match the plugin's $this->post['email']. No plugin PHP is touched. #}
+<div id="bv-forgot-overlay" class="bv-login-overlay">
+    <div class="bv-login-overlay__panel">
+        <button class="bv-login-overlay__close" onclick="bvOpenOverlay(null)" aria-label="Luk">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+
+        <div class="bv-login-overlay__image" aria-hidden="true">
+            <img src="{{ url('theme://images/login-panel.svg') }}" alt="" />
+            <div class="bv-login-overlay__image-content">
+                <span class="bv-badge bv-badge--primary">Medlemsportal</span>
+                <h2 class="bv-headline" style="color: #fff; margin-top: var(--space-4);">F&aelig;llesskab gennem h&aring;ndv&aelig;rk.</h2>
+            </div>
+        </div>
+
+        <div class="bv-login-overlay__form">
+            <div style="margin-bottom: var(--space-8);">
+                <h2 class="bv-display" style="color: var(--primary);">Glemt adgangskode</h2>
+                <div style="width: 6rem; height: 0.375rem; background: var(--tertiary); margin-top: var(--space-2);"></div>
+                <p class="bv-body-lg" style="margin-top: var(--space-6);">Indtast din e-mail, s&aring; sender vi dig et link til at nulstille din adgangskode.</p>
+            </div>
+
+            <form action="{{ base_url_relative }}{{ uri.path }}" method="post" style="display: flex; flex-direction: column; gap: var(--space-6);">
+                {{ nonce_field('forgot-form', 'forgot-form-nonce')|raw }}
+                <div>
+                    <label class="bv-form-label" style="color: var(--outline);">E-mail</label>
+                    <input class="bv-input" type="email" name="email" placeholder="navn@dom&aelig;ne.dk" autocomplete="email" required style="margin-top: var(--space-2);"/>
+                </div>
+                <button type="submit" name="task" value="login.forgot" class="bv-btn bv-btn--primary bv-btn--lg bv-btn--full">Send nulstillingslink</button>
+            </form>
+
+            <div style="margin-top: var(--space-8); text-align: center;">
+                <a href="/login" onclick="bvOpenOverlay('bv-login-overlay'); return false;" class="bv-label" style="color: var(--outline); text-decoration: underline; text-underline-offset: 4px;">Tilbage til login</a>
+            </div>
+        </div>
+    </div>
+</div>

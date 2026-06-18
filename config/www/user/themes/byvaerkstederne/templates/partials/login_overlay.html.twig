@@ -44,7 +44,7 @@
                         <input type="checkbox" name="rememberme" value="1" class="bv-checkbox" />
                         <span class="bv-label" style="color: var(--on-surface-variant);">Husk mig</span>
                     </label>
-                    <a href="/forgot_password" class="bv-label" style="color: var(--tertiary);">Glemt adgangskode</a>
+                    <a href="/forgot_password" onclick="bvOpenOverlay('bv-forgot-overlay'); return false;" class="bv-label" style="color: var(--tertiary);">Glemt adgangskode</a>
                 </div>
 
                 <button type="submit" class="bv-btn bv-btn--primary bv-btn--lg bv-btn--full">Log ind</button>
@@ -53,7 +53,7 @@
             {% if feature_enabled('membership_signup') %}
             <div style="margin-top: var(--space-12); padding-top: var(--space-8); border-top: 1px solid var(--surface-container-highest);">
                 <p class="bv-label" style="color: var(--outline); margin-bottom: var(--space-4);">Ikke medlem endnu?</p>
-                <a href="/opret-medlemskab" onclick="document.getElementById('bv-login-overlay').classList.remove('is-open'); document.body.style.overflow='';"
+                <a href="/opret-medlemskab" onclick="bvOpenOverlay('bv-register-overlay'); return false;"
                    style="display: inline-flex; align-items: center; gap: var(--space-4); font-family: var(--font-headline); font-weight: 700; text-transform: uppercase; color: var(--secondary);">
                     <span>Bliv medlem af foreningen</span>
                     <span class="material-symbols-outlined">arrow_forward</span>

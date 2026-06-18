@@ -16,6 +16,12 @@
     {% block head %}{% endblock %}
 </head>
 <body class="bv-body{% block body_classes %} {{ page.header.body_classes }}{% endblock %}">
+<script>
+/* Auth modals (login / forgot / register): open one, close the others.
+   Pass null to close all. Used by the header + the in-modal switch links so
+   forgot/register open over the current page exactly like the login modal. */
+function bvOpenOverlay(id){['bv-login-overlay','bv-forgot-overlay','bv-register-overlay'].forEach(function(o){var e=document.getElementById(o);if(e)e.classList.toggle('is-open',o===id);});document.body.style.overflow=id?'hidden':'';}
+</script>
 
     {% block header %}
         {% include 'partials/navigation.html.twig' %}
@@ -41,6 +47,15 @@
        under profiles where membership_signup is false. The visibility of
        the "Log ind" button itself is gated in navigation.html.twig. #}
     {% include 'partials/login_overlay.html.twig' %}
+    {# Forgot/register modals open over the current page. Skip each on its own
+       route, where the standalone page already renders that form (avoids a
+       duplicate Form-plugin registration form on /opret-medlemskab). #}
+    {% if page.template != 'forgot' %}
+    {% include 'partials/forgot_overlay.html.twig' %}
+    {% endif %}
+    {% if feature_enabled('membership_signup') and page.template != 'register' %}
+    {% include 'partials/register_overlay.html.twig' %}
+    {% endif %}
     {% if feature_enabled('bug_report') %}
     {% include 'partials/bug_report_overlay.html.twig' %}
     {% endif %}

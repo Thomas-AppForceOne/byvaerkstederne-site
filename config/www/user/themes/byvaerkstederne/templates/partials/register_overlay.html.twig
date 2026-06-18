@@ -1,0 +1,104 @@
+{# Account-creation modal — opens over the current page like the login overlay,
+   reusing the .bv-login-overlay chrome. Renders the SAME global 'registration'
+   Form-plugin form (forms('registration')) the /opret-medlemskab route uses, so
+   CSRF/honeypot/validation/processing are unchanged; it just posts from wherever
+   the modal was opened (the Form plugin matches by form name, not by page). No
+   plugin PHP is touched. #}
+<div id="bv-register-overlay" class="bv-login-overlay">
+    <div class="bv-login-overlay__panel">
+        <button class="bv-login-overlay__close" onclick="bvOpenOverlay(null)" aria-label="Luk">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+
+        <div class="bv-login-overlay__image" aria-hidden="true">
+            <img src="{{ url('theme://images/login-panel.svg') }}" alt="" />
+            <div class="bv-login-overlay__image-content">
+                <span class="bv-badge bv-badge--primary">Medlemsportal</span>
+                <h2 class="bv-headline" style="color: #fff; margin-top: var(--space-4);">F&aelig;llesskab gennem h&aring;ndv&aelig;rk.</h2>
+            </div>
+        </div>
+
+        <div class="bv-login-overlay__form">
+            <div style="margin-bottom: var(--space-8);">
+                <h2 class="bv-display" style="color: var(--primary);">Bliv en del af v&aelig;rkstedet</h2>
+                <div style="width: 6rem; height: 0.375rem; background: var(--tertiary); margin-top: var(--space-2);"></div>
+                <p class="bv-body-lg" style="margin-top: var(--space-6);">Byg, skab og deltag i f&aelig;llesskabet. Opret dit medlemskab herunder for at f&aring; adgang til maskiner, kurser og netv&aelig;rk.</p>
+            </div>
+
+            <style>
+              /* Honeypot anti-spam field (hidden from humans; bots fill it). */
+              #bv-register-overlay .form-honeybear { position: absolute !important; left: -10000px !important; width: 1px; height: 1px; overflow: hidden; }
+            </style>
+
+            <div class="bv-register-card">
+                {% include "forms/form.html.twig" with {form: forms('registration')} %}
+            </div>
+
+            <div style="margin-top: var(--space-8); text-align: center;">
+                <a href="/login" onclick="bvOpenOverlay('bv-login-overlay'); return false;" class="bv-label" style="color: var(--outline); text-decoration: underline; text-underline-offset: 4px;">Har du allerede en profil? Log ind her</a>
+            </div>
+
+            <script>
+            (function () {
+                var root = document.getElementById('bv-register-overlay');
+                if (!root) return;
+                var form = root.querySelector('.bv-register-card form');
+                if (!form) return;
+
+                // Carry the referring page through as a post-registration redirect.
+                var redirect = {{ (uri.query('redirect')|default('/'))|json_encode|raw }};
+                if (redirect && redirect !== '/') {
+                    form.action = form.action + (form.action.indexOf('?') > -1 ? '&' : '?') + 'redirect=' + encodeURIComponent(redirect);
+                }
+
+                // Convert tooltip attributes to visible help text.
+                root.querySelectorAll('.bv-register-card .tooltip[data-tooltip]').forEach(function (el) {
+                    var helpDiv = document.createElement('div');
+                    helpDiv.className = 'bv-help-text';
+                    helpDiv.textContent = el.getAttribute('data-tooltip');
+                    var formLabel = el.closest('.form-label');
+                    if (formLabel) { formLabel.parentNode.insertBefore(helpDiv, formLabel.nextSibling); }
+                    el.removeAttribute('data-tooltip');
+                });
+
+                // Client-side validation mirroring the server-side policy
+                // (same checks as the /opret-medlemskab route).
+                form.addEventListener('submit', function (e) {
+                    root.querySelectorAll('.bv-field-error').forEach(function (el) { el.remove(); });
+                    var hasError = false;
+                    function showError(field, message) {
+                        hasError = true;
+                        var msg = document.createElement('div');
+                        msg.className = 'bv-field-error';
+                        msg.style.cssText = 'background: #ffdad6; color: #93000a; padding: 0.75rem 1rem; margin-top: 0.5rem; font-weight: 600; font-size: 0.8rem;';
+                        msg.textContent = message;
+                        field.parentNode.appendChild(msg);
+                    }
+                    var username = form.querySelector('input[name="data[username]"]');
+                    if (username && !/^[a-z0-9_-]{3,16}$/.test(username.value)) {
+                        showError(username, 'Brugernavn skal være 3-16 tegn med kun små bogstaver, tal, bindestreg eller understregning.');
+                    }
+                    var pwd = form.querySelector('input[name="data[password1]"]') || form.querySelector('input[type="password"]');
+                    if (pwd) {
+                        var v = pwd.value, errs = [];
+                        if (v.length < 8) errs.push('mindst 8 tegn');
+                        if (!/[a-z]/.test(v)) errs.push('mindst ét lille bogstav');
+                        if (!/[A-Z]/.test(v)) errs.push('mindst ét stort bogstav');
+                        if (!/[0-9]/.test(v)) errs.push('mindst ét tal');
+                        if (errs.length) showError(pwd, 'Adgangskoden mangler: ' + errs.join(', ') + '.');
+                    }
+                    var pwd2 = form.querySelector('input[name="data[password2]"]');
+                    if (pwd && pwd2 && pwd.value !== pwd2.value) {
+                        showError(pwd2, 'Adgangskoderne er ikke ens. Skriv den samme adgangskode i begge felter.');
+                    }
+                    if (hasError) {
+                        e.preventDefault();
+                        var first = root.querySelector('.bv-field-error');
+                        if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                });
+            })();
+            </script>
+        </div>
+    </div>
+</div>
