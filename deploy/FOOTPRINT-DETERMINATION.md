@@ -2,7 +2,7 @@
 
 Authoritative record of **what the running site needs** vs **what currently
 ships**, and the justification for every exclusion the deploy applies. This is
-the artifact the [deploy-cleanup spec](../specifications/deploy_cleanup_specification.md)
+the artifact the [deploy-cleanup spec](../specifications/archive/deploy_cleanup_specification.md)
 requires ("Determination first") — the exclude set in
 `deploy/lib/atomic-release.sh` (`bv_staging_user_excludes`) is the encoding of
 the rules below, not an opaque pile of patterns.
