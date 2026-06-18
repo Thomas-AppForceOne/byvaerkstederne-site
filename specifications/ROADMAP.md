@@ -8,11 +8,6 @@ Lifecycle and folder policy: [CLAUDE.md](../CLAUDE.md#specifications-and-decisio
 
 ## Next
 
-### Clean up deploy
-**Spec:** [deploy_cleanup_specification.md](deploy_cleanup_specification.md)
-
-Tiers ship far more than the running site needs. Determine the necessary file set, rewrite the deploy file-selection to ship only that, then wipe the dev tier and redeploy to prove it.
-
 ### Auth surface UI/UX
 **Spec:** [auth_surface_uiux_specification.md](auth_surface_uiux_specification.md)
 
