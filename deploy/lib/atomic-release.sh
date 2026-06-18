@@ -155,6 +155,55 @@ bv_atomic_release_excludes() {
 EOF
 }
 
+# The exclude list applied to the STAGING-ASSEMBLY rsync in deploy.sh
+# (config/www/user/ -> staging/user/). This is the surface where the
+# dependency dev/test/build/doc bloat enters the bundle, so the
+# footprint reduction lands here (deploy-cleanup spec). Every pattern
+# is justified in deploy/FOOTPRINT-DETERMINATION.md.
+#
+# Patterns are matched relative to the transfer root (config/www/user/):
+#   * leading-slash patterns are anchored to that root;
+#   * bare patterns match at any depth.
+#
+# Fail-safe discipline (these are the traps the guard test enforces):
+#   * NEVER a bare `vendor/` — third-party plugins require their
+#     vendor/autoload at runtime. Only the one custom plugin whose
+#     vendor/ is provably dev-only (feature-flags, autoloads its src/
+#     via spl_autoload_register) is excluded, and it is anchored.
+#   * lowercase `tests/`/`test/` ONLY — never `Test/`/`Tests/`: Symfony
+#     ships runtime test-helper namespaces under capital-T `Test/`
+#     (mailer, messenger, mime, service-contracts).
+#   * no `Resources/` exclude — polyfills ship runtime data there.
+#   * no blanket `*.md` — page content is markdown; only specific
+#     CHANGELOG* doc filenames are dropped.
+#   * composer.json is kept (only composer.lock is dropped).
+bv_staging_user_excludes() {
+    cat <<'EOF'
+--exclude=.DS_Store
+--exclude=/themes/quark/
+--exclude=/plugins/feature-flags/vendor/
+--exclude=tests/
+--exclude=test/
+--exclude=.github/
+--exclude=.circleci/
+--exclude=*.map
+--exclude=composer.lock
+--exclude=phpunit.xml
+--exclude=phpunit.xml.dist
+--exclude=phpstan.neon
+--exclude=phpstan.neon.dist
+--exclude=.php-cs-fixer.php
+--exclude=.php-cs-fixer.dist.php
+--exclude=.php_cs
+--exclude=.php_cs.dist
+--exclude=CHANGELOG.md
+--exclude=CHANGELOG
+--exclude=CHANGELOG.txt
+--exclude=.gitignore
+--exclude=.gitattributes
+EOF
+}
+
 # Rsync the staging dir into a fresh release dir.
 #
 # Hard contract:
