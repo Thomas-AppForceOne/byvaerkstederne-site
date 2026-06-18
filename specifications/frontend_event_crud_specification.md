@@ -17,7 +17,7 @@ These are the current state of the system, established by inspection, and the gr
 | The site's own plugins (roadmap, bug-report, feature-suggestion) mutate Flex data by writing the data YAML directly (atomic `flock`), not via the Flex API. The `flex-cache-bust` plugin invalidates render cache on `onFlexAfterSave`/`onFlexAfterDelete`. | Mutate via the **Flex API** (§7–§8) so those events fire — keeping the public list fresh and running blueprint validation. A raw-YAML write bypasses cache-busting and shows stale data; it is not permitted unless it adds an explicit cache bust. |
 | On a deployed tier the events data lives in the **non-versioned `<tier>data/` dir** (live state, preserved across deploys, not a git repo). Git history covers only the repo's seed copy, never live tier mutations. | Git history is **not** a live-audit mechanism. Explicit actor stamping + an append-only audit log is **required** (§10). |
 | The admin plugin is **disabled** (no `user/config/plugins/admin.yaml`; blueprint default off). | Events are edited today only by a super, directly in the data YAML / via git. This feature is frontend-only; arrangører never receive admin-panel access. |
-| The `published` field **defaults to `1`** in the blueprint. | The create handler must **force `published: false`** server-side; it cannot rely on the blueprint default. |
+| The `published` field **defaults to `1`** in the blueprint. | The create form exposes the `published` (Synlig) toggle to the arrangør and the handler honours the submitted value (default visible). There is **no forced moderation state** — an arrangør's own event publishes immediately unless they save it as a draft. |
 | The site is **Danish-only** (`default_lang: da`, no `languages.supported`). The `group` enum (`alle/makerspace/kreativ/groenne/kulturhus`) has a rename pending (`groenne→groent`, `kreativ→krea`). | All labels Danish; no i18n branching. Forms read `group`/`button_style` options **from the blueprint** (single source of truth), never hardcoded. |
 | Versions in place: Grav 1.7.52, Form 8.2.1, Flex Objects 1.3.8 (enabled), Login 3.8.0 (enabled); frontend login enabled (`/login`, register `/opret-medlemskab`, email-activation on, no auto-login). | All version constraints (§14) are already satisfied; no plugin or core upgrade is needed. |
 
@@ -55,7 +55,7 @@ Extend `user/blueprints/flex-objects/begivenheder.yaml`. Existing fields (`publi
 | `created_at` | text | ISO-8601 UTC timestamp at create (`gmdate('Y-m-d\TH:i:s\Z')`). |
 | `updated_by` | text | Username of the last mutator. |
 | `updated_at` | text | ISO-8601 UTC timestamp of the last mutation. |
-| `archived` | toggle (default 0) | Soft-delete marker. An archived event is unpublished and excluded from every public and management collection except the super's. |
+| `archived` | toggle (default 0) | Soft-delete marker. An archived event is hidden from all public views; it stays visible to its **owner** (and super) in the management dashboard, where the owner can restore it. |
 
 Notes:
 - **Missing `owner` ⇒ super-only-editable.** The 7 pre-existing events have no `owner`; the authorization contract treats a null/empty `owner` as editable only by `admin.super`. This makes the new fields purely additive — **no data migration is required** (optional backfill in §13).
@@ -70,15 +70,15 @@ Notes:
 |---|---|---|---|---|
 | Read **published** events (list + detail) | ✅ | ✅ | ✅ | ✅ |
 | Read **own unpublished/archived** | — | — | ✅ (own only) | ✅ (all) |
-| Create event | — | — | ✅ → forced `published:false` | ✅ (may publish) |
+| Create event (publish or save as draft) | — | — | ✅ (own, self-published) | ✅ |
 | Update **own** event | — | — | ✅ | ✅ |
-| Update **another's** event | — | — | ❌ (403) | ✅ |
-| Publish / unpublish | — | — | ❌ | ✅ |
-| Delete = **soft archive** own | — | — | ✅ | ✅ |
-| **Hard delete** (remove object) | — | — | ❌ | ✅ |
+| Publish / unpublish **own** event | — | — | ✅ | ✅ |
+| Delete = **soft archive** own (reversible) | — | — | ✅ | ✅ |
+| Update / publish / delete **another's** event | — | — | ❌ (403) | ✅ (rare escalation) |
+| **Hard delete** (permanent removal) | — | — | ❌ | ✅ (rare) |
 
-- **Super passes every `admin.events.*` check** automatically (Grav `admin.super` overrides `authorize()`), so it needs no group membership.
-- Publish, cross-owner edit/update, and hard-delete are gated on `admin.super` (see §4 for the optional finer-grained alternative).
+- An arrangør is **fully self-service for their own events**: create, edit, publish/unpublish, and remove (soft archive) with **no admin involvement** in the normal flow.
+- **Super passes every `admin.events.*` check** automatically (Grav `admin.super` overrides `authorize()`), so it needs no group membership. Super is a **rare escalation path only** — acting on events an arrangør does not own, and permanently hard-deleting — never a step in the routine publish flow.
 - A logged-in member with no events permission is, for events, exactly equivalent to anonymous.
 
 ---
@@ -89,14 +89,14 @@ One namespace, **`admin.events.{create,read,update,delete}`**, is the single sou
 
 - `admin.events.create` — create new events.
 - `admin.events.read` — view own unpublished/archived events in the management UI. (Public reading of *published* events is **not** permission-gated.)
-- `admin.events.update` — update an event the user owns.
+- `admin.events.update` — update an event the user owns, **including setting its `published` flag** (publish/unpublish your own event).
 - `admin.events.delete` — soft-archive an event the user owns.
 
-**Elevated actions gated on `admin.super`:** publish/unpublish, editing/deleting events the user does not own, and hard delete.
+**Elevated actions gated on `admin.super` (rare escalation, not part of the normal flow):** acting on events the user does **not** own, and permanently hard-deleting an object.
 
 Rationale for reuse over a fresh `site.events.*`: it matches the existing `admin.contacts.list` / `admin.flex-objects` convention, and a scoped `admin.events.*` grant does **not** confer admin-panel access (that needs `admin.login`) — so least privilege holds. The `admin.events.*` strings must be **declared** (e.g. an `events` block in a plugin `permissions.yaml`, mirroring `user/plugins/admin/permissions.yaml`) so they appear as real, checkable permissions.
 
-*Open alternative (see §14):* mint `admin.events.publish` and `admin.events.manage_all` if a non-super "editor" role is ever wanted. Default keeps those as `admin.super` to keep the namespace lean.
+*Open alternative (see §16):* mint `admin.events.manage_all` if a non-super "moderator" role is ever wanted for cross-owner fixes. The default keeps cross-owner actions on `admin.super` to keep the namespace lean. (Publishing is **not** a separate permission — it is part of `admin.events.update` on one's own event.)
 
 ---
 
@@ -144,9 +144,9 @@ Danish slugs, numbered page folders, house gating (`access:` frontmatter + featu
 
 All three mutations use the **Form plugin** (page-frontmatter forms, like `09.opret-medlemskab/register.md`), rendered through the stock `forms/form.html.twig` with `.bv-*` CSS overrides — giving CSRF nonce injection, server-side validation hooks, and house styling for free. Each form declares a custom process action that the plugin handles in `onFormProcessed`.
 
-- **Create** (`process: [ { event_create: … } ]`): fields = `title`, `description`, `group` (select; options sourced from the blueprint), `event_date`, `event_time`, `location`, `capacity`, `price`, `badge`, `button_text`, `button_url`, `button_style` (select), `featured`/`featured_tag` (optional) + a honeypot. **No** `published`, `owner`, or audit fields in the form. On success → PRG redirect to `/begivenheder/mine` with a success flash.
-- **Update** (`event_update`): same visible fields, **prefilled** from the loaded object, plus a hidden `key`. `published` is shown as an editable control **only** to `admin.super`; for arrangører it is absent and untouched. `owner`/audit fields never appear.
-- **Delete** (`event_delete`): a minimal confirmation form — hidden `key` + a destructive confirm button. Arrangör ⇒ soft archive; super ⇒ choice of soft archive or hard delete.
+- **Create** (`process: [ { event_create: … } ]`): fields = `title`, `description`, `group` (select; options sourced from the blueprint), `event_date`, `event_time`, `location`, `capacity`, `price`, `badge`, `button_text`, `button_url`, `button_style` (select), `featured`/`featured_tag` (optional), a `published` (Synlig) toggle defaulting to visible, + a honeypot. **No** `owner` or audit fields in the form — those are server-stamped. On success → PRG redirect to `/begivenheder/mine` with a success flash.
+- **Update** (`event_update`): same visible fields, **prefilled** from the loaded object, plus a hidden `key`. The `published` (Synlig) toggle is editable by the owner (and super), so an arrangør publishes/unpublishes their own event directly. `owner`/audit fields never appear.
+- **Delete** (`event_delete`): a minimal confirmation form — hidden `key` + a destructive confirm button. Arrangør ⇒ soft archive; super ⇒ choice of soft archive or hard delete.
 
 The `key` in update/delete is a routing/correlation value only; the handler re-resolves the object server-side and authorizes against the **stored** object — never trusting any client-submitted ownership or state.
 
@@ -170,13 +170,13 @@ Every mutating handler (`event_create`, `event_update`, `event_delete`) runs the
 6. **Input validation** — `EventValidator` re-validates **every** field server-side, independent of HTML5/client checks: `title` required, ≤80, no `<`/`>` (house `^[^<>]{1,80}$` pattern); `group` ∈ blueprint enum; `event_date` matches `^\d{4}-\d{2}-\d{2}$` and is a real calendar date; `button_style` ∈ blueprint enum; `button_url` is a safe relative or `http(s)` URL (reject `javascript:` and other schemes); bounded lengths on free-text fields. Fail ⇒ 400 with field-level Danish messages.
 7. **Per-object authorization** (update/delete only) — load the object by `key`; not found ⇒ 404. Compute ownership against the **stored** object: `owner === $user->username || $user->authorize('admin.super')`; otherwise 403. A null/empty stored `owner` ⇒ super-only.
 8. **Mutate** via the Flex API:
-   - *create*: stamp `owner = created_by = $user->username`, `created_at`/`updated_at = now`, **force `published:false`** (arrangør) — only a super may set `published:true` here; assign a fresh server key.
-   - *update*: apply validated fields; **preserve `owner`/`created_*` from the stored object** (ignore any client value); set `updated_by`/`updated_at`. `published` only changes if the actor is super.
-   - *delete*: arrangör ⇒ `archived:true` + `published:false` (retain object); super ⇒ hard `->delete()` or soft, per the form.
+   - *create*: stamp `owner = created_by = $user->username`, `created_at`/`updated_at = now`, set `published` to the **validated submitted value** (default visible) — the arrangør self-publishes; no forced moderation state. Assign a fresh server key.
+   - *update*: apply validated fields **including `published`** (the owner controls their own event's visibility); **preserve `owner`/`created_*` from the stored object** (ignore any client value); set `updated_by`/`updated_at`.
+   - *delete*: arrangør ⇒ `archived:true` + `published:false` (retain object, reversible by the owner); super ⇒ hard `->delete()` or soft, per the form.
 9. **Audit** — append `{ts, actor, action, key, before?/after?}` to the audit log (§10).
 10. **Respond** — PRG redirect with a flash (success/error) for form posts; never echo back client-controlled identity.
 
-**Invariants stated for tests:** `owner` is never client-settable and is preserved across updates; `published` is never raised by a non-super; the object id is always re-resolved server-side; a direct POST / forced browse that skips the UI hits exactly these checks and is rejected. These are the negative-test targets (§12).
+**Invariants stated for tests:** `owner` is never client-settable and is preserved across updates; an arrangør can act **only** on events they own; the object id is always re-resolved server-side; a direct POST / forced browse that skips the UI hits exactly these checks and is rejected. These are the negative-test targets (§12).
 
 ---
 
@@ -213,15 +213,15 @@ Each milestone is independently testable and ships behind the `event_management`
 
 - **M1 — Model + Read.** Add the §2 fields; build the public detail route and confirm list/detail show published-only and exclude `archived`.
   - Tests: anon sees published list + detail; unpublished/archived/unknown detail ⇒ 404; the 7 legacy events still render.
-- **M2 — Create.** Gated create page + form; `event_create` handler with the full §8.1 contract, owner stamp, forced `published:false`.
-  - Tests (success): arrangör creates → object persisted with `owner`, `published:false`, audit row; appears in super's pending view, not in the public list.
+- **M2 — Create.** Gated create page + form; `event_create` handler with the full §8.1 contract, owner stamp, self-chosen `published` state.
+  - Tests (success): arrangør creates a **published** event → object persisted with `owner`, `published:true`, audit row, and it appears in the public list immediately; creating with Synlig = Nej → saved as a draft the owner sees in their dashboard while the public list excludes it.
   - Tests (failure/negative): anon GET of `/begivenheder/opret` ⇒ redirect to `/login`; **direct POST** to the create action as anon ⇒ 401/403; logged-in member without events perm ⇒ 403; missing/invalid CSRF ⇒ 403; invalid input (bad date, `<>` in title, out-of-enum group, `javascript:` url) ⇒ 400 with field errors and no object written.
 - **M3 — Update.** Load-by-key, prefilled form, per-object authz, save.
-  - Tests (success): arrangör edits **own** → fields change, `owner` unchanged, `updated_by/at` set, audit row; super edits any.
-  - Tests (negative): arrangör direct-POST `event_update` with **another owner's key** ⇒ 403, object untouched; client-submitted `owner`/`published` ignored (owner preserved, published not raised by non-super); unknown key ⇒ 404.
-- **M4 — Delete.** Confirmation step; soft archive (arrangör/own) vs hard delete (super).
-  - Tests (success): arrangör soft-archives own → object retained, `archived:true`, gone from public list + detail 404, audit row; super hard-deletes → object removed.
-  - Tests (negative): arrangör delete of another's event ⇒ 403; delete without confirm/CSRF ⇒ rejected; forced-browse direct POST ⇒ rejected.
+  - Tests (success): arrangør edits **own** → fields change, `owner` unchanged, `updated_by/at` set, audit row; super edits any.
+  - Tests (negative): arrangør direct-POST `event_update` with **another owner's key** ⇒ 403, object untouched; client-submitted `owner` ignored (owner preserved across the update); unknown key ⇒ 404.
+- **M4 — Delete.** Confirmation step; soft archive (arrangør/own) vs hard delete (super).
+  - Tests (success): arrangør soft-archives own → object retained, `archived:true`, gone from public list + detail 404, audit row; super hard-deletes → object removed.
+  - Tests (negative): arrangør delete of another's event ⇒ 403; delete without confirm/CSRF ⇒ rejected; forced-browse direct POST ⇒ rejected.
 
 **Cross-cutting (M2→):** a forced-browsing suite asserting every mutating endpoint enforces authn+authz+CSRF regardless of UI; audit entries written on every successful mutation; flash feedback renders via the shared component.
 
@@ -247,7 +247,7 @@ Each milestone is independently testable and ships behind the `event_management`
 
 1. **Current state:** events edited only by a super, directly in the events YAML / via git (admin panel disabled). No ownership fields.
 2. **Ship code** (blueprint fields, `groups.yaml`, `event-manager` plugin, templates) with `event_management` **off** on staging/test, **on** in dev/local. The new fields are additive/optional — **no data migration required**; legacy events with no `owner` are treated as super-only-editable.
-3. **Optional backfill:** assign `owner` on the 7 existing events (to a super or a named arrangör) if specific ownership is wanted. Because live data sits in `<tier>data/` (off-git), any backfill runs against each tier's live data (manual edit or the data-versioning runner) — not a repo commit.
+3. **Optional backfill:** assign `owner` on the 7 existing events (to a super or a named arrangør) if specific ownership is wanted. Because live data sits in `<tier>data/` (off-git), any backfill runs against each tier's live data (manual edit or the data-versioning runner) — not a repo commit.
 4. **Grant the role:** create the first `arrangoerer` account(s) by group assignment; verify they get `admin.events.*` and **not** admin-panel access.
 5. **Flip the flag per tier** once a tier's manual + automated checks pass (dev → test → staging → prod), matching the existing feature-flag promotion posture.
 
@@ -257,11 +257,11 @@ Each milestone is independently testable and ships behind the `event_management`
 
 | Decision | Recommendation (adopted) | Alternative |
 |---|---|---|
-| Moderation | **Gated**: arrangör creates `published:false`; super publishes. | Trusted arrangører publish directly (mint `admin.events.publish`). |
-| Edit/Delete scope | **Own-only** for arrangører via `owner`; super = all. | Any-arrangör-edits-any (drop ownership) — rejected; weakens least privilege. |
-| Delete semantics | **Soft archive** for arrangører (retain, unpublish, hide); **hard delete** super-only. | Hard delete for all — rejected; no undo. |
+| Publishing | **Self-service**: arrangører publish/unpublish their **own** events directly (part of `admin.events.update`); no admin approval in the normal flow. | Gated moderation (super approves) — rejected; arrangører must be self-sufficient. |
+| Edit/Delete scope | **Own-only** for arrangører via `owner`; super = all (rare escalation, for fixing others' events). | Any-arrangør-edits-any (drop ownership) — rejected; weakens least privilege. |
+| Delete semantics | **Soft archive** = the arrangør's self-service, reversible delete (retain, unpublish, hide); **hard delete** (permanent) super-only and rare. | Hard delete for all — rejected; no undo. |
 | Onboarding | **Invite/manual** group assignment by super. | Self-register-then-approve (future). |
 | Admin access for arrangører | **None** — frontend-only, `site.login` + `admin.events.*`, no `admin.login`. | — (confirmed). |
-| Permission namespace | **Reuse `admin.events.{create,read,update,delete}`**; publish/cross-owner/hard-delete = `admin.super`. | `site.events.*`; or mint `admin.events.publish` + `admin.events.manage_all` for a non-super editor role. |
+| Permission namespace | **Reuse `admin.events.{create,read,update,delete}`** (publishing own = part of `update`); cross-owner actions + hard-delete = `admin.super`. | `site.events.*`; or mint `admin.events.manage_all` for a non-super moderator role. |
 | Mutation mechanism | **Flex API** (fires cache-bust + blueprint validation). | Direct-YAML house pattern — rejected: bypasses `flex-cache-bust`, risks stale public list. |
 | Event detail routing | Plugin-resolved `/begivenheder/<key>` with server-side read authz. | A Flex-registered object route — verify 1.3.8 support during implementation. |
