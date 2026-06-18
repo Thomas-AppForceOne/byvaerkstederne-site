@@ -69,6 +69,21 @@ test.describe('Auth surface UI/UX', () => {
     ).toBeGreaterThan(0);
   });
 
+  test('auth pages float over a dimmed backdrop with a close affordance', async ({ page }) => {
+    await page.goto('/forgot_password');
+    const authPage = page.locator('.bv-auth-page');
+    await expect(authPage).toBeVisible();
+    const style = await authPage.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { position: cs.position, bg: cs.backgroundColor };
+    });
+    expect(style.position, 'auth surface is a fixed overlay').toBe('fixed');
+    // Dimmed translucent backdrop (not an opaque/solid background).
+    expect(style.bg, 'dimmed translucent backdrop').toMatch(/rgba\(26,\s*28,\s*28,\s*0?\.5\)/);
+    // Close affordance returns to the site (the dimmed header behind isn't clickable).
+    await expect(page.locator('.bv-auth-card__close')).toHaveAttribute('href', '/');
+  });
+
   test('forgot presents the shared card with no English boilerplate', async ({ page }) => {
     const res = await page.goto('/forgot_password');
     expect(res?.status()).toBe(200);

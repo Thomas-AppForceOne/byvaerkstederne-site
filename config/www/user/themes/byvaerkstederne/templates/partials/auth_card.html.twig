@@ -10,6 +10,12 @@
    page. No plugin PHP is touched. #}
 <section class="bv-auth-page">
     <div class="bv-auth-card">
+        {# Dismiss back to the site — the card floats over the dimmed site, whose
+           header is behind the backdrop and not clickable. Mirrors the login
+           overlay's close affordance. #}
+        <a class="bv-auth-card__close" href="/" aria-label="Luk">
+            <span class="material-symbols-outlined">close</span>
+        </a>
         <div class="bv-auth-card__image" aria-hidden="true">
             {# Locally hosted brand asset (WI-7) — same image as the header overlay. #}
             <img src="{{ url('theme://images/login-panel.svg') }}" alt="" />
