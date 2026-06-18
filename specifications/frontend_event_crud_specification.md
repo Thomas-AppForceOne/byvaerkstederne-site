@@ -6,21 +6,20 @@ Scope: Let approved non-admin members ("arrangører") create, read, update and d
 
 ---
 
-## 0. Codebase grounding — where the brief and the code disagree (code wins)
+## 0. System facts & constraints (authoritative)
 
-The brief's architectural givens hold, but the live codebase refines several assumptions. These are settled facts, established by inspection; the spec is written to them.
+These are the current state of the system, established by inspection, and the ground truth this spec is built on. Each carries a binding implication for the implementation.
 
-| Brief assumption | Actual codebase state | Consequence for the spec |
-|---|---|---|
-| Define events as a Flex Directory | **Already exists**: directory `begivenheder` (blueprint `user/blueprints/flex-objects/begivenheder.yaml`, data `user/data/flex-objects/begivenheder.yaml`, registered in `user/config/plugins/flex-objects.yaml`), 7 live events. | Extend the existing `begivenheder` directory; do **not** create a new `events` one. All field/permission work is additive to `begivenheder`. |
-| Inspect `groups.yaml` | **No `groups.yaml` exists.** The only account (`bob`) carries an inline `access:` tree with `admin.super`. | The spec **creates** `user/config/groups.yaml` with an `arrangoerer` group; accounts join via a `groups:` list. |
-| Frontend forms operate on Flex objects via the Flex ACL | The site's own plugins (roadmap, bug-report, feature-suggestion) **mutate by writing the data YAML directly** (atomic `flock`), not via the Flex API. | The spec **recommends the Flex API** for mutations because `flex-cache-bust` invalidates render cache on `onFlexAfterSave/onFlexAfterDelete`; raw-YAML writes would bypass that and the public list would show stale data. This is a deliberate divergence from house style — see §7. |
-| Audit = git history of the events data | On a deployed tier the events data lives in the **non-versioned `<tier>data/` dir** (live state, preserved across deploys, not a git repo). Git history only covers the repo's seed copy, never live tier mutations. | Git audit is **not** a viable live-audit mechanism. Explicit actor stamping + an append-only audit log is **required** (§10), not an "if git is insufficient" fallback. |
-| Replace the admin panel | The **admin plugin is disabled** (no `user/config/plugins/admin.yaml`, blueprint default off). | "Current super-only state" = a super edits the events YAML directly / via git (or a temporarily-enabled admin). The rollout note (§13) reflects this. |
-| — | `published` field **defaults to `1`** in the blueprint. | The create handler must **force `published: false`** server-side; it cannot rely on the blueprint default. |
-| — | Site is **Danish-only** single language (`default_lang: da`, no `languages.supported`); the `group` enum (`alle/makerspace/kreativ/groenne/kulturhus`) has a rename pending in PR #57 (`groenne→groent`, `kreativ→krea`). | All labels Danish, no i18n branching. Forms read `group`/`button_style` options **from the blueprint** (single source of truth), never hardcoded. |
-
-**Versions (all satisfy the gate):** Grav 1.7.52 (≥1.7.25 ✓), Form 8.2.1 (≥5.1.0 ✓), Flex Objects 1.3.8 (enabled ✓), Login 3.8.0 (enabled ✓). Frontend login is already enabled (`/login`, register `/opret-medlemskab`, email-activation on, no auto-login).
+| System fact | Binding implication |
+|---|---|
+| Events are an **existing** Flex Directory `begivenheder` — blueprint `user/blueprints/flex-objects/begivenheder.yaml`, data `user/data/flex-objects/begivenheder.yaml`, registered in `user/config/plugins/flex-objects.yaml`; 7 live events. | Extend the existing `begivenheder` directory. Do **not** create a new directory. All field and permission work is additive to `begivenheder`. |
+| There is **no** `user/config/groups.yaml`. The only account (`bob`) carries an inline `access:` tree granting `admin.super`. | Create `user/config/groups.yaml` with an `arrangoerer` group; accounts join it via a `groups:` list (§5). |
+| The site's own plugins (roadmap, bug-report, feature-suggestion) mutate Flex data by writing the data YAML directly (atomic `flock`), not via the Flex API. The `flex-cache-bust` plugin invalidates render cache on `onFlexAfterSave`/`onFlexAfterDelete`. | Mutate via the **Flex API** (§7–§8) so those events fire — keeping the public list fresh and running blueprint validation. A raw-YAML write bypasses cache-busting and shows stale data; it is not permitted unless it adds an explicit cache bust. |
+| On a deployed tier the events data lives in the **non-versioned `<tier>data/` dir** (live state, preserved across deploys, not a git repo). Git history covers only the repo's seed copy, never live tier mutations. | Git history is **not** a live-audit mechanism. Explicit actor stamping + an append-only audit log is **required** (§10). |
+| The admin plugin is **disabled** (no `user/config/plugins/admin.yaml`; blueprint default off). | Events are edited today only by a super, directly in the data YAML / via git. This feature is frontend-only; arrangører never receive admin-panel access. |
+| The `published` field **defaults to `1`** in the blueprint. | The create handler must **force `published: false`** server-side; it cannot rely on the blueprint default. |
+| The site is **Danish-only** (`default_lang: da`, no `languages.supported`). The `group` enum (`alle/makerspace/kreativ/groenne/kulturhus`) has a rename pending (`groenne→groent`, `kreativ→krea`). | All labels Danish; no i18n branching. Forms read `group`/`button_style` options **from the blueprint** (single source of truth), never hardcoded. |
+| Versions in place: Grav 1.7.52, Form 8.2.1, Flex Objects 1.3.8 (enabled), Login 3.8.0 (enabled); frontend login enabled (`/login`, register `/opret-medlemskab`, email-activation on, no auto-login). | All version constraints (§14) are already satisfied; no plugin or core upgrade is needed. |
 
 ---
 
@@ -86,7 +85,7 @@ Notes:
 
 ## 4. Permission namespace (single source of truth)
 
-Adopt the brief default: one namespace, **`admin.events.{create,read,update,delete}`**, checked identically by the Flex directory ACL (defense-in-depth / future admin use) and by the frontend handlers (the authoritative boundary).
+One namespace, **`admin.events.{create,read,update,delete}`**, is the single source of truth, checked identically by the Flex directory ACL (defense-in-depth / future admin use) and by the frontend handlers (the authoritative boundary).
 
 - `admin.events.create` — create new events.
 - `admin.events.read` — view own unpublished/archived events in the management UI. (Public reading of *published* events is **not** permission-gated.)
@@ -143,7 +142,7 @@ Danish slugs, numbered page folders, house gating (`access:` frontmatter + featu
 
 ## 7. Per-operation form definitions
 
-All three mutations use the **Form plugin** (page-frontmatter forms, like `09.opret-medlemskab/register.md`), rendered through the stock `forms/form.html.twig` with `.bv-*` CSS overrides. This gives CSRF nonce injection, server-side validation hooks, and house styling for free — and matches the brief's "Form plugin forms + `onFormProcessed`". Each form declares a custom process action that the plugin handles.
+All three mutations use the **Form plugin** (page-frontmatter forms, like `09.opret-medlemskab/register.md`), rendered through the stock `forms/form.html.twig` with `.bv-*` CSS overrides — giving CSRF nonce injection, server-side validation hooks, and house styling for free. Each form declares a custom process action that the plugin handles in `onFormProcessed`.
 
 - **Create** (`process: [ { event_create: … } ]`): fields = `title`, `description`, `group` (select; options sourced from the blueprint), `event_date`, `event_time`, `location`, `capacity`, `price`, `badge`, `button_text`, `button_url`, `button_style` (select), `featured`/`featured_tag` (optional) + a honeypot. **No** `published`, `owner`, or audit fields in the form. On success → PRG redirect to `/begivenheder/mine` with a success flash.
 - **Update** (`event_update`): same visible fields, **prefilled** from the loaded object, plus a hidden `key`. `published` is shown as an editable control **only** to `admin.super`; for arrangører it is absent and untouched. `owner`/audit fields never appear.
