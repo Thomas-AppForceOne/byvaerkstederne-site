@@ -270,6 +270,130 @@ else
     check "deploy.sh has no rsync against \$DATA_DIR" ok
 fi
 
+# ── Test 4: staging-user excludes drop bloat, keep runtime (fixture) ──
+# bv_staging_user_excludes is the deploy-cleanup footprint reduction
+# applied at deploy.sh's config/www/user/ -> staging/user/ rsync. This
+# test builds a fixture user/ tree carrying BOTH bloat and runtime
+# files, runs the real exclude set through rsync, and asserts the
+# bloat is gone while every runtime-required path survives.
+echo ""
+echo "Test 4: staging-user exclude set drops bloat, keeps runtime"
+
+USRC="$WORK/usrc"
+mkdir -p \
+  "$USRC/themes/byvaerkstederne/css" \
+  "$USRC/themes/quark/css" \
+  "$USRC/plugins/feature-flags/src" \
+  "$USRC/plugins/feature-flags/vendor/phpunit" \
+  "$USRC/plugins/feature-flags/tests" \
+  "$USRC/plugins/login/vendor/robthree/twofactorauth/tests" \
+  "$USRC/plugins/email/vendor/symfony/mailer/Test" \
+  "$USRC/plugins/email/vendor/symfony/polyfill-php80/Resources" \
+  "$USRC/plugins/admin/.github" \
+  "$USRC/pages/01.home" \
+  "$USRC/config"
+# Runtime-required (MUST survive)
+echo 'theme'    > "$USRC/themes/byvaerkstederne/byvaerkstederne.yaml"
+echo 'css'      > "$USRC/themes/byvaerkstederne/css/theme.css"
+echo 'plugin'   > "$USRC/plugins/feature-flags/feature-flags.php"
+echo 'class'    > "$USRC/plugins/feature-flags/src/FeatureFlag.php"
+echo 'json'     > "$USRC/plugins/feature-flags/composer.json"
+echo 'autoload' > "$USRC/plugins/login/vendor/robthree/twofactorauth/TwoFactorAuth.php"
+echo 'runtime'  > "$USRC/plugins/email/vendor/symfony/mailer/Test/Constraint.php"
+echo 'poly'     > "$USRC/plugins/email/vendor/symfony/polyfill-php80/Resources/stubs.php"
+echo 'page'     > "$USRC/pages/01.home/default.md"
+echo 'cfg'      > "$USRC/config/system.yaml"
+# Bloat (MUST be dropped)
+echo 'quark'    > "$USRC/themes/quark/css/quark.css"
+echo 'phpunit'  > "$USRC/plugins/feature-flags/vendor/phpunit/phpunit"
+echo 'pl-test'  > "$USRC/plugins/feature-flags/tests/FlagTest.php"
+echo 'v-test'   > "$USRC/plugins/login/vendor/robthree/twofactorauth/tests/AuthTest.php"
+echo 'ci'       > "$USRC/plugins/admin/.github/ci.yml"
+echo 'map'      > "$USRC/themes/byvaerkstederne/css/theme.css.map"
+echo 'lock'     > "$USRC/plugins/feature-flags/composer.lock"
+echo 'changelog'> "$USRC/plugins/admin/CHANGELOG.md"
+
+UDST="$WORK/udst"
+mkdir -p "$UDST"
+SU_EX=()
+while IFS= read -r line; do
+    [ -n "$line" ] && SU_EX+=("$line")
+done < <(bv_staging_user_excludes)
+rsync -a "${SU_EX[@]}" "$USRC/" "$UDST/"
+
+for keep in \
+    "themes/byvaerkstederne/byvaerkstederne.yaml" \
+    "themes/byvaerkstederne/css/theme.css" \
+    "plugins/feature-flags/feature-flags.php" \
+    "plugins/feature-flags/src/FeatureFlag.php" \
+    "plugins/feature-flags/composer.json" \
+    "plugins/login/vendor/robthree/twofactorauth/TwoFactorAuth.php" \
+    "plugins/email/vendor/symfony/mailer/Test/Constraint.php" \
+    "plugins/email/vendor/symfony/polyfill-php80/Resources/stubs.php" \
+    "pages/01.home/default.md" \
+    "config/system.yaml"
+do
+    if [ -e "$UDST/$keep" ]; then
+        check "runtime path kept: $keep" ok
+    else
+        check "runtime path kept: $keep" fail
+    fi
+done
+
+for drop in \
+    "themes/quark" \
+    "plugins/feature-flags/vendor" \
+    "plugins/feature-flags/tests" \
+    "plugins/login/vendor/robthree/twofactorauth/tests" \
+    "plugins/admin/.github" \
+    "themes/byvaerkstederne/css/theme.css.map" \
+    "plugins/feature-flags/composer.lock" \
+    "plugins/admin/CHANGELOG.md"
+do
+    if [ -e "$UDST/$drop" ]; then
+        check "bloat dropped: $drop" fail
+    else
+        check "bloat dropped: $drop" ok
+    fi
+done
+
+# ── Test 5: the exclude set is fail-safe (failure path) ──────────────
+# Assert the real set contains NO over-broad pattern that would drop a
+# runtime-required path — and prove the detector has teeth by feeding
+# it a deliberately-bad set (so the assertion is not a tautology).
+echo ""
+echo "Test 5: staging-user exclude set is fail-safe (no over-broad rule)"
+
+# Returns 0 (match) if any line is a forbidden, runtime-dropping shape:
+#   bare vendor/, capital-T Test/ or Tests/, Resources/, blanket *.md,
+#   composer.json, or an anchored drop of system/index.php/active theme.
+has_forbidden_exclude() {
+    printf '%s\n' "$1" | grep -Eq \
+        -e '^--exclude=vendor/$' \
+        -e '^--exclude=/?Tests?/$' \
+        -e '^--exclude=Resources/$' \
+        -e '^--exclude=\*\.md$' \
+        -e '^--exclude=composer\.json$' \
+        -e '^--exclude=/system/' \
+        -e '^--exclude=/index\.php' \
+        -e '^--exclude=/themes/byvaerkstederne'
+}
+
+REAL_SET="$(bv_staging_user_excludes)"
+if has_forbidden_exclude "$REAL_SET"; then
+    check "real exclude set contains no runtime-dropping pattern" fail
+else
+    check "real exclude set contains no runtime-dropping pattern" ok
+fi
+
+# Teeth: a bad set (bare vendor/, capital Test/) MUST be flagged.
+BAD_SET=$'--exclude=.DS_Store\n--exclude=vendor/\n--exclude=Test/'
+if has_forbidden_exclude "$BAD_SET"; then
+    check "guard rejects a bad rule (vendor/, Test/) — detector has teeth" ok
+else
+    check "guard rejects a bad rule — detector has teeth" fail
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────
 echo ""
 echo "─────────────────────────────────────"

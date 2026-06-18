@@ -408,9 +408,22 @@ if [ "$ENV_KIND" = "grav" ]; then
 
     rm -rf "$STAGING_DIR/user/pages" "$STAGING_DIR/user/themes/quark" 2>/dev/null
 
-    rsync -a --exclude='.DS_Store' \
+    # Staging-assembly rsync — the surface where dependency dev/test/
+    # build/doc bloat would enter the bundle. The reduced selection
+    # (bv_staging_user_excludes) is applied here so every downstream
+    # rsync inherits the minimal tree (deploy-cleanup spec; rules
+    # justified in deploy/FOOTPRINT-DETERMINATION.md). Each exclude is
+    # already a separate, quoted token in the array — no string-built
+    # command line.
+    STAGING_USER_EXCLUDES=()
+    while IFS= read -r _ex_line; do
+        [ -n "$_ex_line" ] && STAGING_USER_EXCLUDES+=("$_ex_line")
+    done < <(bv_staging_user_excludes)
+
+    rsync -a "${STAGING_USER_EXCLUDES[@]}" \
         "$PROJECT_DIR/config/www/user/" \
         "$STAGING_DIR/user/"
+    unset _ex_line
 
     cat > "$STAGING_DIR/.htaccess" << 'HTACCESS'
 # Grav CMS .htaccess for one.com shared hosting (Varnish → Apache).
