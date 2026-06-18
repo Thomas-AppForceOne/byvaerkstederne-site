@@ -38,6 +38,26 @@ test.describe('Auth surface UI/UX', () => {
     expect(loaded, 'login-panel.svg must load').toBe(true);
   });
 
+  test('login overlay: no horizontal overflow @1280x800, brand image rendered', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/');
+    // The overlay is the header-triggered login modal (always in the DOM).
+    await page.evaluate(() => {
+      const o = document.getElementById('bv-login-overlay');
+      if (o) o.classList.add('is-open');
+    });
+    const panel = page.locator('.bv-login-overlay__panel').first();
+    await expect(panel).toBeVisible();
+    // Heading "Medlemslogin" must fit — no horizontal slider on the panel.
+    const overflow = await panel.evaluate((el) => el.scrollWidth - el.clientWidth);
+    expect(overflow, 'login overlay must not overflow horizontally').toBeLessThanOrEqual(1);
+    // Brand image present and loaded (in colour — no grayscale placeholder look).
+    const img = page.locator('.bv-login-overlay__image img').first();
+    await expect(img).toHaveAttribute('src', /login-panel\.svg/);
+    const loaded = await img.evaluate((/** @type {HTMLImageElement} */ el) => el.complete && el.naturalWidth > 0);
+    expect(loaded, 'login-panel.svg must load in the overlay').toBe(true);
+  });
+
   test('account creation presents the shared floating card', async ({ page }) => {
     const res = await page.goto('/opret-medlemskab');
     expect(res?.status()).toBe(200);
