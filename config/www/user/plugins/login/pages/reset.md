@@ -1,8 +1,11 @@
 ---
-title: Reset password
+title: Nulstil adgangskode
 cache_control: private, no-cache, must-revalidate
 
 login_redirect_here: false
+
+metadata:
+    description: 'Vælg en ny adgangskode til din Byværkstederne-konto.'
 
 form:
 
@@ -30,6 +33,4 @@ process:
     twig: true
 ---
 
-# Password Reset
-
-### Username: {{uri.param('user')}}
+Vælg en ny adgangskode for {{uri.param('user')}}.

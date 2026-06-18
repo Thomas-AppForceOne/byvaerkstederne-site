@@ -1,8 +1,11 @@
 ---
-title: Forgot password
+title: Glemt adgangskode
 cache_control: private, no-cache, must-revalidate
 
 login_redirect_here: false
+
+metadata:
+    description: 'Nulstil din adgangskode til Byværkstederne — indtast din e-mail, så sender vi dig et nulstillingslink.'
 
 form:
 
@@ -17,6 +20,4 @@ form:
 ---
 
 
-# Recover your password
-
-Enter your email to recover your password
+Indtast din e-mail for at nulstille din adgangskode.
