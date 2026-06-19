@@ -11,7 +11,7 @@
             {# WI-7: locally hosted asset. Previously hotlinked a
                googleusercontent.com image — fragile and leaked visitor IPs to
                Google. Served from the theme so no external request is made. #}
-            <img src="{{ url('theme://images/login-panel.svg') }}" alt="V&aelig;rksted" />
+            <img src="{{ url('theme://images/login-panel.svg') }}?v={{ 'now'|date('U') }}" alt="V&aelig;rksted" />
             <div class="bv-login-overlay__image-content">
                 <span class="bv-badge bv-badge--primary">Medlemsportal</span>
                 <h2 class="bv-headline" style="color: #fff; margin-top: var(--space-4);">F&aelig;llesskab gennem h&aring;ndv&aelig;rk.</h2>
