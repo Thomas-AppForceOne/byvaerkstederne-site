@@ -29,7 +29,6 @@ enabled:
   feature_suggestion: "false"
   bug_report: "false"
   community_footer_column: "false"
-  membership_signup: "false"
   newsletter_signup: "false"
   event_highlight: "false"
   press_page: "false"

@@ -43,9 +43,7 @@ function bvOpenOverlay(id){['bv-login-overlay','bv-forgot-overlay','bv-register-
     {% endblock %}
 
     {# login_overlay is always included: the overlay's <form> is also the
-       form rendered by Grav's /login route. Gating it would break /login
-       under profiles where membership_signup is false. The visibility of
-       the "Log ind" button itself is gated in navigation.html.twig. #}
+       form rendered by Grav's /login route. #}
     {% include 'partials/login_overlay.html.twig' %}
     {# Forgot/register modals open over the current page. Skip each on its own
        route, where the standalone page already renders that form (avoids a
@@ -53,7 +51,7 @@ function bvOpenOverlay(id){['bv-login-overlay','bv-forgot-overlay','bv-register-
     {% if page.template != 'forgot' %}
     {% include 'partials/forgot_overlay.html.twig' %}
     {% endif %}
-    {% if feature_enabled('membership_signup') and page.template != 'register' %}
+    {% if page.template != 'register' %}
     {% include 'partials/register_overlay.html.twig' %}
     {% endif %}
     {% if feature_enabled('bug_report') %}

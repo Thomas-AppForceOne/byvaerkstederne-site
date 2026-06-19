@@ -20,7 +20,6 @@ enabled:
   feature_suggestion: "true"
   bug_report: "true"
   community_footer_column: "true"
-  membership_signup: "true"
   newsletter_signup: "true"
   event_highlight: "true"
   press_page: "true"

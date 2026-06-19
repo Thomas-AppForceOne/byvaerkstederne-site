@@ -125,14 +125,14 @@ async function profileContext(host) {
   });
 }
 
-// The eight flagged routes whose hardcoded nav/footer anchors are gated
-// by this sprint. /foreslaa-feature is included for completeness even
-// though no hardcoded nav/footer anchor currently targets it — the
-// absence assertion must still hold for it.
+// The flagged routes whose hardcoded nav/footer anchors are gated by this
+// sprint. /foreslaa-feature is included for completeness even though no
+// hardcoded nav/footer anchor currently targets it — the absence assertion
+// must still hold for it. (/opret-medlemskab was removed: membership_signup
+// is gone and signup is no longer flag-gated.)
 const FLAGGED_ROUTES = [
   '/roadmap',
   '/foreslaa-feature',
-  '/opret-medlemskab',
   '/presse',
   '/referater',
   '/vaerkstedskalenderen',
@@ -294,26 +294,6 @@ test.describe('Sprint-3: Twig gates hide flagged affordances under public-demo',
     expect(countMatches(body, /<!--[^>]*bug[_ -]report/i)).toBe(0);
     expect(countMatches(body, /<!--[^>]*feature[_ -]suggestion/i)).toBe(0);
   });
-
-  test('membership_signup=false: Log ind and Bliv medlem nav entries are absent', async () => {
-    const resp = await ctx.get('/');
-    const body = await resp.text();
-    // Nav/mobile-menu Log ind anchors must be gone (only anonymous entries;
-    // authed users see Log ud, which is out of scope for this anonymous ctx).
-    expect(
-      countMatches(body, /class="bv-nav__link"[^>]*>Log ind</),
-      'desktop nav Log ind link must be absent when membership_signup is false'
-    ).toBe(0);
-    expect(
-      countMatches(body, /class="bv-mobile-menu__link"[^>]*>Log ind</),
-      'mobile nav Log ind link must be absent when membership_signup is false'
-    ).toBe(0);
-    // Bliv medlem CTA gone too.
-    expect(countMatches(body, />Bliv medlem</)).toBe(0);
-    // NOTE: the login_overlay partial is intentionally still rendered — its
-    // <form> is reused by Grav's /login route. Gating the include would
-    // break /login under profiles where membership_signup is false.
-  });
 });
 
 // ─── Anonymous: internal profile ─────────────────────────────────────────────
@@ -358,16 +338,16 @@ test.describe('Sprint-3: Twig gates render flagged affordances under internal (a
     expect(/<title>\s*Login/i.test(body)).toBe(true);
   });
 
-  test('membership_signup=true: Log ind and Bliv medlem nav entries are present', async () => {
+  test('Log ind and Bliv medlem nav entries are present (signup no longer flag-gated)', async () => {
     const resp = await ctx.get('/');
     const body = await resp.text();
     expect(
       countMatches(body, />Log ind</),
-      'Log ind link must be present when membership_signup is true'
+      'Log ind link must be present'
     ).toBeGreaterThanOrEqual(1);
     expect(
       countMatches(body, />Bliv medlem</),
-      'Bliv medlem CTA must be present when membership_signup is true'
+      'Bliv medlem CTA must be present'
     ).toBeGreaterThanOrEqual(1);
   });
 

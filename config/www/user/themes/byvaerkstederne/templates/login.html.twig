@@ -45,12 +45,10 @@
                 <button type="submit" class="bv-btn bv-btn--primary bv-btn--lg bv-btn--full">Log ind</button>
             </form>
 
-            {% if feature_enabled('membership_signup') %}
             <div style="margin-top: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--surface-container-highest);">
                 <p class="bv-label" style="color: var(--outline); margin-bottom: var(--space-3);">Ikke medlem endnu?</p>
                 <a href="/opret-medlemskab" style="font-family: var(--font-headline); font-weight: 700; text-transform: uppercase; color: var(--secondary);">Bliv medlem af foreningen</a>
             </div>
-            {% endif %}
         {% endif %}
     {% endblock %}
 {% endembed %}

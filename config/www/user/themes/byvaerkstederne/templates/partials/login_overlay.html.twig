@@ -50,7 +50,6 @@
                 <button type="submit" class="bv-btn bv-btn--primary bv-btn--lg bv-btn--full">Log ind</button>
             </form>
 
-            {% if feature_enabled('membership_signup') %}
             <div style="margin-top: var(--space-12); padding-top: var(--space-8); border-top: 1px solid var(--surface-container-highest);">
                 <p class="bv-label" style="color: var(--outline); margin-bottom: var(--space-4);">Ikke medlem endnu?</p>
                 <a href="/opret-medlemskab" onclick="bvOpenOverlay('bv-register-overlay'); return false;"
@@ -59,7 +58,6 @@
                     <span class="material-symbols-outlined">arrow_forward</span>
                 </a>
             </div>
-            {% endif %}
         </div>
     </div>
 </div>

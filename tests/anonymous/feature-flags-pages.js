@@ -123,7 +123,6 @@ function seedAdminIfPossible() {
 const GATED_URLS = [
   '/roadmap',
   '/foreslaa-feature',
-  '/opret-medlemskab',
   '/presse',
   '/referater',
   '/vaerkstedskalenderen',
@@ -140,7 +139,6 @@ const GATED_URLS = [
 const LEAK_STRINGS = {
   '/roadmap': 'Website Roadmap',
   '/foreslaa-feature': 'Foreslå ny Feature',
-  '/opret-medlemskab': 'Opret Medlemskab',
   '/presse': 'Presse',
   '/referater': 'Referater',
   '/vaerkstedskalenderen': 'Værkstedskalenderen',

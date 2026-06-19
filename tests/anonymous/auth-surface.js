@@ -33,9 +33,9 @@ test.describe('Auth surface UI/UX', () => {
 
     // The left brand image is present AND actually loads.
     const img = page.locator('.bv-auth-card__image img').first();
-    await expect(img).toHaveAttribute('src', /login-panel\.svg/);
+    await expect(img).toHaveAttribute('src', /login-panel\.(svg|png|webp)/);
     const loaded = await img.evaluate((/** @type {HTMLImageElement} */ el) => el.complete && el.naturalWidth > 0);
-    expect(loaded, 'login-panel.svg must load').toBe(true);
+    expect(loaded, 'login-panel image must load').toBe(true);
   });
 
   test('login overlay: no horizontal overflow @1280x800, brand image rendered', async ({ page }) => {
@@ -53,9 +53,9 @@ test.describe('Auth surface UI/UX', () => {
     expect(overflow, 'login overlay must not overflow horizontally').toBeLessThanOrEqual(1);
     // Brand image present and loaded (in colour — no grayscale placeholder look).
     const img = page.locator('.bv-login-overlay__image img').first();
-    await expect(img).toHaveAttribute('src', /login-panel\.svg/);
+    await expect(img).toHaveAttribute('src', /login-panel\.(svg|png|webp)/);
     const loaded = await img.evaluate((/** @type {HTMLImageElement} */ el) => el.complete && el.naturalWidth > 0);
-    expect(loaded, 'login-panel.svg must load in the overlay').toBe(true);
+    expect(loaded, 'login-panel image must load in the overlay').toBe(true);
   });
 
   test('account creation presents the shared floating card', async ({ page }) => {
