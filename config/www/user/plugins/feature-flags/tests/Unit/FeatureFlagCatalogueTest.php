@@ -109,6 +109,33 @@ final class FeatureFlagCatalogueTest extends TestCase
         $this->assertSame(self::CATALOGUE, FeatureFlag::catalogueValues());
     }
 
+    /**
+     * WI-1 (outstanding-spec-cleanup): the `workshop_detail_pages` flag gated
+     * nothing (the four /vaerksteder/* pages carried no `feature:` key), so it
+     * was retired. This pins it retired: it is neither a valid enum case nor a
+     * catalogue entry, and no per-tier features.yaml still declares it (a
+     * dangling key would warn at runtime as an "unknown feature flag").
+     */
+    public function testRetiredWorkshopDetailPagesFlagStaysRetired(): void
+    {
+        $this->assertNull(
+            FeatureFlag::tryFrom('workshop_detail_pages'),
+            '`workshop_detail_pages` was retired — it must not be a valid enum case again.'
+        );
+        $this->assertNotContains('workshop_detail_pages', self::CATALOGUE);
+
+        foreach (['dev.hackersbychoice.dk', 'test.hackersbychoice.dk', 'staging.hackersbychoice.dk', 'www.byvaerkstederne.dk'] as $host) {
+            $enabled = self::loadProfileYaml($host);
+            if (is_array($enabled)) {
+                $this->assertArrayNotHasKey(
+                    'workshop_detail_pages',
+                    $enabled,
+                    "{$host} features.yaml must not declare the retired `workshop_detail_pages` flag."
+                );
+            }
+        }
+    }
+
     // -------- (2) Profile resolution --------
 
     public function testDevProfileEnablesAllCatalogueFlags(): void
