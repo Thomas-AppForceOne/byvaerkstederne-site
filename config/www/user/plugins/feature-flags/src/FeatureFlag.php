@@ -22,7 +22,6 @@ enum FeatureFlag: string
     case FeatureSuggestion = 'feature_suggestion';
     case BugReport = 'bug_report';
     case CommunityFooterColumn = 'community_footer_column';
-    case MembershipSignup = 'membership_signup';
     case NewsletterSignup = 'newsletter_signup';
     case EventHighlight = 'event_highlight';
     case PressPage = 'press_page';
@@ -66,7 +65,6 @@ enum FeatureFlag: string
             'feature_suggestion',
             'bug_report',
             'community_footer_column',
-            'membership_signup',
             'newsletter_signup',
             'event_highlight',
             'press_page',

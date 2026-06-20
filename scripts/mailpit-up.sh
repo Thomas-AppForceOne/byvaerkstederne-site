@@ -3,9 +3,9 @@ set -euo pipefail
 
 # Brings up the Mailpit mail sink (WI-6) in THIS worktree's compose project so
 # it shares the Docker network with the worktree's Grav container and is
-# reachable from Grav as `mailpit:1025`. Also injects the test SMTP override
-# into the running Grav container's email.yaml so the real login + email plugin
-# path sends captured mail to Mailpit (nothing mocked at the Grav layer).
+# reachable from Grav as `mailpit:1025`. It ONLY starts the container — the
+# Playwright run repoints email.yaml at the sink (global-setup) and restores it
+# (global-teardown); see scripts/mailpit-down.sh and tests/helpers/mailer.js.
 #
 # Mailpit is scoped to the `test` compose profile, so the plain dev workflow
 # (`make start` / :8080) never starts it.
@@ -62,57 +62,21 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-# Inject the test SMTP override so the real login + email plugin path sends
-# captured mail to Mailpit. We override the BASE user/config/plugins/email.yaml
-# in place rather than a per-tier env override: the local container is reached
-# at 127.0.0.1 / localhost, which has no user/env/<host>/ directory, so Grav's
-# environment merge contributes nothing and only the base plugins.email config
-# applies. (On a real tier the per-tier override lives at
-# user/env/<host>/config/plugins/email.yaml and DOES merge into plugins.email —
-# same namespace, just supplied by the environment layer.) This is the "test
-# environment's email.yaml overrides the SMTP block" from WI-6, applied at the
-# layer Grav actually reads for the local host.
+# This script does NOT touch email.yaml. The Playwright run owns the mailer
+# override: tests/global-setup.js repoints email.yaml at mailpit:1025 when the
+# sink is reachable, and tests/global-teardown.js restores it unconditionally
+# (with a setup-time guard that aborts the run if a prior crash left it dirty).
+# Keeping the write out of this script means starting the sink can never, by
+# itself, leave a committable test-only mailer config in the working tree.
 #
-# Because /config is volume-mounted, this write touches the host tree. We back
-# up the committed credential-free file first; scripts/mailpit-down.sh restores
-# it. The repo file is unchanged after a clean up/down cycle.
-EMAIL_CFG="$WORKTREE_ABS/config/www/user/config/plugins/email.yaml"
-EMAIL_BAK="$WORKTREE_ABS/.gan/email.yaml.committed.bak"
-mkdir -p "$WORKTREE_ABS/.gan"
-if [ -f "$EMAIL_CFG" ] && [ ! -f "$EMAIL_BAK" ]; then
-  cp "$EMAIL_CFG" "$EMAIL_BAK"
-fi
-cat > "$EMAIL_CFG" <<'YAML'
-# TEST-ONLY Mailpit override written by scripts/mailpit-up.sh. The committed
-# credential-free file is backed up at .gan/email.yaml.committed.bak and
-# restored by scripts/mailpit-down.sh. DO NOT COMMIT this form.
-enabled: true
-from: 'noreply@hackersbychoice.dk'
-from_name: 'Byværkstederne'
-charset: utf-8
-content_type: text/html
-debug: false
-mailer:
-  engine: smtp
-  smtp:
-    server: mailpit
-    port: 1025
-    encryption: none
-    user: ''
-    password: ''
-YAML
+# session.secure: no relaxation is needed. The committed system.yaml no longer
+# hard-forces secure: true — Grav emits the Secure flag per-scheme (secure_https
+# + X-Forwarded-Proto), so over the worktree container's plain HTTP (no XFP) the
+# session cookie is NOT Secure and authenticated flows hold a session out of the
+# box. session-cookie.js still proves the TLS-tier Secure behaviour via an
+# X-Forwarded-Proto: https probe.
 
-# NOTE: no session.secure relaxation is needed. The committed system.yaml no
-# longer hard-forces secure: true — Grav emits the Secure flag per-scheme
-# (secure_https + X-Forwarded-Proto), so over the worktree container's plain
-# HTTP (no XFP) the session cookie is NOT Secure and authenticated flows hold a
-# session out of the box. session-cookie.js still proves the TLS-tier Secure
-# behaviour via an X-Forwarded-Proto: https probe.
-
-if docker ps --filter "name=^${GRAV_CONTAINER_NAME}\$" --format '{{.Names}}' | grep -qx "$GRAV_CONTAINER_NAME"; then
-  echo "Pointed email.yaml at mailpit:1025 (backup in .gan/); clearing Grav cache..."
-  docker exec -u abc -w /app/www/public "$GRAV_CONTAINER_NAME" bin/grav clearcache >/dev/null 2>&1 || true
-else
+if ! docker ps --filter "name=^${GRAV_CONTAINER_NAME}\$" --format '{{.Names}}' | grep -qx "$GRAV_CONTAINER_NAME"; then
   echo "⚠️  Grav container $GRAV_CONTAINER_NAME not running — start it first with scripts/grav-up.sh" >&2
 fi
 

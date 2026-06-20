@@ -8,11 +8,6 @@ Lifecycle and folder policy: [CLAUDE.md](../CLAUDE.md#specifications-and-decisio
 
 ## Next
 
-### Auth surface UI/UX
-**Spec:** [auth_surface_uiux_specification.md](auth_surface_uiux_specification.md)
-
-One floating-card identity for login, account creation, and forgotten-password, plus a single consistent centred success/error feedback component. Theme/config only — no plugin PHP, no behaviour change.
-
 ### Frontend event CRUD
 **Spec:** [frontend_event_crud_specification.md](frontend_event_crud_specification.md)
 

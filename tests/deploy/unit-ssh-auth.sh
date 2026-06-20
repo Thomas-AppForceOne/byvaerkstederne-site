@@ -182,16 +182,25 @@ out="$(bv_resolve_ssh_password 2>/dev/null)"
 [ "$out" = "keychain-prod-secret" ] && check "tier=prod uses DEPLOY_PROD_PASS_KEYCHAIN, not DEPLOY_PASS_KEYCHAIN" ok \
     || check "prod Keychain isolation (got '$out')" fail
 
-# A2.4 — Keychain item missing: empty result + readable diagnostic
+# A2.4 — Keychain item configured but unreadable (missing / locked / denied):
+# fail loud with rc 3 + an actionable diagnostic. The resolver must NOT
+# silently fall back to key-auth here (that masks the real cause as a later
+# "Permission denied").
 unset DEPLOY_PASS DEPLOY_PROD_PASS DEPLOY_PROD_PASS_KEYCHAIN
 TIER=dev DEPLOY_PASS_KEYCHAIN="never-stored-in-keychain"
-err="$(bv_resolve_ssh_password 2>&1 >/dev/null)"
-out="$(bv_resolve_ssh_password 2>/dev/null)"
-[ -z "$out" ] && check "missing Keychain item: returns empty (caller falls back to key-auth)" ok \
-    || check "missing Keychain item should return empty (got '$out')" fail
+err="$(bv_resolve_ssh_password 2>&1 >/dev/null || true)"
+rc=0; out="$(bv_resolve_ssh_password 2>/dev/null)" || rc=$?
+[ -z "$out" ] && check "unreadable Keychain item: returns empty stdout" ok \
+    || check "unreadable Keychain item should return empty (got '$out')" fail
+[ "$rc" -eq 3 ] && check "unreadable Keychain item: returns rc 3 (fail-loud signal)" ok \
+    || check "unreadable Keychain item should return rc 3 (got $rc)" fail
 case "$err" in
-    *"not found"*"add-generic-password"*) check "missing Keychain item: diagnostic explains how to add it" ok ;;
-    *) check "missing Keychain diagnostic (got: '$err')" fail ;;
+    *"Could not read"*"add-generic-password"*) check "unreadable Keychain item: actionable diagnostic (re-store)" ok ;;
+    *) check "unreadable Keychain diagnostic (got: '$err')" fail ;;
+esac
+case "$err" in
+    *"unlock-keychain"*) check "unreadable Keychain item: diagnostic mentions unlocking" ok ;;
+    *) check "unreadable Keychain unlock hint (got: '$err')" fail ;;
 esac
 
 # A2.5 — security CLI not on PATH: warning + empty (graceful fallback).
@@ -363,6 +372,48 @@ if grep -q 'SSHPASS_ENV=<unset>' "$LOG"; then
 else
     check "SSHPASS unset (log: $(cat "$LOG"))" fail
 fi
+
+# ─────────────────────────────────────────────────────────────────────
+# Test group E: bv_ssh_cmd fails loud on an unreadable Keychain item
+# ─────────────────────────────────────────────────────────────────────
+echo ""
+echo "E. bv_ssh_cmd fail-loud on Keychain error"
+
+> "$LOG"
+unset DEPLOY_PASS DEPLOY_PROD_PASS
+TIER=dev DEPLOY_PASS_KEYCHAIN="never-stored-in-keychain"
+err="$(bv_ssh_cmd -p 22 user@host true 2>&1 >/dev/null || true)"
+rc=0; bv_ssh_cmd -p 22 user@host true >/dev/null 2>&1 || rc=$?
+if [ "$rc" -ne 0 ] && ! grep -qE '^(ssh|sshpass):' "$LOG"; then
+    check "Keychain error: bv_ssh_cmd returns non-zero and does NOT attempt ssh/sshpass" ok
+else
+    check "Keychain error: bv_ssh_cmd should fail without attempting ssh (rc=$rc, log: $(cat "$LOG"))" fail
+fi
+case "$err" in
+    *"Could not read"*) check "Keychain error: bv_ssh_cmd surfaces the actionable message" ok ;;
+    *) check "Keychain error message via bv_ssh_cmd (got: '$err')" fail ;;
+esac
+unset TIER DEPLOY_PASS_KEYCHAIN
+
+# ─────────────────────────────────────────────────────────────────────
+# Test group F: bv_ssh_diagnose layered output (DNS -> TCP -> auth)
+# ─────────────────────────────────────────────────────────────────────
+echo ""
+echo "F. bv_ssh_diagnose"
+
+# F.1 — unresolvable host -> reports DNS failure and stops.
+out="$(bv_ssh_diagnose user no-such-host.invalid 22 2>&1 || true)"
+case "$out" in
+    *"DNS"*"does NOT resolve"*) check "diagnose: unresolvable host -> DNS failure reported" ok ;;
+    *) check "diagnose DNS-fail (got: '$out')" fail ;;
+esac
+
+# F.2 — resolvable host, closed port -> DNS ok, then TCP unreachable.
+out="$(bv_ssh_diagnose user 127.0.0.1 1 2>&1 || true)"
+case "$out" in
+    *"DNS"*"resolves"*"TCP"*"unreachable"*) check "diagnose: closed port -> DNS ok then TCP unreachable" ok ;;
+    *) check "diagnose TCP-fail (got: '$out')" fail ;;
+esac
 
 # ─────────────────────────────────────────────────────────────────────
 # Summary

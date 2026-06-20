@@ -100,18 +100,25 @@ make test-auth ; echo "exit=$?"
 failure. If accounts aren't seeded, login specs fail — seed them first.
 
 ### F. Member-auth surface (#54) — Mailpit
-The auth specs need a mail sink. `mailpit-up.sh` starts Mailpit and *temporarily*
-relaxes `session.secure→false` + points `email.yaml` at Mailpit **in the working
-tree** (backed up to `.gan/`, restored by `mailpit-down.sh`; committed files never
-change).
+The auth specs need a mail sink. `mailpit-up.sh` ONLY starts the Mailpit
+container; the **Playwright run owns the `email.yaml` override** — global-setup
+repoints the mailer at `mailpit:1025` when the sink is reachable, and
+global-teardown restores it via `git checkout`. So the override exists only for
+the duration of a run and can't be left behind by simply starting the sink.
 ```
-scripts/mailpit-up.sh
+scripts/mailpit-up.sh .        # start the sink container (does NOT touch email.yaml)
 make test            # registration / password-reset / password-policy / session-cookie (anonymous)
 make test-auth       # login (needs creds + seeded accounts)
-scripts/mailpit-down.sh        # ALWAYS run this to restore the relaxed config
+scripts/mailpit-down.sh .      # stop the sink (also a defensive email.yaml restore)
 ```
 **Pass:** Playwright `N passed`. Without Mailpit/creds the auth specs **skip**
-cleanly (≈18 pass / 11 skip / 0 fail) — skips are expected, not failures.
+cleanly — skips are expected, not failures.
+
+**Catastrophic guard:** if a run is killed before teardown, `email.yaml` is left
+pointing at Mailpit. The next run **refuses to start** with a FATAL message
+naming the file — committing that override would break a real tier's mailer.
+Recover with `git checkout -- config/www/user/config/plugins/email.yaml` (or
+`scripts/mailpit-down.sh .`).
 
 ---
 
@@ -152,4 +159,4 @@ prints before its full-history guard (already handled).
 | `Docker` error in B | Docker Desktop not running |
 | `bats`/`age` not found in C | `brew install bats-core age` |
 | `make test-deploy` red after editing a deploy script | read the `FAIL` line; re-run the single probe, e.g. `bash tests/deploy/rollback.sh` |
-| Mailpit left session insecure | you skipped `scripts/mailpit-down.sh` — run it to restore |
+| `FATAL: email.yaml is modified at suite start` | a prior run was killed before teardown — `git checkout -- config/www/user/config/plugins/email.yaml` (or `scripts/mailpit-down.sh .`) and re-run |

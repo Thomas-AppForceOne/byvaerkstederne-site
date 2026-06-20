@@ -670,15 +670,20 @@ a { color: inherit; text-decoration: none; }
     margin-top: 0.125rem;
     margin-bottom: 0.5rem;
 }
+/* Register's forms-plugin messages share the .bv-message identity (centred,
+   elevated, same success/error colours) so account creation matches the other
+   auth surfaces (auth-surface UI/UX spec: one feedback component). */
 .bv-register-card .form-messages { margin-bottom: var(--space-6); }
 .bv-register-card .form-messages .alert {
-    padding: var(--space-4);
+    padding: var(--space-4) var(--space-5);
     font-weight: 600;
-    font-size: 0.875rem;
+    text-align: center;
+    border-left: 6px solid currentColor;
+    box-shadow: 0 0.5rem 1.25rem rgba(26, 28, 28, 0.18);
 }
 .bv-register-card .form-messages .alert-success {
-    background: var(--primary-fixed);
-    color: var(--primary);
+    background: #d8f3dc;
+    color: #1b4332;
 }
 .bv-register-card .form-messages .alert-error,
 .bv-register-card .form-messages .alert-danger {
@@ -712,7 +717,8 @@ a { color: inherit; text-decoration: none; }
 }
 .bv-login-overlay.is-open { opacity: 1; visibility: visible; }
 
-.bv-login-overlay__panel {
+.bv-login-overlay__panel,
+.bv-auth-card {
     width: 90vw;
     max-width: 64rem;
     max-height: 90vh;
@@ -740,35 +746,171 @@ a { color: inherit; text-decoration: none; }
 .bv-login-overlay__close:hover { color: var(--on-surface); }
 .bv-login-overlay__close .material-symbols-outlined { font-size: 1.75rem; }
 
-.bv-login-overlay__image {
+.bv-login-overlay__image,
+.bv-auth-card__image {
     width: 50%;
     position: relative;
     overflow: hidden;
     display: flex;
     align-items: flex-end;
 }
-.bv-login-overlay__image img {
+.bv-login-overlay__image img,
+.bv-auth-card__image img {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    filter: grayscale(1) brightness(0.4);
+    /* Keep the brand-green art in colour — the old grayscale+0.4 filter was
+       for the previous hotlinked PHOTO and turns login-panel.svg murky gray.
+       A slight darken preserves white-text legibility over the panel. */
+    filter: brightness(0.92);
 }
-.bv-login-overlay__image-content {
+.bv-login-overlay__image-content,
+.bv-auth-card__image-content {
     position: relative;
     z-index: 1;
     padding: var(--space-12);
 }
 
-.bv-login-overlay__form {
+/* Same column-fit fix as .bv-auth-card__header .bv-display: the global
+   .bv-display (clamp …, 5rem) overflows the overlay's form column on the long
+   single word "Medlemslogin", forcing a horizontal slider. */
+.bv-login-overlay__form .bv-display {
+    font-size: clamp(1.75rem, 4.5vw, 3rem);
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+.bv-login-overlay__form,
+.bv-auth-card__body {
     width: 50%;
     padding: var(--space-12);
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    /* safe center: vertically centre when the form fits, but fall back to
+       start (scrollable from the top) when it's taller than the panel — the
+       registration form is tall, the login form is short. */
+    justify-content: safe center;
     overflow-y: auto;
 }
+
+/* ---------- Auth surfaces (standalone routes) ---------- */
+/* The PRIMARY auth UX is the modals (login / forgot / register overlays) that
+   open over the current page — see partials/*_overlay.html.twig. These rules
+   are only for DIRECT access to the routes (/login, /opret-medlemskab,
+   /forgot_password, /reset_password) and the email reset link: a plain card
+   centred within the normal site shell (header + footer), NOT a dimmed
+   full-screen overlay (which, on a standalone route, would dim an empty page).
+   The card reuses the login-overlay panel/image/form styling (merged above). */
+.bv-auth-page {
+    min-height: 70vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-12) var(--space-4);
+    background: var(--surface-container);
+}
+/* Cancel the modal slide-in transform, and let the in-flow page card grow with
+   the form (the page scrolls) instead of capping at 90vh with internal scroll
+   the way the modal does. */
+.bv-auth-card {
+    transform: none;
+    transition: none;
+}
+.bv-auth-page .bv-auth-card { max-height: none; }
+.bv-auth-page .bv-auth-card__body { overflow-y: visible; }
+/* Close affordance (back to the site), mirroring .bv-login-overlay__close. */
+.bv-auth-card__close {
+    position: absolute;
+    top: var(--space-4);
+    right: var(--space-4);
+    z-index: 2;
+    color: var(--on-surface-variant);
+    line-height: 1;
+    transition: color 0.15s;
+}
+.bv-auth-card__close:hover { color: var(--on-surface); }
+.bv-auth-card__close .material-symbols-outlined { font-size: 1.75rem; }
+.bv-auth-card__image-title { color: #fff; margin-top: var(--space-4); }
+/* Form-side header — mirrors the overlay's inline green heading + accent rule. */
+.bv-auth-card__header { margin-bottom: var(--space-8); }
+.bv-auth-card__header .bv-display {
+    color: var(--primary);
+    /* Scale the global .bv-display (clamp …, 5rem) to the column so a long
+       single word ("Medlemslogin") doesn't force a horizontal slider. */
+    font-size: clamp(1.75rem, 4.5vw, 3rem);
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+.bv-auth-card__rule {
+    width: 6rem;
+    height: 0.375rem;
+    background: var(--tertiary);
+    margin: var(--space-2) 0 var(--space-6);
+}
+/* The register form keeps its field styling but drops its own card chrome
+   inside the auth card (no panel-in-panel). */
+.bv-auth-card .bv-register-card {
+    background: none;
+    border: none;
+    padding: 0;
+}
+/* Collapse to one column on narrow viewports; hide the brand image. */
+@media (max-width: 48rem) {
+    .bv-auth-card { flex-direction: column; }
+    .bv-auth-card__image { display: none; }
+    .bv-auth-card__body { width: 100%; padding: var(--space-8); }
+}
+
+/* Stock login-plugin form (#grav-login: forgot + reset) — bring the
+   plugin-rendered email/password fields and the submit button onto the design
+   system WITHOUT editing the plugin's field markup (spec: target #grav-login
+   via CSS). Field sizing mirrors .bv-input. */
+#grav-login form { display: flex; flex-direction: column; gap: var(--space-6); }
+#grav-login input[type="email"],
+#grav-login input[type="password"],
+#grav-login input[type="text"] {
+    width: 100%;
+    font-family: var(--font-body);
+    font-size: 1rem;
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface-variant);
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    outline: none;
+    color: var(--on-surface);
+    transition: border-color 0.2s;
+}
+#grav-login input:focus { border-bottom-color: var(--primary); }
+#grav-login label {
+    font-family: var(--font-headline);
+    font-weight: 600;
+    color: var(--outline);
+    display: block;
+    margin-bottom: var(--space-2);
+}
+#grav-login .form-actions { margin-top: var(--space-2); }
+
+/* ---------- Shared form-feedback component ---------- */
+/* One identity for every auth flash. Variants are mapped from Grav's message
+   scopes in partials/messages.html.twig (info/success -> success, error ->
+   error, warning -> warning). Centred + elevated so it reads as floating over
+   the form. */
+.bv-messages { max-width: 48rem; margin: 0 auto var(--space-6); padding: 0 var(--space-4); }
+.bv-auth-card .bv-messages { max-width: none; margin: 0 0 var(--space-6); padding: 0; }
+.bv-message {
+    padding: var(--space-4) var(--space-5);
+    margin-bottom: var(--space-3);
+    font-weight: 600;
+    text-align: center;
+    border-left: 6px solid currentColor;
+    box-shadow: 0 0.5rem 1.25rem rgba(26, 28, 28, 0.18);
+}
+.bv-message:last-child { margin-bottom: 0; }
+.bv-message--success { background: #d8f3dc; color: #1b4332; }
+.bv-message--error   { background: #ffdad6; color: #93000a; }
+.bv-message--warning { background: #fff3cd; color: #664d03; }
 
 /* Nav user display */
 .bv-nav__user {

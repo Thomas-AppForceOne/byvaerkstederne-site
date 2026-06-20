@@ -23,7 +23,6 @@
  *     feature_suggestion         -> POST /feature-suggestion/submit 404
  *     bug_report                 -> POST /bug-report-submit 404
  *     community_footer_column    -> GET  / → no "Fællesskab" heading
- *     membership_signup          -> GET  /opret-medlemskab → 404
  *     newsletter_signup          -> GET  / → no newsletter signup markup
  *     event_highlight            -> GET  / → no event highlight module
  *     press_page                 -> GET  /presse → 404
@@ -382,19 +381,6 @@ const FLAG_PROBES = [
         headingRe.test(body),
         'internal anon home must NOT render Fællesskab footer column (auth-gated per ADR-001)'
       ).toBe(false);
-    },
-  },
-  // Page-gated flags.
-  {
-    flag: 'membership_signup',
-    desc: '/opret-medlemskab 404 under public-demo; reachable under internal',
-    async publicDemo(ctx) {
-      const r = await ctx.get('/opret-medlemskab', { maxRedirects: 0 });
-      expect(r.status()).toBe(404);
-    },
-    async internal(ctx) {
-      const r = await ctx.get('/opret-medlemskab', { maxRedirects: 0 });
-      expect([200, 301, 302].includes(r.status())).toBe(true);
     },
   },
   {
@@ -757,7 +743,6 @@ test.describe('feature-flags Sprint-4: single-flag cache-flip restoration', () =
 const FLAGGED_ROUTES = [
   '/roadmap',
   '/foreslaa-feature',
-  '/opret-medlemskab',
   '/presse',
   '/referater',
   '/vaerkstedskalenderen',

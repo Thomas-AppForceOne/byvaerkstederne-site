@@ -743,3 +743,36 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
+
+// ============================================================================
+// Auth modals (forgot/register): close on Escape / backdrop click like the
+// login overlay; and auto-dismiss flash messages after 5s.
+// ============================================================================
+document.addEventListener('DOMContentLoaded', function () {
+    // Close the forgot/register modals on backdrop click (login is handled above).
+    ['bv-forgot-overlay', 'bv-register-overlay'].forEach(function (id) {
+        var ov = document.getElementById(id);
+        if (ov) {
+            ov.addEventListener('click', function (e) {
+                if (e.target === ov && typeof bvOpenOverlay === 'function') { bvOpenOverlay(null); }
+            });
+        }
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') { return; }
+        if (document.querySelector('#bv-forgot-overlay.is-open, #bv-register-overlay.is-open')
+            && typeof bvOpenOverlay === 'function') { bvOpenOverlay(null); }
+    });
+
+    // Auto-dismiss flash messages (e.g. "You have been successfully logged in.")
+    // Hold 5s, fade out, then remove so the layout reflows.
+    var HOLD_MS = 5000;
+    var FADE_MS = 600;
+    document.querySelectorAll('.bv-messages .bv-message, .bv-register-card .form-messages .alert').forEach(function (m) {
+        setTimeout(function () {
+            m.style.transition = 'opacity ' + FADE_MS + 'ms ease';
+            m.style.opacity = '0';
+            setTimeout(function () { if (m && m.parentNode) { m.parentNode.removeChild(m); } }, FADE_MS + 50);
+        }, HOLD_MS);
+    });
+});

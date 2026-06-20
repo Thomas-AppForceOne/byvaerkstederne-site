@@ -41,7 +41,6 @@ final class FeatureFlagCatalogueTest extends TestCase
         'feature_suggestion',
         'bug_report',
         'community_footer_column',
-        'membership_signup',
         'newsletter_signup',
         'event_highlight',
         'press_page',
@@ -112,13 +111,17 @@ final class FeatureFlagCatalogueTest extends TestCase
 
     // -------- (2) Profile resolution --------
 
-    public function testStagingProfileEnablesAllCatalogueFlags(): void
+    public function testDevProfileEnablesAllCatalogueFlags(): void
     {
-        $enabled = self::loadProfileYaml('staging.hackersbychoice.dk');
-        $this->assertIsArray($enabled, 'staging.hackersbychoice.dk features.yaml must parse to an array.');
+        // dev is the SOLE all-on tier (the "internal" profile). test, staging
+        // and prod are always all-off — see the disables-all tests below. An
+        // earlier version of this test read the staging tier and asserted
+        // all-on, which is backwards: staging ships every flag "false".
+        $enabled = self::loadProfileYaml('dev.hackersbychoice.dk');
+        $this->assertIsArray($enabled, 'dev.hackersbychoice.dk features.yaml must parse to an array.');
 
         $logger = new ArrayLogger();
-        $store = new FlagStore($enabled, $logger, 'staging.hackersbychoice.dk');
+        $store = new FlagStore($enabled, $logger, 'dev.hackersbychoice.dk');
 
         $enabledCount = 0;
         $total = count(self::CATALOGUE);
@@ -126,19 +129,48 @@ final class FeatureFlagCatalogueTest extends TestCase
             $case = FeatureFlag::from($flagValue);
             $this->assertTrue(
                 $store->isEnabled($case),
-                "Staging profile must enable `{$flagValue}` ({$total}/{$total} rule)."
+                "Dev (internal) profile must enable `{$flagValue}` ({$total}/{$total} rule)."
             );
             $enabledCount++;
         }
-        $this->assertSame($total, $enabledCount, "Staging must flip exactly {$total} catalogue flags on.");
+        $this->assertSame($total, $enabledCount, "Dev must flip exactly {$total} catalogue flags on.");
 
-        // And the profile must not emit any warnings — that would mean a
-        // malformed value or unknown key slipped in.
+        // Zero warnings — a warning would mean a malformed value or an unknown
+        // key (e.g. a flag left in the YAML after its enum case was removed).
         $this->assertSame(
             [],
             $logger->warnings(),
-            'Staging profile must load cleanly with zero FlagStore warnings.'
+            'Dev profile must load cleanly with zero FlagStore warnings.'
         );
+    }
+
+    public function testStagingAndProdProfilesDisableAllCatalogueFlags(): void
+    {
+        // Policy: test, staging and prod are ALWAYS all-off. staging and prod
+        // spell this out with explicit `"false"` values (each flag is
+        // configured-but-disabled); the public-demo/test tier uses an empty
+        // map, covered by testPublicDemoProfileDisablesAllCatalogueFlags.
+        foreach (['staging.hackersbychoice.dk', 'www.byvaerkstederne.dk'] as $host) {
+            $enabled = self::loadProfileYaml($host);
+            $this->assertIsArray($enabled, "{$host} features.yaml must parse to an array.");
+
+            $logger = new ArrayLogger();
+            $store = new FlagStore($enabled, $logger, $host);
+
+            foreach (self::CATALOGUE as $flagValue) {
+                $case = FeatureFlag::from($flagValue);
+                $this->assertFalse(
+                    $store->isEnabled($case),
+                    "{$host} must disable `{$flagValue}` (non-dev tiers are always off)."
+                );
+            }
+
+            $this->assertSame(
+                [],
+                $logger->warnings(),
+                "{$host} profile must load cleanly with zero FlagStore warnings."
+            );
+        }
     }
 
     public function testPublicDemoProfileDisablesAllCatalogueFlags(): void
@@ -246,7 +278,7 @@ final class FeatureFlagCatalogueTest extends TestCase
             'feature_suggestion=True-mixed'   => ['feature_suggestion', 'True'],
             'bug_report=1-string'             => ['bug_report', '1'],
             'community_footer_column=int1'    => ['community_footer_column', 1],
-            'membership_signup=bool-true'     => ['membership_signup', true],
+            'event_highlight=bool-true'       => ['event_highlight', true],
             'newsletter_signup=yes'           => ['newsletter_signup', 'yes'],
             'workshop_calendar=null'          => ['workshop_calendar', null],
             'statutes_page=array'             => ['statutes_page', ['true']],

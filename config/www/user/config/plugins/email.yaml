@@ -28,10 +28,14 @@
 # only the env override supplies). deploy/preflight emits a non-fatal WARN so
 # the silent degrade becomes visible; the tier still boots.
 #
-# UNDER TEST (CI / local Playwright): the test environment's email.yaml
-# overrides the mailer block to point SMTP at Mailpit (mailpit:1025, no auth)
-# so the real login + email plugin path runs against an API-queryable sink.
-# See tests/fixtures/grav-seeds/README.md.
+# UNDER TEST (CI / local Playwright): the Playwright run repoints this mailer
+# block at Mailpit (mailpit:1025, no auth) for the duration of the run so the
+# real login + email plugin path runs against an API-queryable sink. The
+# override is written by tests/global-setup.js (only when the sink is reachable)
+# and restored by tests/global-teardown.js via `git checkout`; a setup-time
+# guard aborts the run if a prior crash left this file modified. scripts/
+# mailpit-up.sh only starts the sink container — it never edits this file.
+# See tests/helpers/mailer.js and tests/fixtures/grav-seeds/README.md.
 enabled: true
 from: 'noreply@hackersbychoice.dk'
 from_name: 'Byværkstederne'

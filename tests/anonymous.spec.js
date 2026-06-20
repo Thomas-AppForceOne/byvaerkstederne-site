@@ -38,6 +38,7 @@ require('./anonymous/session-cookie');
 require('./anonymous/registration');
 require('./anonymous/registration-honeypot');
 require('./anonymous/password-reset');
+require('./anonymous/auth-surface');
 
 // Visual-parity tests live at tests/anonymous/event-card-visual-parity.js
 // and are picked up directly by the chromium project's testMatch (see

@@ -1,0 +1,43 @@
+{# Shared floating auth card — login / account creation / forgot / reset embed
+   this via {% embed %}. Mirrors the .bv-login-overlay__panel identity (brand
+   image left, content right) as a page-level card floating over a dimmed
+   backdrop. The .bv-auth-card marker is the test contract (auth-surface UI/UX
+   spec: one shared floating-card presentation).
+
+   The shared feedback component (partials/messages.html.twig) renders HERE,
+   centred over the form. The embedding page empties base's {% block flash %}
+   so the read-once flash queue is consumed in the card, not at the top of the
+   page. No plugin PHP is touched. #}
+<section class="bv-auth-page">
+    <div class="bv-auth-card">
+        {# Dismiss back to the site — the card floats over the dimmed site, whose
+           header is behind the backdrop and not clickable. Mirrors the login
+           overlay's close affordance. #}
+        <a class="bv-auth-card__close" href="/" aria-label="Luk">
+            <span class="material-symbols-outlined">close</span>
+        </a>
+        <div class="bv-auth-card__image" aria-hidden="true">
+            {# Locally hosted brand asset (WI-7) — same image as the header overlay. #}
+            <img src="{{ url('theme://images/login-panel.webp') }}?v={{ 'now'|date('U') }}" alt="" />
+            <div class="bv-auth-card__image-content">
+                <span class="bv-badge bv-badge--primary">Medlemsportal</span>
+                <h2 class="bv-headline bv-auth-card__image-title">F&aelig;llesskab gennem h&aring;ndv&aelig;rk.</h2>
+            </div>
+        </div>
+        <div class="bv-auth-card__body">
+            <div class="bv-auth-card__header">
+                <h1 class="bv-display">{% block auth_title %}{% endblock %}</h1>
+                <div class="bv-auth-card__rule"></div>
+                {% block auth_intro %}{% endblock %}
+            </div>
+
+            {% block auth_messages %}{% include 'partials/messages.html.twig' %}{% endblock %}
+
+            <div class="bv-auth-form">
+                {% block auth_form %}{% endblock %}
+            </div>
+
+            {% block auth_footer %}{% endblock %}
+        </div>
+    </div>
+</section>

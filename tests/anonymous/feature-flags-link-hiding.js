@@ -91,7 +91,6 @@ const FLAG_ROUTES = {
   roadmap: ['/roadmap'],
   feature_suggestion: ['/foreslaa-feature', '/feature-suggestion'],
   bug_report: ['/bug-report', '/bug-report-submit'],
-  membership_signup: ['/opret-medlemskab'],
   press_page: ['/presse'],
   minutes_archive: ['/referater'],
   workshop_calendar: ['/vaerkstedskalenderen'],

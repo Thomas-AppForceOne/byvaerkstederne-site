@@ -26,8 +26,26 @@ const {
   ensureUnpromotedBugReport,
   clearGravCache,
 } = require('./helpers/fixtures');
+const { isMailSinkConfigured, mailSinkUrl } = require('./helpers/mail');
+const { assertEmailConfigCleanOrThrow, applyMailpitOverride } = require('./helpers/mailer');
 
 module.exports = async function globalSetup() {
+  // FIRST: refuse to run if a prior crashed run left the Mailpit email.yaml
+  // override in the working tree (see helpers/mailer.js). This is the
+  // catastrophic guard — committing that override would break a real tier's
+  // mailer, so we abort the whole run rather than risk it.
+  assertEmailConfigCleanOrThrow();
+
+  // When the Mailpit sink is reachable, repoint the mailer at it for the
+  // duration of this run so the email-bearing auth flows actually send.
+  // global-teardown restores email.yaml unconditionally. When Mailpit is down
+  // we leave the committed (non-sending) config and those specs skip-with-reason.
+  if (await isMailSinkConfigured()) {
+    applyMailpitOverride();
+    // eslint-disable-next-line no-console
+    console.log(`globalSetup: Mailpit reachable at ${mailSinkUrl()} — email.yaml repointed at mailpit:1025 for this run.`);
+  }
+
   if (hasUserPassword) {
     const password = process.env.TEST_PASSWORD || '';
     await ensureAccount(TEST_USER, password);

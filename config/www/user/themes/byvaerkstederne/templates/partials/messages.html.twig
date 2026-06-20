@@ -17,10 +17,16 @@
     {% endfor %}
 {% endfor %}
 {% if bv_all_messages|length %}
-<div class="bv-messages" role="status" aria-live="polite" style="max-width: 48rem; margin: var(--space-6) auto 0; padding: 0 var(--space-4);">
+<div class="bv-messages" role="status" aria-live="polite">
     {% for m in bv_all_messages %}
-        {% set bg = m.scope == 'error' ? '#ffdad6' : (m.scope == 'success' ? '#d8f3dc' : (m.scope == 'warning' ? '#fff3cd' : '#e7f0fd')) %}
-        {% set fg = m.scope == 'error' ? '#93000a' : (m.scope == 'success' ? '#1b4332' : '#1f2933') %}
+        {# Normalise Grav's four scopes to the success/error contract the auth
+           surface asserts on, keeping a distinct amber for warnings. The
+           forgot/reset "instructions sent" confirmation is flashed by the login
+           plugin as scope 'info' (neutral, no-enumeration wording); on the auth
+           surface that reads as a positive confirmation, so info -> success.
+           error -> error; warning -> warning. Styling lives in theme.css
+           (.bv-message / .bv-message--{success,error,warning}). #}
+        {% set bv_variant = m.scope == 'error' ? 'error' : (m.scope == 'warning' ? 'warning' : 'success') %}
         {# |raw matches Grav's stock messages partial (flashes may carry
            intentional markup, e.g. links). Any USER-CONTROLLED value that
            reaches a flash must therefore be gated at the source: the only such
@@ -28,7 +34,7 @@
            constrained to exclude angle brackets in register.md so it cannot
            inject markup here. Do not interpolate unsanitised user input into a
            flash rendered by this partial. #}
-        <div class="bv-message bv-message--{{ m.scope }}" style="background: {{ bg }}; color: {{ fg }}; padding: var(--space-4) var(--space-5); margin-bottom: var(--space-3); font-weight: 600; border-left: 6px solid currentColor;">
+        <div class="bv-message bv-message--{{ bv_variant }}">
             {{ m.message|raw }}
         </div>
     {% endfor %}
