@@ -25,6 +25,7 @@ const {
   removeReleasableRoadmapItem,
   removeUnpromotedBugReport,
 } = require('./helpers/fixtures');
+const { restoreEmailConfig } = require('./helpers/mailer');
 
 // Grav auto-generates a per-environment `security.yaml` (salt) the first
 // time a profile is accessed. The Sprint-4 feature-flag tests probe the
@@ -56,6 +57,13 @@ module.exports = async function globalTeardown() {
   for (const rel of GENERATED_ENV_SECURITY_FILES) {
     try { fs.rmSync(path.join(repoRoot, rel), { force: true }); } catch (_) { /* non-fatal */ }
   }
+
+  // Automatic teardown of the Mailpit mailer override that global-setup may
+  // have written. Unconditional + idempotent (a no-op when email.yaml is
+  // already clean), and it clears the Grav cache as `abc`. This is what makes
+  // the override impossible to leak past a normal run; the global-setup guard
+  // catches the only remaining case — a run killed before this point.
+  try { restoreEmailConfig(); } catch (_) { /* non-fatal */ }
 
   // Restore tracked files the suites mutate as a side effect, so the working
   // tree stays clean in `git status`:

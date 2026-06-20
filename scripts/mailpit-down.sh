@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Tears down the Mailpit sink for THIS worktree (WI-6). Restores the Grav
-# container's repo-tracked email.yaml from the host tree so the container no
-# longer points at the (now-removed) Mailpit. Leaves the Grav container itself
-# running.
+# Tears down the Mailpit sink for THIS worktree (WI-6). Stops the sink container
+# and DEFENSIVELY restores email.yaml — the Playwright run restores it itself in
+# global-teardown, so under normal use the restore here is a no-op; it exists as
+# the operator's recovery path after a killed run left the override behind.
+# Leaves the Grav container itself running.
 #
 # Usage:
 #   scripts/mailpit-down.sh <worktree-path>
@@ -29,17 +30,14 @@ GRAV_ROOT="$WORKTREE_ABS/config" \
 MAILPIT_CONTAINER="$MAILPIT_CONTAINER_NAME" \
   docker compose -p "$PROJECT_NAME" --profile test rm -sf mailpit 2>/dev/null || true
 
-# Restore the committed credential-free email.yaml from the backup taken by
-# mailpit-up.sh, so the working tree is clean again.
-EMAIL_CFG="$WORKTREE_ABS/config/www/user/config/plugins/email.yaml"
-EMAIL_BAK="$WORKTREE_ABS/.gan/email.yaml.committed.bak"
-if [ -f "$EMAIL_BAK" ]; then
-  cp "$EMAIL_BAK" "$EMAIL_CFG"
-  rm -f "$EMAIL_BAK"
-elif command -v git >/dev/null 2>&1; then
-  # Fallback: restore from git if the backup is gone.
+# Defensively restore the committed credential-free email.yaml so the working
+# tree is clean again. `git checkout` is the source of truth (a no-op when the
+# file is already clean). Also drop any stale backup a legacy, pre-suite-owned
+# mailpit-up.sh may have written under .gan/.
+if command -v git >/dev/null 2>&1; then
   git -C "$WORKTREE_ABS" checkout -- config/www/user/config/plugins/email.yaml 2>/dev/null || true
 fi
+rm -f "$WORKTREE_ABS/.gan/email.yaml.committed.bak"
 
 # Legacy cleanup: older mailpit-up.sh relaxed session.secure and backed
 # system.yaml up to .gan/. That relaxation is gone (system.yaml no longer
