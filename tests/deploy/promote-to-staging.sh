@@ -396,6 +396,256 @@ else
     report_fail "traversal PROMOTE_LOCAL_TIER_DIR not rejected as expected (rc=$RC_TRAV)"
 fi
 
+# ──────────────────────────────────────────────────────────────────────
+# SUCCESS PATH: --from-backup <existing id> reuses the named archive and
+# SKIPS the fresh prod backup. The clean success run at the top of this
+# file already produced exactly one archive ($PRODUCED_ID) in $STORE; we
+# now promote a FRESH tier --from-backup that id and assert:
+#   * exit 0
+#   * step 2 reports "using existing backup id (--from-backup)" and NOT
+#     "taking a fresh prod backup" (the fresh-backup branch is skipped)
+#   * NO new archive was created in the store (file count unchanged)
+#   * the blessing's source_backup_id == the reused id
+# (Previously only the bad-id failure was covered.)
+# ──────────────────────────────────────────────────────────────────────
+echo "→ success path: --from-backup <existing id> reuses the archive (no fresh backup)"
+if [ -z "$PRODUCED_ID" ]; then
+    report_fail "--from-backup success: no produced archive id from the earlier success run to reuse"
+else
+    STORE_COUNT_BEFORE="$(ls "$STORE"/*.tar.gz.age 2>/dev/null | wc -l | tr -d ' ')"
+    TIER_FB="$TMP/tier-frombackup"; mkdir -p "$TIER_FB"
+    # Seed a CURRENT (v0) dir so the build step has a cp -a source (parity
+    # with the main success path's tier layout).
+    mkdir -p "$TIER_FB/stagingdata/v0/user/config"
+    echo 'salt: keep-me' > "$TIER_FB/stagingdata/v0/user/config/security.yaml"
+    ln -sfn v0 "$TIER_FB/stagingdata/current"
+
+    OUT_FB="$TMP/promote-frombackup.out"
+    set +e
+    PROMOTE_LOCAL_TIER_DIR="$TIER_FB" \
+        "$PROMOTE_SH" --from-backup "$PRODUCED_ID" --yes >"$OUT_FB" 2>&1
+    RC_FB=$?
+    set -e
+
+    if [ "$RC_FB" -eq 0 ]; then
+        report_pass "--from-backup success: promote exits 0 reusing $PRODUCED_ID"
+    else
+        report_fail "--from-backup success: exited $RC_FB (expected 0)"
+        tail -30 "$OUT_FB" >&2
+    fi
+
+    if grep -q "using existing backup id (--from-backup)" "$OUT_FB" \
+        && ! grep -q "taking a fresh prod backup" "$OUT_FB"; then
+        report_pass "--from-backup success: skipped the fresh backup (used the existing archive)"
+    else
+        report_fail "--from-backup success: did not take the existing-archive branch at step 2"
+        tail -20 "$OUT_FB" >&2
+    fi
+
+    STORE_COUNT_AFTER="$(ls "$STORE"/*.tar.gz.age 2>/dev/null | wc -l | tr -d ' ')"
+    if [ "$STORE_COUNT_AFTER" = "$STORE_COUNT_BEFORE" ]; then
+        report_pass "--from-backup success: no new archive created (count stayed $STORE_COUNT_BEFORE)"
+    else
+        report_fail "--from-backup success: archive count changed ($STORE_COUNT_BEFORE → $STORE_COUNT_AFTER); a fresh backup was taken"
+    fi
+
+    BLESS_FB="$TIER_FB/staging-blessed.yaml"
+    bsid_fb="$(awk -F'"' '$0 ~ /^source_backup_id: / {print $2; exit}' "$BLESS_FB" 2>/dev/null || true)"
+    if [ "$bsid_fb" = "$PRODUCED_ID" ]; then
+        report_pass "--from-backup success: blessing source_backup_id == reused id ($PRODUCED_ID)"
+    else
+        report_fail "--from-backup success: blessing source_backup_id='$bsid_fb', expected '$PRODUCED_ID'"
+    fi
+fi
+
+# ──────────────────────────────────────────────────────────────────────
+# MIGRATION BUMP (success + missing-migration abort).
+#
+# The TARGET data version is read by promote-to-staging.sh from its OWN
+# PROJECT_DIR's config/www/user/data-version.yaml (no env override exists),
+# and the real repo's marker is 0.1.0 — the floor — so a same-repo run can
+# never exercise a forward migration. To drive a real bump we run a
+# WORK_REPO copy of deploy/ (+ a copy of the real migrations/ so the PHP
+# bootstrap + vendor resolve) whose code marker we stamp at the target.
+# This is the same self-contained-checkout trick promote-to-prod's test
+# uses; it is test-only and touches no product code.
+#
+# The migration itself is provided as a synthetic <semver>_<slug>.php under
+# a throwaway BV_MIGRATIONS_DIR — the canonical fixture mechanism from
+# migrations/run-tests.sh. migrate.sh resolves PHP via system `php`, else
+# the Docker php:8.3-cli fallback, so this needs one of those.
+# ──────────────────────────────────────────────────────────────────────
+echo "→ migration bump (success + missing-migration abort)"
+
+# migrate.sh needs a PHP toolchain (system php or Docker). Without either,
+# fail loudly rather than silently skipping (CLAUDE.md: no silent skips).
+if command -v php >/dev/null 2>&1 || command -v docker >/dev/null 2>&1; then
+    MIG_TARGET_DV="0.2.0"
+    MIG_VDIR="v_${MIG_TARGET_DV//./_}"
+
+    # Self-contained WORK_REPO: deploy/ + migrations/ copied verbatim, a
+    # code marker stamped at MIG_TARGET_DV, plus the staging env/features
+    # + VERSION that step 9's blessing write reads. Git-init it so the
+    # blessing's code_commit/code_build (git rev-parse / rev-list) resolve.
+    WR="$TMP/wr-staging-mig"
+    mkdir -p "$WR/deploy/lib" \
+             "$WR/config/www/user" \
+             "$WR/config/www/user/env/staging.hackersbychoice.dk/config"
+    cp "$REPO_ROOT/deploy/promote-to-staging.sh" "$WR/deploy/"
+    cp "$REPO_ROOT/deploy/backup.sh"             "$WR/deploy/"
+    cp "$REPO_ROOT/deploy/restore.sh"            "$WR/deploy/"
+    cp "$REPO_ROOT/deploy/migrate.sh"            "$WR/deploy/"
+    cp "$REPO_ROOT/deploy/backup-paths.txt"      "$WR/deploy/"
+    cp -R "$REPO_ROOT/deploy/lib/." "$WR/deploy/lib/"
+    cp -R "$REPO_ROOT/migrations" "$WR/migrations"
+    chmod +x "$WR/deploy/"*.sh
+    printf 'data_version: "%s"\n' "$MIG_TARGET_DV" > "$WR/config/www/user/data-version.yaml"
+    echo '0.1.0' > "$WR/config/www/VERSION"
+    printf 'features:\n  staging_flag: "true"\n' \
+        > "$WR/config/www/user/env/staging.hackersbychoice.dk/config/features.yaml"
+    (
+        cd "$WR"
+        git init -q
+        git config user.email "test@example.com"
+        git config user.name "Test Harness"
+        git add -A
+        git commit -q -m "wr-staging-mig initial"
+    ) || { echo "FATAL: could not init WORK_REPO for staging migration test" >&2; exit 1; }
+    PROMOTE_WR="$WR/deploy/promote-to-staging.sh"
+
+    # Backup fixture stamped BELOW the target so step 4 sees SOURCE=0.1.0,
+    # TARGET=0.2.0 → a forward migration is required. backup.sh reads the
+    # source data_version from $BACKUP_FIXTURE_DIR/user/data-version.yaml.
+    MIG_FIXTURE="$TMP/mig-fixture"
+    mkdir -p "$MIG_FIXTURE/user/accounts" "$MIG_FIXTURE/user/data/flex"
+    echo 'username: alice' > "$MIG_FIXTURE/user/accounts/alice.yaml"
+    echo 'task: hello'     > "$MIG_FIXTURE/user/data/flex/tasks.yaml"
+    echo '0.1.0' > "$MIG_FIXTURE/VERSION"
+    echo '247'   > "$MIG_FIXTURE/BUILD"
+    printf 'version: "0.1.0"\n' > "$MIG_FIXTURE/user/data-version.yaml"
+
+    # ── SUCCESS: synthetic migrations dir holds a real 0.2.0 migration. ──
+    MIG_DIR_OK="$TMP/migdir-ok"; mkdir -p "$MIG_DIR_OK"
+    cat > "$MIG_DIR_OK/0.2.0_wi6_staging_bump.php" <<'PHP'
+<?php
+// WI-6 fixture migration: advance 0.1.0 → 0.2.0 and stamp a sentinel so
+// the test can prove the migration actually RAN (vs being skipped).
+return function (string $dataDir): void {
+    file_put_contents(
+        $dataDir . '/user/data-version.yaml',
+        "data_version: \"0.2.0\"\nwi6_staging_migration_ran: \"yes\"\n"
+    );
+};
+PHP
+
+    TIER_MIG="$TMP/tier-mig"; mkdir -p "$TIER_MIG"
+    mkdir -p "$TIER_MIG/stagingdata/v0/user/config"
+    echo 'salt: keep-me' > "$TIER_MIG/stagingdata/v0/user/config/security.yaml"
+    ln -sfn v0 "$TIER_MIG/stagingdata/current"
+
+    OUT_MIG="$TMP/promote-mig.out"
+    set +e
+    BACKUP_FIXTURE_DIR="$MIG_FIXTURE" \
+    BV_MIGRATIONS_DIR="$MIG_DIR_OK" \
+    BACKUP_FAKE_NOW_EPOCH="1777466200" \
+    PROMOTE_LOCAL_TIER_DIR="$TIER_MIG" \
+        "$PROMOTE_WR" --yes >"$OUT_MIG" 2>&1
+    RC_MIG=$?
+    set -e
+
+    if [ "$RC_MIG" -eq 0 ]; then
+        report_pass "migration bump: promote exits 0 (0.1.0 → $MIG_TARGET_DV)"
+    else
+        report_fail "migration bump: exited $RC_MIG (expected 0)"
+        tail -40 "$OUT_MIG" >&2
+    fi
+    # Prove a migration was actually APPLIED (not the same-version skip).
+    if grep -q "migration required: 0.1.0 → $MIG_TARGET_DV" "$OUT_MIG" \
+        && grep -q "applying 0.2.0_wi6_staging_bump.php" "$OUT_MIG"; then
+        report_pass "migration bump: a migration was applied (not short-circuited)"
+    else
+        report_fail "migration bump: migration was NOT applied (still on the skip branch?)"
+        tail -25 "$OUT_MIG" >&2
+    fi
+    # Served data dir lands at the TARGET version, carrying the sentinel the
+    # migration wrote — proof the migrated snapshot reached the tier.
+    DV_MIG="$TIER_MIG/stagingdata/$MIG_VDIR/user/data-version.yaml"
+    if [ -f "$DV_MIG" ] && grep -q '"0.2.0"' "$DV_MIG" && grep -q 'wi6_staging_migration_ran' "$DV_MIG"; then
+        report_pass "migration bump: served data dir at $MIG_VDIR is at $MIG_TARGET_DV with the migration's sentinel"
+    else
+        report_fail "migration bump: served data-version.yaml missing/wrong at $MIG_VDIR"
+        [ -f "$DV_MIG" ] && cat "$DV_MIG" >&2
+    fi
+    # current repointed at the migrated target dir + blessing stamps target.
+    CUR_MIG="$(readlink "$TIER_MIG/stagingdata/current" 2>/dev/null || echo "")"
+    bdv_mig="$(awk -F'"' '$0 ~ /^data_version: / {print $2; exit}' "$TIER_MIG/staging-blessed.yaml" 2>/dev/null || true)"
+    if [ "$CUR_MIG" = "$MIG_VDIR" ] && [ "$bdv_mig" = "$MIG_TARGET_DV" ]; then
+        report_pass "migration bump: current → $MIG_VDIR and blessing data_version == $MIG_TARGET_DV"
+    else
+        report_fail "migration bump: current='$CUR_MIG' (want $MIG_VDIR), blessing data_version='$bdv_mig' (want $MIG_TARGET_DV)"
+    fi
+
+    # ── FAILURE: required migration missing → abort BEFORE any tier push. ──
+    # Empty synthetic migrations dir: nothing satisfies --to 0.2.0, so
+    # migrate.sh refuses ("no migration to 0.2.0 found", exit 5) and
+    # promote aborts at step 5 — BEFORE the step-6 build+activate and the
+    # step-9 blessing. We assert: non-zero, the migrate.sh diagnostic, AND
+    # that NONE of the tier-push artifacts exist (no served $MIG_VDIR dir,
+    # current NOT repointed, no blessing). Removing the step-5 abort guard
+    # (the `fail_with_scratch` on migrate.sh failure) would let the run
+    # proceed to build $MIG_VDIR and write the blessing — flipping these
+    # absence assertions to failures.
+    MIG_DIR_MISSING="$TMP/migdir-missing"; mkdir -p "$MIG_DIR_MISSING"  # deliberately empty
+
+    TIER_MIGF="$TMP/tier-mig-fail"; mkdir -p "$TIER_MIGF"
+    mkdir -p "$TIER_MIGF/stagingdata/v0/user/config"
+    echo 'salt: keep-me' > "$TIER_MIGF/stagingdata/v0/user/config/security.yaml"
+    ln -sfn v0 "$TIER_MIGF/stagingdata/current"
+
+    OUT_MIGF="$TMP/promote-mig-fail.out"
+    set +e
+    BACKUP_FIXTURE_DIR="$MIG_FIXTURE" \
+    BV_MIGRATIONS_DIR="$MIG_DIR_MISSING" \
+    BACKUP_FAKE_NOW_EPOCH="1777466260" \
+    PROMOTE_LOCAL_TIER_DIR="$TIER_MIGF" \
+        "$PROMOTE_WR" --yes >"$OUT_MIGF" 2>&1
+    RC_MIGF=$?
+    set -e
+
+    if [ "$RC_MIGF" -ne 0 ]; then
+        report_pass "missing-migration: promote exits non-zero ($RC_MIGF)"
+    else
+        report_fail "missing-migration: promote unexpectedly exited 0"
+        tail -30 "$OUT_MIGF" >&2
+    fi
+    if grep -q "no migration to $MIG_TARGET_DV found" "$OUT_MIGF"; then
+        report_pass "missing-migration: migrate.sh 'no migration found' diagnostic present"
+    else
+        report_fail "missing-migration: expected migrate.sh 'no migration found' diagnostic, not seen"
+        tail -25 "$OUT_MIGF" >&2
+    fi
+    # ABORT-BEFORE-PUSH proof: none of the tier-push/activate artifacts exist.
+    if [ ! -d "$TIER_MIGF/stagingdata/$MIG_VDIR" ]; then
+        report_pass "missing-migration: aborted BEFORE build — no served $MIG_VDIR dir"
+    else
+        report_fail "missing-migration: served $MIG_VDIR dir was built despite the abort"
+    fi
+    CUR_MIGF="$(readlink "$TIER_MIGF/stagingdata/current" 2>/dev/null || echo "")"
+    if [ "$CUR_MIGF" = "v0" ]; then
+        report_pass "missing-migration: current NOT repointed (still → v0)"
+    else
+        report_fail "missing-migration: current was repointed to '$CUR_MIGF' despite the abort"
+    fi
+    if [ ! -f "$TIER_MIGF/staging-blessed.yaml" ]; then
+        report_pass "missing-migration: no blessing written (abort before step 9)"
+    else
+        report_fail "missing-migration: blessing was written despite the abort"
+    fi
+else
+    echo "FATAL: migration-bump cases require a PHP toolchain (system php or Docker) and neither is present" >&2
+    report_fail "migration-bump cases could not run — no PHP toolchain (install php or Docker; do not silently skip)"
+fi
+
 # ─── Summary ──────────────────────────────────────────────────────────
 echo ""
 echo "promote-to-staging: ${PASS_COUNT} passed, ${FAIL_COUNT} failed"
