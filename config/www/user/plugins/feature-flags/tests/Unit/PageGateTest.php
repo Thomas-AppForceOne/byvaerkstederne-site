@@ -164,6 +164,7 @@ final class PageGateTest extends TestCase
         $logger = new ArrayLogger();
         $throwing = new class implements FlagStoreInterface {
             public function isEnabled(FeatureFlag $flag): bool { throw new \RuntimeException('boom'); }
+            public function isDisabled(FeatureFlag $flag): bool { throw new \RuntimeException('boom'); }
             public function isConfigured(FeatureFlag $flag): bool { return false; }
             public function getEnabledFlags(): array { return []; }
             public function allFlags(): array { return []; }

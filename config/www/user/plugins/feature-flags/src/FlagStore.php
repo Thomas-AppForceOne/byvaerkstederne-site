@@ -162,6 +162,11 @@ final class FlagStore implements FlagStoreInterface
         return $this->resolved[$flag->value] ?? false;
     }
 
+    public function isDisabled(FeatureFlag $flag): bool
+    {
+        return !$this->isEnabled($flag);
+    }
+
     public function isConfigured(FeatureFlag $flag): bool
     {
         return isset($this->configuredKeys[$flag->value]);
