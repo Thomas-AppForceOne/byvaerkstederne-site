@@ -51,8 +51,8 @@
                    no fictive fallback fields — "better an empty card than a
                    fictive one"). #}
                 {% if next_event %}
-                    {% set accent_map = {makerspace: 'secondary', kreativ: 'tertiary', groenne: 'primary', kulturhus: 'kulturhus', alle: 'primary'} %}
-                    {% set filter_map = {makerspace: 'makerspace', kreativ: 'kreativ', groenne: 'groenne', kulturhus: 'kulturhus', alle: 'all'} %}
+                    {% set accent_map = {makerspace: 'secondary', krea: 'tertiary', groent: 'primary', kulturhus: 'kulturhus', alle: 'primary'} %}
+                    {% set filter_map = {makerspace: 'makerspace', krea: 'krea', groent: 'groent', kulturhus: 'kulturhus', alle: 'all'} %}
                     {% set ev_group = next_event.group|default('alle') %}
                     {% set ev_accent = accent_map[ev_group]|default('primary') %}
                     {# CTA only when the RSVP flag is on AND a real URL exists —
@@ -94,7 +94,7 @@
                         {% set flex_dir = flex ? flex.directory('opgaver') : null %}
                         {% set flex_opgaver = flex_dir ? flex_dir.collection : null %}
                         {% set priority_rank = {high: 1, medium: 2, low: 3} %}
-                        {% set group_colors = {groenne: 'primary', makerspace: 'secondary', kreativ: 'tertiary', kulturhus: 'kulturhus', alle: 'neutral'} %}
+                        {% set group_colors = {groent: 'primary', makerspace: 'secondary', krea: 'tertiary', kulturhus: 'kulturhus', alle: 'neutral'} %}
 
                         {% if flex_opgaver is not null and flex_opgaver|length > 0 %}
                             {# Build best-per-group: iterate all items, keep the one with earliest due_date / highest priority per group #}
@@ -153,8 +153,8 @@
 </section>
 
 {# Fullscreen To-Do Overlay #}
-{% set group_names = {groenne: 'Grønt BYværksted', makerspace: 'Makerspace & Reparation', kreativ: 'Krea Café', kulturhus: 'Eventværkstedet', alle: 'Fælles Opgaver'} %}
-{% set group_order = ['alle', 'groenne', 'makerspace', 'kreativ', 'kulturhus'] %}
+{% set group_names = {groent: 'Grønt BYværksted', makerspace: 'Makerspace & Reparation', krea: 'Krea Café', kulturhus: 'Eventværkstedet', alle: 'Fælles Opgaver'} %}
+{% set group_order = ['alle', 'groent', 'makerspace', 'krea', 'kulturhus'] %}
 
 <div id="bv-todo-overlay" class="bv-todo-overlay">
     <div class="bv-todo-overlay__panel">

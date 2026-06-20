@@ -2,7 +2,7 @@ opgave001:
   published: true
   title: 'Byg nye plantekasser'
   description: 'Det Grønne Fællesskab har brug for 4 store kasser i lærketræ.'
-  group: groenne
+  group: groent
   color: primary
   status: open
   priority: high
@@ -30,7 +30,7 @@ fef9b2ed790e62aadc00ed5610e1424a:
   published: true
   title: 'Forberede smykke værksted'
   description: 'Vi skal have ordnet og sorteret værktøj og materialer til smykkeværkstedet'
-  group: kreativ
+  group: krea
   color: tertiary
   status: open
   priority: high

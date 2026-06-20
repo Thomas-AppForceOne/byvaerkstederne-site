@@ -218,7 +218,7 @@ test.describe('mobile-event-card-unification', () => {
     const row = page.locator('.bv-event-row--featured').first();
     await expect(row, 'home featured row should render').toBeVisible();
 
-    const FILTER_IDS = new Set(['makerspace', 'kreativ', 'groenne', 'kulturhus', 'all']);
+    const FILTER_IDS = new Set(['makerspace', 'krea', 'groent', 'kulturhus', 'all']);
     const ACCENT_TOKENS = new Set(['primary', 'secondary', 'tertiary', 'kulturhus']);
     const group = await row.evaluate((el) => el.getAttribute('data-group') || '');
     const accent = await row.evaluate((el) => el.style.getPropertyValue('--bv-accent').trim());
@@ -249,7 +249,7 @@ test.describe('mobile-event-card-unification', () => {
     // this set (plus 'all' for the synthetic 'show everything' case,
     // though no row ever carries 'all' — the 'all' button shows every
     // row regardless of its data-group).
-    const FILTER_IDS = new Set(['makerspace', 'kreativ', 'groenne', 'kulturhus']);
+    const FILTER_IDS = new Set(['makerspace', 'krea', 'groent', 'kulturhus']);
 
     for (let i = 0; i < n; i += 1) {
       const row = rows.nth(i);
@@ -280,7 +280,7 @@ test.describe('mobile-event-card-unification', () => {
     await page.goto(CALENDAR_ROUTE);
 
     // Pick a filter that the seeded begivenheder.yaml definitely covers:
-    // 'makerspace' (event001-003) and 'kreativ' (event004-005).
+    // 'makerspace' (event001-003) and 'krea' (event004-005).
     const FILTER_TO_TEST = 'makerspace';
 
     const filterBtn = page.locator(`.bv-filter-btn[data-filter="${FILTER_TO_TEST}"]`);
@@ -308,6 +308,54 @@ test.describe('mobile-event-card-unification', () => {
     expect(visible, 'filter click must NOT hide every row (regression guard)').toBeGreaterThan(0);
     expect(matchingVisible, `filter "${FILTER_TO_TEST}" must show at least one matching row`).toBeGreaterThan(0);
     expect(nonMatchingVisible, `filter "${FILTER_TO_TEST}" must hide every non-matching row`).toBe(0);
+  });
+
+  // ------------------------------------------------------------------
+  // WI-5 — filter IDs renamed groenne->groent, kreativ->krea
+  // ------------------------------------------------------------------
+
+  test('WI-5 calendar uses renamed filter IDs (groent/krea) with no legacy groenne/kreativ', async ({ page }) => {
+    await page.goto(CALENDAR_ROUTE);
+
+    // The renamed filter buttons are present...
+    await expect(
+      page.locator('.bv-filter-btn[data-filter="groent"]'),
+      'green filter button must use the renamed id "groent"',
+    ).toBeVisible();
+    await expect(
+      page.locator('.bv-filter-btn[data-filter="krea"]'),
+      'creative filter button must use the renamed id "krea"',
+    ).toBeVisible();
+
+    // ...and the legacy tokens appear nowhere — neither button nor row.
+    expect(
+      await page.locator('[data-filter="groenne"], [data-filter="kreativ"]').count(),
+      'no legacy groenne/kreativ filter buttons may remain',
+    ).toBe(0);
+    expect(
+      await page.locator('.bv-event-row[data-group="groenne"], .bv-event-row[data-group="kreativ"]').count(),
+      'no event row may carry a legacy groenne/kreativ data-group',
+    ).toBe(0);
+
+    // Behaviour preserved: clicking the creative (krea) filter shows the krea
+    // rows and hides every non-krea row (begivenheder.yaml seeds krea events;
+    // the green filter has no calendar events, same as before the rename).
+    await page.locator('.bv-filter-btn[data-filter="krea"]').click();
+    const rows = page.locator('.bv-event-row[data-group]');
+    const total = await rows.count();
+    expect(total, 'expected event rows on the calendar').toBeGreaterThan(0);
+
+    let kreaVisible = 0;
+    let nonKreaVisible = 0;
+    for (let i = 0; i < total; i += 1) {
+      const row = rows.nth(i);
+      const shown = await row.evaluate((el) => /** @type {HTMLElement} */ (el).style.display !== 'none');
+      if (!shown) continue;
+      const group = await row.evaluate((el) => el.getAttribute('data-group'));
+      if (group === 'krea') kreaVisible += 1; else nonKreaVisible += 1;
+    }
+    expect(kreaVisible, 'krea filter must show at least one krea row').toBeGreaterThan(0);
+    expect(nonKreaVisible, 'krea filter must hide every non-krea row').toBe(0);
   });
 
   // ------------------------------------------------------------------
