@@ -38,5 +38,9 @@
         {% if h.outro %}
         <p style="margin-top: var(--space-12); max-width: 56rem; color: var(--on-surface-variant);">{{ h.outro }}</p>
         {% endif %}
+
+        {% if h.contact_email %}
+        <p style="margin-top: var(--space-4); max-width: 56rem; color: var(--on-surface-variant);">Skriv til <a href="mailto:{{ h.contact_email }}" style="color: var(--{{ h.accent|default('tertiary') }}); font-weight: 600;">{{ h.contact_email }}</a></p>
+        {% endif %}
     </div>
 </section>

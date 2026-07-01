@@ -56,7 +56,7 @@
     --inverse-on-surface: #f1f1f1;
 
     /* Kulturhus (neutral dark) */
-    --kulturhus: #27272a;
+    --kulturhus: #c2410c;
 
     /* Typography */
     --font-headline: 'Space Grotesk', sans-serif;
@@ -1032,19 +1032,25 @@ a { color: inherit; text-decoration: none; }
 .bv-workgroup-card__line { width: 3rem; height: 0.25rem; background: #fff; }
 
 /* Centered card titles with hover reveal (opt-in via card_center: true) —
-   used on the Krea Café "Vores atelierer" section. The title's TOP sits at
-   the card's vertical centre and the accent line sits directly beneath it;
+   used on the Krea Café "Vores atelierer" section. The title's TOP sits about
+   a third down the card and the accent line sits directly beneath it;
    the description is collapsed to zero height so there is no gap. On hover
    the description expands (fades + grows), which pushes the line downward —
    the "line animates down, sub-paragraph appears" behaviour. The title stays
    anchored so it never jumps. Other sections keep the bottom-left default. */
 .bv-workgroups--center .bv-workgroup-card__content {
     position: absolute;
-    top: 50%;
+    top: 33%;
     left: 0;
     right: 0;
-    padding: 0 var(--space-8);
+    padding: 0 var(--space-4);
     text-align: center;
+}
+/* Slightly smaller title on the centered cards so long single-word names
+   (EVENTVÆRKSTEDET, SMYKKEVÆRKSTEDET) fit the narrow 4-up / 3-up cards down
+   to iPad widths without clipping. Home-page cards keep the 1.75rem size. */
+.bv-workgroups--center .bv-workgroup-card__title {
+    font-size: 1.5rem;
 }
 .bv-workgroups--center .bv-workgroup-card__line {
     margin-left: auto;
@@ -1068,6 +1074,7 @@ a { color: inherit; text-decoration: none; }
 .bv-workgroup-card--tertiary { background: var(--tertiary); }
 .bv-workgroup-card--tertiary-alt { background: var(--tertiary-container); }
 .bv-workgroup-card--dark { background: var(--kulturhus); }
+.bv-workgroup-card--kulturhus { background: var(--kulturhus); }
 
 /* ---------- Calendar ---------- */
 .bv-filters { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
