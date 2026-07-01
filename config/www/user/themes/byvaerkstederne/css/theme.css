@@ -56,7 +56,7 @@
     --inverse-on-surface: #f1f1f1;
 
     /* Kulturhus (neutral dark) */
-    --kulturhus: #27272a;
+    --kulturhus: #c2410c;
 
     /* Typography */
     --font-headline: 'Space Grotesk', sans-serif;
@@ -926,6 +926,12 @@ a { color: inherit; text-decoration: none; }
 
 /* ---------- Workgroup Cards ---------- */
 .bv-workgroups { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; }
+/* Per-section override for grids with fewer than 4 cards (e.g. the Krea
+   Café ateliers, which has 3) so each card is wider and long titles like
+   "Smykkeværkstedet" fit on one line. Only desktop is overridden here;
+   the ≤1023px (2-up) and ≤767px (1-up) base rules below are later in
+   source with equal specificity, so they still win on tablet/mobile. */
+.bv-workgroups--cols-3 { grid-template-columns: repeat(3, 1fr); }
 
 .bv-workgroup-card {
     position: relative;
@@ -967,6 +973,54 @@ a { color: inherit; text-decoration: none; }
     color: #fff;
     margin-bottom: var(--space-2);
 }
+
+/* Smykkeværkstedet intro: an airy text column in the middle, flanked by
+   a portrait photo in each side margin, with a wide photo beneath the
+   text. Uses the full container width so the page's side space is filled
+   and the prose gets room to breathe. Collapses to one column on tablet. */
+.bv-prose-sides {
+    display: grid;
+    grid-template-columns: 1fr 2fr 1fr;
+    grid-template-areas:
+        "left text  right"
+        ".    wide  .";
+    gap: var(--space-12);
+    align-items: center;
+}
+.bv-prose-sides__text { grid-area: text; }
+.bv-prose-sides__left  { grid-area: left; }
+.bv-prose-sides__right { grid-area: right; }
+.bv-prose-sides__wide  { grid-area: wide; margin-top: var(--space-10); }
+.bv-prose-sides__left,
+.bv-prose-sides__right {
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+    display: block;
+}
+.bv-prose-sides__wide {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+@media (max-width: 900px) {
+    .bv-prose-sides {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "text"
+            "wide"
+            "left"
+            "right";
+        gap: var(--space-8);
+    }
+    .bv-prose-sides__left,
+    .bv-prose-sides__right {
+        max-width: 26rem;
+        margin: 0 auto;
+        aspect-ratio: auto;
+    }
+}
+
 .bv-workgroup-card__desc {
     font-size: 0.875rem;
     color: rgba(255,255,255,0.7);
@@ -977,11 +1031,50 @@ a { color: inherit; text-decoration: none; }
 .bv-workgroup-card:hover .bv-workgroup-card__desc { opacity: 1; }
 .bv-workgroup-card__line { width: 3rem; height: 0.25rem; background: #fff; }
 
+/* Centered card titles with hover reveal (opt-in via card_center: true) —
+   used on the Krea Café "Vores atelierer" section. The title's TOP sits about
+   a third down the card and the accent line sits directly beneath it;
+   the description is collapsed to zero height so there is no gap. On hover
+   the description expands (fades + grows), which pushes the line downward —
+   the "line animates down, sub-paragraph appears" behaviour. The title stays
+   anchored so it never jumps. Other sections keep the bottom-left default. */
+.bv-workgroups--center .bv-workgroup-card__content {
+    position: absolute;
+    top: 33%;
+    left: 0;
+    right: 0;
+    padding: 0 var(--space-4);
+    text-align: center;
+}
+/* Slightly smaller title on the centered cards so long single-word names
+   (EVENTVÆRKSTEDET, SMYKKEVÆRKSTEDET) fit the narrow 4-up / 3-up cards down
+   to iPad widths without clipping. Home-page cards keep the 1.75rem size. */
+.bv-workgroups--center .bv-workgroup-card__title {
+    font-size: 1.5rem;
+}
+.bv-workgroups--center .bv-workgroup-card__line {
+    margin-left: auto;
+    margin-right: auto;
+}
+.bv-workgroups--center .bv-workgroup-card__desc {
+    max-height: 0;
+    margin-bottom: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height 0.4s ease, opacity 0.3s ease, margin-bottom 0.4s ease;
+}
+.bv-workgroups--center .bv-workgroup-card:hover .bv-workgroup-card__desc {
+    max-height: 12rem;
+    margin-bottom: var(--space-6);
+    opacity: 1;
+}
+
 .bv-workgroup-card--primary { background: var(--primary); }
 .bv-workgroup-card--secondary { background: var(--secondary); }
 .bv-workgroup-card--tertiary { background: var(--tertiary); }
 .bv-workgroup-card--tertiary-alt { background: var(--tertiary-container); }
 .bv-workgroup-card--dark { background: var(--kulturhus); }
+.bv-workgroup-card--kulturhus { background: var(--kulturhus); }
 
 /* ---------- Calendar ---------- */
 .bv-filters { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
