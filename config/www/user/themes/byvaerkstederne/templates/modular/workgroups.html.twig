@@ -4,7 +4,7 @@
         <h2 class="bv-headline" style="font-size: 3rem; text-align: center; margin-bottom: var(--space-16);">{{ h.section_title|default('Vores V&aelig;rkstedsgrupper') }}</h2>
     </div>
     <div class="bv-container">
-        <div class="bv-workgroups">
+        <div class="bv-workgroups{% if h.card_columns %} bv-workgroups--cols-{{ h.card_columns }}{% endif %}{% if h.card_center %} bv-workgroups--center{% endif %}">
             {% for group in h.groups|feature_visible %}
             <a href="{{ group.url|default('#') }}" class="bv-workgroup-card bv-workgroup-card--{{ group.color|default('primary') }}">
                 {% if group.image %}
