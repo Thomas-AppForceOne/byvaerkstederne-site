@@ -7,6 +7,9 @@
                 <span class="bv-label" style="color: var(--{{ h.accent|default('tertiary') }}); letter-spacing: 0.2em; margin-bottom: var(--space-4); display: block;">{{ h.section_label }}</span>
                 {% endif %}
                 <h2 class="bv-headline" style="font-size: 2.5rem;">{{ h.section_title|default('Næste sessioner') }}</h2>
+                {% if h.section_byline %}
+                <p class="bv-label" style="margin-top: var(--space-2); color: var(--on-surface-variant);">{{ h.section_byline }}</p>
+                {% endif %}
             </div>
             <div style="background: var(--surface-dim); height: 2px; flex: 1; max-width: 33%; margin-bottom: var(--space-4);"></div>
         </div>
