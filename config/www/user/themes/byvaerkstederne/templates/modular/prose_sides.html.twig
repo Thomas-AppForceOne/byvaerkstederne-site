@@ -1,0 +1,30 @@
+{% set h = page.header %}
+<section class="bv-section">
+    <div class="bv-container">
+        <div class="bv-prose-sides">
+            {% if h.image_left %}
+            <img class="bv-prose-sides__left" src="{{ h.image_left }}" alt="{{ h.image_left_alt|default('') }}"/>
+            {% endif %}
+
+            <div class="bv-prose-sides__text">
+                {% if h.section_label %}
+                <span class="bv-label" style="color: var(--{{ h.accent|default('tertiary') }}); letter-spacing: 0.2em; margin-bottom: var(--space-4); display: block;">{{ h.section_label }}</span>
+                {% endif %}
+                {% if h.section_title %}
+                <h2 class="bv-headline" style="font-size: 2.5rem; margin-bottom: var(--space-8);">{{ h.section_title }}</h2>
+                {% endif %}
+                <div class="bv-prose" style="font-size: 1.1rem; line-height: 1.85; color: var(--on-surface);">
+                    {{ content|raw }}
+                </div>
+            </div>
+
+            {% if h.image_right %}
+            <img class="bv-prose-sides__right" src="{{ h.image_right }}" alt="{{ h.image_right_alt|default('') }}"/>
+            {% endif %}
+
+            {% if h.image_wide %}
+            <img class="bv-prose-sides__wide" src="{{ h.image_wide }}" alt="{{ h.image_wide_alt|default('') }}"/>
+            {% endif %}
+        </div>
+    </div>
+</section>

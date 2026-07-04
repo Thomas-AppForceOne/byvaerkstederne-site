@@ -63,7 +63,7 @@
       {% endif %}
       <h3 class="bv-event-row__title">{{ event.title }}</h3>
       {% if event.time %}<p class="bv-event-row__time">{{ event.time }}</p>{% endif %}
-      {% if event.description %}<p class="bv-event-row__desc">{{ event.description }}</p>{% endif %}
+      {% if event.description %}<p class="bv-event-row__desc">{{ event.description|e|regex_replace('/([\\w.%+-]+@[\\w.-]+\\.[A-Za-z]{2,})/', '<a href="mailto:$1">$1</a>')|raw }}</p>{% endif %}
     </div>
 
     {% if event.price or (event.cta and event.cta.label and event.cta.href) or event.capacity %}
