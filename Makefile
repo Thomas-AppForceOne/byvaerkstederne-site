@@ -53,7 +53,7 @@ create-admin: ## Create a super-admin account (interactive)
 	CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(1) }' 2>/dev/null) || { \
 		echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
 	}; \
-	docker exec -w /app/www/public "$$CONTAINER" bin/plugin login new-user \
+	docker exec -u abc -w /app/www/public "$$CONTAINER" bin/plugin login new-user \
 		-u "$$username" -e "$$email" -p "$$password" -N "$$fullname" -t admin -s enabled -P b -n || exit 1; \
 	echo ""; \
 	echo "  ✓ Super-admin account '$$username' created"

@@ -120,7 +120,7 @@ async function injectLongTitleProbeRow(page, titleText) {
     wrapper.className = 'bv-event-item';
     const row = document.createElement('article');
     row.className = 'bv-event-row';
-    row.setAttribute('data-group', 'kreativ');
+    row.setAttribute('data-group', 'krea');
     row.setAttribute('style', '--bv-accent: var(--tertiary);');
     row.setAttribute('data-test', 'gen-b-longtitle-probe');
     row.innerHTML = `

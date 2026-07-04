@@ -95,6 +95,14 @@ cp "$REPO_ROOT/deploy/restore.sh"         "$WORK_REPO/deploy/"
 cp "$REPO_ROOT/deploy/migrate.sh"         "$WORK_REPO/deploy/"
 cp "$REPO_ROOT/deploy/backup-paths.txt"   "$WORK_REPO/deploy/"
 cp -R "$REPO_ROOT/deploy/lib/." "$WORK_REPO/deploy/lib/"
+# Copy the real migrations/ (PHP bootstrap + vendor + any migration files)
+# so the WORK_REPO is a self-contained migrate.sh target: migrate.sh's
+# default BV_MIGRATE_BOOTSTRAP_DIR is $PROJECT_DIR/migrations, and under
+# the Docker-PHP fallback only $PROJECT_DIR + the data dir + a synthetic
+# BV_MIGRATIONS_DIR are mounted — so the bootstrap must live under
+# PROJECT_DIR. The migration-bump section below points BV_MIGRATIONS_DIR
+# at a throwaway dir, so this copy supplies bootstrap/vendor only.
+cp -R "$REPO_ROOT/migrations" "$WORK_REPO/migrations"
 chmod +x "$WORK_REPO/deploy/"*.sh
 
 # Markers + features files. data-version.yaml at TARGET_DV (no-bump).
@@ -730,6 +738,234 @@ if ls "$STORE"/*.tag >/dev/null 2>&1 \
 else
     report_fail "rollback-prod did not take a tagged pre-rollback backup"
     printf '%s\n' "$out" | tail -8 >&2
+fi
+
+# (c) --code-to <commit>: in LOCAL mode the code deploy is SKIPPED (step 2
+# logs "local mode: skipping --code-to deploy (<commit>)"), but the rest of
+# the flow still runs — pre-rollback backup, restore, summary. We assert the
+# local skip branch is taken (not the "no --code-to given" branch), the run
+# still restores successfully, and the summary records the requested commit.
+# Contrast: without --code-to the run logs the "leaving current prod code in
+# place" branch instead. (Previously --code-to was wholly uncovered.)
+echo "→ rollback-prod --code-to (local skip branch)"
+RB_TIER_CT="$TMP/rb-tier-codeto"; mkdir -p "$RB_TIER_CT/user/accounts"
+echo 'username: WILL-BE-WIPED' > "$RB_TIER_CT/user/accounts/ghost.yaml"
+CODE_TO_REF="deadbeef-rollback-codeto"
+set +e
+out="$(ROLLBACK_PROD_LOCAL_TIER_DIR="$RB_TIER_CT" \
+    "$ROLLBACK_WR" --to-backup "$RB_BACKUP" --code-to "$CODE_TO_REF" --yes-i-mean-it 2>&1)"
+rc=$?
+set -e
+if [ "$rc" -eq 0 ]; then
+    report_pass "rollback-prod --code-to local run exits 0"
+else
+    report_fail "rollback-prod --code-to local run exited $rc"
+    printf '%s\n' "$out" | tail -15 >&2
+fi
+# The local SKIP branch was taken (the deploy was NOT attempted), and the
+# "no --code-to given" branch was NOT taken.
+if printf '%s' "$out" | grep -q "local mode: skipping --code-to deploy ($CODE_TO_REF)" \
+    && ! printf '%s' "$out" | grep -q "no --code-to given"; then
+    report_pass "rollback-prod --code-to took the local skip branch (deploy not attempted)"
+else
+    report_fail "rollback-prod --code-to did not report the local skip branch"
+    printf '%s\n' "$out" | tail -10 >&2
+fi
+# The rest of the flow still ran: restore wiped+replaced the tier accounts.
+if [ -f "$RB_TIER_CT/user/accounts/alice.yaml" ] && [ ! -e "$RB_TIER_CT/user/accounts/ghost.yaml" ]; then
+    report_pass "rollback-prod --code-to still restored the backup (ghost wiped, alice present)"
+else
+    report_fail "rollback-prod --code-to did not restore the tier as expected"
+fi
+# The summary records the requested code commit (not "unchanged").
+if printf '%s' "$out" | grep -q "code deployed:        $CODE_TO_REF"; then
+    report_pass "rollback-prod --code-to summary records the requested commit"
+else
+    report_fail "rollback-prod --code-to summary did not record the commit"
+    printf '%s\n' "$out" | tail -8 >&2
+fi
+
+# ──────────────────────────────────────────────────────────────────────
+# MIGRATION BUMP (success + missing-migration abort) — PROD.
+#
+# Same mechanism as the staging probe: the TARGET data version is read by
+# promote-to-prod.sh from its PROJECT_DIR's config/www/user/data-version.yaml
+# (the WORK_REPO marker here), and a forward migration only runs when the
+# backup snapshot's SOURCE version is strictly below it. The rest of the
+# suite pins the WORK_REPO marker at 0.1.0 (no-bump), so we run these cases
+# LAST, temporarily bumping the marker to 0.2.0, committing it, and
+# regenerating a matching blessing. A synthetic BV_MIGRATIONS_DIR supplies
+# the 0.2.0 migration (success) or nothing (missing-migration abort); the
+# real migrations/ copied into WORK_REPO supplies the PHP bootstrap+vendor.
+# migrate.sh resolves PHP via system `php` else the Docker php:8.3-cli
+# fallback — fail loudly (not skip) if neither is present.
+# ──────────────────────────────────────────────────────────────────────
+echo "→ migration bump (success + missing-migration abort) [prod]"
+if command -v php >/dev/null 2>&1 || command -v docker >/dev/null 2>&1; then
+    MIG_TARGET_DV="0.2.0"
+    MIG_VDIR="v_${MIG_TARGET_DV//./_}"
+
+    git -C "$WORK_REPO" checkout -q release/v9.9.9
+    # Bump the WORK_REPO code marker to the migration target + commit it so
+    # the working tree stays clean (step 6's clean-checkpoint guard).
+    printf 'data_version: "%s"\n' "$MIG_TARGET_DV" > "$WORK_REPO/config/www/user/data-version.yaml"
+    # Keep prod features == staging so step 6's flag-sync is a no-op (HEAD
+    # stays put through the run, so the blessing stays valid).
+    cp "$WR_STAGING_FEATURES" "$WR_PROD_FEATURES"
+    git -C "$WORK_REPO" add -A
+    git -C "$WORK_REPO" commit -q -m "bump data_version to $MIG_TARGET_DV for migration test"
+    # Matching blessing for the bumped marker: data_version must == 0.2.0.
+    MIG_HEAD="$(git -C "$WORK_REPO" rev-parse --short HEAD)"
+    MIG_STAGING_SHA="$(sha256_of "$WR_STAGING_FEATURES")"
+    MIG_BLESS="$TMP/mig-bless.yaml"
+    cat > "$MIG_BLESS" <<EOF
+blessed_at: "2026-06-14T00:00:00Z"
+code_commit: "$MIG_HEAD"
+code_version: "0.1.0"
+code_build: "1"
+data_version: "$MIG_TARGET_DV"
+features_yaml_sha256: "$MIG_STAGING_SHA"
+source_backup_id: "prod-2026-06-14T00-00Z-v0.1.0-b1.tar.gz.age"
+EOF
+    MIG_PROD_NODRIFT="$TMP/mig-prod-nodrift.yaml"
+    cp "$WR_PROD_FEATURES" "$MIG_PROD_NODRIFT"
+
+    # Backup fixture stamped BELOW target so SOURCE=0.1.0 < TARGET=0.2.0.
+    MIG_FIXTURE="$TMP/mig-fixture-prod"
+    mkdir -p "$MIG_FIXTURE/user/accounts" "$MIG_FIXTURE/user/data/flex"
+    echo 'username: alice' > "$MIG_FIXTURE/user/accounts/alice.yaml"
+    echo 'task: hello'     > "$MIG_FIXTURE/user/data/flex/tasks.yaml"
+    echo '0.1.0' > "$MIG_FIXTURE/VERSION"
+    echo '247'   > "$MIG_FIXTURE/BUILD"
+    printf 'version: "0.1.0"\n' > "$MIG_FIXTURE/user/data-version.yaml"
+
+    # ── SUCCESS: synthetic dir holds a real 0.2.0 migration. ──
+    MIG_DIR_OK="$TMP/migdir-ok-prod"; mkdir -p "$MIG_DIR_OK"
+    cat > "$MIG_DIR_OK/0.2.0_wi6_prod_bump.php" <<'PHP'
+<?php
+// WI-6 fixture migration (prod): advance 0.1.0 → 0.2.0 + a sentinel so the
+// test can prove the migration actually RAN (vs being skipped).
+return function (string $dataDir): void {
+    file_put_contents(
+        $dataDir . '/user/data-version.yaml',
+        "data_version: \"0.2.0\"\nwi6_prod_migration_ran: \"yes\"\n"
+    );
+};
+PHP
+
+    TIER_MIG="$TMP/tier-mig-prod"; mkdir -p "$TIER_MIG"; make_tier "$TIER_MIG"
+    OUT_MIG="$TMP/promote-prod-mig.out"
+    set +e
+    out="$(BACKUP_FIXTURE_DIR="$MIG_FIXTURE" \
+        BV_MIGRATIONS_DIR="$MIG_DIR_OK" \
+        BACKUP_FAKE_NOW_EPOCH="1781137000" \
+        PROMOTE_PROD_LOCAL_TIER_DIR="$TIER_MIG" \
+        PROMOTE_PROD_LOCAL_BLESSING_FILE="$MIG_BLESS" \
+        PROMOTE_PROD_LOCAL_PROD_FEATURES="$MIG_PROD_NODRIFT" \
+        PROMOTE_PROD_LOG_FILE="$TMP/jrnl-mig.jsonl" \
+        "$PROMOTE_WR" --reason "WI-6 prod migration bump success path" 2>&1)"
+    rc=$?
+    set -e
+    printf '%s\n' "$out" > "$OUT_MIG"
+
+    if [ "$rc" -eq 0 ]; then
+        report_pass "prod migration bump: promote exits 0 (0.1.0 → $MIG_TARGET_DV)"
+    else
+        report_fail "prod migration bump: exited $rc (expected 0)"
+        printf '%s\n' "$out" | tail -40 >&2
+    fi
+    if printf '%s' "$out" | grep -q "migration required: 0.1.0 → $MIG_TARGET_DV" \
+        && printf '%s' "$out" | grep -q "applying 0.2.0_wi6_prod_bump.php"; then
+        report_pass "prod migration bump: a migration was applied (not short-circuited)"
+    else
+        report_fail "prod migration bump: migration was NOT applied (still on the skip branch?)"
+        printf '%s\n' "$out" | tail -25 >&2
+    fi
+    DV_MIG="$TIER_MIG/proddata/$MIG_VDIR/user/data-version.yaml"
+    if [ -f "$DV_MIG" ] && grep -q '"0.2.0"' "$DV_MIG" && grep -q 'wi6_prod_migration_ran' "$DV_MIG"; then
+        report_pass "prod migration bump: served data dir at $MIG_VDIR is at $MIG_TARGET_DV with the migration's sentinel"
+    else
+        report_fail "prod migration bump: served data-version.yaml missing/wrong at $MIG_VDIR"
+        [ -f "$DV_MIG" ] && cat "$DV_MIG" >&2
+    fi
+    CUR_MIG="$(readlink "$TIER_MIG/proddata/current" 2>/dev/null || echo "")"
+    if [ "$CUR_MIG" = "$MIG_VDIR" ]; then
+        report_pass "prod migration bump: proddata/current → $MIG_VDIR (migrated dir activated)"
+    else
+        report_fail "prod migration bump: proddata/current → '$CUR_MIG' (expected '$MIG_VDIR')"
+    fi
+
+    # ── FAILURE: required migration missing → abort BEFORE any tier push. ──
+    # Empty synthetic migrations dir → migrate.sh refuses ("no migration to
+    # 0.2.0 found", exit 5); promote aborts at step 5, BEFORE the step-7
+    # build+activate. We assert non-zero + the migrate diagnostic + that NONE
+    # of the push artifacts exist (no served $MIG_VDIR, current not repointed,
+    # no promotion-log line for THIS run). Removing the step-5 abort guard
+    # would let the run build $MIG_VDIR + repoint current — flipping these
+    # absence assertions to failures.
+    MIG_DIR_MISSING="$TMP/migdir-missing-prod"; mkdir -p "$MIG_DIR_MISSING"  # empty
+    # Refresh the blessing against the CURRENT HEAD (the success run's flag
+    # sync was a no-op since prod==staging, but be defensive).
+    MIG_HEAD="$(git -C "$WORK_REPO" rev-parse --short HEAD)"
+    MIG_STAGING_SHA="$(sha256_of "$WR_STAGING_FEATURES")"
+    cat > "$MIG_BLESS" <<EOF
+blessed_at: "2026-06-14T00:00:00Z"
+code_commit: "$MIG_HEAD"
+code_version: "0.1.0"
+code_build: "1"
+data_version: "$MIG_TARGET_DV"
+features_yaml_sha256: "$MIG_STAGING_SHA"
+source_backup_id: "prod-2026-06-14T00-00Z-v0.1.0-b1.tar.gz.age"
+EOF
+    cp "$WR_PROD_FEATURES" "$MIG_PROD_NODRIFT"
+
+    TIER_MIGF="$TMP/tier-mig-fail-prod"; mkdir -p "$TIER_MIGF"; make_tier "$TIER_MIGF"
+    JRNL_MIGF="$TMP/jrnl-mig-fail.jsonl"
+    set +e
+    out="$(BACKUP_FIXTURE_DIR="$MIG_FIXTURE" \
+        BV_MIGRATIONS_DIR="$MIG_DIR_MISSING" \
+        BACKUP_FAKE_NOW_EPOCH="1781137060" \
+        PROMOTE_PROD_LOCAL_TIER_DIR="$TIER_MIGF" \
+        PROMOTE_PROD_LOCAL_BLESSING_FILE="$MIG_BLESS" \
+        PROMOTE_PROD_LOCAL_PROD_FEATURES="$MIG_PROD_NODRIFT" \
+        PROMOTE_PROD_LOG_FILE="$JRNL_MIGF" \
+        "$PROMOTE_WR" --reason "WI-6 prod missing-migration abort path" 2>&1)"
+    rc=$?
+    set -e
+
+    if [ "$rc" -ne 0 ]; then
+        report_pass "prod missing-migration: promote exits non-zero ($rc)"
+    else
+        report_fail "prod missing-migration: promote unexpectedly exited 0"
+        printf '%s\n' "$out" | tail -30 >&2
+    fi
+    if printf '%s' "$out" | grep -q "no migration to $MIG_TARGET_DV found"; then
+        report_pass "prod missing-migration: migrate.sh 'no migration found' diagnostic present"
+    else
+        report_fail "prod missing-migration: expected migrate.sh 'no migration found' diagnostic, not seen"
+        printf '%s\n' "$out" | tail -25 >&2
+    fi
+    # ABORT-BEFORE-PUSH proof.
+    if [ ! -d "$TIER_MIGF/proddata/$MIG_VDIR" ]; then
+        report_pass "prod missing-migration: aborted BEFORE build — no served $MIG_VDIR dir"
+    else
+        report_fail "prod missing-migration: served $MIG_VDIR dir was built despite the abort"
+    fi
+    CUR_MIGF="$(readlink "$TIER_MIGF/proddata/current" 2>/dev/null || echo "")"
+    if [ "$CUR_MIGF" = "v0" ]; then
+        report_pass "prod missing-migration: proddata/current NOT repointed (still → v0)"
+    else
+        report_fail "prod missing-migration: current was repointed to '$CUR_MIGF' despite the abort"
+    fi
+    # No promotion-log entry for the aborted run (step 5 < the journal append).
+    if [ ! -f "$JRNL_MIGF" ] || ! grep -q "WI-6 prod missing-migration abort path" "$JRNL_MIGF" 2>/dev/null; then
+        report_pass "prod missing-migration: no promotion-log entry for the aborted run"
+    else
+        report_fail "prod missing-migration: a promotion-log entry was written despite the abort"
+    fi
+else
+    echo "FATAL: prod migration-bump cases require a PHP toolchain (system php or Docker) and neither is present" >&2
+    report_fail "prod migration-bump cases could not run — no PHP toolchain (install php or Docker; do not silently skip)"
 fi
 
 # ─── Summary ──────────────────────────────────────────────────────────

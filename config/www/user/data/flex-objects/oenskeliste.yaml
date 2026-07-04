@@ -12,7 +12,7 @@ wish002:
   published: true
   name: "Nye pensler til Kreativ Fitness"
   description: "Sæt med flad- og rundpensler i forskellige størrelser"
-  group: kreativ
+  group: krea
   priority: high
   estimated_cost: "300 kr"
   fulfilled: false
@@ -32,7 +32,7 @@ wish006:
   published: true
   name: "Plantekasser i lærketræ"
   description: "4 stk store kasser til byhaven"
-  group: groenne
+  group: groent
   priority: high
   estimated_cost: "1.200 kr"
   fulfilled: false
@@ -42,7 +42,7 @@ wish007:
   published: true
   name: "Kompostbeholder"
   description: "Stor udendørs kompostbeholder"
-  group: groenne
+  group: groent
   priority: medium
   estimated_cost: "600 kr"
   fulfilled: false

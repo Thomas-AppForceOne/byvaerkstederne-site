@@ -1,4 +1,19 @@
 {% set h = page.header %}
+{# Pull from Flex Objects if available, fall back to page header. Collect the
+   visible members first so the whole section (heading included) disappears
+   when there is nobody to show. #}
+{% set flex = grav.get('flex_objects') %}{% set flex_dir = flex ? flex.directory('teammedlemmer') : null %}{% set flex_team = flex_dir ? flex_dir.collection : null %}
+{% set visible_members = [] %}
+{% if flex_team is not null %}
+    {% for member in flex_team %}
+        {% if member.published and member.show_on_contact %}
+            {% set visible_members = visible_members|merge([member]) %}
+        {% endif %}
+    {% endfor %}
+{% else %}
+    {% set visible_members = h.members ?? [] %}
+{% endif %}
+{% if visible_members|length > 0 %}
 <section class="bv-section--sm">
     <div class="bv-container">
         {% if h.section_title %}
@@ -6,51 +21,26 @@
         {% endif %}
 
         <div style="display: flex; flex-direction: column; gap: var(--space-6);">
-            {# Pull from Flex Objects if available, fall back to page header #}
-            {% set flex = grav.get('flex_objects') %}{% set flex_dir = flex ? flex.directory('teammedlemmer') : null %}{% set flex_team = flex_dir ? flex_dir.collection : null %}
-            {% if flex_team is not null %}
-                {% for member in flex_team %}
-                    {% if member.published and member.show_on_contact %}
-                    <div class="bv-team-card">
-                        <div class="bv-team-card__photo">
-                            {% if member.photo %}
-                            <img src="{{ member.photo }}" alt="{{ member.name }}"/>
-                            {% endif %}
-                        </div>
-                        <div>
-                            <div class="bv-team-card__name">{{ member.name }}</div>
-                            <div class="bv-team-card__role">{{ member.role }}</div>
-                            {% if member.email %}
-                            <div class="bv-team-card__email">
-                                <span class="material-symbols-outlined" style="font-size: 0.875rem;">mail</span>
-                                <span>{{ member.email }}</span>
-                            </div>
-                            {% endif %}
-                        </div>
+            {% for member in visible_members %}
+            <div class="bv-team-card">
+                <div class="bv-team-card__photo">
+                    {% if member.photo %}
+                    <img src="{{ member.photo }}" alt="{{ member.name }}"/>
+                    {% endif %}
+                </div>
+                <div>
+                    <div class="bv-team-card__name">{{ member.name }}</div>
+                    <div class="bv-team-card__role">{{ member.role }}</div>
+                    {% if member.email %}
+                    <div class="bv-team-card__email">
+                        <span class="material-symbols-outlined" style="font-size: 0.875rem;">mail</span>
+                        <span>{{ member.email }}</span>
                     </div>
                     {% endif %}
-                {% endfor %}
-            {% else %}
-                {% for member in h.members %}
-                <div class="bv-team-card">
-                    <div class="bv-team-card__photo">
-                        {% if member.photo %}
-                        <img src="{{ member.photo }}" alt="{{ member.name }}"/>
-                        {% endif %}
-                    </div>
-                    <div>
-                        <div class="bv-team-card__name">{{ member.name }}</div>
-                        <div class="bv-team-card__role">{{ member.role }}</div>
-                        {% if member.email %}
-                        <div class="bv-team-card__email">
-                            <span class="material-symbols-outlined" style="font-size: 0.875rem;">mail</span>
-                            <span>{{ member.email }}</span>
-                        </div>
-                        {% endif %}
-                    </div>
                 </div>
-                {% endfor %}
-            {% endif %}
+            </div>
+            {% endfor %}
         </div>
     </div>
 </section>
+{% endif %}

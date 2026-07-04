@@ -129,7 +129,9 @@ function ensureAccount(account, password) {
   assertDockerAndGravRunning();
 
   const args = [
-    'exec', '-w', '/app/www/public', gravContainer(),
+    // -u abc: running PHP as root leaves root-owned cache/account files the
+    // web user can't overwrite, which 500s the whole site (admin included).
+    'exec', '-u', 'abc', '-w', '/app/www/public', gravContainer(),
     'bin/plugin', 'login', 'new-user',
     '-u', a.username,
     '-p', password,
@@ -261,7 +263,9 @@ function grantAdminSuperInContainer(account) {
     `  awk '1; /^\\s*admin:\\s*$/ && !d { print "    super: true"; d=1 }' "${yamlPath}" > "${yamlPath}.tmp" && mv "${yamlPath}.tmp" "${yamlPath}"`,
     `fi`,
   ].join('\n');
-  execFileSync('docker', ['exec', gravContainer(), 'sh', '-c', script], {
+  // -u abc: the awk|mv branch rewrites the account YAML; as root it would
+  // leave a root-owned file Grav's web user can no longer update.
+  execFileSync('docker', ['exec', '-u', 'abc', gravContainer(), 'sh', '-c', script], {
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 10_000,
   });

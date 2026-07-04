@@ -62,11 +62,20 @@ async function browserLogin(page, username, password) {
   await form.locator('[name="username"]').fill(username);
   await form.locator('[name="password"]').fill(password);
   await form.locator('[type="submit"]').click();
-  // Success redirects away from /login; failure re-renders /login. Wait for
-  // either, with a bounded timeout (don't throw on failure — callers assert).
-  await page
-    .waitForURL((url) => !url.pathname.includes('/login'), { timeout: 8000 })
-    .catch(() => {});
+  // Success redirects away from /login; failure re-renders /login with a
+  // flash message. Wait for whichever comes first — the flash auto-dismisses
+  // after 5s (see auth-surface.js), so waiting the full URL timeout on a
+  // failed login would capture the page AFTER the message is gone.
+  await Promise.race([
+    page
+      .waitForURL((url) => !url.pathname.includes('/login'), { timeout: 8000 })
+      .catch(() => {}),
+    page
+      .locator('.bv-message')
+      .first()
+      .waitFor({ state: 'visible', timeout: 8000 })
+      .catch(() => {}),
+  ]);
   return (await page.content()) || '';
 }
 
@@ -97,6 +106,9 @@ test.describe('Login (WI-6)', () => {
   });
 
   test('failure: repeated wrong passwords hit the rate limiter', async ({ page }) => {
+    // Worst case every attempt misses the flash race and burns browserLogin's
+    // full 8s bound; 8 attempts would collide with the 60s default timeout.
+    test.setTimeout(120_000);
     // Use a throwaway username for the attempts. The limiter is IP-keyed (see
     // resetLoginRateLimit above), so this doesn't spare pw-test-user on its
     // own — the beforeEach reset + serial mode is what keeps the sibling

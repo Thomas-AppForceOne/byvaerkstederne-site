@@ -55,7 +55,7 @@ function clearGravCache() {
   // would fail an otherwise-passing test.
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
-      execSync(`docker exec -w /app/www/public ${CONTAINER} bin/grav clearcache`, {
+      execSync(`docker exec -u abc -w /app/www/public ${CONTAINER} bin/grav clearcache`, {
         stdio: ['ignore', 'pipe', 'pipe'],
         timeout: 30_000,
       });
@@ -98,7 +98,7 @@ function seedAdminIfPossible() {
     execFileSync(
       'docker',
       [
-        'exec', '-w', '/app/www/public', CONTAINER,
+        'exec', '-u', 'abc', '-w', '/app/www/public', CONTAINER,
         'bin/plugin', 'login', 'new-user',
         '-u', 'pw-test-admin',
         '-p', adminPw,
@@ -239,7 +239,7 @@ test.describe('feature-flags: internal profile renders flagged pages', () => {
     expect(resp.status()).toBe(200);
     const body = await resp.text();
     const gridMatch = body.match(
-      /<div class="bv-workgroups"[^>]*>([\s\S]*?)<\/div>\s*<\/div>\s*<\/section>/
+      /<div class="bv-workgroups[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>\s*<\/section>/
     );
     expect(gridMatch, 'expected workgroups grid container in response').not.toBeNull();
     const grid = gridMatch[1];

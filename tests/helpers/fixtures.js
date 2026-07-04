@@ -115,7 +115,7 @@ function appendIfMissing(path, key, yaml) {
   if (yamlContains(path, `^${key}:`)) return { seeded: false };
   execFileSync(
     'docker',
-    ['exec', '-i', gravContainer(), 'sh', '-c', `cat >> ${path}`],
+    ['exec', '-i', '-u', 'abc', gravContainer(), 'sh', '-c', `cat >> ${path}`],
     { input: yaml, stdio: ['pipe', 'pipe', 'pipe'], timeout: 10_000 }
   );
   return { seeded: true };
@@ -131,11 +131,13 @@ function appendIfMissing(path, key, yaml) {
  * page then never renders the release_nonce, failing the admin smoke test).
  * Clearing the cache once after seeding makes the seed visible to every read
  * path. `-w /app/www/public` is mandatory (the image's default WORKDIR lacks
- * bin/grav); `clearcache` is the single-word form (no hyphen).
+ * bin/grav); `clearcache` is the single-word form (no hyphen); `-u abc` is
+ * mandatory too — as root it recreates cache dirs the web user can't write,
+ * which 500s the whole site on the next request.
  */
 function clearGravCache() {
   try {
-    execFileSync('docker', ['exec', '-w', '/app/www/public', gravContainer(), 'bin/grav', 'clearcache'], {
+    execFileSync('docker', ['exec', '-u', 'abc', '-w', '/app/www/public', gravContainer(), 'bin/grav', 'clearcache'], {
       stdio: ['ignore', 'ignore', 'ignore'],
       timeout: 30_000,
     });
@@ -164,7 +166,8 @@ function removeFixture(path, key) {
   // untrusted input.
   const script = `sed -i '/^${key}:$/,/^[a-zA-Z_]/{ /^${key}:$/d; /^[a-zA-Z_]/!d; }' ${path}`;
   try {
-    execFileSync('docker', ['exec', gravContainer(), 'sh', '-c', script], {
+    // -u abc: sed -i rewrites the YAML; as root it leaves a root-owned file.
+    execFileSync('docker', ['exec', '-u', 'abc', gravContainer(), 'sh', '-c', script], {
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 10_000,
     });

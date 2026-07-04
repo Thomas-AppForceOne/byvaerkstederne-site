@@ -187,7 +187,9 @@ test.describe('Roadmap — authenticated', () => {
         + "echo $g['twig']->twig()->createTemplate(getenv('TPL'))->render([]);";
       const out = execFileSync(
         'docker',
-        ['exec', '-e', `TPL=${tpl}`, '-w', '/app/www/public', GRAV_CONTAINER, 'php', '-r', php],
+        // -u abc: this bootstrap writes doctrine/twig cache entries; as root
+        // they become unwritable for the web user and 500 the whole site.
+        ['exec', '-u', 'abc', '-e', `TPL=${tpl}`, '-w', '/app/www/public', GRAV_CONTAINER, 'php', '-r', php],
         { encoding: 'utf8', timeout: 30_000 }
       ).trim();
       expect(['bool-true', 'bool-false']).toContain(out);

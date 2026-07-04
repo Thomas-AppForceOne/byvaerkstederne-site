@@ -56,7 +56,7 @@ function seedWorktreeAdmin() {
     execFileSync(
       'docker',
       [
-        'exec', '-w', '/app/www/public', container,
+        'exec', '-u', 'abc', '-w', '/app/www/public', container,
         'bin/plugin', 'login', 'new-user',
         '-u', 'pw-test-admin',
         '-p', adminPw,

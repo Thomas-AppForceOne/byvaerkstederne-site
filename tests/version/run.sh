@@ -295,7 +295,7 @@ site_read_json() {
   # VERSION/BUILD at /config/www/{VERSION,BUILD}; the plugin's
   # resolveVersionRoot() resolves to that path automatically via the
   # realpath(__DIR__) fallback (see ReadCommand::resolveVersionRoot).
-  docker exec -w /app/www/public "$GRAV_CONTAINER_NAME" \
+  docker exec -u abc -w /app/www/public "$GRAV_CONTAINER_NAME" \
     bin/plugin site-version read 2>/dev/null
 }
 

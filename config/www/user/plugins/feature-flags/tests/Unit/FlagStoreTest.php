@@ -71,6 +71,34 @@ final class FlagStoreTest extends TestCase
         $this->assertSame([], $logger->warnings(), '"false" is a valid value; no warning.');
     }
 
+    public function testIsDisabledIsExactInverseOfIsEnabled(): void
+    {
+        $logger = new ArrayLogger();
+        // enabled, explicitly-disabled, and unconfigured flags all in one store.
+        $store = new FlagStore(['roadmap' => 'true', 'press_page' => 'false'], $logger);
+
+        // Enabled flag: isDisabled is the inverse of isEnabled.
+        $this->assertTrue($store->isEnabled(FeatureFlag::Roadmap));
+        $this->assertFalse($store->isDisabled(FeatureFlag::Roadmap));
+
+        // Explicitly-disabled flag.
+        $this->assertFalse($store->isEnabled(FeatureFlag::PressPage));
+        $this->assertTrue($store->isDisabled(FeatureFlag::PressPage));
+
+        // Unconfigured flag: fail-closed disabled.
+        $this->assertFalse($store->isEnabled(FeatureFlag::ContactPage));
+        $this->assertTrue($store->isDisabled(FeatureFlag::ContactPage));
+
+        // Exhaustive: isDisabled === !isEnabled for every catalogue flag.
+        foreach (FeatureFlag::cases() as $case) {
+            $this->assertSame(
+                !$store->isEnabled($case),
+                $store->isDisabled($case),
+                "isDisabled must be the exact inverse of isEnabled for `{$case->value}`.",
+            );
+        }
+    }
+
     // -------- Resolution table: any other string --------
 
     /** @return array<string,array{0:mixed}> */
