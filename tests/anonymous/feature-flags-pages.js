@@ -239,7 +239,7 @@ test.describe('feature-flags: internal profile renders flagged pages', () => {
     expect(resp.status()).toBe(200);
     const body = await resp.text();
     const gridMatch = body.match(
-      /<div class="bv-workgroups"[^>]*>([\s\S]*?)<\/div>\s*<\/div>\s*<\/section>/
+      /<div class="bv-workgroups[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>\s*<\/section>/
     );
     expect(gridMatch, 'expected workgroups grid container in response').not.toBeNull();
     const grid = gridMatch[1];
