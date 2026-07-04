@@ -42,6 +42,12 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y age
 
+      - name: Install migrations dependencies
+        # migrations/vendor/ is gitignored; run-migration.php dies with
+        # "FATAL: migrations/vendor/autoload.php missing" without it, which
+        # fails the WI-6 migration-bump probes in tests/deploy/promote-to-staging.sh.
+        run: composer install --no-interaction --no-progress --working-dir=migrations
+
       - name: Syntax-check deploy scripts (bash -n)
         # Parse every deploy/test script in full. `make test-deploy` exercises
         # behaviour, but its --dry-run paths can exit BEFORE a syntactically
