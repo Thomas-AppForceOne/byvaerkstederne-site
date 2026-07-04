@@ -4,14 +4,6 @@ form_title: Send en hilsen
 submit_text: Tilmeld mig
 ---
 
-<div class="team-cards">
-    <div class="card">
-        <h3>Sofie Holm</h3>
-        <p><strong>Frivilligkoordinator</strong></p>
-        <p><a href="mailto:sofie@byvaerkstederne.dk">sofie@byvaerkstederne.dk</a></p>
-    </div>
-</div>
-
 ## Find os
 
 Byværkstederne i Hundested

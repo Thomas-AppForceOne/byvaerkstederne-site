@@ -1,11 +1,4 @@
-member002:
-  published: true
-  name: Sofie Holm
-  role: Frivilligkoordinator
-  group: alle
-  email: sofie@byvaerkstederne.dk
-  phone: ""
-  photo: ""
-  bio: ""
-  show_on_contact: true
-  sort_order: 2
+# Team members shown on /kontakt (flex-objects: teammedlemmer).
+# Empty until real tovholdere are added — the team_cards section on /kontakt
+# hides itself when no member has published + show_on_contact.
+{}
