@@ -77,7 +77,7 @@ function clearGravCache() {
   // than a spurious failure — profiles are selected by Host header regardless.
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
-      execSync(`docker exec -w /app/www/public ${CONTAINER} bin/grav clearcache`, {
+      execSync(`docker exec -u abc -w /app/www/public ${CONTAINER} bin/grav clearcache`, {
         stdio: ['ignore', 'pipe', 'pipe'],
         timeout: 30_000,
       });
@@ -125,7 +125,7 @@ function seedWorktreeAdminIfPossible() {
     execFileSync(
       'docker',
       [
-        'exec', '-w', '/app/www/public', CONTAINER,
+        'exec', '-u', 'abc', '-w', '/app/www/public', CONTAINER,
         'bin/plugin', 'login', 'newuser',
         '-u', 'pw-test-admin',
         '-p', adminPw,
@@ -691,7 +691,7 @@ test.describe('feature-flags Sprint-4: single-flag cache-flip restoration', () =
 
     // Cache MUST be cleared via `bin/grav clearcache` (not "clear-cache")
     // with `-w /app/www/public` on the linuxserver/grav image.
-    execSync(`docker exec -w /app/www/public ${CONTAINER} bin/grav clearcache`, {
+    execSync(`docker exec -u abc -w /app/www/public ${CONTAINER} bin/grav clearcache`, {
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 30_000,
     });
@@ -710,7 +710,7 @@ test.describe('feature-flags Sprint-4: single-flag cache-flip restoration', () =
     // Restore explicitly so the assertion below proves restoration works,
     // rather than merely relying on afterAll.
     fs.writeFileSync(INTERNAL_YAML, originalYaml, 'utf8');
-    execSync(`docker exec -w /app/www/public ${CONTAINER} bin/grav clearcache`, {
+    execSync(`docker exec -u abc -w /app/www/public ${CONTAINER} bin/grav clearcache`, {
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 30_000,
     });

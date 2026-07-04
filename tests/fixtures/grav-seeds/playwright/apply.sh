@@ -50,7 +50,7 @@ provision() {
   fi
 
   echo "creating: $user"
-  docker exec -w "$GRAV_ROOT" "$CONTAINER" bin/plugin login newuser \
+  docker exec -u abc -w "$GRAV_ROOT" "$CONTAINER" bin/plugin login newuser \
     -u "$user" \
     -p "$pw" \
     -e "$email" \

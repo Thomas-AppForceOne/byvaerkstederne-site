@@ -56,7 +56,7 @@ function clearGravCache() {
   // would fail an otherwise-passing test.
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
-      execSync(`docker exec -w /app/www/public ${CONTAINER} bin/grav clearcache`, {
+      execSync(`docker exec -u abc -w /app/www/public ${CONTAINER} bin/grav clearcache`, {
         stdio: ['ignore', 'pipe', 'pipe'],
         timeout: 30_000,
       });
@@ -98,7 +98,7 @@ function ensureLocalAccountSafe(username, password, opts) {
     execFileSync(
       'docker',
       [
-        'exec', '-w', '/app/www/public', CONTAINER,
+        'exec', '-u', 'abc', '-w', '/app/www/public', CONTAINER,
         'bin/plugin', 'login', 'new-user',
         '-u', username,
         '-p', password,
