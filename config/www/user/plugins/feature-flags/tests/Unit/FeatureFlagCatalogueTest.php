@@ -62,6 +62,7 @@ final class FeatureFlagCatalogueTest extends TestCase
         'gear_donation',
         'social_media_links',
         'makerspace_meeting_link',
+        'event_management',
     ];
 
     /** Absolute path to `config/www/user/env/`. */
