@@ -8,7 +8,7 @@ Provisions the three test accounts that the Playwright suite under `tests/` need
 |----------------------|-----------------------|---------------------------------|------------------------------|
 | `pw-test-user`       | Member                | `site` login                    | `$TEST_PASSWORD`             |
 | `pw-test-admin`      | Admin                 | `site` + admin                  | `$TEST_ADMIN_PASSWORD`       |
-| `pw-test-organizer`  | Member + `organizers` | `site` login + `admin.events.*` | `$TEST_ORGANIZER_PASSWORD`   |
+| `pw-test-org`  | Member + `organizers` | `site` login + `admin.events.*` | `$TEST_ORGANIZER_PASSWORD`   |
 
 All accounts get emails at `@example.invalid` (RFC 2606) so they can never collide with real addresses.
 

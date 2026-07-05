@@ -99,8 +99,8 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
 
     // Server-managed stamps on the stored object; owner from the session.
     const block = eventBlock(key) || '';
-    expect(block).toContain('owner: pw-test-organizer');
-    expect(block).toContain('created_by: pw-test-organizer');
+    expect(block).toContain('owner: pw-test-org');
+    expect(block).toContain('created_by: pw-test-org');
     expect(block).toContain('published: true');
     expect(block).toContain('archived: false');
 
@@ -109,7 +109,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     expect(auditAfter.startsWith(auditBefore)).toBe(true);
     const newLines = auditAfter.slice(auditBefore.length).trim().split('\n');
     const record = JSON.parse(newLines[newLines.length - 1]);
-    expect(record).toMatchObject({ actor: 'pw-test-organizer', action: 'create', key });
+    expect(record).toMatchObject({ actor: 'pw-test-org', action: 'create', key });
 
     // Dashboard shows it with a success flash and 'publiceret' chip.
     await page.goto('/begivenheder/mine');
@@ -173,8 +173,8 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
 
     const block = eventBlock(key) || '';
     expect(block).toContain(`title: '${newTitle}'`);
-    expect(block).toContain('owner: pw-test-organizer');
-    expect(block).toContain('updated_by: pw-test-organizer');
+    expect(block).toContain('owner: pw-test-org');
+    expect(block).toContain('updated_by: pw-test-org');
     // Flash rendered through the shared component.
     await expect(page.locator('.bv-message--success')).toContainText('opdateret');
   });

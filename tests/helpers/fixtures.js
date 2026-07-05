@@ -100,7 +100,7 @@ const UNPROMOTED_BUG_YAML = `${UNPROMOTED_BUG_REPORT_ID}:
 `;
 
 // Event fixtures (frontend event CRUD). The draft and archived events are
-// owned by pw-test-organizer (read-visibility + restore tests); the foreign
+// owned by pw-test-org (read-visibility + restore tests); the foreign
 // event is owned by a name that matches no test account, so organizer
 // mutations against it must 403 (per-object authz negative tests).
 const DRAFT_EVENT_YAML = `${DRAFT_EVENT_ID}:
@@ -119,10 +119,10 @@ const DRAFT_EVENT_YAML = `${DRAFT_EVENT_ID}:
   button_style: primary
   featured: false
   featured_tag: ''
-  owner: pw-test-organizer
-  created_by: pw-test-organizer
+  owner: pw-test-org
+  created_by: pw-test-org
   created_at: '2026-06-01T00:00:00Z'
-  updated_by: pw-test-organizer
+  updated_by: pw-test-org
   updated_at: '2026-06-01T00:00:00Z'
   archived: false
 `;
@@ -143,10 +143,10 @@ const ARCHIVED_EVENT_YAML = `${ARCHIVED_EVENT_ID}:
   button_style: secondary
   featured: false
   featured_tag: ''
-  owner: pw-test-organizer
-  created_by: pw-test-organizer
+  owner: pw-test-org
+  created_by: pw-test-org
   created_at: '2026-06-01T00:00:00Z'
-  updated_by: pw-test-organizer
+  updated_by: pw-test-org
   updated_at: '2026-06-01T00:00:00Z'
   archived: true
 `;

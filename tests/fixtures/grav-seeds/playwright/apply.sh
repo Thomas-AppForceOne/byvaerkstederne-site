@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Seed: playwright — provisions pw-test-user, pw-test-admin and
-# pw-test-organizer against a running Grav container. Idempotent.
+# pw-test-org against a running Grav container. Idempotent.
 #
 # Usage: apply.sh [container-name]   # defaults to 'grav'
 #
@@ -70,7 +70,7 @@ provision() {
 
 provision pw-test-user      "$TEST_PASSWORD"           pw-test-user@example.invalid      "Playwright Test User"      Member s
 provision pw-test-admin     "$TEST_ADMIN_PASSWORD"     pw-test-admin@example.invalid     "Playwright Test Admin"     Admin  b
-provision pw-test-organizer "$TEST_ORGANIZER_PASSWORD" pw-test-organizer@example.invalid "Playwright Test Organizer" Member s
+provision pw-test-org "$TEST_ORGANIZER_PASSWORD" pw-test-org@example.invalid "Playwright Test Organizer" Member s
 
 # (a) groups.yaml must resolve in the test tier or the organizers access tree
 # never applies on login — fail loud rather than let the authz suite run
@@ -87,6 +87,6 @@ fi
 # (c) Patch the organizer account into the group (idempotent; the newuser CLI
 # has no --groups flag).
 docker exec -u abc "$CONTAINER" sh -c \
-  'grep -q "^groups:" /config/www/user/accounts/pw-test-organizer.yaml || printf "groups:\n  - organizers\n" >> /config/www/user/accounts/pw-test-organizer.yaml'
+  'grep -q "^groups:" /config/www/user/accounts/pw-test-org.yaml || printf "groups:\n  - organizers\n" >> /config/www/user/accounts/pw-test-org.yaml'
 
 echo "done."

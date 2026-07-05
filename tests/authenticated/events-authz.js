@@ -12,7 +12,7 @@
  *
  * Fixtures (global-setup): ev_fixture_foreign (owner that matches no test
  * account) and ev_fixture_draft/ev_fixture_archived (owner
- * pw-test-organizer).
+ * pw-test-org).
  */
 
 const fs = require('fs');
@@ -178,8 +178,8 @@ test.describe('Events — organizer forced browsing (per-object authz)', () => {
     });
     expect(response.status()).toBe(303);
     const block = readEventsFile().match(/^ev_fixture_draft:\n((?:[ ].*\n?)*)/m)?.[1] || '';
-    expect(block).toContain('owner: pw-test-organizer');
-    expect(block).toContain('created_by: pw-test-organizer');
+    expect(block).toContain('owner: pw-test-org');
+    expect(block).toContain('created_by: pw-test-org');
     expect(block).not.toContain('attacker');
   });
 

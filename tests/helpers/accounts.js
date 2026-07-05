@@ -60,8 +60,8 @@ const TEST_ADMIN = Object.freeze({
 // to the `organizers` group, conferring admin.events.* — but never
 // admin.login. Password env var: TEST_ORGANIZER_PASSWORD.
 const TEST_ORGANIZER = Object.freeze({
-  username: 'pw-test-organizer',
-  email: 'pw-test-organizer@example.invalid',
+  username: 'pw-test-org',
+  email: 'pw-test-org@example.invalid',
   fullName: 'Playwright Test Organizer',
   isAdmin: false,
   groups: Object.freeze(['organizers']),

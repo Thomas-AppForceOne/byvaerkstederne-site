@@ -56,7 +56,7 @@ module.exports = async function globalTeardown() {
   try {
     removeAccount(TEST_ORGANIZER);
   } catch (err) {
-    console.warn(`globalTeardown: removeAccount(pw-test-organizer) failed: ${/** @type {any} */ (err).message}`);
+    console.warn(`globalTeardown: removeAccount(pw-test-org) failed: ${/** @type {any} */ (err).message}`);
   }
   try { removeLockedRoadmapItem(); } catch (_) { /* non-fatal */ }
   try { removeReleasableRoadmapItem(); } catch (_) { /* non-fatal */ }
