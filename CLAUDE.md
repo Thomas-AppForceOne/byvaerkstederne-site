@@ -10,6 +10,30 @@ Byværkstederne is a Grav CMS site (PHP 8 + Twig templates + vanilla JS) running
 
 ---
 
+## Language conventions — English code, Danish UI
+
+The site's audience is Danish; the codebase is worked on in English. The rule for every change, whether made directly, via `/gan`, or by a sub-agent:
+
+**English — everything a developer reads:**
+
+- Variable, function, class, and method names; PHP namespaces
+- Plugin names, config keys, YAML frontmatter *field* names, Flex type names
+- Twig template filenames and block names, CSS class names, JS identifiers
+- Code comments, commit messages, branch names, PR titles/bodies
+- Specs, ADRs, READMEs, and all other repo documentation
+
+**Danish — everything a site visitor reads:**
+
+- Page content (markdown bodies, frontmatter *values* like `title:`)
+- Page folder names / URL slugs (`03.vaerksteder`, `04.kontakt`) — slugs are user-facing URLs on a Danish-only site
+- Form labels, validation messages, emails, and any string rendered in the UI
+
+**The boundary case — templates bound to Danish slugs:** Grav picks a page's template from its `.md` filename, so a Danish page file like `foreslaa-feature.md` pulls in `foreslaa-feature.html.twig`. When creating a new page whose slug is Danish, set `template:` explicitly in the page frontmatter to an English template name instead of letting the Danish slug propagate into the theme. Existing Danish-named templates stay as-is until touched for other reasons.
+
+When reviewing a PR, flag new Danish identifiers in code or new English strings in the UI as changes requiring fixes before merge.
+
+---
+
 ## Repository structure
 
 | Folder | Contents |
