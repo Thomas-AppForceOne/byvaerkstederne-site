@@ -4,6 +4,8 @@ Status: Planned
 Owner: thomas@appforceone.dk
 Scope: Let approved non-admin members ("arrangører") create, read, update and delete events from the public site through a themed UI, instead of the Grav admin panel. Server-side enforcement is the real boundary. Complete CRUD is the release gate — no partial ship.
 
+**Language note (per CLAUDE.md — Language conventions):** every *new* developer-facing identifier in this spec is English — the `organizers` group, the `event-manager` plugin and its classes, `admin.events.*`, the `event_management` flag, the `events-audit.jsonl` log, blueprint field names. Danish appears only where visitors read it: URL slugs (`/begivenheder/...`), form labels ("Synlig"), flash messages, status chips, and the group's `readableName`. In prose, "arrangør" is the Danish UI label for the organizer role; its code-side name is `organizers`. One grandfathered exception: the Flex directory key `begivenheder` predates the rule and must be extended, not replaced (§0). New pages with Danish slugs set `template:` explicitly in frontmatter to an English template name.
+
 ---
 
 ## 0. System facts & constraints (authoritative)
@@ -13,10 +15,10 @@ These are the current state of the system, established by inspection, and the gr
 | System fact | Binding implication |
 |---|---|
 | Events are an **existing** Flex Directory `begivenheder` — blueprint `user/blueprints/flex-objects/begivenheder.yaml`, data `user/data/flex-objects/begivenheder.yaml`, registered in `user/config/plugins/flex-objects.yaml`; **16 live events** (`event001`–`event016`, verified 2026-06-18 — re-confirm the count at implementation time, since live-tier data drifts off-git). | Extend the existing `begivenheder` directory. Do **not** create a new directory. All field and permission work is additive to `begivenheder`. |
-| There is **no** `user/config/groups.yaml`. The only account (`bob`) carries an inline `access:` tree granting `admin.super`. | Create `user/config/groups.yaml` with an `arrangoerer` group; accounts join it via a `groups:` list (§5). |
+| There is **no** `user/config/groups.yaml`. The only account (`bob`) carries an inline `access:` tree granting `admin.super`. | Create `user/config/groups.yaml` with an `organizers` group; accounts join it via a `groups:` list (§5). |
 | The site's own plugins (roadmap, bug-report, feature-suggestion) mutate Flex data by writing the data YAML directly (atomic `flock`), not via the Flex API. The `flex-cache-bust` plugin invalidates render cache on `onFlexAfterSave`/`onFlexAfterDelete` — but in this codebase those events are only demonstrably fired by the admin `AdminController`; whether a *frontend* Flex save emits them in 1.3.8 is unverified. | Mutate via the **Flex API** (§7–§8) for blueprint validation and the supported write path; **additionally bust the render cache explicitly** after every mutation (§8) rather than relying on `onFlexAfterSave/Delete` firing frontend-side. A raw-YAML write that bypasses both validation and cache-busting is not permitted. |
 | On a deployed tier the events data lives in the **non-versioned `<tier>data/` dir** (live state, preserved across deploys, not a git repo). Git history covers only the repo's seed copy, never live tier mutations. | Git history is **not** a live-audit mechanism. Explicit actor stamping + an append-only audit log is **required** (§10). |
-| The admin plugin has **no `user/config/plugins/admin.yaml` override** (the bundled plugin default is `enabled: true`, so confirm the panel's actual on/off state at implementation time). Either way, only `bob` (super) can reach it — admin access is gated on `admin.login`. | Events are edited today only by a super, directly in the data YAML / via git. This feature is frontend-only; arrangører never receive admin-panel access, because the `arrangoerer` group grants `admin.events.*` but **not** `admin.login`. |
+| The admin plugin has **no `user/config/plugins/admin.yaml` override** (the bundled plugin default is `enabled: true`, so confirm the panel's actual on/off state at implementation time). Either way, only `bob` (super) can reach it — admin access is gated on `admin.login`. | Events are edited today only by a super, directly in the data YAML / via git. This feature is frontend-only; arrangører never receive admin-panel access, because the `organizers` group grants `admin.events.*` but **not** `admin.login`. |
 | The `published` field **defaults to `1`** in the blueprint, which runs `validation: loose`. | The create form exposes the `published` (Synlig) toggle to the arrangør and the handler honours the submitted value (default visible), **coercing it to a strict boolean server-side** (loose validation won't). There is **no forced moderation state** — an arrangør's own event publishes immediately unless they save it as a draft. |
 | The site is **Danish-only** (`default_lang: da` in `user/config/site.yaml`, no `languages.supported`). The `group` enum currently reads `alle/makerspace/kreativ/groenne/kulturhus`; a filter/enum rename (`groenne→groent`, `kreativ→krea`) is tracked separately (PR #57 renames calendar *filter IDs*, not necessarily the blueprint enum). | All labels Danish; no i18n branching. Forms read `group`/`button_style` options **from the blueprint** (single source of truth), never hardcoded — so the final names don't matter to this spec. |
 | Versions in place: Grav 1.7.52 (core ships from the deploy release zip / Docker image, not the repo checkout), Form 8.2.1, Flex Objects 1.3.8 (enabled), Login 3.8.0 (enabled); frontend login enabled (`/login`, register `/opret-medlemskab`, email-activation on, no auto-login). | All version constraints (§14) are already satisfied; no plugin or core upgrade is needed. |
@@ -30,7 +32,7 @@ These are the current state of the system, established by inspection, and the gr
 - A public events **list** and **detail** view (anonymous sees published only). Detail is net-new (today events render only as cards).
 - A gated, feature-flagged frontend **management surface**: "Mine begivenheder" dashboard + create / edit / delete forms, themed in house style.
 - A new custom plugin that provides the create/update/delete handlers with a single, centralised **authorization contract** (authn + capability + per-object ownership + server-side validation), mutating via the Flex API.
-- A `groups.yaml` with an `arrangoerer` group, owner-stamping on create, an in-app audit trail, and Playwright coverage including forced-browsing negative tests.
+- A `groups.yaml` with an `organizers` group, owner-stamping on create, an in-app audit trail, and Playwright coverage including forced-browsing negative tests.
 
 ### Out of scope
 - Event RSVP/signup flows, ticketing, capacity enforcement, calendar export, recurring events.
@@ -68,7 +70,7 @@ Notes:
 
 ## 3. Roles & per-action permission matrix
 
-| Capability | Anonymous | Member (`site.login`, no events perms) | Arrangør (`arrangoerer` group) | Super (`admin.super`) |
+| Capability | Anonymous | Member (`site.login`, no events perms) | Arrangør (`organizers` group) | Super (`admin.super`) |
 |---|---|---|---|---|
 | Read **published** events (list + detail) | ✅ | ✅ | ✅ | ✅ |
 | Read **own unpublished/archived** | — | — | ✅ (own only) | ✅ (all) |
@@ -104,12 +106,12 @@ Rationale for reuse over a fresh `site.events.*`: it matches the existing `admin
 
 ## 5. Auth & onboarding flow
 
-- Frontend login is already live; arrangører are **ordinary, email-activated members**. A super grants the role by adding `arrangoerer` to the account's `groups:` list (manual/invite to start). On next login the group's `access:` tree confers `admin.events.*`. No admin-panel access is granted.
+- Frontend login is already live; arrangører are **ordinary, email-activated members**. A super grants the role by adding `organizers` to the account's `groups:` list (manual/invite to start). On next login the group's `access:` tree confers `admin.events.*`. No admin-panel access is granted.
 - `user/config/groups.yaml` (new):
   ```yaml
-  arrangoerer:
+  organizers:
     readableName: 'Arrangør'
-    description: 'Kan oprette og redigere egne begivenheder fra forsiden.'
+    description: 'Can create and edit own events from the public site.'
     access:
       site:
         login: true
@@ -209,23 +211,23 @@ The dashboard lists only objects the viewer may read (own incl. unpublished/arch
 - Per-object ownership enforced for update **and** delete, against the stored object.
 - All input validated server-side (§8.1.6); never trust client/HTML5 validation.
 - CSRF nonce on every mutating form (Form plugin); Grav 1.7 form XSS detection enabled.
-- Least privilege: the `arrangoerer` group carries **only** `site.login` + `admin.events.*` — no `admin.super`, `admin.login`, `admin.pages`, `admin.users`.
-- **Audit (required, not a fallback):** because live tier event data is off-git, every mutation stamps `created_by`/`updated_by`/timestamps on the object **and** appends an immutable record `{ts, actor, action, key}` to a genuinely **append-only** log. Use a line-oriented append — `fopen($path, 'a')` + `flock(LOCK_EX)`, one JSON object per line, e.g. `user/data/flex-objects/begivenheder-audit.jsonl` — **not** the site's house full-file load-mutate-`file_put_contents(LOCK_EX)` YAML pattern: that pattern is serialised but rewrites the whole file on every write, so it is not append-only or immutable. A dedicated monolog channel is an acceptable alternative. This is the authoritative actor trail.
+- Least privilege: the `organizers` group carries **only** `site.login` + `admin.events.*` — no `admin.super`, `admin.login`, `admin.pages`, `admin.users`.
+- **Audit (required, not a fallback):** because live tier event data is off-git, every mutation stamps `created_by`/`updated_by`/timestamps on the object **and** appends an immutable record `{ts, actor, action, key}` to a genuinely **append-only** log. Use a line-oriented append — `fopen($path, 'a')` + `flock(LOCK_EX)`, one JSON object per line, e.g. `user/data/flex-objects/events-audit.jsonl` — **not** the site's house full-file load-mutate-`file_put_contents(LOCK_EX)` YAML pattern: that pattern is serialised but rewrites the whole file on every write, so it is not append-only or immutable. A dedicated monolog channel is an acceptable alternative. This is the authoritative actor trail.
 - No existence leak: unauthorized reads of unpublished/archived/unknown events return 404, not 403-with-detail.
 
 ---
 
 ## 11. Onboarding / "approved"
 
-Manual/invite to start: a super assigns the `arrangoerer` group to an existing, activated member (via account edit or the existing `deploy/` user tooling). Self-register-then-approve is explicitly future work. No new account-creation path is introduced.
+Manual/invite to start: a super assigns the `organizers` group to an existing, activated member (via account edit or the existing `deploy/` user tooling). Self-register-then-approve is explicitly future work. No new account-creation path is introduced.
 
 ---
 
 ## 12. Milestones & per-milestone test plan
 
-Each milestone is independently testable and ships behind the `event_management` flag. Playwright, reusing the anonymous + authenticated harness and seed bundles; the authenticated suite needs a **seeded `arrangoerer` member** plus the existing `pw-test-user`/`pw-test-admin`. Every milestone from M2 covers success **and** failure paths.
+Each milestone is independently testable and ships behind the `event_management` flag. Playwright, reusing the anonymous + authenticated harness and seed bundles; the authenticated suite needs a **seeded `organizers` member** plus the existing `pw-test-user`/`pw-test-admin`. Every milestone from M2 covers success **and** failure paths.
 
-**Seeding an arrangør is a new bundle step, not a one-liner.** The existing `tests/fixtures/grav-seeds/playwright/apply.sh` provisions accounts via `bin/plugin login newuser -P <preset>`, which sets a single permission preset and has **no `--groups` flag**. The bundle must therefore: (a) seed `user/config/groups.yaml` (the `arrangoerer` group, §5) into the test container; (b) create the member account; (c) patch that account's YAML to add `groups: [arrangoerer]`; and the run must confirm `groups.yaml` is actually present in the test tier so the group's `access:` tree resolves on login. Without this, the entire own-vs-other-owner authz suite (the core of M3/M4) cannot run — and per CLAUDE.md a silently-unrunnable authz suite is the Sprint-5 failure mode, so the harness must **fail loud** if the arrangør seed is missing rather than skip.
+**Seeding an arrangør is a new bundle step, not a one-liner.** The existing `tests/fixtures/grav-seeds/playwright/apply.sh` provisions accounts via `bin/plugin login newuser -P <preset>`, which sets a single permission preset and has **no `--groups` flag**. The bundle must therefore: (a) seed `user/config/groups.yaml` (the `organizers` group, §5) into the test container; (b) create the member account; (c) patch that account's YAML to add `groups: [organizers]`; and the run must confirm `groups.yaml` is actually present in the test tier so the group's `access:` tree resolves on login. Without this, the entire own-vs-other-owner authz suite (the core of M3/M4) cannot run — and per CLAUDE.md a silently-unrunnable authz suite is the Sprint-5 failure mode, so the harness must **fail loud** if the arrangør seed is missing rather than skip.
 
 - **M1 — Model + Read.** Add the §2 fields; build the public detail route and confirm list/detail show published-only and exclude `archived`.
   - Tests: anon sees published list + detail; unpublished/archived/unknown detail ⇒ 404; all legacy events still render (16 at time of writing — assert against the actual count, not a hardcoded 7).
@@ -239,7 +241,7 @@ Each milestone is independently testable and ships behind the `event_management`
   - Tests (success): arrangør soft-archives own → object retained, `archived:true`, gone from public list + detail 404, audit row; super hard-deletes → object removed.
   - Tests (negative): arrangør delete of another's event ⇒ 403; delete without confirm/CSRF ⇒ rejected; forced-browse direct POST ⇒ rejected.
 
-**Cross-cutting (M2→):** a forced-browsing suite asserting every mutating endpoint enforces authn+authz+CSRF regardless of UI; audit entries written on every successful mutation **and the audit log is append-only** (a second mutation adds a line without altering prior lines); an `arrangoerer` account is denied admin-panel access (`/admin` ⇒ not authorized, confirming `admin.events.*` does not confer `admin.login`); flash feedback renders via the shared component.
+**Cross-cutting (M2→):** a forced-browsing suite asserting every mutating endpoint enforces authn+authz+CSRF regardless of UI; audit entries written on every successful mutation **and the audit log is append-only** (a second mutation adds a line without altering prior lines); an `organizers` account is denied admin-panel access (`/admin` ⇒ not authorized, confirming `admin.events.*` does not confer `admin.login`); flash feedback renders via the shared component.
 
 ---
 
@@ -264,7 +266,7 @@ Each milestone is independently testable and ships behind the `event_management`
 1. **Current state:** events edited only by a super, directly in the events YAML / via git (admin panel disabled). No ownership fields.
 2. **Ship code** (blueprint fields, `groups.yaml`, `event-manager` plugin, templates) with `event_management` **off** on staging/test, **on** in dev/local. The new fields are additive/optional — **no data migration required**; legacy events with no `owner` are treated as super-only-editable.
 3. **Optional backfill:** assign `owner` on the existing legacy events (16 at time of writing) — to a super or a named arrangør — if specific ownership is wanted. Because live data sits in `<tier>data/` (off-git), any backfill runs against each tier's live data (manual edit or the data-versioning runner) — not a repo commit.
-4. **Grant the role:** create the first `arrangoerer` account(s) by group assignment; verify they get `admin.events.*` and **not** admin-panel access.
+4. **Grant the role:** create the first `organizers` account(s) by group assignment; verify they get `admin.events.*` and **not** admin-panel access.
 5. **Flip the flag per tier** once a tier's manual + automated checks pass (dev → test → staging → prod), matching the existing feature-flag promotion posture.
 
 ---
