@@ -18,12 +18,16 @@ const { execFileSync } = require('child_process');
 const {
   TEST_USER,
   TEST_ADMIN,
+  TEST_ORGANIZER,
   removeAccount,
 } = require('./helpers/accounts');
 const {
   removeLockedRoadmapItem,
   removeReleasableRoadmapItem,
   removeUnpromotedBugReport,
+  removeDraftEvent,
+  removeArchivedEvent,
+  removeForeignEvent,
 } = require('./helpers/fixtures');
 const { restoreEmailConfig } = require('./helpers/mailer');
 
@@ -49,9 +53,17 @@ module.exports = async function globalTeardown() {
   } catch (err) {
     console.warn(`globalTeardown: removeAccount(pw-test-admin) failed: ${/** @type {any} */ (err).message}`);
   }
+  try {
+    removeAccount(TEST_ORGANIZER);
+  } catch (err) {
+    console.warn(`globalTeardown: removeAccount(pw-test-organizer) failed: ${/** @type {any} */ (err).message}`);
+  }
   try { removeLockedRoadmapItem(); } catch (_) { /* non-fatal */ }
   try { removeReleasableRoadmapItem(); } catch (_) { /* non-fatal */ }
   try { removeUnpromotedBugReport(); } catch (_) { /* non-fatal */ }
+  try { removeDraftEvent(); } catch (_) { /* non-fatal */ }
+  try { removeArchivedEvent(); } catch (_) { /* non-fatal */ }
+  try { removeForeignEvent(); } catch (_) { /* non-fatal */ }
 
   const repoRoot = path.resolve(__dirname, '..');
   for (const rel of GENERATED_ENV_SECURITY_FILES) {

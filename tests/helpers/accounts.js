@@ -56,10 +56,26 @@ const TEST_ADMIN = Object.freeze({
   isAdmin: true,
 });
 
-const ALLOWED_USERNAMES = Object.freeze([TEST_USER.username, TEST_ADMIN.username]);
+// Arrangør (frontend event CRUD): an ordinary member that global-setup adds
+// to the `organizers` group, conferring admin.events.* — but never
+// admin.login. Password env var: TEST_ORGANIZER_PASSWORD.
+const TEST_ORGANIZER = Object.freeze({
+  username: 'pw-test-organizer',
+  email: 'pw-test-organizer@example.invalid',
+  fullName: 'Playwright Test Organizer',
+  isAdmin: false,
+  groups: Object.freeze(['organizers']),
+});
+
+const ALLOWED_USERNAMES = Object.freeze([
+  TEST_USER.username,
+  TEST_ADMIN.username,
+  TEST_ORGANIZER.username,
+]);
 
 const hasUserPassword = Boolean(process.env.TEST_PASSWORD);
 const hasAdminPassword = Boolean(process.env.TEST_ADMIN_PASSWORD);
+const hasOrganizerPassword = Boolean(process.env.TEST_ORGANIZER_PASSWORD);
 
 /**
  * Validate an account argument before any shell-out or filesystem call.
@@ -163,6 +179,15 @@ function ensureAccount(account, password) {
           grantAdminSuperInContainer(a);
         } catch (patchErr) {
           reject(new Error(`accounts.ensureAccount(${a.username}) created but failed to grant admin.super: ${/** @type {any} */ (patchErr).message}`));
+          return;
+        }
+      }
+      const groups = /** @type {any} */ (account).groups;
+      if (Array.isArray(groups) && groups.length > 0) {
+        try {
+          grantGroupsInContainer(a, groups);
+        } catch (patchErr) {
+          reject(new Error(`accounts.ensureAccount(${a.username}) created but failed to assign groups: ${/** @type {any} */ (patchErr).message}`));
           return;
         }
       }
@@ -271,6 +296,35 @@ function grantAdminSuperInContainer(account) {
   });
 }
 
+/**
+ * Idempotently append a `groups:` list to an account YAML in the container.
+ * Group names are allowlist-validated (lowercase identifiers) — the only
+ * caller passes the compile-time TEST_ORGANIZER.groups constant.
+ *
+ * @param {{username: string}} account
+ * @param {readonly string[]} groups
+ */
+function grantGroupsInContainer(account, groups) {
+  for (const g of groups) {
+    if (!/^[a-z0-9_-]+$/.test(g)) {
+      throw new Error(`accounts: group name '${g}' is not a valid identifier`);
+    }
+  }
+  const yamlPath = `/config/www/user/accounts/${account.username}.yaml`;
+  const lines = ['groups:', ...groups.map((g) => `  - ${g}`)].join('\\n');
+  const script = [
+    'set -e',
+    `if ! grep -q '^groups:' "${yamlPath}"; then`,
+    `  printf '${lines}\\n' >> "${yamlPath}"`,
+    'fi',
+  ].join('\n');
+  // -u abc: keep the account YAML writable by Grav's web user.
+  execFileSync('docker', ['exec', '-u', 'abc', gravContainer(), 'sh', '-c', script], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 10_000,
+  });
+}
+
 function assertDockerAndGravRunning() {
   try {
     execFileSync('docker', ['version', '--format', '{{.Server.Version}}'], {
@@ -299,8 +353,10 @@ function assertDockerAndGravRunning() {
 module.exports = {
   TEST_USER,
   TEST_ADMIN,
+  TEST_ORGANIZER,
   hasUserPassword,
   hasAdminPassword,
+  hasOrganizerPassword,
   ensureAccount,
   removeAccount,
   // Exported for tests / callers that need to assert on the path; never used

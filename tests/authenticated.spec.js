@@ -17,3 +17,6 @@ require('./authenticated/bug-report');
 require('./authenticated/feature-suggestion');
 // WI-6 — login success/failure + rate-limit coverage.
 require('./authenticated/login');
+// Frontend event CRUD — organizer success paths + forced-browsing authz.
+require('./authenticated/events-crud');
+require('./authenticated/events-authz');
