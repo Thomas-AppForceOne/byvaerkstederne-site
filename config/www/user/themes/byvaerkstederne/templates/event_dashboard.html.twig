@@ -1,0 +1,60 @@
+{% extends 'partials/base.html.twig' %}
+
+{# ============================================================================
+   "Mine begivenheder" — the arrangør dashboard (/begivenheder/mine).
+   `em_events` is injected by the event-manager plugin: the viewer's own
+   events in every state (super sees all), each row carrying `key` and a
+   derived `status` (kladde / publiceret / arkiveret). Buttons are UX only —
+   every mutation re-runs the full server-side contract.
+   ============================================================================ #}
+
+{% block body %}
+<section class="bv-section--sm" aria-label="Mine begivenheder">
+    <div class="bv-container">
+
+        <div class="bv-event-dashboard__head">
+            <h1 class="bv-headline">Mine begivenheder</h1>
+            {% if grav.user.authorize('admin.events.create') or grav.user.authorize('admin.super') %}
+                <a class="bv-btn bv-btn--primary" href="/begivenheder/opret" data-testid="event-create-link">Opret begivenhed</a>
+            {% endif %}
+        </div>
+
+        {% set events = em_events|default([]) %}
+        {% if events is empty %}
+            <p class="bv-body-lg">Du har ingen begivenheder endnu. Opret din første med knappen ovenfor.</p>
+        {% else %}
+        <ul class="bv-event-dashboard__list">
+            {% for ev in events %}
+            <li class="bv-event-dashboard__item" data-event-key="{{ ev.key }}" data-event-status="{{ ev.status }}">
+                <div class="bv-event-dashboard__main">
+                    <span class="bv-badge bv-badge--{{ ev.status == 'publiceret' ? 'primary' : (ev.status == 'arkiveret' ? 'tertiary' : 'secondary') }}">
+                        {{ ev.status|capitalize }}
+                    </span>
+                    <a class="bv-event-dashboard__title" href="/begivenheder/{{ ev.key }}">{{ ev.title }}</a>
+                    <span class="bv-event-dashboard__date">{{ ev.event_date }}</span>
+                    {% if ev.owner and grav.user.authorize('admin.super') %}
+                        <span class="bv-event-dashboard__owner">({{ ev.owner }})</span>
+                    {% endif %}
+                </div>
+                <div class="bv-event-dashboard__actions">
+                    <a class="bv-btn bv-btn--secondary bv-btn--sm" href="/begivenheder/rediger/{{ ev.key }}">Rediger</a>
+                    {% if ev.status == 'arkiveret' %}
+                        {# Restore: reversible undo of the soft archive. Minimal
+                           inline form — same Form-plugin nonce, same contract. #}
+                        <form method="post" action="/begivenheder/slet" class="bv-event-dashboard__inline-form">
+                            {{ nonce_field('form', 'form-nonce')|raw }}
+                            <input type="hidden" name="data[key]" value="{{ ev.key }}">
+                            <input type="hidden" name="data[mode]" value="restore">
+                            <button type="submit" class="bv-btn bv-btn--primary bv-btn--sm">Gendan</button>
+                        </form>
+                    {% else %}
+                        <a class="bv-btn bv-btn--tertiary bv-btn--sm" href="/begivenheder/slet/{{ ev.key }}">Fjern</a>
+                    {% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

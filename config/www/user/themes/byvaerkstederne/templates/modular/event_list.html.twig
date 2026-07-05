@@ -22,7 +22,7 @@
         {% set events_list = [] %}
         {% if flex_events is not null %}
             {% for ev in flex_events %}
-                {% if ev.published and not ev.featured %}
+                {% if ev.published and not ev.archived and not ev.featured %}
                     {% set _accent = ev.button_style|default('primary') %}
                     {% set _filter = filter_map[ev.group]|default(ev.group) %}
                     {% set _cta = (ev.button_text and ev.button_url)

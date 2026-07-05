@@ -40,3 +40,4 @@ enabled:
   gear_donation: "true"
   social_media_links: "true"
   makerspace_meeting_link: "true"
+  event_management: "true"

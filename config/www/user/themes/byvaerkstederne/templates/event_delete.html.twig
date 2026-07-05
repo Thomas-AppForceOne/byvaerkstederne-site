@@ -1,0 +1,31 @@
+{% extends 'partials/base.html.twig' %}
+
+{# ============================================================================
+   Delete confirmation (/begivenheder/slet/<key>). For an arrangør this is a
+   reversible soft archive (retain + unpublish + hide); a super additionally
+   gets a hard-delete choice (radio injected by the plugin). The handler
+   enforces admin.super on mode=hard regardless of what is posted.
+   ============================================================================ #}
+
+{% block body %}
+<section class="bv-section--sm" aria-label="Fjern begivenhed">
+    <div class="bv-container">
+        <div class="bv-event-form-card">
+            <h1 class="bv-headline">Fjern begivenhed</h1>
+            {% if em_event %}
+                <p class="bv-body-lg">
+                    Er du sikker på, at du vil fjerne "{{ em_event.title }}"
+                    ({{ em_event.event_date }})?
+                </p>
+            {% endif %}
+            <p>Begivenheden arkiveres: den forsvinder fra kalenderen, men kan gendannes fra dit overblik.</p>
+
+            {% include "forms/form.html.twig" with { form: forms('event-delete') } %}
+
+            <div class="bv-event-form-card__footer">
+                <a class="bv-btn bv-btn--secondary" href="/begivenheder/mine">Fortryd</a>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

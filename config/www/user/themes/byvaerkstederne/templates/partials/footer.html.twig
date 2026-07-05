@@ -54,6 +54,12 @@
                 {% if feature_enabled('bug_report') %}
                 <button type="button" onclick="bvBugReport.open(); return false;">Rapport&eacute;r fejl</button>
                 {% endif %}
+                {# Event management entry point — footer-only, auth-gated per
+                   ADR-001; additionally hidden from members without the
+                   organizers capability (UX only, never the boundary). #}
+                {% if feature_enabled('event_management') and (grav.user.authorize('admin.events.read') or grav.user.authorize('admin.super')) %}
+                <a href="/begivenheder/mine">Mine begivenheder</a>
+                {% endif %}
             </nav>
         </div>
         {% endif %}

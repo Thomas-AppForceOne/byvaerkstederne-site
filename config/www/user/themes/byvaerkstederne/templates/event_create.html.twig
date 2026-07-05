@@ -1,0 +1,30 @@
+{% extends 'partials/base.html.twig' %}
+
+{# ============================================================================
+   Create-event form (/begivenheder/opret). Same pattern as register.html.twig:
+   a themed card around Grav's stock form rendering (forms/form.html.twig) so
+   nonce/CSRF injection comes for free. Select options are injected from the
+   begivenheder blueprint by the event-manager plugin; the POST is handled by
+   the plugin's §8.1 contract handler.
+   ============================================================================ #}
+
+{% block body %}
+<section class="bv-section--sm" aria-label="Opret begivenhed">
+    <div class="bv-container">
+        <div class="bv-event-form-card">
+            <h1 class="bv-headline">Opret begivenhed</h1>
+            <p class="bv-body-lg">Udfyld felterne herunder. Synlige begivenheder vises med det samme i <a href="/vaerkstedskalenderen">værkstedskalenderen</a>.</p>
+
+            <style>
+              .form-honeybear { position: absolute !important; left: -10000px !important; width: 1px; height: 1px; overflow: hidden; }
+            </style>
+
+            {% include "forms/form.html.twig" with { form: forms('event-create') } %}
+
+            <div class="bv-event-form-card__footer">
+                <a class="bv-btn bv-btn--secondary" href="/begivenheder/mine">Tilbage til mine begivenheder</a>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
