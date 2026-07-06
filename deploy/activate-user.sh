@@ -116,6 +116,8 @@ fi
 . "$ENV_FILE"
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$SCRIPT_DIR/lib/ssh-auth.sh"
+# shellcheck source=deploy/lib/user-resolve.sh
+. "$SCRIPT_DIR/lib/user-resolve.sh"
 
 export TIER
 if [ "$TIER" = "prod" ]; then
@@ -141,48 +143,10 @@ TIER_DIR="$PATH_SSH/$TIER"
 ACCOUNTS_DIR="$TIER_DIR/user/accounts"
 FLEX_INDEX="$TIER_DIR/user/data/flex/indexes/accounts.yaml"
 
-# ── 3. Resolve the user (email → username, or verify the username) ───
-if printf '%s' "$USERID" | grep -q '@'; then
-    email_re="$(printf '%s' "$USERID" | sed 's/[.[\\*^$+]/\\&/g')"
-    matches="$(bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" "
-        d=\"$ACCOUNTS_DIR\"
-        [ -d \"\$d\" ] || { echo __NODIR__; exit 0; }
-        grep -lE \"^email:[[:space:]]*['\\\"]?${email_re}['\\\"]?[[:space:]]*\$\" \"\$d\"/*.yaml 2>/dev/null \
-            | while read -r f; do b=\$(basename \"\$f\"); echo \"\${b%.yaml}\"; done
-    " 2>/dev/null || echo __SSHFAIL__)"
-    if printf '%s' "$matches" | grep -q '__SSHFAIL__'; then
-        echo "✗ SSH to $USER_SSH@$HOST_SSH:$PORT_SSH failed." >&2
-        bv_ssh_diagnose "$USER_SSH" "$HOST_SSH" "$PORT_SSH"
-        exit 1
-    fi
-    if printf '%s' "$matches" | grep -q '__NODIR__'; then
-        echo "✗ No accounts dir on $TIER ($ACCOUNTS_DIR) — tier not deployed yet, or fresh." >&2
-        exit 1
-    fi
-    matches="$(printf '%s\n' "$matches" | sed '/^$/d')"
-    match_count="$(printf '%s' "$matches" | grep -c . || true)"
-    if [ "$match_count" -eq 0 ]; then
-        echo "✗ No account on $TIER has email '$USERID'. Try: make list-users tier=$TIER" >&2
-        exit 1
-    fi
-    if [ "$match_count" -gt 1 ]; then
-        echo "✗ Email '$USERID' matches more than one account on $TIER:" >&2
-        printf '%s\n' "$matches" | sed 's/^/      - /' >&2
-        echo "    Re-run with the username instead." >&2
-        exit 1
-    fi
-    USERNAME="$(printf '%s' "$matches" | head -1)"
-    echo "→ resolved email '$USERID' to username '$USERNAME'"
-else
-    USERNAME="$USERID"
+# ── 3. Resolve the user (email → username, shared lib) ───────────────
+if ! USERNAME="$(bv_resolve_username "$USERID")"; then
+    exit 1
 fi
-
-case "$USERNAME" in
-    *[!A-Za-z0-9._-]*|*..*|.*|"")
-        echo "❌  Resolved username '$USERNAME' is not path-safe; aborting." >&2
-        exit 1
-        ;;
-esac
 
 case "$USERNAME" in
     "$PROTECTED_USER_PREFIX"*)

@@ -39,6 +39,7 @@ trap 'rm -rf "$SB"' EXIT
 mkdir -p "$SB/proj/deploy/lib" "$SB/bin" "$SB/remotebin"
 cp "$PROJECT_ROOT/deploy/activate-user.sh" "$SB/proj/deploy/"
 cp "$PROJECT_ROOT/deploy/lib/ssh-auth.sh" "$SB/proj/deploy/lib/"
+cp "$PROJECT_ROOT/deploy/lib/user-resolve.sh" "$SB/proj/deploy/lib/"
 
 cat > "$SB/proj/.env.deploy" <<EOF
 DEPLOY_HOST=fakehost

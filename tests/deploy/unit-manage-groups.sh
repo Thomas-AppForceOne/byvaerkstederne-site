@@ -44,6 +44,7 @@ trap 'rm -rf "$SB"' EXIT
 mkdir -p "$SB/proj/deploy/lib" "$SB/proj/config/www/user/config" "$SB/bin" "$SB/remote"
 cp "$PROJECT_ROOT/deploy/manage-groups.sh" "$SB/proj/deploy/"
 cp "$PROJECT_ROOT/deploy/lib/ssh-auth.sh" "$SB/proj/deploy/lib/"
+cp "$PROJECT_ROOT/deploy/lib/user-resolve.sh" "$SB/proj/deploy/lib/"
 cp "$PROJECT_ROOT/deploy/lib/account-groups.php" "$SB/proj/deploy/lib/"
 
 cat > "$SB/proj/config/www/user/config/groups.yaml" <<'EOF'
