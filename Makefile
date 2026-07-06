@@ -213,6 +213,27 @@ list-users: ## List member accounts on a tier (tier=dev|test|staging|prod)
 	  *) echo "❌  list-users: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
+activate-user: ## Activate a member whose confirmation email never arrived (tier=... user=<username|email>, state=enabled|disabled, dry_run=1, yes=1, i_mean_it=1)
+	@t="$(tier)"; u="$(user)"; \
+	args=""; \
+	if [ -n "$(state)" ]; then args="$$args --state=$(state)"; fi; \
+	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
+	if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
+	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
+	if [ -z "$$t" ] || [ -z "$$u" ]; then \
+	  echo "❌  activate-user: missing required argument(s).  Got: tier='$$t' user='$$u'"; \
+	  [ -z "$$t" ] && echo "    → 'tier' is empty (required: dev|test|staging|prod)"; \
+	  [ -z "$$u" ] && echo "    → 'user' is empty (a username, or an email to resolve)"; \
+	  echo "    Usage:   make activate-user tier=<dev|test|staging|prod> user=<username|email> [state=enabled|disabled] [dry_run=1] [yes=1] [i_mean_it=1]"; \
+	  echo "    Example: make activate-user tier=dev user=anders@example.dk"; \
+	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/activate-user.sh "$$t" "$$u" $$args ;; \
+	  *) echo "❌  activate-user: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
 list-groups: ## List available user groups (repo groups.yaml; add tier=dev|test|staging|prod for a tier's deployed copy)
 	@t="$(tier)"; \
 	if [ -z "$$t" ]; then \
@@ -485,6 +506,7 @@ test-deploy: ## Run deploy-script regression tests (lint + unit + atomic-layout 
 	@bash tests/deploy/unit-promotion-no-email-sync.sh
 	@bash tests/deploy/bump-version.sh
 	@bash tests/deploy/unit-manage-groups.sh
+	@bash tests/deploy/unit-activate-user.sh
 
 test-backup-restore: ## Run backup/restore tooling tests (bats)
 	@command -v bats >/dev/null 2>&1 || { echo "❌  bats not installed. Run: brew install bats-core"; exit 1; }
