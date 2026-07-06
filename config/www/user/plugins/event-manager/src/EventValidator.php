@@ -21,7 +21,27 @@ final class EventValidator
     public const FORM_FIELDS = [
         'published', 'title', 'description', 'group', 'badge', 'event_date',
         'event_time', 'location', 'capacity', 'price', 'button_text',
-        'button_url', 'button_style', 'featured', 'featured_tag',
+        'button_url', 'featured', 'featured_tag',
+    ];
+
+    /**
+     * Visual accent per workshop group — the single mapping the stored
+     * `button_style` is DERIVED from (never a user choice; the button/badge
+     * colour must follow the workshop the event belongs to). Values are the
+     * closed accent set partials/event_card.html.twig accepts. Both the
+     * current blueprint enum keys (kreativ/groenne) and the post-rename
+     * candidates (krea/groent, PR #57) are mapped so the derivation
+     * survives the rename. Mirrored client-side by the live preview in
+     * partials/event_form.html.twig — keep the two in sync.
+     */
+    public const ACCENT_BY_GROUP = [
+        'alle' => 'primary',
+        'makerspace' => 'secondary',
+        'kreativ' => 'tertiary',
+        'krea' => 'tertiary',
+        'groenne' => 'primary',
+        'groent' => 'primary',
+        'kulturhus' => 'kulturhus',
     ];
 
     /** Bounded lengths for free-text fields (defense against unbounded payloads). */
@@ -39,17 +59,13 @@ final class EventValidator
 
     /** @var array<string,string> */
     private array $groupOptions;
-    /** @var array<string,string> */
-    private array $styleOptions;
 
     /**
      * @param array<string,string> $groupOptions blueprint `group` enum
-     * @param array<string,string> $styleOptions blueprint `button_style` enum
      */
-    public function __construct(array $groupOptions, array $styleOptions)
+    public function __construct(array $groupOptions)
     {
         $this->groupOptions = $groupOptions;
-        $this->styleOptions = $styleOptions;
     }
 
     /**
@@ -87,16 +103,9 @@ final class EventValidator
             $values['event_date'] = $date;
         }
 
-        // button_style — blueprint enum; empty falls back to the blueprint default.
-        $style = $this->str($data, 'button_style');
-        if ($style === '') {
-            $style = 'primary';
-        }
-        if ($this->styleOptions !== [] && !array_key_exists($style, $this->styleOptions)) {
-            $errors['button_style'] = 'Ugyldig knap-stil.';
-        } else {
-            $values['button_style'] = $style;
-        }
+        // button_style — DERIVED from the group, never client-settable: the
+        // accent colour must follow the workshop. Any posted value is ignored.
+        $values['button_style'] = self::ACCENT_BY_GROUP[$group] ?? 'primary';
 
         // button_url — allowlist, not denylist (§8.1.6): empty (no button),
         // a site-relative path (leading single '/'), or absolute http(s).

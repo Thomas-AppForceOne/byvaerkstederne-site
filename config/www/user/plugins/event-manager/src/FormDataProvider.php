@@ -28,12 +28,6 @@ final class FormDataProvider
         return self::repository()->fieldOptions('group');
     }
 
-    /** @return array<string,string> */
-    public static function buttonStyleOptions(): array
-    {
-        return self::repository()->fieldOptions('button_style');
-    }
-
     /**
      * Delete-mode choices: soft archive for everyone; the permanent hard
      * delete only for super (and the POST handler re-checks admin.super on

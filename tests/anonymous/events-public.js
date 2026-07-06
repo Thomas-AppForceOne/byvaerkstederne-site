@@ -50,7 +50,9 @@ function readEvents() {
 test.describe('Events — public read (M1)', () => {
   test('calendar lists every published, non-archived event (legacy seeds intact)', async ({ page }) => {
     const events = readEvents();
-    const visible = events.filter((e) => e.published && !e.archived && !e.featured);
+    // Featured events are part of the list too (they only get a styling
+    // boost) — the only exclusions are unpublished and archived.
+    const visible = events.filter((e) => e.published && !e.archived);
     // Regression guard for the legacy seeds: the repo ships 16 events and
     // all of them must still render. Assert against the file, not a literal.
     expect(visible.length).toBeGreaterThanOrEqual(16);
@@ -141,5 +143,10 @@ test.describe('Events — anonymous management gating (M2 negatives)', () => {
   test('footer shows no event-management entry to anonymous visitors', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('.bv-footer')).not.toContainText('Mine begivenheder');
+  });
+
+  test('calendar shows no create button to anonymous visitors', async ({ page }) => {
+    await page.goto('/vaerkstedskalenderen');
+    await expect(page.locator('[data-testid="calendar-create-link"]')).toHaveCount(0);
   });
 });

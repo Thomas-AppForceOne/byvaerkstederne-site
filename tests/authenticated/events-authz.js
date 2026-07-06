@@ -69,6 +69,12 @@ test.describe('Events — member without the organizer role', () => {
     await expect(page.locator('.bv-footer')).not.toContainText('Mine begivenheder');
   });
 
+  test('member sees no create button on the calendar page', async ({ page }) => {
+    await login(page);
+    await page.goto('/vaerkstedskalenderen');
+    await expect(page.locator('[data-testid="calendar-create-link"]')).toHaveCount(0);
+  });
+
   test('member cannot read another owner\'s draft (404, no existence leak)', async ({ page }) => {
     await login(page);
     const response = await page.goto('/begivenheder/ev_fixture_draft');

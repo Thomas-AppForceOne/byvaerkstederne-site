@@ -1,0 +1,155 @@
+{#
+   Shared create/edit event-form surface with a LIVE event-card preview.
+
+   Include variables:
+     ef_form_name  — the Form-plugin form to render ('event-create' / 'event-edit')
+     ef_heading    — page heading
+     ef_intro      — intro line under the heading (optional)
+
+   Layout: form on the left, a sticky preview panel on the right. The preview
+   is a hand-mirrored copy of partials/event_card.html.twig's markup, updated
+   by inline JS as the user types — it must stay structurally in sync with
+   the canonical partial (same .bv-event-row skeleton) so what the arrangør
+   sees is what the calendar renders. The group→accent map mirrors
+   EventValidator::ACCENT_BY_GROUP (the server-side derivation of
+   button_style); keep the two in sync.
+#}
+<section class="bv-section--sm" aria-label="{{ ef_heading }}">
+    <div class="bv-container">
+        <div class="bv-event-form__head">
+            <h1 class="bv-headline">{{ ef_heading }}</h1>
+            {% if ef_intro %}<p class="bv-body-lg">{{ ef_intro|raw }}</p>{% endif %}
+        </div>
+
+        <div class="bv-event-form__layout">
+            <div class="bv-event-form-card">
+                <style>
+                  .form-honeybear { position: absolute !important; left: -10000px !important; width: 1px; height: 1px; overflow: hidden; }
+                </style>
+                {% include "forms/form.html.twig" with { form: forms(ef_form_name) } %}
+                <div class="bv-event-form-card__footer">
+                    <a class="bv-btn bv-btn--outlined" href="/begivenheder/mine">Tilbage til mine begivenheder</a>
+                </div>
+            </div>
+
+            <aside class="bv-event-preview" aria-label="Forhåndsvisning">
+                <div class="bv-event-preview__sticky">
+                    <h2 class="bv-event-preview__heading">Sådan kommer kortet til at se ud</h2>
+                    <div class="bv-event-item" id="ef-preview">
+                        <article class="bv-event-row" id="ef-preview-row" style="--bv-accent: var(--primary);">
+                            <div class="bv-event-row__date">
+                                <span class="bv-event-row__date-month" id="ef-preview-month">···</span>
+                                <span class="bv-event-row__date-day" id="ef-preview-day">?</span>
+                            </div>
+                            <div class="bv-event-row__body">
+                                <span class="bv-badge bv-badge--primary bv-event-row__badge" id="ef-preview-badge" hidden></span>
+                                <h3 class="bv-event-row__title" id="ef-preview-title">Din begivenhed</h3>
+                                <p class="bv-event-row__time" id="ef-preview-time" hidden></p>
+                                <p class="bv-event-row__desc" id="ef-preview-desc" hidden></p>
+                            </div>
+                            <div class="bv-event-row__meta" id="ef-preview-meta" hidden>
+                                <span class="bv-event-row__price" id="ef-preview-price" hidden></span>
+                                <a class="bv-btn bv-btn--primary bv-btn--sm" id="ef-preview-cta" href="#" onclick="return false;" hidden></a>
+                                <span class="bv-event-row__capacity" id="ef-preview-capacity" hidden>
+                                    <span class="material-symbols-outlined" aria-hidden="true">group</span>
+                                    <span id="ef-preview-capacity-text"></span>
+                                </span>
+                            </div>
+                        </article>
+                    </div>
+                    <p class="bv-event-preview__note" id="ef-preview-visibility"></p>
+                </div>
+            </aside>
+        </div>
+    </div>
+</section>
+
+<script>
+(function () {
+    'use strict';
+
+    var form = document.querySelector('.bv-event-form-card form');
+    if (!form) return;
+
+    // Mirrors EventValidator::ACCENT_BY_GROUP — the server derives the card
+    // colour from the group; the preview must agree.
+    var ACCENT_BY_GROUP = {
+        alle: 'primary', makerspace: 'secondary',
+        kreativ: 'tertiary', krea: 'tertiary',
+        groenne: 'primary', groent: 'primary',
+        kulturhus: 'kulturhus'
+    };
+    var ACCENTS = ['primary', 'secondary', 'tertiary', 'kulturhus'];
+    // Matches Twig's |date('M') output used by the calendar cards.
+    var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    function field(name) { return form.querySelector('[name="data[' + name + ']"]'); }
+    function fieldValue(name) {
+        var el = field(name);
+        return el ? el.value.trim() : '';
+    }
+    function toggleValue(name) {
+        var checked = form.querySelector('[name="data[' + name + ']"]:checked');
+        return checked ? checked.value === '1' : null;
+    }
+    function el(id) { return document.getElementById(id); }
+    function setText(id, value) {
+        var node = el(id);
+        if (!node) return;
+        node.hidden = value === '';
+        node.textContent = value;
+    }
+
+    function update() {
+        var accent = ACCENT_BY_GROUP[fieldValue('group')] || 'primary';
+        var row = el('ef-preview-row');
+        row.style.setProperty('--bv-accent', 'var(--' + accent + ')');
+
+        // Date block.
+        var date = fieldValue('event_date');
+        var m = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        el('ef-preview-month').textContent = m ? (MONTHS[parseInt(m[2], 10) - 1] || '···') : '···';
+        el('ef-preview-day').textContent = m ? String(parseInt(m[3], 10)) : '?';
+
+        // Badge swaps its colour class with the accent.
+        var badgeEl = el('ef-preview-badge');
+        ACCENTS.forEach(function (a) { badgeEl.classList.remove('bv-badge--' + a); });
+        badgeEl.classList.add('bv-badge--' + accent);
+        setText('ef-preview-badge', fieldValue('badge'));
+
+        setText('ef-preview-title', fieldValue('title') || 'Din begivenhed');
+        setText('ef-preview-time', fieldValue('event_time'));
+        setText('ef-preview-desc', fieldValue('description'));
+
+        // Meta column: price / CTA / capacity — hidden entirely when empty,
+        // like the real card.
+        setText('ef-preview-price', fieldValue('price'));
+        var ctaEl = el('ef-preview-cta');
+        var showCta = fieldValue('button_text') !== '' && fieldValue('button_url') !== '';
+        ctaEl.hidden = !showCta;
+        ctaEl.textContent = fieldValue('button_text');
+        ACCENTS.forEach(function (a) { ctaEl.classList.remove('bv-btn--' + a); });
+        ctaEl.classList.add('bv-btn--' + accent);
+
+        var capacity = fieldValue('capacity');
+        el('ef-preview-capacity').hidden = capacity === '';
+        el('ef-preview-capacity-text').textContent = capacity;
+
+        el('ef-preview-meta').hidden = fieldValue('price') === '' && !showCta && capacity === '';
+
+        // Featured typography boost.
+        row.classList.toggle('bv-event-row--featured', toggleValue('featured') === true);
+
+        // Visibility note under the preview.
+        var published = toggleValue('published');
+        el('ef-preview-visibility').textContent =
+            published === false
+                ? 'Gemmes som kladde — kun du kan se den, indtil du sætter Synlig til Ja.'
+                : 'Vises i værkstedskalenderen, så snart du gemmer.';
+    }
+
+    form.addEventListener('input', update);
+    form.addEventListener('change', update);
+    update();
+})();
+</script>

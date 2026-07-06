@@ -503,10 +503,7 @@ class EventManagerPlugin extends Plugin
      */
     private function validateOr400(array $data): array
     {
-        $validator = new EventValidator(
-            $this->repository()->fieldOptions('group'),
-            $this->repository()->fieldOptions('button_style')
-        );
+        $validator = new EventValidator($this->repository()->fieldOptions('group'));
         $result = $validator->validate($data);
         if ($result['errors'] !== []) {
             $this->sendJson(['success' => false, 'errors' => $result['errors']], 400);

@@ -103,6 +103,9 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     expect(block).toContain('created_by: pw-test-org');
     expect(block).toContain('published: true');
     expect(block).toContain('archived: false');
+    // The accent is DERIVED from the group (makerspace → secondary); the
+    // client cannot choose it.
+    expect(block).toContain('button_style: secondary');
 
     // Audit row appended.
     const auditAfter = readAuditLog();
@@ -279,6 +282,15 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     } finally {
       await adminContext.close();
     }
+  });
+
+  test('organizer sees the create button on the calendar page', async ({ page }) => {
+    await loginAsOrganizer(page);
+    await page.goto('/vaerkstedskalenderen');
+    const link = page.locator('[data-testid="calendar-create-link"]');
+    await expect(link).toBeVisible();
+    await link.click();
+    await expect(page).toHaveURL(/\/begivenheder\/opret/);
   });
 
   test('organizer sees the footer entry and reaches the dashboard from it', async ({ page }) => {

@@ -1,28 +1,17 @@
 {% extends 'partials/base.html.twig' %}
 
 {# ============================================================================
-   Edit-event form (/begivenheder/rediger/<key>). The event-manager plugin has
-   already enforced ownership for the current viewer, prefilled every field's
-   default from the stored object and injected the hidden key. The POST is
-   handled by the plugin's §8.1 contract handler, which re-resolves the object
-   and authorizes against the STORED owner.
+   Edit-event form (/begivenheder/rediger/<key>) — the shared event-form
+   surface (partials/event_form.html.twig) with live preview. The
+   event-manager plugin has already enforced ownership and the fields are
+   prefilled from the stored object (data-default@); the POST handler
+   re-resolves the object and authorizes against the STORED owner.
    ============================================================================ #}
 
 {% block body %}
-<section class="bv-section--sm" aria-label="Rediger begivenhed">
-    <div class="bv-container">
-        <div class="bv-event-form-card">
-            <h1 class="bv-headline">Rediger begivenhed</h1>
-            {% if em_event %}
-                <p class="bv-body-lg">Du redigerer "{{ em_event.title }}".</p>
-            {% endif %}
-
-            {% include "forms/form.html.twig" with { form: forms('event-edit') } %}
-
-            <div class="bv-event-form-card__footer">
-                <a class="bv-btn bv-btn--secondary" href="/begivenheder/mine">Tilbage til mine begivenheder</a>
-            </div>
-        </div>
-    </div>
-</section>
+    {% include 'partials/event_form.html.twig' with {
+        ef_form_name: 'event-edit',
+        ef_heading: 'Rediger begivenhed',
+        ef_intro: em_event ? ('Du redigerer "' ~ em_event.title ~ '". Forhåndsvisningen til højre opdateres, mens du skriver.') : null
+    } %}
 {% endblock %}

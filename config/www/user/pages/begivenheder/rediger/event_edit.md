@@ -9,11 +9,13 @@ cache_enable: false
 never_cache_twig: true
 
 # Reached as /begivenheder/rediger/<key> — the event-manager plugin resolves
-# the keyed route to this page, enforces ownership, injects blueprint options
-# and prefills every field's `default` from the stored object. The hidden
-# `key` is a correlation value only: the POST handler re-resolves the object
-# server-side and authorizes against the STORED owner. Server-managed fields
-# (owner, audit stamps, archived) never appear here.
+# the keyed route to this page and enforces ownership; every field's default
+# is prefilled from the stored object per request via data-default@
+# (FormDataProvider). The hidden `key` is a correlation value only: the POST
+# handler re-resolves the object server-side and authorizes against the
+# STORED owner. The card colour (button_style) is DERIVED from the group
+# server-side; server-managed fields (owner, audit stamps, archived) never
+# appear here.
 form:
     name: event-edit
     action: /begivenheder/rediger
@@ -22,110 +24,128 @@ form:
             type: hidden
             data-default@: '\Grav\Plugin\EventManager\FormDataProvider::currentEventKey'
 
-        published:
-            type: toggle
-            label: Synlig
-            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'published']
-            help: "Synlige begivenheder vises i værkstedskalenderen. Vælg Nej for at trække begivenheden tilbage som kladde."
-            highlight: 1
-            default: 1
-            options:
-                1: Ja
-                0: Nej
+        section_about:
+            type: display
+            markdown: true
+            content: "### Om begivenheden"
 
         title:
             type: text
             label: Titel
+            help: "Overskriften på kortet i kalenderen. Hold den kort og sigende, fx 'Reparationscafé for cykler'."
             data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'title']
             validate:
                 required: true
 
-        description:
-            type: textarea
-            label: Beskrivelse
-            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'description']
-            rows: 3
-
         group:
             type: select
             label: Værkstedsgruppe
+            help: "Det værksted begivenheden hører til. Kortets farve følger automatisk værkstedet."
             validate:
                 required: true
             data-options@: '\Grav\Plugin\EventManager\FormDataProvider::groupOptions'
             data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'group']
 
+        description:
+            type: textarea
+            label: Beskrivelse
+            help: "Et par linjer om hvad der sker, hvem det er for, og om man skal medbringe noget."
+            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'description']
+            rows: 3
+
         badge:
             type: text
-            label: Kategori badge
+            label: Kategori-badge
+            help: "Den lille farvede etiket øverst på kortet, fx værkstedets navn eller 'Kursus'. Kan stå tom."
             data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'badge']
-            help: "Vises som farvet badge, f.eks. 'Makerspace & Reparation'"
+
+        section_when:
+            type: display
+            markdown: true
+            content: "### Tid & sted"
 
         event_date:
             type: text
             label: Dato
-            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'event_date']
-            help: "Format: 2026-05-02"
+            help: "Skriv datoen som ÅÅÅÅ-MM-DD, fx 2026-08-22."
             placeholder: "ÅÅÅÅ-MM-DD"
+            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'event_date']
             validate:
                 required: true
 
         event_time:
             type: text
             label: Tidspunkt
+            help: "Fri tekst, fx '10:00 - 14:00' eller 'Hele dagen'. Kan stå tom."
             data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'event_time']
-            help: "F.eks. '10:00 - 14:00'"
 
         location:
             type: text
             label: Lokation
+            help: "Fx 'Makerspace lokalet' eller 'Hele området'. Kan stå tom."
             data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'location']
-            help: "F.eks. 'Hele området' eller 'Makerspace lokalet'"
+
+        section_signup:
+            type: display
+            markdown: true
+            content: "### Tilmelding & pris\nAlt herunder er valgfrit — udfyld kun det, der er relevant."
 
         capacity:
             type: text
             label: Kapacitet
+            help: "Fx '8 pladser' eller 'Begrænset plads'. Tom betyder ubegrænset."
             data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'capacity']
-            help: "F.eks. '8 Pladser', 'Begrænset plads' eller tom for ubegrænset"
 
         price:
             type: text
             label: Pris
+            help: "Fx '50 kr. voksne' eller 'Gratis entré'. Tom betyder at der ikke vises nogen pris."
             data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'price']
-            help: "F.eks. '50 kr. voksne', 'Gratis entrè' eller tom"
 
         button_text:
             type: text
-            label: Knap tekst
+            label: Knap-tekst
+            help: "Teksten på kortets knap, fx 'Tilmeld'. Knappen vises kun, hvis der også er et link herunder."
             data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'button_text']
 
         button_url:
             type: text
-            label: Tilmelding URL
+            label: Knap-link
+            help: "Hvor knappen fører hen: en side på sitet (fx /kontakt) eller en fuld adresse (https://…)."
             data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'button_url']
-            help: "En side på sitet (fx /vaerksteder) eller en fuld http(s)-adresse"
 
-        button_style:
-            type: select
-            label: Knap stil
-            data-options@: '\Grav\Plugin\EventManager\FormDataProvider::buttonStyleOptions'
-            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'button_style']
+        section_visibility:
+            type: display
+            markdown: true
+            content: "### Synlighed"
+
+        published:
+            type: toggle
+            label: Synlig
+            help: "Ja: begivenheden ligger i værkstedskalenderen. Nej: den trækkes tilbage som kladde, som kun du kan se under 'Mine begivenheder'."
+            highlight: 1
+            default: 1
+            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'published']
+            options:
+                1: Ja
+                0: Nej
 
         featured:
             type: toggle
-            label: Fremhævet begivenhed
-            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'featured']
-            help: Vises stort øverst på kalendersiden
+            label: Fremhævet
+            help: "Fremhævede begivenheder vises med større overskrift i kalenderen. Brug det til de vigtigste arrangementer."
             highlight: 1
             default: 0
+            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'featured']
             options:
                 1: Ja
                 0: Nej
 
         featured_tag:
             type: text
-            label: Fremhævet tag
+            label: Fremhævet-tag
+            help: "Lille tag på fremhævede begivenheder, fx 'All Hands'. Bruges kun når Fremhævet er slået til."
             data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'featured_tag']
-            help: "F.eks. 'All Hands' — kun vist når fremhævet"
 
     buttons:
         - type: submit

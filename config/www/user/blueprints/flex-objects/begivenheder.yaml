@@ -127,6 +127,9 @@ form:
       label: Tilmelding URL
       default: '#'
 
+    # On the frontend management surface this is DERIVED from `group`
+    # (EventValidator::ACCENT_BY_GROUP) — the accent follows the workshop and
+    # is never a user choice. The select remains here for admin edits.
     button_style:
       type: select
       label: Knap stil
@@ -135,6 +138,7 @@ form:
         primary: Primær (grøn)
         secondary: Sekundær (blå)
         tertiary: Terracotta
+        kulturhus: Orange (Eventværkstedet)
 
     featured:
       type: toggle
