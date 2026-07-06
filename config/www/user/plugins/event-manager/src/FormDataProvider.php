@@ -22,10 +22,65 @@ use Grav\Common\Grav;
 
 final class FormDataProvider
 {
+    private const OLD_INPUT_SESSION_KEY = 'em_old_input';
+
+    /** @var array<string,mixed>|null Old input consumed from the session for THIS request. */
+    private static ?array $oldInput = null;
+    private static bool $oldInputLoaded = false;
+
     /** @return array<string,string> */
     public static function groupOptions(): array
     {
         return self::repository()->fieldOptions('group');
+    }
+
+    /**
+     * Stash a rejected submission so the next form render repopulates the
+     * fields instead of losing the member's input (the §8.1.10 PRG error
+     * path). Read-once: the next render consumes and clears it.
+     *
+     * @param array<string,mixed> $data
+     */
+    public static function stashOldInput($grav, array $data): void
+    {
+        $session = $grav['session'] ?? null;
+        if ($session === null) {
+            return;
+        }
+        $stash = [];
+        foreach (EventValidator::FORM_FIELDS as $field) {
+            if (array_key_exists($field, $data) && is_scalar($data[$field])) {
+                $stash[$field] = (string)$data[$field];
+            }
+        }
+        $session->{self::OLD_INPUT_SESSION_KEY} = $stash;
+    }
+
+    /**
+     * Repopulation value for one field after a rejected submission (create
+     * form), or null to leave the static default. Values render through
+     * Twig's attribute escaping, so a hostile stashed value cannot inject.
+     */
+    public static function oldInputDefault(string $field): mixed
+    {
+        $old = self::consumeOldInput();
+        return $old !== null && array_key_exists($field, $old) ? $old[$field] : null;
+    }
+
+    /** @return array<string,mixed>|null */
+    private static function consumeOldInput(): ?array
+    {
+        if (self::$oldInputLoaded) {
+            return self::$oldInput;
+        }
+        self::$oldInputLoaded = true;
+        $session = Grav::instance()['session'] ?? null;
+        $key = self::OLD_INPUT_SESSION_KEY;
+        if ($session !== null && isset($session->{$key}) && is_array($session->{$key})) {
+            self::$oldInput = $session->{$key};
+            unset($session->{$key});
+        }
+        return self::$oldInput;
     }
 
     /**
@@ -64,6 +119,12 @@ final class FormDataProvider
     {
         if (!in_array($field, EventValidator::FORM_FIELDS, true)) {
             return null;
+        }
+        // A rejected submission's own values win over the stored object, so
+        // the member's edits survive a validation round-trip.
+        $old = self::oldInputDefault($field);
+        if ($old !== null) {
+            return $old;
         }
         $event = self::currentEvent();
         if ($event === null || !array_key_exists($field, $event)) {

@@ -19,7 +19,7 @@ final class EventValidator
      * the handlers and deliberately absent.
      */
     public const FORM_FIELDS = [
-        'published', 'title', 'description', 'group', 'badge', 'event_date',
+        'published', 'title', 'description', 'group', 'event_date',
         'event_time', 'location', 'capacity', 'price', 'button_text',
         'button_url', 'featured', 'featured_tag',
     ];
@@ -34,6 +34,22 @@ final class EventValidator
      * survives the rename. Mirrored client-side by the live preview in
      * partials/event_form.html.twig — keep the two in sync.
      */
+    /**
+     * Card badge per workshop group — derived alongside the accent, never a
+     * user choice (matches the badges the legacy seed events carry). Both
+     * current and post-rename group keys are mapped, like ACCENT_BY_GROUP.
+     * Mirrored client-side by the live preview — keep in sync.
+     */
+    public const BADGE_BY_GROUP = [
+        'alle' => 'Alle grupper',
+        'makerspace' => 'Makerspace & Reparation',
+        'kreativ' => 'Krea Café',
+        'krea' => 'Krea Café',
+        'groenne' => 'Grønt BYværksted',
+        'groent' => 'Grønt BYværksted',
+        'kulturhus' => 'Eventværkstedet',
+    ];
+
     public const ACCENT_BY_GROUP = [
         'alle' => 'primary',
         'makerspace' => 'secondary',
@@ -47,7 +63,6 @@ final class EventValidator
     /** Bounded lengths for free-text fields (defense against unbounded payloads). */
     private const MAX_LENGTHS = [
         'description' => 2000,
-        'badge' => 80,
         'event_time' => 60,
         'location' => 120,
         'capacity' => 60,
@@ -103,9 +118,11 @@ final class EventValidator
             $values['event_date'] = $date;
         }
 
-        // button_style — DERIVED from the group, never client-settable: the
-        // accent colour must follow the workshop. Any posted value is ignored.
+        // button_style + badge — DERIVED from the group, never client-
+        // settable: the card colour and the category badge must follow the
+        // workshop. Any posted values are ignored.
         $values['button_style'] = self::ACCENT_BY_GROUP[$group] ?? 'primary';
+        $values['badge'] = self::BADGE_BY_GROUP[$group] ?? '';
 
         // button_url — allowlist, not denylist (§8.1.6): empty (no button),
         // a site-relative path (leading single '/'), or absolute http(s).

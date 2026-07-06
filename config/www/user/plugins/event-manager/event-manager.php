@@ -46,6 +46,7 @@ use Grav\Plugin\EventManager\AuditLog;
 use Grav\Plugin\EventManager\EventAuthorizer;
 use Grav\Plugin\EventManager\EventRepository;
 use Grav\Plugin\EventManager\EventValidator;
+use Grav\Plugin\EventManager\FormDataProvider;
 use Grav\Plugin\FeatureFlags\FeatureFlag;
 use Grav\Plugin\FeatureFlags\FlagStoreInterface;
 
@@ -379,7 +380,7 @@ class EventManagerPlugin extends Plugin
             $this->sendError(400, 'Ugyldig formular.');
         }
 
-        $values = $this->validateOr400($data);
+        $values = $this->validateOr400($data, self::ROUTE_BASE . '/opret');
 
         // 8. Mutate — owner stamped once here, never client-settable. The
         //    arrangør self-publishes: the validated `published` value is
@@ -411,7 +412,7 @@ class EventManagerPlugin extends Plugin
     {
         [$key, $object, $stored] = $this->resolveOwnedObjectOr40x($user, $data);
 
-        $values = $this->validateOr400($data);
+        $values = $this->validateOr400($data, self::ROUTE_BASE . '/rediger/' . $key);
 
         // Preserve identity and creation stamps from the STORED object —
         // client-submitted values for server-managed fields are ignored.
@@ -501,14 +502,30 @@ class EventManagerPlugin extends Plugin
      * @param array<string,mixed> $data
      * @return array<string,mixed>
      */
-    private function validateOr400(array $data): array
+    private function validateOr400(array $data, string $formRoute): array
     {
         $validator = new EventValidator($this->repository()->fieldOptions('group'));
         $result = $validator->validate($data);
-        if ($result['errors'] !== []) {
-            $this->sendJson(['success' => false, 'errors' => $result['errors']], 400);
+        if ($result['errors'] === []) {
+            return $result['values'];
         }
-        return $result['values'];
+
+        // A browser form POST (Accept: text/html) gets the friendly path —
+        // §8.1.10's PRG-with-flash: back to the form with the field errors
+        // flashed and the submitted values stashed for repopulation
+        // (FormDataProvider consumes the stash on the next render). Every
+        // other caller — the forced-browsing negative tests, scripts, APIs —
+        // gets the contract's bare 400 with field-level JSON errors.
+        if (str_contains((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'text/html')) {
+            $messages = $this->grav['messages'];
+            foreach ($result['errors'] as $message) {
+                $messages->add($message, 'error');
+            }
+            FormDataProvider::stashOldInput($this->grav, $data);
+            $this->grav->redirect($formRoute, 303);
+        }
+
+        $this->sendJson(['success' => false, 'errors' => $result['errors']], 400);
     }
 
     /**

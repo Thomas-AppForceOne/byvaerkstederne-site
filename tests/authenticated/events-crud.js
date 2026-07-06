@@ -103,9 +103,11 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     expect(block).toContain('created_by: pw-test-org');
     expect(block).toContain('published: true');
     expect(block).toContain('archived: false');
-    // The accent is DERIVED from the group (makerspace → secondary); the
-    // client cannot choose it.
+    // The accent AND the category badge are DERIVED from the group
+    // (makerspace → secondary / 'Makerspace & Reparation'); the client
+    // cannot choose them.
     expect(block).toContain('button_style: secondary');
+    expect(block).toContain("badge: 'Makerspace & Reparation'");
 
     // Audit row appended.
     const auditAfter = readAuditLog();

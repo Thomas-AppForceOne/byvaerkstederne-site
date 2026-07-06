@@ -101,6 +101,31 @@ test.describe('Events — organizer forced browsing (per-object authz)', () => {
     expect(readEventsFile()).toBe(before);
   });
 
+  test('browser-form validation failure redirects back to the form with a flash (no raw JSON)', async ({ page }) => {
+    await loginAsOrganizer(page);
+    const nonce = await organizerNonce(page);
+    const response = await page.request.post('/begivenheder/opret', {
+      headers: { Accept: 'text/html' }, // what a real browser form POST sends
+      form: {
+        'data[title]': 'Ugyldig dato rundtur',
+        'data[group]': 'makerspace',
+        'data[event_date]': '2030-13-99',
+        'form-nonce': nonce,
+      },
+      maxRedirects: 0,
+    });
+    expect(response.status()).toBe(303);
+    expect(response.headers()['location']).toContain('/begivenheder/opret');
+    // The form shows the Danish field error as a flash and repopulates the
+    // submitted title (one-shot stash).
+    await page.goto('/begivenheder/opret');
+    await expect(page.locator('.bv-message--error')).toContainText('Datoen skal have formatet');
+    await expect(page.locator('input[name="data[title]"]')).toHaveValue('Ugyldig dato rundtur');
+    // The stash is read-once: a fresh load renders a clean form.
+    await page.goto('/begivenheder/opret');
+    await expect(page.locator('input[name="data[title]"]')).toHaveValue('');
+  });
+
   test('invalid input is 400 with field-level Danish errors and no object written', async ({ page }) => {
     await loginAsOrganizer(page);
     const nonce = await organizerNonce(page);
