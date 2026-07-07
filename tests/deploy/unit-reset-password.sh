@@ -210,11 +210,22 @@ fi
 # ─────────────────────────────────────────────────────────────────────
 # account-password.php — the REAL hashing logic
 # ─────────────────────────────────────────────────────────────────────
+# Host mode needs a php + any vendored symfony/yaml. Two candidates: the
+# feature-flags plugin's dev vendor tree (present locally, gitignored) and
+# migrations/vendor (installed by the ci-test-deploy workflow's composer
+# step — this is what makes the real-PHP checks run in CI).
 PHP_MODE=""
-if command -v php >/dev/null 2>&1 \
-   && [ -f "$PROJECT_ROOT/config/www/user/plugins/feature-flags/vendor/autoload.php" ]; then
-    PHP_MODE="host"
-elif command -v docker >/dev/null 2>&1; then
+PHP_AUTOLOAD_DIR=""
+if command -v php >/dev/null 2>&1; then
+    for candidate in "$PROJECT_ROOT/config/www/user/plugins/feature-flags" "$PROJECT_ROOT/migrations"; do
+        if [ -f "$candidate/vendor/autoload.php" ]; then
+            PHP_MODE="host"
+            PHP_AUTOLOAD_DIR="$candidate"
+            break
+        fi
+    done
+fi
+if [ -z "$PHP_MODE" ] && command -v docker >/dev/null 2>&1; then
     GRAV_CONTAINER="$(docker ps --format '{{.Names}}' | grep -m1 '^grav-' || true)"
     [ -n "$GRAV_CONTAINER" ] && PHP_MODE="docker"
 fi
@@ -228,7 +239,7 @@ run_password_php() {
     src="$(cat "$PROJECT_ROOT/deploy/lib/account-password.php")"
     src="${src//__PW_B64__/$b64}"
     if [ "$PHP_MODE" = "host" ]; then
-        ( cd "$PROJECT_ROOT/config/www/user/plugins/feature-flags" \
+        ( cd "$PHP_AUTOLOAD_DIR" \
           && printf '%s' "$src" | php -- "$1" )
     else
         docker cp "$1" "$GRAV_CONTAINER:/tmp/acct-pw-test.yaml" >/dev/null
@@ -249,7 +260,7 @@ echo isset($d["reset"]) ? "+reset-still-there" : "+reset-cleared";
 echo isset($d["password"]) ? "+plaintext-left" : "+no-plaintext";
 echo "\n";'
     if [ "$PHP_MODE" = "host" ]; then
-        ( cd "$PROJECT_ROOT/config/www/user/plugins/feature-flags" \
+        ( cd "$PHP_AUTOLOAD_DIR" \
           && printf '%s' "$probe" | php -- "$1" )
     else
         docker cp "$1" "$GRAV_CONTAINER:/tmp/acct-pw-test.yaml" >/dev/null
@@ -290,7 +301,7 @@ EOF
 
     # Un-substituted placeholder (operator error / broken pipe) must fail
     # loudly rather than hash the placeholder string.
-    out="$( (cd "$PROJECT_ROOT/config/www/user/plugins/feature-flags" 2>/dev/null \
+    out="$( (cd "$PHP_AUTOLOAD_DIR" 2>/dev/null \
         && php -- "$ACCT" < "$PROJECT_ROOT/deploy/lib/account-password.php") 2>&1 || true )"
     if [ "$PHP_MODE" = "docker" ]; then
         out="$(docker exec -i -w /app/www/public "$GRAV_CONTAINER" php -- /tmp/acct-pw-test.yaml \

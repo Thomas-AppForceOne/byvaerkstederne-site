@@ -295,11 +295,22 @@ fi
 # ─────────────────────────────────────────────────────────────────────
 # Needs a real PHP with symfony/yaml. Prefer host php + the feature-flags
 # plugin's vendored symfony/yaml; else the checkout's Grav dev container.
+# Host mode needs a php + any vendored symfony/yaml. Two candidates: the
+# feature-flags plugin's dev vendor tree (present locally, gitignored) and
+# migrations/vendor (installed by the ci-test-deploy workflow's composer
+# step — this is what makes the real-PHP checks run in CI).
 PHP_MODE=""
-if command -v php >/dev/null 2>&1 \
-   && [ -f "$PROJECT_ROOT/config/www/user/plugins/feature-flags/vendor/autoload.php" ]; then
-    PHP_MODE="host"
-elif command -v docker >/dev/null 2>&1; then
+PHP_AUTOLOAD_DIR=""
+if command -v php >/dev/null 2>&1; then
+    for candidate in "$PROJECT_ROOT/config/www/user/plugins/feature-flags" "$PROJECT_ROOT/migrations"; do
+        if [ -f "$candidate/vendor/autoload.php" ]; then
+            PHP_MODE="host"
+            PHP_AUTOLOAD_DIR="$candidate"
+            break
+        fi
+    done
+fi
+if [ -z "$PHP_MODE" ] && command -v docker >/dev/null 2>&1; then
     GRAV_CONTAINER="$(docker ps --format '{{.Names}}' | grep -m1 '^grav-' || true)"
     [ -n "$GRAV_CONTAINER" ] && PHP_MODE="docker"
 fi
@@ -307,7 +318,7 @@ fi
 run_groups_php() {
     # $1 = account yaml (host path), $2 = group, $3 = action
     if [ "$PHP_MODE" = "host" ]; then
-        ( cd "$PROJECT_ROOT/config/www/user/plugins/feature-flags" \
+        ( cd "$PHP_AUTOLOAD_DIR" \
           && php -- "$1" "$2" "$3" < "$PROJECT_ROOT/deploy/lib/account-groups.php" )
     else
         docker cp "$1" "$GRAV_CONTAINER:/tmp/acct-under-test.yaml" >/dev/null
