@@ -59,6 +59,7 @@
                         capacity: ev.capacity,
                         featured: ev.featured|default(false),
                         href: '/begivenheder/' ~ key,
+                        key: key,
                         sort_key: event_sort_key(ev.event_date, ev.event_time, ev.group) ~ '|' ~ '%03d'|format(loop.index)
                     }]) %}
                 {% endif %}

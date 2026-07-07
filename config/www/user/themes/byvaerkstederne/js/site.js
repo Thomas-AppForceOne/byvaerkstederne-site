@@ -776,3 +776,149 @@ document.addEventListener('DOMContentLoaded', function () {
         }, HOLD_MS);
     });
 });
+
+// ============================================================================
+// Event RSVP — the card button IS the live signup action (event_rsvp).
+// Delegated so it works for cards injected on any surface (calendar, detail,
+// and the Phase-4 modal, which can show the same event twice). Anonymous →
+// login overlay; authenticated → AJAX toggle with optimistic UI, nonce
+// rotation, and rollback on error. Follows the roadmap-vote button pattern.
+// ============================================================================
+(function () {
+    'use strict';
+
+    var ENDPOINT = '/begivenheder/tilmeld';
+
+    function nonceInput() { return document.querySelector('#bv-em-rsvp-nonce [name="rsvp_nonce"]'); }
+    function isAuthenticated() { return !!nonceInput(); }
+    function getNonce() { var el = nonceInput(); return el ? el.value : ''; }
+    function setNonce(value) { var el = nonceInput(); if (el && value) { el.value = value; } }
+
+    function cssEscape(s) {
+        if (window.CSS && CSS.escape) { return CSS.escape(s); }
+        return String(s).replace(/["\\\]]/g, '\\$&');
+    }
+
+    // Danish label/state for a button given mode + signed-up + availability —
+    // must mirror the Twig-rendered initial state in partials/event_card.html.twig.
+    function labelFor(mode, signedUp, isFull) {
+        if (mode === 'interesseret') {
+            return signedUp ? 'Du er interesseret — klik for at fjerne' : 'Interesseret';
+        }
+        if (signedUp) { return 'Du er tilmeldt — klik for at framelde'; }
+        if (isFull) { return 'Alle pladser er optaget'; }
+        return 'Tilmeld';
+    }
+    function stateFor(mode, signedUp, isFull) {
+        if (mode === 'interesseret') { return signedUp ? 'marked' : 'open'; }
+        if (signedUp) { return 'signed_up'; }
+        if (isFull) { return 'full'; }
+        return 'open';
+    }
+    function availabilityText(mode, count, remaining) {
+        if (remaining !== null && remaining !== undefined) {
+            if (remaining > 0) { return remaining + ' plads' + (remaining === 1 ? '' : 'er') + ' tilbage'; }
+            return 'Alle pladser er optaget';
+        }
+        if (mode === 'interesseret') { return count + ' interesseret' + (count === 1 ? '' : 'e'); }
+        return count + ' tilmeldt' + (count === 1 ? '' : 'e');
+    }
+
+    // Update every card + availability line sharing this key from a server result.
+    function applyResult(key, signedUp, count, remaining) {
+        var sel = '[data-rsvp-key="' + cssEscape(key) + '"]';
+        var mode = 'tilmeld';
+        var firstBtn = document.querySelector(sel);
+        if (firstBtn) { mode = firstBtn.getAttribute('data-rsvp-mode') || 'tilmeld'; }
+        var isFull = (remaining !== null && remaining !== undefined && remaining <= 0) && !signedUp;
+
+        document.querySelectorAll(sel).forEach(function (btn) {
+            var m = btn.getAttribute('data-rsvp-mode') || 'tilmeld';
+            btn.textContent = labelFor(m, signedUp, isFull);
+            btn.setAttribute('data-rsvp-state', stateFor(m, signedUp, isFull));
+            btn.classList.toggle('is-signed-up', signedUp);
+            btn.disabled = isFull;
+        });
+        document.querySelectorAll('[data-rsvp-availability="' + cssEscape(key) + '"]').forEach(function (line) {
+            line.textContent = availabilityText(mode, count, remaining);
+        });
+    }
+
+    // Inline feedback near the button (never a dialog — dialogs block automation).
+    function announce(btn, msg) {
+        var row = btn.closest('.bv-event-row') || btn.parentElement;
+        if (!row) { return; }
+        var note = row.querySelector('.bv-event-row__rsvp-note');
+        if (!note) {
+            note = document.createElement('span');
+            note.className = 'bv-event-row__rsvp-note';
+            note.setAttribute('role', 'status');
+            btn.insertAdjacentElement('afterend', note);
+        }
+        note.textContent = msg;
+    }
+
+    function toggle(btn) {
+        var key = btn.getAttribute('data-rsvp-key');
+        if (!key || btn.disabled || btn.dataset.busy === '1') { return; }
+
+        var prev = {
+            label: btn.textContent,
+            state: btn.getAttribute('data-rsvp-state'),
+            signed: btn.classList.contains('is-signed-up')
+        };
+        btn.dataset.busy = '1';
+        btn.classList.add('is-busy');
+
+        var body = new FormData();
+        body.append('data[key]', key);
+        body.append('rsvp_nonce', getNonce());
+
+        fetch(ENDPOINT, {
+            method: 'POST',
+            body: body,
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        })
+        .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
+        .then(function (res) {
+            btn.dataset.busy = '';
+            btn.classList.remove('is-busy');
+            if (res.status === 200 && res.data && res.data.success) {
+                if (res.data.new_nonce) { setNonce(res.data.new_nonce); }
+                var signedUp = res.data.action === 'signed_up';
+                var remaining = (res.data.remaining === undefined) ? null : res.data.remaining;
+                applyResult(key, signedUp, res.data.count, remaining);
+            } else {
+                // Rollback and surface the server message (409 full/past, 403 stale nonce).
+                btn.textContent = prev.label;
+                btn.setAttribute('data-rsvp-state', prev.state);
+                btn.classList.toggle('is-signed-up', prev.signed);
+                var msg = (res.data && res.data.data && res.data.data.error)
+                    || (res.data && res.data.error)
+                    || 'Handlingen mislykkedes. Prøv igen.';
+                announce(btn, msg);
+            }
+        })
+        .catch(function () {
+            btn.dataset.busy = '';
+            btn.classList.remove('is-busy');
+            btn.textContent = prev.label;
+            btn.setAttribute('data-rsvp-state', prev.state);
+            btn.classList.toggle('is-signed-up', prev.signed);
+            announce(btn, 'Netværksfejl. Kontrollér din forbindelse og prøv igen.');
+        });
+    }
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-rsvp-key]');
+        if (!btn) { return; }
+        e.preventDefault();
+        e.stopPropagation(); // never bubble to the card-expand handler (Phase 4)
+        if (!isAuthenticated()) {
+            if (typeof bvOpenOverlay === 'function') { bvOpenOverlay('bv-login-overlay'); }
+            return;
+        }
+        toggle(btn);
+    });
+}());

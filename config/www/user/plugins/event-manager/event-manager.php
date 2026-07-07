@@ -729,6 +729,119 @@ class EventManagerPlugin extends Plugin
                 return sprintf('%s|%s|%d', (string)$date, $start, $rank);
             }
         ));
+
+        // RSVP reads injected straight into the existing card/detail/dashboard
+        // templates — no new read endpoints (§3). Arrow functions bind $this
+        // so the closures reach the private repositories.
+        $twig->addFunction(new \Twig\TwigFunction(
+            'event_signup_info',
+            fn (string $key): ?array => $this->signupInfo($key)
+        ));
+        $twig->addFunction(new \Twig\TwigFunction(
+            'event_attendees',
+            fn (string $key): ?array => $this->attendeeList($key)
+        ));
+    }
+
+    /**
+     * Public signup state for one event, or null when the event is not
+     * signup-able (unknown, unpublished, archived, or the flag is off). The
+     * data is public — counts and remaining seats are shown to everyone,
+     * including anonymous visitors (§1.3).
+     *
+     * @return array{count:int, remaining:?int, is_full:bool, user_signed_up:bool, mode:string, is_past:bool}|null
+     */
+    private function signupInfo(string $key): ?array
+    {
+        if ($key === '' || !$this->rsvpFeatureEnabled()) {
+            return null;
+        }
+        $event = $this->repository()->findArray($key);
+        if ($event === null || empty($event['published']) || !empty($event['archived'])) {
+            return null;
+        }
+
+        $mode = strtolower(trim((string)($event['button_text'] ?? 'Tilmeld')));
+        if ($mode !== SignupRepository::MODE_TILMELD && $mode !== 'interesseret') {
+            $mode = SignupRepository::MODE_TILMELD;
+        }
+
+        $rawCap = trim((string)($event['capacity'] ?? ''));
+        $capacity = preg_match('/^\d+$/', $rawCap) ? (int)$rawCap : null;
+
+        $signups = $this->signupRepository();
+        $count = $signups->countFor($key);
+        $remaining = ($mode === SignupRepository::MODE_TILMELD && $capacity !== null)
+            ? max(0, $capacity - $signups->countFor($key, SignupRepository::MODE_TILMELD))
+            : null;
+
+        $user = $this->grav['user'] ?? null;
+        $userSignedUp = $user && $user->authenticated && $user->authorized
+            && $signups->isSignedUp($key, (string)$user->username);
+
+        return [
+            'count' => $count,
+            'remaining' => $remaining,
+            'is_full' => $remaining !== null && $remaining <= 0,
+            'user_signed_up' => (bool)$userSignedUp,
+            'mode' => $mode,
+            'is_past' => $this->eventIsPast($event),
+        ];
+    }
+
+    /**
+     * Attendee list for the OWNER (or super) only — the ownership check lives
+     * here in PHP so a template can never leak names by accident (§3). Returns
+     * null for anyone else. Full names are resolved from Grav's accounts at
+     * render time, never stored in the signup file (§2).
+     *
+     * @return list<array{username:string, fullname:string, mode:string, ts:string}>|null
+     */
+    private function attendeeList(string $key): ?array
+    {
+        if ($key === '' || !$this->rsvpFeatureEnabled()) {
+            return null;
+        }
+        $event = $this->repository()->findArray($key);
+        if ($event === null) {
+            return null;
+        }
+        $user = $this->grav['user'] ?? null;
+        if (!EventAuthorizer::ownsOrSuper($user, isset($event['owner']) ? (string)$event['owner'] : null)) {
+            return null;
+        }
+
+        $rows = $this->signupRepository()->attendeesFor($key);
+        foreach ($rows as &$row) {
+            $row['fullname'] = $this->resolveFullName($row['username']);
+        }
+        unset($row);
+        return $rows;
+    }
+
+    /** Best-effort full-name lookup via Grav's accounts; falls back to ''. */
+    private function resolveFullName(string $username): string
+    {
+        try {
+            $accounts = $this->grav['accounts'] ?? null;
+            if ($accounts === null || !method_exists($accounts, 'load')) {
+                return '';
+            }
+            $account = $accounts->load($username);
+            if (!$account) {
+                return '';
+            }
+            $name = '';
+            if (method_exists($account, 'get')) {
+                $name = (string)($account->get('fullname') ?? '');
+            }
+            if ($name === '' && isset($account->fullname)) {
+                $name = (string)$account->fullname;
+            }
+            return $name;
+        } catch (\Throwable $e) {
+            return '';
+        }
     }
 
     public function onTwigSiteVariables(): void

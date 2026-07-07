@@ -51,6 +51,30 @@
                         <a class="bv-btn bv-btn--tertiary bv-btn--sm" href="/begivenheder/slet/{{ ev.key }}">Fjern</a>
                     {% endif %}
                 </div>
+
+                {# Attendee list for the owner (or super). event_attendees()
+                   enforces ownership in PHP and returns null for anyone else,
+                   so no names can leak through this template (§3/§5). #}
+                {% set _attendees = feature_enabled('event_rsvp') ? event_attendees(ev.key) : null %}
+                {% if _attendees is not null %}
+                <details class="bv-event-dashboard__attendees">
+                    <summary>Tilmeldte ({{ _attendees|length }})</summary>
+                    {% if _attendees is empty %}
+                        <p class="bv-body-sm u-text-muted">Ingen tilmeldte endnu.</p>
+                    {% else %}
+                    <ul class="bv-event-dashboard__attendee-list">
+                        {% for a in _attendees %}
+                        <li class="bv-event-dashboard__attendee">
+                            <span class="bv-event-dashboard__attendee-name">{{ a.fullname ?: a.username }}</span>
+                            <span class="bv-event-dashboard__attendee-user">@{{ a.username }}</span>
+                            <span class="bv-badge bv-badge--{{ a.mode == 'tilmeld' ? 'primary' : 'secondary' }}">{{ a.mode == 'tilmeld' ? 'Tilmeldt' : 'Interesseret' }}</span>
+                            <span class="bv-event-dashboard__attendee-ts">{{ a.ts ? a.ts|date('j. M Y H:i') : '' }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                </details>
+                {% endif %}
             </li>
             {% endfor %}
         </ul>
