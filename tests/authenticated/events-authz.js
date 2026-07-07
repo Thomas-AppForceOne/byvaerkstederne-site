@@ -136,6 +136,7 @@ test.describe('Events — organizer forced browsing (per-object authz)', () => {
         'data[group]': 'not-a-group',
         'data[event_date]': '2030-13-99',
         'data[button_url]': 'javascript:alert(1)',
+        'data[price]': '1000 kr. kontant', // price is a closed choice
         'form-nonce': nonce,
       },
       maxRedirects: 0,
@@ -143,7 +144,7 @@ test.describe('Events — organizer forced browsing (per-object authz)', () => {
     expect(response.status()).toBe(400);
     const body = await response.json();
     expect(Object.keys(body.errors)).toEqual(
-      expect.arrayContaining(['title', 'group', 'event_date', 'button_url'])
+      expect.arrayContaining(['title', 'group', 'event_date', 'button_url', 'price'])
     );
     expect(readEventsFile()).toBe(before);
   });

@@ -35,6 +35,21 @@ final class FormDataProvider
     }
 
     /**
+     * Price choices for the form select — keys are the stored/displayed
+     * values (EventValidator::PRICE_OPTIONS is the single source).
+     *
+     * @return array<string,string>
+     */
+    public static function priceOptions(): array
+    {
+        $options = [];
+        foreach (EventValidator::PRICE_OPTIONS as $value) {
+            $options[$value] = $value === '' ? 'Ingen prisvisning' : $value;
+        }
+        return $options;
+    }
+
+    /**
      * Stash a rejected submission so the next form render repopulates the
      * fields instead of losing the member's input (the §8.1.10 PRG error
      * path). Read-once: the next render consumes and clears it.

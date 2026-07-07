@@ -60,13 +60,19 @@ final class EventValidator
         'kulturhus' => 'kulturhus',
     ];
 
+    /**
+     * Price is a closed choice, stored as the display text the card renders.
+     * '' = no price shown on the card. Legacy events keep their free-text
+     * prices until they are edited, at which point one of these is chosen.
+     */
+    public const PRICE_OPTIONS = ['', 'Gratis', 'Brugerbetaling', 'Drop-in'];
+
     /** Bounded lengths for free-text fields (defense against unbounded payloads). */
     private const MAX_LENGTHS = [
         'description' => 2000,
         'event_time' => 60,
         'location' => 120,
         'capacity' => 60,
-        'price' => 60,
         'button_text' => 60,
         'button_url' => 300,
         'featured_tag' => 60,
@@ -123,6 +129,14 @@ final class EventValidator
         // workshop. Any posted values are ignored.
         $values['button_style'] = self::ACCENT_BY_GROUP[$group] ?? 'primary';
         $values['badge'] = self::BADGE_BY_GROUP[$group] ?? '';
+
+        // price — closed set (select in the form; anything else is tampering).
+        $price = $this->str($data, 'price');
+        if (!in_array($price, self::PRICE_OPTIONS, true)) {
+            $errors['price'] = 'Ugyldig pris — vælg Gratis, Brugerbetaling eller Drop-in.';
+        } else {
+            $values['price'] = $price;
+        }
 
         // button_url — allowlist, not denylist (§8.1.6): empty (no button),
         // a site-relative path (leading single '/'), or absolute http(s).

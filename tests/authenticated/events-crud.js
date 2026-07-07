@@ -63,6 +63,7 @@ async function createEvent(page, { title, published }) {
       'data[group]': 'makerspace',
       'data[event_date]': '2030-06-01',
       'data[event_time]': '10:00 - 12:00',
+      'data[price]': 'Gratis',
       'data[published]': published,
       'form-nonce': nonce,
     },
@@ -108,6 +109,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     // cannot choose them.
     expect(block).toContain('button_style: secondary');
     expect(block).toContain("badge: 'Makerspace & Reparation'");
+    expect(block).toContain('price: Gratis');
 
     // Audit row appended.
     const auditAfter = readAuditLog();

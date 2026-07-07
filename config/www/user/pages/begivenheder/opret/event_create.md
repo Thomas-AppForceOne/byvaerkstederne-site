@@ -106,10 +106,11 @@ form:
                             help: "Fx '8 pladser' eller 'Begrænset plads'. Tom betyder ubegrænset."
 
                         price:
-                            type: text
-                            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::oldInputDefault', 'price']
+                            type: select
                             label: Pris
-                            help: "Fx '50 kr. voksne' eller 'Gratis entré'. Tom betyder at der ikke vises nogen pris."
+                            help: "Gratis, Brugerbetaling eller Drop-in. 'Ingen prisvisning' skjuler prisen på kortet."
+                            data-options@: '\Grav\Plugin\EventManager\FormDataProvider::priceOptions'
+                            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::oldInputDefault', 'price']
 
                         button_text:
                             type: text
