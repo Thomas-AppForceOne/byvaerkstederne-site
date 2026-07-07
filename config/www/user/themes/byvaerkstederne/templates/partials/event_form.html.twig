@@ -300,3 +300,38 @@
     update();
 })();
 </script>
+
+{# Rich-text editor for the `details` field — TinyMCE (GPL), self-hosted under
+   theme://js/vendor/tinymce, NO CDN. Progressive enhancement: without JS, or
+   if TinyMCE fails to load, the plain <textarea class="bv-rich-editor"> still
+   posts text that the server sanitizes (DetailsSanitizer). The server is the
+   security boundary; the editor is UX only. #}
+<script src="{{ url('theme://js/vendor/tinymce/tinymce.min.js') }}?v={{ 'now'|date('U') }}"></script>
+<script>
+(function () {
+    if (!window.tinymce) { return; } // graceful fallback to the plain textarea
+    tinymce.init({
+        selector: 'textarea.bv-rich-editor',
+        license_key: 'gpl',
+        base_url: '{{ url('theme://js/vendor/tinymce') }}',
+        suffix: '.min',
+        promotion: false,
+        branding: false,
+        menubar: false,
+        elementpath: false,
+        plugins: 'lists advlist autolink link image table code wordcount quickbars',
+        toolbar: 'undo redo | blocks | bold italic underline | bullist numlist | link image table | removeformat code',
+        block_formats: 'Afsnit=p; Overskrift=h2; Underoverskrift=h3; Lille overskrift=h4',
+        height: 340,
+        skin: 'oxide',
+        content_css: 'default',
+        convert_urls: false,
+        // Image insertion uploads to the event-manager endpoint (Phase 6); the
+        // server stores the file under the allowlisted /begivenheder/billede/
+        // serving path, the only img src the sanitizer keeps.
+        images_upload_url: '/begivenheder/upload',
+        automatic_uploads: true,
+        images_reuse_filename: false
+    });
+})();
+</script>
