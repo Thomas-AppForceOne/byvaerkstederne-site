@@ -12,7 +12,7 @@ Scope: Members sign up for (or mark interest in) events from the public site; ev
 
 | Already in place (PR #67) | Consequence for this spec |
 |---|---|
-| `button_text` is a closed choice — `Tilmeld` or `Interesseret` — always rendered on the card, linking to `/begivenheder/<key>`; `button_url` is retired. | `button_text` **is** the signup mode: `Tilmeld` = binding signup counted against capacity; `Interesseret` = non-binding interest, never capacity-limited. No new field needed. |
+| `button_text` is a closed choice — `Tilmeld` or `Interesseret` — always rendered on the card; `button_url` is retired. (Interim CRUD behaviour: the button links to `/begivenheder/<key>`.) | `button_text` **is** the signup mode: `Tilmeld` = binding signup counted against capacity; `Interesseret` = non-binding interest, never capacity-limited. No new field needed. This feature replaces the interim link: the card button becomes the **live signup action** (§4). |
 | `capacity` is stored as `''` (unlimited, the default) or a bounded integer string. Legacy events may carry free text — treat any non-numeric capacity as unlimited. | Seat math is `(int)capacity - confirmed signups`. |
 | The detail route `/begivenheder/<key>` exists with the §8.2 read contract (published ⇒ anyone; no existence leak), and cards/titles link to it. | The RSVP button and availability render on the detail page and cards without new routing. |
 | The event-manager plugin owns the §8.1 mutation contract (flag → method → authn → CSRF → capability → ownership → mutate → audit → PRG) and the append-only `events-audit.jsonl`. | RSVP endpoints follow the same contract shape and audit channel. |
@@ -71,9 +71,12 @@ One endpoint, toggle semantics (mirrors the roadmap vote add/remove pattern): fl
 
 ## 4. UX
 
-- **Cards + detail page**: under the meta column, the availability line (§1.3 wording). The card button stays a link to the detail page; the **live** signup button lives on the detail page (state-aware: "Tilmeld" / "Du er tilmeldt — klik for at framelde" / "Alle pladser er optaget", disabled when full or past).
-- **Anonymous**: clicking the detail-page button opens the existing login overlay (`bv-login-overlay`) with a `redirect` back to the event; the overlay already links to `/opret-medlemskab`.
-- **Organizer view**: the dashboard row and the detail page (for owner/super) show the attendee list with mode and timestamp, plus a count summary. Consider a CSV-ish copy affordance later — not in scope.
+- **The card button IS the signup action.** On every surface it renders (calendar card and expanded card alike), clicking it signs the member up / withdraws — it never navigates. State-aware: "Tilmeld" / "Du er tilmeldt — klik for at framelde" / "Alle pladser er optaget" (disabled when full or past). AJAX with the same PRG fallback pattern as the roadmap vote button.
+- **Every other click within the card expands it in place** — the card animates larger and floats **modally above the calendar page** (dimmed backdrop, Esc/backdrop-click/luk closes, same overlay conventions as the login/bug-report overlays). The expanded card shows the full details: the rich `details_html` body, all meta, the availability line, and the same live signup button. It is NOT a page navigation; `/begivenheder/<key>` stays as the deep-link/no-JS/SEO fallback rendering the same content, and the modal updates the URL (history pushState) so links stay shareable.
+- **Description is always visible on the card** — both collapsed (the calendar card, as today) and expanded (above the rich details body). The `details_html` body appears only in the expanded/modal state.
+- **Availability line**: under the meta column on both card states (§1.3 wording).
+- **Anonymous**: clicking the signup button opens the existing login overlay (`bv-login-overlay`) with a `redirect` back to the event; the overlay already links to `/opret-medlemskab`. Expanding the card requires no login.
+- **Organizer view**: the dashboard row and the expanded card (for owner/super) show the attendee list with mode and timestamp, plus a count summary. Consider a CSV-ish copy affordance later — not in scope.
 
 ---
 
@@ -102,7 +105,8 @@ Decision requested by the owner: a **full WYSIWYG (HTML) editor**, not markdown.
 
 ## 7. Test plan (Playwright, reusing the pw-test-* seeds)
 
-- Member signs up on a Tilmeld event → count +1 publicly, state-aware button flips, audit row; withdraw reverses it. Same for Interesseret (never capacity-blocked).
+- Member signs up on a Tilmeld event **directly from the card button** → count +1 publicly, state-aware button flips without navigation, audit row; withdraw reverses it. Same for Interesseret (never capacity-blocked).
+- Card expansion: clicking the card (not the button) opens the floating modal with description + details; Esc/backdrop closes it back to the calendar; the URL updates and a direct load of `/begivenheder/<key>` renders the same content (no-JS fallback).
 - Capacity: seed capacity=1, two members — second gets 409 and the public line shows "Alle pladser er optaget"; withdraw frees the seat.
 - Unlimited event shows only the count, never "pladser tilbage".
 - Anonymous: availability visible; button click opens the login overlay; direct POST ⇒ 401/redirect, nothing written.
