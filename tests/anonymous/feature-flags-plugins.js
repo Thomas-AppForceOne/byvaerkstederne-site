@@ -540,16 +540,19 @@ const FLAG_PROBES = [
   },
   {
     flag: 'event_rsvp',
-    desc: '"Jeg kommer" button absent from public-demo home; present under internal',
+    // The featured home card's CTA is the live RSVP signup button (the retired
+    // "Jeg kommer" button_url link is gone). The button — and its data-rsvp-key
+    // hook — is present only when event_rsvp is on.
+    desc: 'live RSVP signup button absent from public-demo home; present under internal',
     async publicDemo(ctx) {
       const r = await ctx.get('/', { maxRedirects: 0 });
       expect(r.status()).toBe(200);
-      expect(/Jeg kommer/i.test(await r.text())).toBe(false);
+      expect(/data-rsvp-key/.test(await r.text())).toBe(false);
     },
     async internal(ctx) {
       const r = await ctx.get('/', { maxRedirects: 0 });
       expect(r.status()).toBe(200);
-      expect(/Jeg kommer/i.test(await r.text())).toBe(true);
+      expect(/data-rsvp-key/.test(await r.text())).toBe(true);
     },
   },
   {

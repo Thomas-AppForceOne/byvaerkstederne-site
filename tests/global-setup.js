@@ -29,6 +29,11 @@ const {
   ensureDraftEvent,
   ensureArchivedEvent,
   ensureForeignEvent,
+  ensureRsvpEvent,
+  ensureCapacityEvent,
+  ensureInterestEvent,
+  clearEventSignups,
+  clearEventImages,
   clearGravCache,
 } = require('./helpers/fixtures');
 const { isMailSinkConfigured, mailSinkUrl } = require('./helpers/mail');
@@ -90,6 +95,14 @@ module.exports = async function globalSetup() {
     seeded = ensureDraftEvent().seeded || seeded;
     seeded = ensureArchivedEvent().seeded || seeded;
     seeded = ensureForeignEvent().seeded || seeded;
+    // Event RSVP fixtures back the signup/capacity/interest suites. Start from
+    // a clean signup + image state so a prior crashed run can't leave a
+    // capacity-1 event already full.
+    seeded = ensureRsvpEvent().seeded || seeded;
+    seeded = ensureCapacityEvent().seeded || seeded;
+    seeded = ensureInterestEvent().seeded || seeded;
+    clearEventSignups();
+    clearEventImages();
   }
   // Make the freshly-seeded flex fixtures visible to Grav's cached admin flex
   // index (appending YAML at runtime doesn't invalidate it). Without this the

@@ -20,3 +20,7 @@ require('./authenticated/login');
 // Frontend event CRUD — organizer success paths + forced-browsing authz.
 require('./authenticated/events-crud');
 require('./authenticated/events-authz');
+// Event RSVP — signup/withdraw, capacity, forced-browsing negatives, attendee
+// visibility; rich details sanitisation + image upload.
+require('./authenticated/events-rsvp');
+require('./authenticated/events-details');
