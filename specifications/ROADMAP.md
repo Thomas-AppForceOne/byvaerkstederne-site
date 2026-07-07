@@ -13,6 +13,11 @@ Lifecycle and folder policy: [CLAUDE.md](../CLAUDE.md#specifications-and-decisio
 
 Let approved members ("arrangører") create/read/update/delete events from the public site via themed forms, instead of the admin panel. Builds on the existing `begivenheder` Flex Directory; a new `event-manager` plugin enforces a single handler authorization contract (authn + `admin.events.*` capability + per-object ownership), owner-stamping, and self-service publishing (arrangører manage and publish their own events; admin is a rare escalation only). Complete CRUD is the release gate.
 
+### Event RSVP & rich event details
+**Spec:** [event_rsvp_specification.md](event_rsvp_specification.md)
+
+Members sign up for (Tilmeld) or mark interest in (Interesseret) events; everyone sees seat availability (unlimited events show counts only); organizers see their attendee lists; events gain a WYSIWYG-edited details body with image upload (sanitized server-side). Builds on the frontend event CRUD; ships behind the reserved `event_rsvp` flag. Depends on the event-CRUD PR landing first.
+
 ---
 
 ## Backlog (spec pending)
