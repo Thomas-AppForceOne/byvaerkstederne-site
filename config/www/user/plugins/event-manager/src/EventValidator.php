@@ -20,9 +20,20 @@ final class EventValidator
      */
     public const FORM_FIELDS = [
         'published', 'title', 'description', 'group', 'event_date',
-        'event_time', 'location', 'capacity', 'price', 'button_text',
-        'button_url', 'featured', 'featured_tag',
+        'time_start', 'time_end', 'location', 'capacity_unlimited',
+        'capacity_count', 'price', 'button_text', 'featured', 'featured_tag',
     ];
+
+    /**
+     * The card button is a signup affordance, not a free link: the label is
+     * a closed choice and the target is always the event's own detail page
+     * (button_url is retired for new/edited events). The RSVP spec builds
+     * the actual signup flow on top of this label.
+     */
+    public const BUTTON_TEXT_OPTIONS = ['Tilmeld', 'Interesseret'];
+
+    /** Suggested rooms for the location field (free text remains allowed). */
+    public const LOCATION_SUGGESTIONS = ['Store Rum', 'Lille Rum', 'Plænen'];
 
     /**
      * Visual accent per workshop group — the single mapping the stored
@@ -70,11 +81,7 @@ final class EventValidator
     /** Bounded lengths for free-text fields (defense against unbounded payloads). */
     private const MAX_LENGTHS = [
         'description' => 2000,
-        'event_time' => 60,
         'location' => 120,
-        'capacity' => 60,
-        'button_text' => 60,
-        'button_url' => 300,
         'featured_tag' => 60,
     ];
 
@@ -130,6 +137,47 @@ final class EventValidator
         $values['button_style'] = self::ACCENT_BY_GROUP[$group] ?? 'primary';
         $values['badge'] = self::BADGE_BY_GROUP[$group] ?? '';
 
+        // event_time — composed from two required native time inputs
+        // (HH:MM), end after start; stored in the card's established
+        // "HH:MM - HH:MM" shape so rendering and legacy data are untouched.
+        $timeStart = $this->str($data, 'time_start');
+        $timeEnd = $this->str($data, 'time_end');
+        if (!preg_match('/^\d{2}:\d{2}$/', $timeStart) || !preg_match('/^\d{2}:\d{2}$/', $timeEnd)) {
+            $errors['time_start'] = 'Vælg både start- og sluttidspunkt.';
+        } elseif ($timeEnd <= $timeStart) {
+            $errors['time_end'] = 'Sluttidspunktet skal være efter starttidspunktet.';
+        } else {
+            $values['event_time'] = $timeStart . ' - ' . $timeEnd;
+        }
+
+        // capacity — unlimited (default, stored '') or a bounded integer.
+        $unlimited = array_key_exists('capacity_unlimited', $data)
+            ? self::toBool($data['capacity_unlimited'])
+            : true;
+        if ($unlimited) {
+            $values['capacity'] = '';
+        } else {
+            $count = $this->str($data, 'capacity_count');
+            if (!preg_match('/^\d{1,4}$/', $count) || (int)$count < 1) {
+                $errors['capacity_count'] = 'Angiv antal pladser som et tal (mindst 1), eller vælg ubegrænset.';
+            } else {
+                $values['capacity'] = (string)(int)$count;
+            }
+        }
+
+        // button_text — closed choice; the button always renders and links
+        // to the event's detail page (button_url retired).
+        $buttonText = $this->str($data, 'button_text');
+        if ($buttonText === '') {
+            $buttonText = 'Tilmeld';
+        }
+        if (!in_array($buttonText, self::BUTTON_TEXT_OPTIONS, true)) {
+            $errors['button_text'] = 'Knappen kan kun være Tilmeld eller Interesseret.';
+        } else {
+            $values['button_text'] = $buttonText;
+        }
+        $values['button_url'] = '';
+
         // price — closed set (select in the form; anything else is tampering).
         $price = $this->str($data, 'price');
         if (!in_array($price, self::PRICE_OPTIONS, true)) {
@@ -138,34 +186,14 @@ final class EventValidator
             $values['price'] = $price;
         }
 
-        // button_url — allowlist, not denylist (§8.1.6): empty (no button),
-        // a site-relative path (leading single '/'), or absolute http(s).
-        // Everything else — javascript:, data:, vbscript:, protocol-relative
-        // //host, bare words — is rejected.
-        $url = $this->str($data, 'button_url');
-        if ($url !== ''
-            && !preg_match('#^/(?!/)#', $url)
-            && !preg_match('#^https?://#i', $url)) {
-            $errors['button_url'] = 'Linket skal være en side på sitet (fx /vaerksteder) eller en fuld http(s)-adresse.';
-        } else {
-            $values['button_url'] = $url;
-        }
-
         // Bounded free-text fields.
         foreach (self::MAX_LENGTHS as $field => $max) {
-            if ($field === 'button_url') {
-                continue; // validated above; length-checked below
-            }
             $value = $this->str($data, $field);
             if (mb_strlen($value) > $max) {
                 $errors[$field] = 'Feltet er for langt (maks. ' . $max . ' tegn).';
-            } elseif (!isset($errors[$field])) {
+            } else {
                 $values[$field] = $value;
             }
-        }
-        if (isset($values['button_url']) && mb_strlen($values['button_url']) > self::MAX_LENGTHS['button_url']) {
-            unset($values['button_url']);
-            $errors['button_url'] = 'Feltet er for langt (maks. ' . self::MAX_LENGTHS['button_url'] . ' tegn).';
         }
 
         // published — strict boolean server-side (the blueprint runs

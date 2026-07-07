@@ -62,7 +62,8 @@ async function createEvent(page, { title, published }) {
       'data[description]': 'Oprettet af Playwright.',
       'data[group]': 'makerspace',
       'data[event_date]': '2030-06-01',
-      'data[event_time]': '10:00 - 12:00',
+      'data[time_start]': '10:00',
+      'data[time_end]': '12:00',
       'data[price]': 'Gratis',
       'data[published]': published,
       'form-nonce': nonce,
@@ -110,6 +111,8 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     expect(block).toContain('button_style: secondary');
     expect(block).toContain("badge: 'Makerspace & Reparation'");
     expect(block).toContain('price: Gratis');
+    // The two native time inputs compose the stored card string.
+    expect(block).toContain("event_time: '10:00 - 12:00'");
 
     // Audit row appended.
     const auditAfter = readAuditLog();
@@ -201,6 +204,8 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
         'data[title]': title,
         'data[group]': 'makerspace',
         'data[event_date]': '2030-06-01',
+        'data[time_start]': '10:00',
+        'data[time_end]': '12:00',
         'data[published]': '0',
         'form-nonce': nonce,
       },

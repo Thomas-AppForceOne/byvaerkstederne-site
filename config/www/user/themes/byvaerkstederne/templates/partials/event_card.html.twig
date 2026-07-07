@@ -61,7 +61,14 @@
       {% if event.badge %}
         <span class="bv-badge bv-badge--{{ _accent }} bv-event-row__badge">{{ event.badge }}</span>
       {% endif %}
-      <h3 class="bv-event-row__title">{{ event.title }}</h3>
+      {# Optional event.href (net-new, only passed by flex-backed callers):
+         the title links to the event's detail view. Callers without keys
+         (page-header events, atelier sessions) render unchanged. #}
+      {% if event.href %}
+        <h3 class="bv-event-row__title"><a class="bv-event-row__title-link" href="{{ event.href }}">{{ event.title }}</a></h3>
+      {% else %}
+        <h3 class="bv-event-row__title">{{ event.title }}</h3>
+      {% endif %}
       {% if event.time %}<p class="bv-event-row__time">{{ event.time }}</p>{% endif %}
       {% if event.description %}<p class="bv-event-row__desc">{{ event.description|e|regex_replace('/([\\w.%+-]+@[\\w.-]+\\.[A-Za-z]{2,})/', '<a href="mailto:$1">$1</a>')|raw }}</p>{% endif %}
     </div>

@@ -35,13 +35,16 @@
                top; that module was removed, which left featured events
                invisible on the calendar entirely. Featured now opts into the
                .bv-event-row--featured styling boost instead. #}
-            {% for ev in flex_events %}
+            {% for key, ev in flex_events %}
                 {% if ev.published and not ev.archived %}
                     {% set _accent = ev.button_style|default('primary') %}
                     {% set _filter = filter_map[ev.group]|default(ev.group) %}
-                    {% set _cta = (ev.button_text and ev.button_url)
-                        ? { label: ev.button_text, href: ev.button_url, variant: _accent }
-                        : null %}
+                    {# The card button is a signup affordance: it always
+                       renders (label Tilmeld/Interesseret, default Tilmeld)
+                       and opens the event's own detail page — button_url is
+                       retired. The RSVP feature turns it into the actual
+                       signup action. #}
+                    {% set _cta = { label: ev.button_text|default('Tilmeld'), href: '/begivenheder/' ~ key, variant: _accent } %}
                     {% set events_list = events_list|merge([{
                         day: ev.event_date|date('j'),
                         month: ev.event_date|date('M'),
@@ -54,7 +57,8 @@
                         price: ev.price,
                         cta: _cta,
                         capacity: ev.capacity,
-                        featured: ev.featured|default(false)
+                        featured: ev.featured|default(false),
+                        href: '/begivenheder/' ~ key
                     }]) %}
                 {% endif %}
             {% endfor %}

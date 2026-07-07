@@ -119,7 +119,7 @@ test.describe('Events — organizer forced browsing (per-object authz)', () => {
     // The form shows the Danish field error as a flash and repopulates the
     // submitted title (one-shot stash).
     await page.goto('/begivenheder/opret');
-    await expect(page.locator('.bv-message--error')).toContainText('Datoen skal have formatet');
+    await expect(page.locator('.bv-message--error', { hasText: 'Datoen skal have formatet' })).toBeVisible();
     await expect(page.locator('input[name="data[title]"]')).toHaveValue('Ugyldig dato rundtur');
     // The stash is read-once: a fresh load renders a clean form.
     await page.goto('/begivenheder/opret');
@@ -135,8 +135,12 @@ test.describe('Events — organizer forced browsing (per-object authz)', () => {
         'data[title]': '<script>alert(1)</script>',
         'data[group]': 'not-a-group',
         'data[event_date]': '2030-13-99',
-        'data[button_url]': 'javascript:alert(1)',
+        'data[time_start]': '12:00',
+        'data[time_end]': '10:00', // ends before it starts
+        'data[capacity_unlimited]': '0',
+        'data[capacity_count]': 'mange', // must be a number
         'data[price]': '1000 kr. kontant', // price is a closed choice
+        'data[button_text]': 'Køb nu', // only Tilmeld/Interesseret
         'form-nonce': nonce,
       },
       maxRedirects: 0,
@@ -144,7 +148,7 @@ test.describe('Events — organizer forced browsing (per-object authz)', () => {
     expect(response.status()).toBe(400);
     const body = await response.json();
     expect(Object.keys(body.errors)).toEqual(
-      expect.arrayContaining(['title', 'group', 'event_date', 'button_url', 'price'])
+      expect.arrayContaining(['title', 'group', 'event_date', 'time_end', 'capacity_count', 'price', 'button_text'])
     );
     expect(readEventsFile()).toBe(before);
   });
@@ -201,6 +205,8 @@ test.describe('Events — organizer forced browsing (per-object authz)', () => {
         'data[title]': '[FIXTURE] Draft event for Playwright tests',
         'data[group]': 'makerspace',
         'data[event_date]': '2030-01-15',
+        'data[time_start]': '10:00',
+        'data[time_end]': '12:00',
         'data[published]': '0',
         'data[owner]': 'attacker',
         'data[created_by]': 'attacker',
@@ -254,6 +260,8 @@ test.describe('Events — organizer forced browsing (per-object authz)', () => {
         'data[title]': '[FIXTURE] Draft event for Playwright tests',
         'data[group]': 'makerspace',
         'data[event_date]': '2030-01-15',
+        'data[time_start]': '10:00',
+        'data[time_end]': '12:00',
         'data[published]': published,
         'form-nonce': nonce,
       },

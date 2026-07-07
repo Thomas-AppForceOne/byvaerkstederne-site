@@ -4085,6 +4085,10 @@ a { color: inherit; text-decoration: none; }
 }
 .bv-btn--kulturhus:hover { filter: brightness(1.15); }
 
+/* Clickable event-card titles (flex-backed cards link to their detail view) */
+.bv-event-row__title-link { color: inherit; text-decoration: none; }
+.bv-event-row__title-link:hover { text-decoration: underline; text-underline-offset: 4px; }
+
 /* Calendar list header — heading + the arrangør's contextual create button */
 .bv-event-list__head {
     display: flex;
@@ -4177,6 +4181,7 @@ a { color: inherit; text-decoration: none; }
 .bv-event-form-card input:focus-visible,
 .bv-event-form-card textarea:focus-visible,
 .bv-event-form-card select:focus-visible { outline: 2px solid var(--secondary); outline-offset: 2px; }
+.bv-event-form-card .bv-field--muted { opacity: 0.45; }
 /* Client-side per-field validation (blur) */
 .bv-event-form-card .bv-input--invalid { border-color: #93000a; outline: 1px solid #93000a; }
 .bv-event-form-card .bv-field-error {

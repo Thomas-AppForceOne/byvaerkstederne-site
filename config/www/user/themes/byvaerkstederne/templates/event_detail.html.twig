@@ -15,9 +15,9 @@
    button_style (visual token), filter from group (behaviour ID). #}
 {% set filter_map = {makerspace: 'makerspace', krea: 'krea', groent: 'groent', kulturhus: 'kulturhus', alle: 'all'} %}
 {% set _accent = ev.button_style|default('primary') %}
-{% set _cta = (ev.button_text and ev.button_url)
-    ? { label: ev.button_text, href: ev.button_url, variant: _accent }
-    : null %}
+{# No CTA on the detail card — the event RSVP feature adds the live
+   Tilmeld/Interesseret action here (button_url is retired). #}
+{% set _cta = null %}
 {% set _card = {
     day: ev.event_date|date('j'),
     month: ev.event_date|date('M'),

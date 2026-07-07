@@ -50,6 +50,21 @@ final class FormDataProvider
     }
 
     /**
+     * Button-label choices — keys are the stored values
+     * (EventValidator::BUTTON_TEXT_OPTIONS is the single source).
+     *
+     * @return array<string,string>
+     */
+    public static function buttonTextOptions(): array
+    {
+        $options = [];
+        foreach (EventValidator::BUTTON_TEXT_OPTIONS as $value) {
+            $options[$value] = $value;
+        }
+        return $options;
+    }
+
+    /**
      * Stash a rejected submission so the next form render repopulates the
      * fields instead of losing the member's input (the §8.1.10 PRG error
      * path). Read-once: the next render consumes and clears it.
@@ -142,7 +157,32 @@ final class FormDataProvider
             return $old;
         }
         $event = self::currentEvent();
-        if ($event === null || !array_key_exists($field, $event)) {
+        if ($event === null) {
+            return null;
+        }
+
+        // Virtual form fields derived from the stored shape: the time pair
+        // comes from the "HH:MM - HH:MM" event_time string, the capacity
+        // pair from the capacity value ('' or non-numeric legacy text =
+        // unlimited).
+        if ($field === 'time_start' || $field === 'time_end') {
+            $time = (string)($event['event_time'] ?? '');
+            if (preg_match('/(\d{1,2}[:.]\d{2}).*?(\d{1,2}[:.]\d{2})/u', $time, $m)) {
+                $value = $field === 'time_start' ? $m[1] : $m[2];
+                return str_pad(str_replace('.', ':', $value), 5, '0', STR_PAD_LEFT);
+            }
+            return null;
+        }
+        if ($field === 'capacity_unlimited') {
+            $capacity = trim((string)($event['capacity'] ?? ''));
+            return preg_match('/^\d+$/', $capacity) ? '0' : '1';
+        }
+        if ($field === 'capacity_count') {
+            $capacity = trim((string)($event['capacity'] ?? ''));
+            return preg_match('/^\d+$/', $capacity) ? $capacity : null;
+        }
+
+        if (!array_key_exists($field, $event)) {
             return null;
         }
         $value = $event[$field];

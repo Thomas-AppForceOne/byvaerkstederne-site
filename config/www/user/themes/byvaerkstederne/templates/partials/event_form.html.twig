@@ -91,6 +91,33 @@
         labelSpan.removeAttribute('data-tooltip');
     });
 
+    // Location: suggest the three rooms while keeping free text
+    // (EventValidator::LOCATION_SUGGESTIONS is the canonical list).
+    var locationInput = form.querySelector('[name="data[location]"]');
+    if (locationInput) {
+        var datalist = document.createElement('datalist');
+        datalist.id = 'ef-location-suggestions';
+        ['Store Rum', 'Lille Rum', 'Plænen'].forEach(function (room) {
+            var option = document.createElement('option');
+            option.value = room;
+            datalist.appendChild(option);
+        });
+        form.appendChild(datalist);
+        locationInput.setAttribute('list', 'ef-location-suggestions');
+    }
+
+    // Capacity count is only meaningful when unlimited is off.
+    function syncCapacityState() {
+        var unlimited = form.querySelector('[name="data[capacity_unlimited]"]:checked');
+        var count = form.querySelector('[name="data[capacity_count]"]');
+        if (!count) return;
+        var off = !unlimited || unlimited.value === '1';
+        count.disabled = off;
+        var wrapper = count.closest('.form-field');
+        if (wrapper) wrapper.classList.toggle('bv-field--muted', off);
+        if (off) showFieldError(count, '');
+    }
+
     // Mirrors EventValidator::ACCENT_BY_GROUP / BADGE_BY_GROUP — the server
     // derives the card colour AND the category badge from the group; the
     // preview must agree.
@@ -133,9 +160,15 @@
                 return value === '' ? 'Vælg hvilket værksted begivenheden hører til.' : '';
             case 'event_date':
                 return isRealDate(value) ? '' : 'Datoen skal have formatet ÅÅÅÅ-MM-DD og være en gyldig dato.';
-            case 'button_url':
-                if (value !== '' && !/^\/(?!\/)/.test(value) && !/^https?:\/\//i.test(value)) {
-                    return 'Linket skal være en side på sitet (fx /vaerksteder) eller en fuld http(s)-adresse.';
+            case 'time_start':
+                return value === '' ? 'Vælg både start- og sluttidspunkt.' : '';
+            case 'time_end':
+                if (value === '') return 'Vælg både start- og sluttidspunkt.';
+                var start = fieldValue('time_start');
+                return (start !== '' && value <= start) ? 'Sluttidspunktet skal være efter starttidspunktet.' : '';
+            case 'capacity_count':
+                if (toggleValue('capacity_unlimited') === false && !/^\d+$/.test(value)) {
+                    return 'Angiv antal pladser som et tal (mindst 1), eller vælg ubegrænset.';
                 }
                 return '';
             default:
@@ -229,24 +262,27 @@
         setText('ef-preview-badge', BADGE_BY_GROUP[fieldValue('group')] || '');
 
         setText('ef-preview-title', fieldValue('title') || 'Din begivenhed');
-        setText('ef-preview-time', fieldValue('event_time'));
+        var timeStart = fieldValue('time_start');
+        var timeEnd = fieldValue('time_end');
+        setText('ef-preview-time', timeStart && timeEnd ? timeStart + ' - ' + timeEnd : '');
         setText('ef-preview-desc', fieldValue('description'));
 
-        // Meta column: price / CTA / capacity — hidden entirely when empty,
-        // like the real card.
+        // Meta column. The button always renders (signup affordance) with
+        // the chosen label; capacity only when not unlimited.
         setText('ef-preview-price', fieldValue('price'));
         var ctaEl = el('ef-preview-cta');
-        var showCta = fieldValue('button_text') !== '' && fieldValue('button_url') !== '';
-        ctaEl.hidden = !showCta;
-        ctaEl.textContent = fieldValue('button_text');
+        ctaEl.hidden = false;
+        ctaEl.textContent = fieldValue('button_text') || 'Tilmeld';
         ACCENTS.forEach(function (a) { ctaEl.classList.remove('bv-btn--' + a); });
         ctaEl.classList.add('bv-btn--' + accent);
 
-        var capacity = fieldValue('capacity');
+        var capacity = toggleValue('capacity_unlimited') === false ? fieldValue('capacity_count') : '';
         el('ef-preview-capacity').hidden = capacity === '';
         el('ef-preview-capacity-text').textContent = capacity;
 
-        el('ef-preview-meta').hidden = fieldValue('price') === '' && !showCta && capacity === '';
+        el('ef-preview-meta').hidden = false;
+
+        syncCapacityState();
 
         // Featured typography boost.
         row.classList.toggle('bv-event-row--featured', toggleValue('featured') === true);

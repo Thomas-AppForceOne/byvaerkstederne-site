@@ -79,16 +79,26 @@ form:
                             validate:
                                 required: true
 
-                        event_time:
-                            type: text
-                            label: Tidspunkt
-                            help: "Fri tekst, fx '10:00 - 14:00' eller 'Hele dagen'. Kan stå tom."
-                            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'event_time']
+                        time_start:
+                            type: time
+                            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'time_start']
+                            label: Starttidspunkt
+                            help: "Hvornår begynder begivenheden?"
+                            validate:
+                                required: true
+
+                        time_end:
+                            type: time
+                            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'time_end']
+                            label: Sluttidspunkt
+                            help: "Hvornår slutter den? Skal være efter starttidspunktet."
+                            validate:
+                                required: true
 
                         location:
                             type: text
                             label: Lokation
-                            help: "Fx 'Makerspace lokalet' eller 'Hele området'. Kan stå tom."
+                            help: "Vælg Store Rum, Lille Rum eller Plænen — eller skriv selv et sted."
                             data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'location']
 
                 layout_column_right:
@@ -101,11 +111,25 @@ form:
                             markdown: true
                             content: "### Tilmelding & pris\nAlt herunder er valgfrit — udfyld kun det, der er relevant."
 
-                        capacity:
-                            type: text
-                            label: Kapacitet
-                            help: "Fx '8 pladser' eller 'Begrænset plads'. Tom betyder ubegrænset."
-                            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'capacity']
+                        capacity_unlimited:
+                            type: toggle
+                            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'capacity_unlimited']
+                            label: Ubegrænset antal pladser
+                            help: "Ubegrænsede begivenheder viser ikke et pladstal på kortet."
+                            highlight: 1
+                            default: 1
+                            options:
+                                1: Ja
+                                0: Nej
+
+                        capacity_count:
+                            type: number
+                            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'capacity_count']
+                            label: Antal pladser
+                            help: "Hvor mange kan deltage? Bruges kun når ubegrænset er slået fra."
+                            validate:
+                                min: 1
+                                max: 9999
 
                         price:
                             type: select
@@ -115,16 +139,12 @@ form:
                             data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'price']
 
                         button_text:
-                            type: text
-                            label: Knap-tekst
-                            help: "Teksten på kortets knap, fx 'Tilmeld'. Knappen vises kun, hvis der også er et link herunder."
+                            type: select
                             data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'button_text']
-
-                        button_url:
-                            type: text
-                            label: Knap-link
-                            help: "Hvor knappen fører hen: en side på sitet (fx /kontakt) eller en fuld adresse (https://…)."
-                            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'button_url']
+                            label: Knap
+                            help: "Knappen vises altid på kortet og åbner begivenheden. Vælg om den skal hedde Tilmeld eller Interesseret."
+                            default: Tilmeld
+                            data-options@: '\Grav\Plugin\EventManager\FormDataProvider::buttonTextOptions'
 
                         section_visibility:
                             type: display
