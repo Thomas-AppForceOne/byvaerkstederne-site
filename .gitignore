@@ -145,3 +145,6 @@ config/www/user/env/*/config/plugins/email.yaml
 # promote-to-prod operator journal — operator-local audit trail, may carry
 # sensitive --reason context. Kept on the operator's machine, never committed.
 deploy/promotion-log.jsonl
+
+# Event-manager audit trail — live state written by the plugin, per-tier, never committed
+config/www/user/data/flex-objects/events-audit.jsonl

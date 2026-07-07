@@ -21,7 +21,7 @@
 
                 {% if ev_collection %}
                     {% for ev in ev_collection %}
-                        {% if ev.published and ev.event_date >= today %}
+                        {% if ev.published and not ev.archived and ev.event_date >= today %}
                             {% if next_event is null or ev.event_date < next_event.event_date %}
                                 {% set next_event = ev %}
                             {% endif %}

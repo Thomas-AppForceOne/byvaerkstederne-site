@@ -68,7 +68,7 @@ setup() {
     echo '0.1.0' > "$FIXTURE/VERSION"
     echo '247'   > "$FIXTURE/BUILD"
     cat > "$FIXTURE/user/data-version.yaml" <<'EOF'
-version: "0.1.0"
+data_version: "0.1.0"
 EOF
 
     # Generate a throw-away age keypair for the test run.
@@ -703,10 +703,14 @@ teardown() {
     grep -q '^code_build: "424242"$' "$SCRATCH/backup-meta.yaml"
 }
 
-@test "data_version comes from fixture data-version.yaml version: field" {
+@test "data_version comes from fixture data-version.yaml data_version: field (canonical)" {
+    # Regression: the live tiers write `data_version:` (the shipped
+    # data-versioning format — data-version.yaml.example, atomic-release,
+    # migrate.sh all agree). backup.sh used to parse only the legacy bare
+    # `version:` key and hard-failed on every migrated tier.
     cat > "$FIXTURE/user/data-version.yaml" <<'EOF'
 # This data version applies to the live tier's flex objects schema.
-version: "3.4.5"
+data_version: "3.4.5"
 EOF
     unset BACKUP_FAKE_DATA_VERSION
     unset BACKUP_DATA_VERSION
@@ -717,6 +721,21 @@ EOF
     run "$RESTORE_SH" --to "$SCRATCH"
     [ "$status" -eq 0 ]
     grep -q '^data_version: "3.4.5"$' "$SCRATCH/backup-meta.yaml"
+}
+
+@test "data_version legacy bare version: field still accepted (fallback)" {
+    cat > "$FIXTURE/user/data-version.yaml" <<'EOF'
+version: "2.2.2"
+EOF
+    unset BACKUP_FAKE_DATA_VERSION
+    unset BACKUP_DATA_VERSION
+
+    run "$BACKUP_SH" prod
+    [ "$status" -eq 0 ]
+    SCRATCH="$TMP/scratch-dv-legacy"
+    run "$RESTORE_SH" --to "$SCRATCH"
+    [ "$status" -eq 0 ]
+    grep -q '^data_version: "2.2.2"$' "$SCRATCH/backup-meta.yaml"
 }
 
 @test "data_version defaults to 0.0.0 (NOT code_version) when fixture missing data-version.yaml" {

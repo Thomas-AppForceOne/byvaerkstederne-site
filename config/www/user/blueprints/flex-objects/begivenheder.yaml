@@ -127,6 +127,9 @@ form:
       label: Tilmelding URL
       default: '#'
 
+    # On the frontend management surface this is DERIVED from `group`
+    # (EventValidator::ACCENT_BY_GROUP) — the accent follows the workshop and
+    # is never a user choice. The select remains here for admin edits.
     button_style:
       type: select
       label: Knap stil
@@ -135,6 +138,7 @@ form:
         primary: Primær (grøn)
         secondary: Sekundær (blå)
         tertiary: Terracotta
+        kulturhus: Orange (Eventværkstedet)
 
     featured:
       type: toggle
@@ -152,3 +156,47 @@ form:
       type: text
       label: Fremhævet tag
       help: "F.eks. 'All Hands' — kun vist når fremhævet"
+
+    # ── Server-managed fields (frontend event CRUD) ─────────────────────
+    # Stamped exclusively by the event-manager plugin's handlers; readonly
+    # in every form and never client-settable. `owner` is the basis of
+    # per-object authorization: a missing/empty owner means the event is
+    # editable only by admin.super (covers the pre-existing legacy events,
+    # so no data migration is needed).
+
+    owner:
+      type: text
+      label: Ejer
+      readonly: true
+
+    created_by:
+      type: text
+      label: Oprettet af
+      readonly: true
+
+    created_at:
+      type: text
+      label: Oprettet
+      readonly: true
+
+    updated_by:
+      type: text
+      label: Senest ændret af
+      readonly: true
+
+    updated_at:
+      type: text
+      label: Senest ændret
+      readonly: true
+
+    archived:
+      type: toggle
+      label: Arkiveret
+      readonly: true
+      highlight: 1
+      default: 0
+      options:
+        1: Ja
+        0: Nej
+      validate:
+        type: bool

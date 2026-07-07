@@ -39,6 +39,8 @@ require('./anonymous/registration');
 require('./anonymous/registration-honeypot');
 require('./anonymous/password-reset');
 require('./anonymous/auth-surface');
+// Frontend event CRUD — public read (M1) + anonymous management gating.
+require('./anonymous/events-public');
 
 // Visual-parity tests live at tests/anonymous/event-card-visual-parity.js
 // and are picked up directly by the chromium project's testMatch (see

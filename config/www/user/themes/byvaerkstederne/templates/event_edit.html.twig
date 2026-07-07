@@ -1,0 +1,17 @@
+{% extends 'partials/base.html.twig' %}
+
+{# ============================================================================
+   Edit-event form (/begivenheder/rediger/<key>) — the shared event-form
+   surface (partials/event_form.html.twig) with live preview. The
+   event-manager plugin has already enforced ownership and the fields are
+   prefilled from the stored object (data-default@); the POST handler
+   re-resolves the object and authorizes against the STORED owner.
+   ============================================================================ #}
+
+{% block body %}
+    {% include 'partials/event_form.html.twig' with {
+        ef_form_name: 'event-edit',
+        ef_heading: 'Rediger begivenhed',
+        ef_intro: em_event ? ('Du redigerer "' ~ em_event.title ~ '". Forhåndsvisningen til højre opdateres, mens du skriver.') : null
+    } %}
+{% endblock %}

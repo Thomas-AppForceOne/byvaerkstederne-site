@@ -48,6 +48,12 @@ enum FeatureFlag: string
     case SocialMediaLinks = 'social_media_links';
     case MakerspaceMeetingLink = 'makerspace_meeting_link';
 
+    // --- Frontend event CRUD (frontend_event_crud_specification.md) ---
+    // Gates the entire event-management surface: the /begivenheder/* routes
+    // (detail, dashboard, create/edit/delete forms) and every mutating
+    // handler in the event-manager plugin.
+    case EventManagement = 'event_management';
+
     /**
      * All rollout-catalogue flag string values, in declaration order. Used by
      * tests and profile validators that need to assert "every catalogue flag
@@ -86,6 +92,7 @@ enum FeatureFlag: string
             'gear_donation',
             'social_media_links',
             'makerspace_meeting_link',
+            'event_management',
         ];
     }
 }

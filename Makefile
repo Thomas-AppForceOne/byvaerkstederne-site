@@ -213,6 +213,101 @@ list-users: ## List member accounts on a tier (tier=dev|test|staging|prod)
 	  *) echo "❌  list-users: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
+activate-user: ## Activate a member whose confirmation email never arrived (tier=... user=<username|email>, state=enabled|disabled, dry_run=1, yes=1, i_mean_it=1)
+	@t="$(tier)"; u="$(user)"; \
+	args=""; \
+	if [ -n "$(state)" ]; then args="$$args --state=$(state)"; fi; \
+	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
+	if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
+	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
+	if [ -z "$$t" ] || [ -z "$$u" ]; then \
+	  echo "❌  activate-user: missing required argument(s).  Got: tier='$$t' user='$$u'"; \
+	  [ -z "$$t" ] && echo "    → 'tier' is empty (required: dev|test|staging|prod)"; \
+	  [ -z "$$u" ] && echo "    → 'user' is empty (a username, or an email to resolve)"; \
+	  echo "    Usage:   make activate-user tier=<dev|test|staging|prod> user=<username|email> [state=enabled|disabled] [dry_run=1] [yes=1] [i_mean_it=1]"; \
+	  echo "    Example: make activate-user tier=dev user=anders@example.dk"; \
+	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/activate-user.sh "$$t" "$$u" $$args ;; \
+	  *) echo "❌  activate-user: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
+reset-password: ## Reset a member's password on a tier (tier=... user=<username|email>, generate=1 to auto-generate+print, dry_run=1, yes=1, i_mean_it=1). Never pass the password as an argument — you are prompted, or use generate=1.
+	@t="$(tier)"; u="$(user)"; \
+	args=""; \
+	if [ "$(generate)" = "1" ]; then args="$$args --generate"; fi; \
+	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
+	if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
+	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
+	if [ -z "$$t" ] || [ -z "$$u" ]; then \
+	  echo "❌  reset-password: missing required argument(s).  Got: tier='$$t' user='$$u'"; \
+	  [ -z "$$t" ] && echo "    → 'tier' is empty (required: dev|test|staging|prod)"; \
+	  [ -z "$$u" ] && echo "    → 'user' is empty (a username, or an email to resolve)"; \
+	  echo "    Usage:   make reset-password tier=<dev|test|staging|prod> user=<username|email> [generate=1] [dry_run=1] [yes=1] [i_mean_it=1]"; \
+	  echo "    Example: make reset-password tier=dev user=anders@example.dk generate=1"; \
+	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/reset-password.sh "$$t" "$$u" $$args ;; \
+	  *) echo "❌  reset-password: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
+list-groups: ## List available user groups (repo groups.yaml; add tier=dev|test|staging|prod for a tier's deployed copy)
+	@t="$(tier)"; \
+	if [ -z "$$t" ]; then \
+	  ./deploy/manage-groups.sh list; \
+	else \
+	  case "$$t" in \
+	    dev|test|staging|prod) ./deploy/manage-groups.sh list "$$t" ;; \
+	    *) echo "❌  list-groups: invalid tier '$$t' (allowed: dev|test|staging|prod, or omit for the repo copy)"; exit 1 ;; \
+	  esac; \
+	fi
+
+grant-rights: ## Grant a group to a user on a tier (tier=... user=<username|email> group=<name>, dry_run=1, yes=1, i_mean_it=1)
+	@t="$(tier)"; u="$(user)"; g="$(group)"; \
+	args=""; \
+	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
+	if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
+	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
+	if [ -z "$$t" ] || [ -z "$$u" ] || [ -z "$$g" ]; then \
+	  echo "❌  grant-rights: missing required argument(s).  Got: tier='$$t' user='$$u' group='$$g'"; \
+	  [ -z "$$t" ] && echo "    → 'tier' is empty (required: dev|test|staging|prod)"; \
+	  [ -z "$$u" ] && echo "    → 'user' is empty (a username, or an email to resolve)"; \
+	  [ -z "$$g" ] && echo "    → 'group' is empty (see: make list-groups)"; \
+	  echo "    Usage:   make grant-rights tier=<dev|test|staging|prod> user=<username|email> group=<name> [dry_run=1] [yes=1] [i_mean_it=1]"; \
+	  echo "    Example: make grant-rights tier=dev user=anders@example.dk group=organizers"; \
+	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/manage-groups.sh grant "$$t" "$$u" "$$g" $$args ;; \
+	  *) echo "❌  grant-rights: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
+revoke-rights: ## Revoke a group from a user on a tier (tier=... user=<username|email> group=<name>, dry_run=1, yes=1, i_mean_it=1)
+	@t="$(tier)"; u="$(user)"; g="$(group)"; \
+	args=""; \
+	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
+	if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
+	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
+	if [ -z "$$t" ] || [ -z "$$u" ] || [ -z "$$g" ]; then \
+	  echo "❌  revoke-rights: missing required argument(s).  Got: tier='$$t' user='$$u' group='$$g'"; \
+	  [ -z "$$t" ] && echo "    → 'tier' is empty (required: dev|test|staging|prod)"; \
+	  [ -z "$$u" ] && echo "    → 'user' is empty (a username, or an email to resolve)"; \
+	  [ -z "$$g" ] && echo "    → 'group' is empty (see: make list-groups)"; \
+	  echo "    Usage:   make revoke-rights tier=<dev|test|staging|prod> user=<username|email> group=<name> [dry_run=1] [yes=1] [i_mean_it=1]"; \
+	  echo "    Example: make revoke-rights tier=dev user=anders group=organizers"; \
+	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/manage-groups.sh revoke "$$t" "$$u" "$$g" $$args ;; \
+	  *) echo "❌  revoke-rights: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
 cleanup-unverified: ## Remove unconfirmed accounts older than N min (tier=dev|test|staging|prod, max_age=10, apply=1, i_mean_it=1). Dry-run unless apply=1.
 	@t="$(tier)"; \
 	args=""; \
@@ -431,6 +526,9 @@ test-deploy: ## Run deploy-script regression tests (lint + unit + atomic-layout 
 	@bash tests/deploy/unit-release-pr-guard.sh
 	@bash tests/deploy/unit-promotion-no-email-sync.sh
 	@bash tests/deploy/bump-version.sh
+	@bash tests/deploy/unit-manage-groups.sh
+	@bash tests/deploy/unit-activate-user.sh
+	@bash tests/deploy/unit-reset-password.sh
 
 test-backup-restore: ## Run backup/restore tooling tests (bats)
 	@command -v bats >/dev/null 2>&1 || { echo "❌  bats not installed. Run: brew install bats-core"; exit 1; }

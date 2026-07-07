@@ -29,8 +29,12 @@ function gravContainer() {
 const LOCKED_ROADMAP_ITEM_ID = 'rm_fixture_locked';
 const RELEASABLE_ROADMAP_ITEM_ID = 'rm_fixture_releasable';
 const UNPROMOTED_BUG_REPORT_ID = 'br_fixture_unpromoted';
+const DRAFT_EVENT_ID = 'ev_fixture_draft';
+const ARCHIVED_EVENT_ID = 'ev_fixture_archived';
+const FOREIGN_EVENT_ID = 'ev_fixture_foreign';
 const LOCKED_ROADMAP_YAML_PATH = '/config/www/user/data/flex-objects/roadmap-items.yaml';
 const BUG_REPORTS_YAML_PATH = '/config/www/user/data/flex-objects/bug-reports.yaml';
+const EVENTS_YAML_PATH = '/config/www/user/data/flex-objects/begivenheder.yaml';
 
 // Leading newline is intentionally omitted: the target files already end in
 // a newline, so `cat >>` produces a clean break. Leaving a blank line in
@@ -94,6 +98,120 @@ const UNPROMOTED_BUG_YAML = `${UNPROMOTED_BUG_REPORT_ID}:
   promoted_item_id: null
   title: '[FIXTURE] Unpromoted for admin smoke'
 `;
+
+// Event fixtures (frontend event CRUD). The draft and archived events are
+// owned by pw-test-org (read-visibility + restore tests); the foreign
+// event is owned by a name that matches no test account, so organizer
+// mutations against it must 403 (per-object authz negative tests).
+const DRAFT_EVENT_YAML = `${DRAFT_EVENT_ID}:
+  published: false
+  title: '[FIXTURE] Draft event for Playwright tests'
+  description: 'Seeded by tests/helpers/fixtures.js; do not edit.'
+  group: makerspace
+  badge: 'Makerspace & Reparation'
+  event_date: '2030-01-15'
+  event_time: '10:00 - 12:00'
+  location: 'Makerspace lokalet'
+  capacity: ''
+  price: ''
+  button_text: ''
+  button_url: ''
+  button_style: primary
+  featured: false
+  featured_tag: ''
+  owner: pw-test-org
+  created_by: pw-test-org
+  created_at: '2026-06-01T00:00:00Z'
+  updated_by: pw-test-org
+  updated_at: '2026-06-01T00:00:00Z'
+  archived: false
+`;
+
+const ARCHIVED_EVENT_YAML = `${ARCHIVED_EVENT_ID}:
+  published: false
+  title: '[FIXTURE] Archived event for Playwright tests'
+  description: 'Seeded by tests/helpers/fixtures.js; do not edit.'
+  group: kreativ
+  badge: 'Krea Café'
+  event_date: '2030-02-15'
+  event_time: '10:00 - 12:00'
+  location: 'Krea lokalet'
+  capacity: ''
+  price: ''
+  button_text: ''
+  button_url: ''
+  button_style: secondary
+  featured: false
+  featured_tag: ''
+  owner: pw-test-org
+  created_by: pw-test-org
+  created_at: '2026-06-01T00:00:00Z'
+  updated_by: pw-test-org
+  updated_at: '2026-06-01T00:00:00Z'
+  archived: true
+`;
+
+const FOREIGN_EVENT_YAML = `${FOREIGN_EVENT_ID}:
+  published: true
+  title: '[FIXTURE] Foreign-owned event for Playwright tests'
+  description: 'Seeded by tests/helpers/fixtures.js; do not edit.'
+  group: kulturhus
+  badge: 'Eventværkstedet'
+  event_date: '2030-03-15'
+  event_time: '10:00 - 12:00'
+  location: 'Eventværkstedet'
+  capacity: ''
+  price: ''
+  button_text: ''
+  button_url: ''
+  button_style: tertiary
+  featured: false
+  featured_tag: ''
+  owner: some-other-organizer
+  created_by: some-other-organizer
+  created_at: '2026-06-01T00:00:00Z'
+  updated_by: some-other-organizer
+  updated_at: '2026-06-01T00:00:00Z'
+  archived: false
+`;
+
+function ensureDraftEvent() {
+  return appendIfMissing(EVENTS_YAML_PATH, DRAFT_EVENT_ID, DRAFT_EVENT_YAML);
+}
+
+function ensureArchivedEvent() {
+  return appendIfMissing(EVENTS_YAML_PATH, ARCHIVED_EVENT_ID, ARCHIVED_EVENT_YAML);
+}
+
+function ensureForeignEvent() {
+  return appendIfMissing(EVENTS_YAML_PATH, FOREIGN_EVENT_ID, FOREIGN_EVENT_YAML);
+}
+
+function removeDraftEvent() {
+  return removeFixture(EVENTS_YAML_PATH, DRAFT_EVENT_ID);
+}
+
+function removeArchivedEvent() {
+  return removeFixture(EVENTS_YAML_PATH, ARCHIVED_EVENT_ID);
+}
+
+function removeForeignEvent() {
+  return removeFixture(EVENTS_YAML_PATH, FOREIGN_EVENT_ID);
+}
+
+/**
+ * Remove an event created DURING a test run by its server-assigned key.
+ * Key shape is strictly validated (`ev_<hex>`) before it reaches sed — the
+ * legacy `event0NN` seeds and fixtures can never match.
+ *
+ * @param {string} key
+ */
+function removeEventByKey(key) {
+  if (!/^ev_[0-9a-f]{8,32}$/.test(key)) {
+    throw new Error(`fixtures.removeEventByKey: '${key}' is not a test-created event key`);
+  }
+  return removeFixture(EVENTS_YAML_PATH, key);
+}
 
 /**
  * Ensure the locked-roadmap fixture is present. Idempotent: if the key is
@@ -193,11 +311,21 @@ module.exports = {
   LOCKED_ROADMAP_ITEM_ID,
   RELEASABLE_ROADMAP_ITEM_ID,
   UNPROMOTED_BUG_REPORT_ID,
+  DRAFT_EVENT_ID,
+  ARCHIVED_EVENT_ID,
+  FOREIGN_EVENT_ID,
   ensureLockedRoadmapItem,
   ensureReleasableRoadmapItem,
   ensureUnpromotedBugReport,
+  ensureDraftEvent,
+  ensureArchivedEvent,
+  ensureForeignEvent,
   removeLockedRoadmapItem,
   removeReleasableRoadmapItem,
   removeUnpromotedBugReport,
+  removeDraftEvent,
+  removeArchivedEvent,
+  removeForeignEvent,
+  removeEventByKey,
   clearGravCache,
 };

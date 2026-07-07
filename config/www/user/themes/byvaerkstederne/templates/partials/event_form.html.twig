@@ -1,0 +1,302 @@
+{#
+   Shared create/edit event-form surface with a LIVE event-card preview.
+
+   Include variables:
+     ef_form_name  — the Form-plugin form to render ('event-create' / 'event-edit')
+     ef_heading    — page heading
+     ef_intro      — intro line under the heading (optional)
+
+   Layout: form on the left, a sticky preview panel on the right. The preview
+   is a hand-mirrored copy of partials/event_card.html.twig's markup, updated
+   by inline JS as the user types — it must stay structurally in sync with
+   the canonical partial (same .bv-event-row skeleton) so what the arrangør
+   sees is what the calendar renders. The group→accent map mirrors
+   EventValidator::ACCENT_BY_GROUP (the server-side derivation of
+   button_style); keep the two in sync.
+#}
+<section class="bv-section--sm" aria-label="{{ ef_heading }}">
+    <div class="bv-container">
+        <div class="bv-event-form__head">
+            <h1 class="bv-headline">{{ ef_heading }}</h1>
+            {% if ef_intro %}<p class="bv-body-lg">{{ ef_intro|raw }}</p>{% endif %}
+        </div>
+
+        <div class="bv-event-form__layout">
+            {# Preview first: full width above the form (the form's own two
+               columns come from the columns/column layout fields in the page
+               frontmatter). #}
+            <aside class="bv-event-preview" aria-label="Forhåndsvisning">
+                <h2 class="bv-event-preview__heading">Sådan kommer kortet til at se ud</h2>
+                <div class="bv-event-item" id="ef-preview">
+                    <article class="bv-event-row" id="ef-preview-row" style="--bv-accent: var(--primary);">
+                        <div class="bv-event-row__date">
+                            <span class="bv-event-row__date-month" id="ef-preview-month">···</span>
+                            <span class="bv-event-row__date-day" id="ef-preview-day">?</span>
+                        </div>
+                        <div class="bv-event-row__body">
+                            <span class="bv-badge bv-badge--primary bv-event-row__badge" id="ef-preview-badge" hidden></span>
+                            <h3 class="bv-event-row__title" id="ef-preview-title">Din begivenhed</h3>
+                            <p class="bv-event-row__time" id="ef-preview-time" hidden></p>
+                            <p class="bv-event-row__desc" id="ef-preview-desc" hidden></p>
+                        </div>
+                        <div class="bv-event-row__meta" id="ef-preview-meta" hidden>
+                            <span class="bv-event-row__price" id="ef-preview-price" hidden></span>
+                            <a class="bv-btn bv-btn--primary bv-btn--sm" id="ef-preview-cta" href="#" onclick="return false;" hidden></a>
+                            <span class="bv-event-row__capacity" id="ef-preview-capacity" hidden>
+                                <span class="material-symbols-outlined" aria-hidden="true">group</span>
+                                <span id="ef-preview-capacity-text"></span>
+                            </span>
+                        </div>
+                    </article>
+                </div>
+                <p class="bv-event-preview__note" id="ef-preview-visibility"></p>
+            </aside>
+
+            <div class="bv-event-form-card">
+                <style>
+                  .form-honeybear { position: absolute !important; left: -10000px !important; width: 1px; height: 1px; overflow: hidden; }
+                </style>
+                {% include "forms/form.html.twig" with { form: forms(ef_form_name) } %}
+                <div class="bv-event-form-card__footer">
+                    <a class="bv-btn bv-btn--outlined" href="/begivenheder/mine">Tilbage til mine begivenheder</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+(function () {
+    'use strict';
+
+    var form = document.querySelector('.bv-event-form-card form');
+    if (!form) return;
+
+    // Surface the `help:` texts as visible lines under the labels. The stock
+    // form templates emit them as data-tooltip attributes, HTML-escaped
+    // TWICE (once by field.html.twig's |e, once by the attribute rendering)
+    // — so a pure-CSS attr() display shows literal &#039; artifacts. Decode
+    // one level via innerHTML on a detached node (developer-authored text,
+    // no user input), then write it as textContent.
+    form.querySelectorAll('.tooltip[data-tooltip]').forEach(function (labelSpan) {
+        var decoder = document.createElement('textarea');
+        decoder.innerHTML = labelSpan.getAttribute('data-tooltip');
+        var help = document.createElement('div');
+        help.className = 'bv-help-text';
+        help.textContent = decoder.value;
+        var label = labelSpan.closest('label');
+        if (label) {
+            label.insertAdjacentElement('afterend', help);
+        }
+        labelSpan.removeAttribute('data-tooltip');
+    });
+
+    // Location: suggest the three rooms while keeping free text
+    // (EventValidator::LOCATION_SUGGESTIONS is the canonical list).
+    var locationInput = form.querySelector('[name="data[location]"]');
+    if (locationInput) {
+        var datalist = document.createElement('datalist');
+        datalist.id = 'ef-location-suggestions';
+        ['Store Rum', 'Lille Rum', 'Plænen'].forEach(function (room) {
+            var option = document.createElement('option');
+            option.value = room;
+            datalist.appendChild(option);
+        });
+        form.appendChild(datalist);
+        locationInput.setAttribute('list', 'ef-location-suggestions');
+    }
+
+    // Capacity count is only meaningful when unlimited is off.
+    function syncCapacityState() {
+        var unlimited = form.querySelector('[name="data[capacity_unlimited]"]:checked');
+        var count = form.querySelector('[name="data[capacity_count]"]');
+        if (!count) return;
+        var off = !unlimited || unlimited.value === '1';
+        count.disabled = off;
+        var wrapper = count.closest('.form-field');
+        if (wrapper) wrapper.classList.toggle('bv-field--muted', off);
+        if (off) showFieldError(count, '');
+    }
+
+    // Mirrors EventValidator::ACCENT_BY_GROUP / BADGE_BY_GROUP — the server
+    // derives the card colour AND the category badge from the group; the
+    // preview must agree.
+    var ACCENT_BY_GROUP = {
+        alle: 'primary', makerspace: 'secondary',
+        kreativ: 'tertiary', krea: 'tertiary',
+        groenne: 'primary', groent: 'primary',
+        kulturhus: 'kulturhus'
+    };
+    var BADGE_BY_GROUP = {
+        alle: 'Alle grupper', makerspace: 'Makerspace & Reparation',
+        kreativ: 'Krea Café', krea: 'Krea Café',
+        groenne: 'Grønt BYværksted', groent: 'Grønt BYværksted',
+        kulturhus: 'Eventværkstedet'
+    };
+    var ACCENTS = ['primary', 'secondary', 'tertiary', 'kulturhus'];
+    // Matches Twig's |date('M') output used by the calendar cards.
+    var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    // ── Per-field client-side validation, shown when a field is left ──
+    // Mirrors EventValidator's rules and Danish messages exactly — this is
+    // UX only; the server re-validates every submission regardless.
+    var MAX_LENGTHS = {
+        description: 2000, event_time: 60, location: 120,
+        capacity: 60, button_text: 60, featured_tag: 60
+    };
+    function isRealDate(v) {
+        var m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return false;
+        var d = new Date(+m[1], +m[2] - 1, +m[3]);
+        return d.getFullYear() === +m[1] && d.getMonth() === +m[2] - 1 && d.getDate() === +m[3];
+    }
+    function validateField(name, value) {
+        switch (name) {
+            case 'title':
+                if (value === '') return 'Titlen skal udfyldes.';
+                if (!/^[^<>]{1,80}$/.test(value)) return 'Titlen skal være 1-80 tegn og må ikke indeholde tegnene < eller >.';
+                return '';
+            case 'group':
+                return value === '' ? 'Vælg hvilket værksted begivenheden hører til.' : '';
+            case 'event_date':
+                return isRealDate(value) ? '' : 'Datoen skal have formatet ÅÅÅÅ-MM-DD og være en gyldig dato.';
+            case 'time_start':
+                return value === '' ? 'Vælg både start- og sluttidspunkt.' : '';
+            case 'time_end':
+                if (value === '') return 'Vælg både start- og sluttidspunkt.';
+                var start = fieldValue('time_start');
+                return (start !== '' && value <= start) ? 'Sluttidspunktet skal være efter starttidspunktet.' : '';
+            case 'capacity_count':
+                if (toggleValue('capacity_unlimited') === false && !/^\d+$/.test(value)) {
+                    return 'Angiv antal pladser som et tal (mindst 1), eller vælg ubegrænset.';
+                }
+                return '';
+            default:
+                if (MAX_LENGTHS[name] && value.length > MAX_LENGTHS[name]) {
+                    return 'Feltet er for langt (maks. ' + MAX_LENGTHS[name] + ' tegn).';
+                }
+                return '';
+        }
+    }
+    function fieldNameOf(input) {
+        var m = (input.getAttribute('name') || '').match(/^data\[([a-z_]+)\]$/);
+        return m ? m[1] : null;
+    }
+    function showFieldError(input, message) {
+        var wrapper = input.closest('.form-field') || input.parentElement;
+        var existing = wrapper.querySelector('.bv-field-error');
+        if (message === '') {
+            input.classList.remove('bv-input--invalid');
+            if (existing) existing.remove();
+            return true;
+        }
+        input.classList.add('bv-input--invalid');
+        if (!existing) {
+            existing = document.createElement('div');
+            existing.className = 'bv-field-error';
+            input.insertAdjacentElement('afterend', existing);
+        }
+        existing.textContent = message;
+        return false;
+    }
+    function checkInput(input) {
+        var name = fieldNameOf(input);
+        if (!name || input.type === 'radio' || input.type === 'hidden') return true;
+        return showFieldError(input, validateField(name, input.value.trim()));
+    }
+    // Validate when a field is left; once a field has an error, re-validate
+    // live on every keystroke so the message clears as soon as it's fixed.
+    form.addEventListener('focusout', function (e) {
+        var t = e.target;
+        if (t && t.matches && t.matches('input, textarea, select')) checkInput(t);
+    });
+    form.addEventListener('input', function (e) {
+        var t = e.target;
+        if (t && t.classList && t.classList.contains('bv-input--invalid')) checkInput(t);
+    });
+    form.addEventListener('submit', function (e) {
+        var firstInvalid = null;
+        form.querySelectorAll('input, textarea, select').forEach(function (input) {
+            if (!checkInput(input) && !firstInvalid) firstInvalid = input;
+        });
+        if (firstInvalid) {
+            e.preventDefault();
+            firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            firstInvalid.focus({ preventScroll: true });
+        }
+    });
+
+    function field(name) { return form.querySelector('[name="data[' + name + ']"]'); }
+    function fieldValue(name) {
+        var el = field(name);
+        return el ? el.value.trim() : '';
+    }
+    function toggleValue(name) {
+        var checked = form.querySelector('[name="data[' + name + ']"]:checked');
+        return checked ? checked.value === '1' : null;
+    }
+    function el(id) { return document.getElementById(id); }
+    function setText(id, value) {
+        var node = el(id);
+        if (!node) return;
+        node.hidden = value === '';
+        node.textContent = value;
+    }
+
+    function update() {
+        var accent = ACCENT_BY_GROUP[fieldValue('group')] || 'primary';
+        var row = el('ef-preview-row');
+        row.style.setProperty('--bv-accent', 'var(--' + accent + ')');
+
+        // Date block.
+        var date = fieldValue('event_date');
+        var m = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        el('ef-preview-month').textContent = m ? (MONTHS[parseInt(m[2], 10) - 1] || '···') : '···';
+        el('ef-preview-day').textContent = m ? String(parseInt(m[3], 10)) : '?';
+
+        // Badge is derived from the group (like the accent) — shown as soon
+        // as a workshop is chosen.
+        var badgeEl = el('ef-preview-badge');
+        ACCENTS.forEach(function (a) { badgeEl.classList.remove('bv-badge--' + a); });
+        badgeEl.classList.add('bv-badge--' + accent);
+        setText('ef-preview-badge', BADGE_BY_GROUP[fieldValue('group')] || '');
+
+        setText('ef-preview-title', fieldValue('title') || 'Din begivenhed');
+        var timeStart = fieldValue('time_start');
+        var timeEnd = fieldValue('time_end');
+        setText('ef-preview-time', timeStart && timeEnd ? timeStart + ' - ' + timeEnd : '');
+        setText('ef-preview-desc', fieldValue('description'));
+
+        // Meta column. The button always renders (signup affordance) with
+        // the chosen label; capacity only when not unlimited.
+        setText('ef-preview-price', fieldValue('price'));
+        var ctaEl = el('ef-preview-cta');
+        ctaEl.hidden = false;
+        ctaEl.textContent = fieldValue('button_text') || 'Tilmeld';
+        ACCENTS.forEach(function (a) { ctaEl.classList.remove('bv-btn--' + a); });
+        ctaEl.classList.add('bv-btn--' + accent);
+
+        var capacity = toggleValue('capacity_unlimited') === false ? fieldValue('capacity_count') : '';
+        el('ef-preview-capacity').hidden = capacity === '';
+        el('ef-preview-capacity-text').textContent = capacity;
+
+        el('ef-preview-meta').hidden = false;
+
+        syncCapacityState();
+
+        // Featured typography boost.
+        row.classList.toggle('bv-event-row--featured', toggleValue('featured') === true);
+
+        // Visibility note under the preview.
+        var published = toggleValue('published');
+        el('ef-preview-visibility').textContent =
+            published === false
+                ? 'Gemmes som kladde — kun du kan se den, indtil du sætter Synlig til Ja.'
+                : 'Vises i værkstedskalenderen, så snart du gemmer.';
+    }
+
+    form.addEventListener('input', update);
+    form.addEventListener('change', update);
+    update();
+})();
+</script>
