@@ -50,7 +50,7 @@
         </div>
         {% endif %}
 
-        {% include 'partials/event_card.html.twig' with { event: _card, inList: false } %}
+        {% include 'partials/event_card.html.twig' with { event: _card, inList: false, expandable: false } %}
 
         <article class="bv-event-detail">
             {% if ev.description %}

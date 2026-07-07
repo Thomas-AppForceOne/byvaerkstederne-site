@@ -54,11 +54,19 @@
    (page-header events, atelier sessions) get null → today's link behaviour,
    untouched. #}
 {% set _rsvp_key = event.key is defined ? event.key : null %}
-{% set _info = (feature_enabled('event_rsvp') and _rsvp_key) ? event_signup_info(_rsvp_key) : null %}
+{% set _rsvp_on = feature_enabled('event_rsvp') and _rsvp_key %}
+{% set _info = _rsvp_on ? event_signup_info(_rsvp_key) : null %}
+
+{# Card-modal expansion (§4): clicking anywhere on the card that isn't the
+   button or a link floats it modally with the full details. The detail page
+   passes expandable:false — it already shows the same content inline and must
+   not re-expand into a modal. #}
+{% set _expandable = (expandable ?? true) and _rsvp_on %}
 
 {% if _in_list %}<li class="bv-event-item">{% else %}<div class="bv-event-item">{% endif %}
-  <article class="bv-event-row{% if event.featured %} bv-event-row--featured{% endif %}"
+  <article class="bv-event-row{% if event.featured %} bv-event-row--featured{% endif %}{% if _expandable %} bv-event-row--expandable{% endif %}"
            {% if event.filter %}data-group="{{ event.filter }}"{% endif %}
+           {% if _expandable %}data-event-key="{{ event.key }}" tabindex="0" aria-haspopup="dialog"{% endif %}
            style="--bv-accent: var(--{{ _accent }});">
 
     <div class="bv-event-row__date">
@@ -139,6 +147,13 @@
           </span>
         {% endif %}
       </div>
+    {% endif %}
+
+    {% if _expandable %}
+      {# Rich details body delivered inline (no new read endpoint, §4): the
+         modal clones this into the expanded view. details_html is sanitizer
+         output (§5), so |raw is safe; empty until an organizer adds details. #}
+      <template data-event-details="{{ event.key }}">{{ (event.details_html|default(''))|raw }}</template>
     {% endif %}
   </article>
 {% if _in_list %}</li>{% else %}</div>{% endif %}
