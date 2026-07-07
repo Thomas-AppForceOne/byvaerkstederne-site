@@ -47,6 +47,7 @@ use Grav\Plugin\EventManager\EventAuthorizer;
 use Grav\Plugin\EventManager\EventRepository;
 use Grav\Plugin\EventManager\EventValidator;
 use Grav\Plugin\EventManager\FormDataProvider;
+use Grav\Plugin\EventManager\ImageStore;
 use Grav\Plugin\EventManager\SignupRepository;
 use Grav\Plugin\FeatureFlags\FeatureFlag;
 use Grav\Plugin\FeatureFlags\FlagStoreInterface;
@@ -56,7 +57,7 @@ class EventManagerPlugin extends Plugin
     private const ROUTE_BASE = '/begivenheder';
 
     /** Fixed management slugs under /begivenheder — never treated as object keys. */
-    private const RESERVED_SLUGS = ['mine', 'opret', 'rediger', 'slet', 'tilmeld'];
+    private const RESERVED_SLUGS = ['mine', 'opret', 'rediger', 'slet', 'tilmeld', 'upload', 'billede'];
 
     /** Object keys: legacy `event0NN` and new `ev_<hex>` both match. */
     private const KEY_PATTERN = '/^[A-Za-z0-9_-]{1,64}$/';
@@ -147,6 +148,13 @@ class EventManagerPlugin extends Plugin
         $segments = array_values(array_filter(explode('/', $path), 'strlen'));
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
+        // Public image serving GET /begivenheder/billede/<key>/<file> (§5.3) —
+        // streamed directly and terminated here.
+        if (count($segments) === 4 && $segments[1] === 'billede') {
+            $this->serveEventImage($segments[2], $segments[3]);
+            return;
+        }
+
         // /begivenheder itself has no page; the public event list lives on
         // the calendar page.
         if (count($segments) === 1) {
@@ -167,11 +175,11 @@ class EventManagerPlugin extends Plugin
                 $this->enforceManagementAccess('create');
                 return;
             }
-            if ($slug === 'tilmeld') {
-                // The RSVP toggle (§3) is POST-only and has no page of its
-                // own. Mount a virtual page so the §8.1 contract handler in
-                // onPageInitialized reliably fires for the POST; a bare GET is
-                // a dead end → back to the calendar.
+            if ($slug === 'tilmeld' || $slug === 'upload') {
+                // The RSVP toggle (§3) and image upload (§5.2) are POST-only
+                // and have no page of their own. Mount a virtual page so the
+                // §8.1 contract handler in onPageInitialized reliably fires for
+                // the POST; a bare GET is a dead end → back to the calendar.
                 if ($method === 'POST') {
                     $this->mountVirtualRoute('event-rsvp.md');
                 } else {
@@ -325,10 +333,12 @@ class EventManagerPlugin extends Plugin
 
         // 1. Feature-flag gate — before any payload parsing. Belt to the
         //    page-level gate: a disabled feature never processes a POST. The
-        //    CRUD actions gate on event_management; the RSVP toggle (§3/§6)
-        //    additionally requires event_rsvp — either off ⇒ the same no-leak
-        //    404.
-        $flagOk = $action === 'rsvp' ? $this->rsvpFeatureEnabled() : $this->featureEnabled();
+        //    CRUD actions gate on event_management; the RSVP toggle and the
+        //    image upload (part of the details feature, §3/§5/§6) additionally
+        //    require event_rsvp — either off ⇒ the same no-leak 404.
+        $flagOk = in_array($action, ['rsvp', 'upload'], true)
+            ? $this->rsvpFeatureEnabled()
+            : $this->featureEnabled();
         if (!$flagOk) {
             $this->sendFlagDisabled404();
         }
@@ -363,8 +373,15 @@ class EventManagerPlugin extends Plugin
         // 5. Capability (admin.super passes explicitly — core authorize()
         //    has no super override outside the admin plugin). SKIPPED for
         //    rsvp: any activated member may sign up — site.login is the bar
-        //    (§3), which step 3 already enforced.
-        if ($action !== 'rsvp' && !EventAuthorizer::hasCapability($user, $action)) {
+        //    (§3), which step 3 already enforced. For upload, either the
+        //    create or the update capability qualifies (§5.2) — the image may
+        //    be added while composing a new event or editing an existing one.
+        if ($action === 'upload') {
+            if (!EventAuthorizer::hasCapability($user, 'create')
+                && !EventAuthorizer::hasCapability($user, 'update')) {
+                $this->sendError(403, 'Du har ikke rettigheder til at uploade billeder.');
+            }
+        } elseif ($action !== 'rsvp' && !EventAuthorizer::hasCapability($user, $action)) {
             $this->sendError(403, 'Du har ikke rettigheder til at administrere begivenheder.');
         }
 
@@ -386,6 +403,9 @@ class EventManagerPlugin extends Plugin
             case 'rsvp':
                 $this->handleRsvp($user, $data);
                 break;
+            case 'upload':
+                $this->handleUpload($user, $data);
+                break;
         }
     }
 
@@ -394,6 +414,9 @@ class EventManagerPlugin extends Plugin
     {
         if ($path === self::ROUTE_BASE . '/tilmeld') {
             return 'rsvp';
+        }
+        if ($path === self::ROUTE_BASE . '/upload') {
+            return 'upload';
         }
         if ($path === self::ROUTE_BASE . '/opret') {
             return 'create';
@@ -430,14 +453,21 @@ class EventManagerPlugin extends Plugin
         $values['updated_at'] = $now;
         $values['archived'] = false;
 
-        // Fresh collision-resistant server key (mirrors the br_/rm_ convention).
-        $key = 'ev_' . bin2hex(random_bytes(8));
+        // Adopt the create form's pre-generated key when it is well-formed and
+        // still unused, so images uploaded before first save (§5.2/§6) land in
+        // the folder the finished event actually uses; otherwise mint a fresh
+        // collision-resistant one (mirrors the br_/rm_ convention).
+        $key = $this->adoptOrGenerateKey($data);
 
         try {
             $key = $this->repository()->create($values, $key);
         } catch (\Throwable $e) {
             $this->sendError(500, 'Begivenheden kunne ikke gemmes. Prøv igen.');
         }
+
+        // The create-form key has been consumed — the next new form gets a
+        // fresh one.
+        FormDataProvider::clearNewEventKey($this->grav);
 
         $this->auditLog()->append('create', $key, $user->username, ['after' => $this->auditSnapshot($values)]);
         $this->repository()->bustRenderCache();
@@ -492,6 +522,9 @@ class EventManagerPlugin extends Plugin
             } catch (\Throwable $e) {
                 $this->sendError(500, 'Begivenheden kunne ikke slettes. Prøv igen.');
             }
+            // A permanently removed event leaves no orphaned signups or images.
+            $this->signupRepository()->deleteFor($key);
+            $this->imageStore()->deleteEventImages($key);
             $this->auditLog()->append('hard_delete', $key, $user->username, ['before' => $this->auditSnapshot($stored)]);
             $this->repository()->bustRenderCache();
             $this->redirectWithFlash('Begivenheden er slettet permanent.');
@@ -612,6 +645,49 @@ class EventManagerPlugin extends Plugin
         $this->grav['messages']->add($flash, 'success');
         $this->grav->redirect($this->safeReferer('/vaerkstedskalenderen'), 303);
         exit; // @phpstan-ignore-line — redirect() exits; belt for static analysis
+    }
+
+    /**
+     * Image upload for the details editor (§5.2). The shared gates (flags,
+     * authn, form-nonce CSRF, create|update capability) have already run.
+     * Per-object rule: if the posted key resolves to an existing event, the
+     * caller must own it (or be super); if it doesn't exist yet, a
+     * capability-holder may upload against the pre-generated create-form key
+     * (bounded by the per-event quota). Responds in TinyMCE's shape:
+     * {location} on success.
+     *
+     * @param array<string,mixed> $data
+     */
+    private function handleUpload($user, array $data): void
+    {
+        $key = trim((string)($data['key'] ?? ''));
+        if ($key === '' || !preg_match(self::KEY_PATTERN, $key)) {
+            $this->sendError(400, 'Ugyldig begivenhedsnøgle.');
+        }
+
+        // Existing event → ownership required; not-yet-created key → allowed
+        // for the capability-holder already verified in the shared gates.
+        $event = $this->repository()->findArray($key);
+        if ($event !== null && !EventAuthorizer::ownsOrSuper($user, $event['owner'] ?? null)) {
+            $this->sendError(403, 'Du kan kun uploade billeder til dine egne begivenheder.');
+        }
+
+        $file = $_FILES['file'] ?? null;
+        if (!is_array($file)) {
+            $this->sendError(400, 'Ingen fil modtaget.');
+        }
+
+        $result = $this->imageStore()->store($key, $file);
+        if (isset($result['error'])) {
+            $this->sendError(400, $result['error']);
+        }
+
+        $this->auditLog()->append('image_upload', $key, (string)$user->username, ['file' => $result['file']]);
+        // The serving URL is extensionless (see ImageStore) so the web server's
+        // static-asset handler doesn't swallow it before Grav.
+        $this->sendJson([
+            'location' => self::ROUTE_BASE . '/billede/' . $key . '/' . ImageStore::hashOf($result['file']),
+        ]);
     }
 
     /**
@@ -936,6 +1012,68 @@ class EventManagerPlugin extends Plugin
             mkdir($dir, 0750, true);
         }
         return new SignupRepository($dir . '/event-signups.yaml');
+    }
+
+    /** The image store, bound to user/data/event-images/. */
+    private function imageStore(): ImageStore
+    {
+        $dir = $this->grav['locator']->findResource('user-data://event-images', true, true);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0750, true);
+        }
+        return new ImageStore($dir);
+    }
+
+    /**
+     * Adopt the create form's pre-generated `ev_<hex>` key when it is
+     * well-formed and not already an event (so pre-save image uploads keep
+     * their folder); otherwise mint a fresh one.
+     *
+     * @param array<string,mixed> $data
+     */
+    private function adoptOrGenerateKey(array $data): string
+    {
+        $posted = trim((string)($data['key'] ?? ''));
+        if ($posted !== ''
+            && preg_match('/^ev_[a-f0-9]{16}$/', $posted)
+            && $this->repository()->find($posted) === null) {
+            return $posted;
+        }
+        return 'ev_' . bin2hex(random_bytes(8));
+    }
+
+    /**
+     * Stream a stored event image (§5.3). Public — event details are public —
+     * so no auth gate, but the feature flag still applies (off ⇒ natural 404)
+     * and the key/filename are strictly validated (no traversal). Content-Type
+     * is derived from magic bytes with X-Content-Type-Options: nosniff.
+     */
+    private function serveEventImage(string $key, string $file): void
+    {
+        if (!$this->rsvpFeatureEnabled()) {
+            return; // natural themed 404 — no existence leak
+        }
+        $store = $this->imageStore();
+        $path = $store->resolvePath($key, $file);
+        if ($path === null) {
+            return; // malformed or missing → natural 404
+        }
+        $mime = $store->detectMimeType($path);
+        if ($mime === null || !in_array($mime, ImageStore::ALLOWED_MIME, true)) {
+            return;
+        }
+
+        $response = new Response(
+            200,
+            [
+                'Content-Type' => $mime,
+                'Content-Length' => (string)filesize($path),
+                'Cache-Control' => 'public, max-age=86400',
+                'X-Content-Type-Options' => 'nosniff',
+            ],
+            (string)file_get_contents($path)
+        );
+        $this->grav->close($response);
     }
 
     /** True when the event's date is strictly before today in Europe/Copenhagen. */

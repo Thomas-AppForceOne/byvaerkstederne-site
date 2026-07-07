@@ -130,6 +130,38 @@ final class FormDataProvider
         return $options;
     }
 
+    private const NEW_KEY_SESSION_KEY = 'em_new_event_key';
+
+    /**
+     * A pre-generated `ev_<hex>` key for the create form, stable across the
+     * form's lifetime (stored in the session) so images uploaded before first
+     * save (§5.2/§6) go to the folder the finished event will use. handleCreate
+     * adopts this key when it is still unused, then clears it.
+     */
+    public static function newEventKey(): string
+    {
+        $session = Grav::instance()['session'] ?? null;
+        if ($session !== null
+            && isset($session->{self::NEW_KEY_SESSION_KEY})
+            && preg_match('/^ev_[a-f0-9]{16}$/', (string)$session->{self::NEW_KEY_SESSION_KEY})) {
+            return (string)$session->{self::NEW_KEY_SESSION_KEY};
+        }
+        $key = 'ev_' . bin2hex(random_bytes(8));
+        if ($session !== null) {
+            $session->{self::NEW_KEY_SESSION_KEY} = $key;
+        }
+        return $key;
+    }
+
+    /** Clear the create-form key once an event has adopted it. */
+    public static function clearNewEventKey($grav): void
+    {
+        $session = $grav['session'] ?? null;
+        if ($session !== null) {
+            unset($session->{self::NEW_KEY_SESSION_KEY});
+        }
+    }
+
     /** The <key> segment of /begivenheder/{rediger,slet}/<key>, or ''. */
     public static function currentEventKey(): string
     {

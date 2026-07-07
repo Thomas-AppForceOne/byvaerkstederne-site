@@ -326,12 +326,33 @@
         skin: 'oxide',
         content_css: 'default',
         convert_urls: false,
-        // Image insertion uploads to the event-manager endpoint (Phase 6); the
-        // server stores the file under the allowlisted /begivenheder/billede/
-        // serving path, the only img src the sanitizer keeps.
-        images_upload_url: '/begivenheder/upload',
         automatic_uploads: true,
-        images_reuse_filename: false
+        // Image insertion POSTs to the event-manager upload endpoint with the
+        // form's CSRF nonce and event key; the server stores the file under
+        // the allowlisted /begivenheder/billede/ serving path — the only img
+        // src the sanitizer keeps.
+        images_upload_handler: function (blobInfo) {
+            return new Promise(function (resolve, reject) {
+                var f = document.querySelector('.bv-event-form-card form');
+                var fd = new FormData();
+                fd.append('file', blobInfo.blob(), blobInfo.filename());
+                var nonce = f && f.querySelector('[name="form-nonce"]');
+                var keyEl = f && f.querySelector('[name="data[key]"]');
+                fd.append('form-nonce', nonce ? nonce.value : '');
+                fd.append('data[key]', keyEl ? keyEl.value : '');
+                fetch('/begivenheder/upload', { method: 'POST', body: fd, credentials: 'same-origin' })
+                    .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
+                    .then(function (res) {
+                        if (res.status === 200 && res.data && res.data.location) {
+                            resolve(res.data.location);
+                        } else {
+                            var msg = (res.data && res.data.data && res.data.data.error) || 'Upload fejlede.';
+                            reject({ message: msg, remove: true });
+                        }
+                    })
+                    .catch(function () { reject({ message: 'Netværksfejl ved upload.', remove: true }); });
+            });
+        }
     });
 })();
 </script>

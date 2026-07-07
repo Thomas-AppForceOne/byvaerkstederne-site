@@ -21,6 +21,13 @@ form:
     name: event-create
     action: /begivenheder/opret
     fields:
+        # Pre-generated ev_<hex> key so images can be uploaded (§5.2) before the
+        # event is first saved; handleCreate adopts it when still unused. It is
+        # a correlation value only — never trusted for ownership.
+        key:
+            type: hidden
+            data-default@: '\Grav\Plugin\EventManager\FormDataProvider::newEventKey'
+
         # Layout-only containers (form plugin columns/column fields): the two
         # form columns render under the full-width live preview. Nested field
         # names and POST data are unaffected by the nesting.
