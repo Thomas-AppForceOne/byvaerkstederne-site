@@ -47,6 +47,7 @@ use Grav\Plugin\EventManager\EventAuthorizer;
 use Grav\Plugin\EventManager\EventRepository;
 use Grav\Plugin\EventManager\EventValidator;
 use Grav\Plugin\EventManager\FormDataProvider;
+use Grav\Plugin\EventManager\SignupRepository;
 use Grav\Plugin\FeatureFlags\FeatureFlag;
 use Grav\Plugin\FeatureFlags\FlagStoreInterface;
 
@@ -55,7 +56,7 @@ class EventManagerPlugin extends Plugin
     private const ROUTE_BASE = '/begivenheder';
 
     /** Fixed management slugs under /begivenheder — never treated as object keys. */
-    private const RESERVED_SLUGS = ['mine', 'opret', 'rediger', 'slet'];
+    private const RESERVED_SLUGS = ['mine', 'opret', 'rediger', 'slet', 'tilmeld'];
 
     /** Object keys: legacy `event0NN` and new `ev_<hex>` both match. */
     private const KEY_PATTERN = '/^[A-Za-z0-9_-]{1,64}$/';
@@ -164,6 +165,18 @@ class EventManagerPlugin extends Plugin
             }
             if ($slug === 'opret') {
                 $this->enforceManagementAccess('create');
+                return;
+            }
+            if ($slug === 'tilmeld') {
+                // The RSVP toggle (§3) is POST-only and has no page of its
+                // own. Mount a virtual page so the §8.1 contract handler in
+                // onPageInitialized reliably fires for the POST; a bare GET is
+                // a dead end → back to the calendar.
+                if ($method === 'POST') {
+                    $this->mountVirtualRoute('event-rsvp.md');
+                } else {
+                    $this->grav->redirect('/vaerkstedskalenderen', 302);
+                }
                 return;
             }
             // A bare GET on the keyed form routes is meaningless — send the
@@ -311,8 +324,12 @@ class EventManagerPlugin extends Plugin
         }
 
         // 1. Feature-flag gate — before any payload parsing. Belt to the
-        //    page-level gate: a disabled feature never processes a POST.
-        if (!$this->featureEnabled()) {
+        //    page-level gate: a disabled feature never processes a POST. The
+        //    CRUD actions gate on event_management; the RSVP toggle (§3/§6)
+        //    additionally requires event_rsvp — either off ⇒ the same no-leak
+        //    404.
+        $flagOk = $action === 'rsvp' ? $this->rsvpFeatureEnabled() : $this->featureEnabled();
+        if (!$flagOk) {
             $this->sendFlagDisabled404();
         }
 
@@ -323,18 +340,31 @@ class EventManagerPlugin extends Plugin
         //    the contract never depends on page frontmatter.
         $user = $this->grav['user'] ?? null;
         if (!$user || !$user->authenticated || !$user->authorized) {
-            $this->sendError(401, 'Ikke autoriseret. Log ind for at administrere begivenheder.');
+            $this->sendError(401, 'Ikke autoriseret. Log ind for at fortsætte.');
         }
 
-        // 4. CSRF — the Form plugin's nonce, injected by forms/form.html.twig.
-        $nonce = (string)($_POST['form-nonce'] ?? '');
-        if ($nonce === '' || !Utils::verifyNonce($nonce, 'form')) {
-            $this->sendError(403, 'Ugyldig sikkerhedstoken. Genindlæs siden og prøv igen.');
+        // 4. CSRF. The full-page CRUD forms use the Form plugin's shared
+        //    'form' nonce (injected by forms/form.html.twig). The RSVP button
+        //    flips state without navigation, so it carries its own rotating
+        //    'event-rsvp' nonce (minted fresh into every success response) —
+        //    the roadmap-vote pattern.
+        if ($action === 'rsvp') {
+            $nonce = (string)($_POST['rsvp_nonce'] ?? '');
+            if ($nonce === '' || !Utils::verifyNonce($nonce, 'event-rsvp')) {
+                $this->sendError(403, 'Ugyldig sikkerhedstoken. Genindlæs siden og prøv igen.');
+            }
+        } else {
+            $nonce = (string)($_POST['form-nonce'] ?? '');
+            if ($nonce === '' || !Utils::verifyNonce($nonce, 'form')) {
+                $this->sendError(403, 'Ugyldig sikkerhedstoken. Genindlæs siden og prøv igen.');
+            }
         }
 
         // 5. Capability (admin.super passes explicitly — core authorize()
-        //    has no super override outside the admin plugin).
-        if (!EventAuthorizer::hasCapability($user, $action)) {
+        //    has no super override outside the admin plugin). SKIPPED for
+        //    rsvp: any activated member may sign up — site.login is the bar
+        //    (§3), which step 3 already enforced.
+        if ($action !== 'rsvp' && !EventAuthorizer::hasCapability($user, $action)) {
             $this->sendError(403, 'Du har ikke rettigheder til at administrere begivenheder.');
         }
 
@@ -353,12 +383,18 @@ class EventManagerPlugin extends Plugin
             case 'delete':
                 $this->handleDelete($user, $data);
                 break;
+            case 'rsvp':
+                $this->handleRsvp($user, $data);
+                break;
         }
     }
 
     /** Map a request path to the §8.1 action (and capability suffix). */
     private function mutationActionForPath(string $path): ?string
     {
+        if ($path === self::ROUTE_BASE . '/tilmeld') {
+            return 'rsvp';
+        }
         if ($path === self::ROUTE_BASE . '/opret') {
             return 'create';
         }
@@ -493,6 +529,89 @@ class EventManagerPlugin extends Plugin
         $this->auditLog()->append('archive', $key, $user->username, ['before' => $this->auditSnapshot($stored)]);
         $this->repository()->bustRenderCache();
         $this->redirectWithFlash('Begivenheden er arkiveret.');
+    }
+
+    /**
+     * RSVP toggle (event_rsvp_specification.md §3). The shared gates (flag,
+     * authn, CSRF) have already run; no capability is required. Order here:
+     * event exists → published && !archived → date not past → toggle (with
+     * capacity inside the store's lock for Tilmeld) → audit → respond.
+     *
+     * Every not-signup-able condition returns the same no-leak 404 as the
+     * detail route (existence is not disclosed); a past event is 409; a full
+     * Tilmeld event is 409 "Alle pladser er optaget".
+     *
+     * @param array<string,mixed> $data
+     */
+    private function handleRsvp($user, array $data): void
+    {
+        $key = trim((string)($data['key'] ?? ''));
+        if ($key === '' || !preg_match(self::KEY_PATTERN, $key)) {
+            $this->sendError(404, 'Begivenheden findes ikke.');
+        }
+
+        $event = $this->repository()->findArray($key);
+        if ($event === null || empty($event['published']) || !empty($event['archived'])) {
+            // Unknown, unpublished, or archived — indistinguishable from
+            // missing, same posture as the detail route (§8.2).
+            $this->sendError(404, 'Begivenheden findes ikke.');
+        }
+
+        if ($this->eventIsPast($event)) {
+            $this->sendError(409, 'Tilmelding er lukket — begivenheden er afholdt.');
+        }
+
+        // Mode is stamped from the event's button_text (lowercased), so a
+        // later organizer flip does not reinterpret existing signups (§2).
+        $mode = strtolower(trim((string)($event['button_text'] ?? 'Tilmeld')));
+        if ($mode !== SignupRepository::MODE_TILMELD && $mode !== 'interesseret') {
+            $mode = SignupRepository::MODE_TILMELD;
+        }
+
+        // Capacity is enforced only for Tilmeld with a numeric capacity;
+        // non-numeric/empty ⇒ unlimited (§0). Interesseret is never bounded.
+        $capacity = null;
+        if ($mode === SignupRepository::MODE_TILMELD) {
+            $rawCap = trim((string)($event['capacity'] ?? ''));
+            if (preg_match('/^\d+$/', $rawCap)) {
+                $capacity = (int)$rawCap;
+            }
+        }
+
+        $signups = $this->signupRepository();
+        $result = $signups->toggle($key, (string)$user->username, $mode, $capacity);
+
+        if ($result === SignupRepository::FULL) {
+            $this->sendError(409, 'Alle pladser er optaget.');
+        }
+
+        $auditAction = $result === SignupRepository::SIGNED_UP ? 'signup' : 'withdraw';
+        $this->auditLog()->append($auditAction, $key, (string)$user->username, ['mode' => $mode]);
+
+        $count = $signups->countFor($key);
+        $remaining = $capacity !== null
+            ? max(0, $capacity - $signups->countFor($key, SignupRepository::MODE_TILMELD))
+            : null;
+
+        // AJAX button (Accept not text/html) gets JSON with a fresh rotating
+        // nonce; a no-JS form submit (Accept: text/html) gets PRG-with-flash
+        // back to the page it came from — mirrors validateOr400()'s split.
+        if (!str_contains((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'text/html')) {
+            $this->sendJson([
+                'success' => true,
+                'action' => $result,
+                'count' => $count,
+                'remaining' => $remaining,
+                'new_nonce' => Utils::getNonce('event-rsvp'),
+            ]);
+        }
+
+        $flash = $result === SignupRepository::SIGNED_UP
+            ? ($mode === SignupRepository::MODE_TILMELD ? 'Du er nu tilmeldt.' : 'Du er nu noteret som interesseret.')
+            : 'Din tilmelding er annulleret.';
+        $this->grav['messages']->add($flash, 'success');
+        $this->grav->redirect($this->safeReferer('/vaerkstedskalenderen'), 303);
+        exit; // @phpstan-ignore-line — redirect() exits; belt for static analysis
     }
 
     /**
@@ -680,6 +799,85 @@ class EventManagerPlugin extends Plugin
             return true;
         }
         return $store->isEnabled(FeatureFlag::EventManagement);
+    }
+
+    /**
+     * RSVP gate: both event_rsvp AND event_management must be on (§3/§6).
+     * Same fail-open-if-missing posture as featureEnabled().
+     */
+    private function rsvpFeatureEnabled(): bool
+    {
+        $store = $this->grav['feature_flags'] ?? null;
+        if (!$store instanceof FlagStoreInterface) {
+            return true;
+        }
+        return $store->isEnabled(FeatureFlag::EventRsvp)
+            && $store->isEnabled(FeatureFlag::EventManagement);
+    }
+
+    /** The signup store, bound to user/data/flex-objects/event-signups.yaml. */
+    private function signupRepository(): SignupRepository
+    {
+        $dir = $this->grav['locator']->findResource('user-data://flex-objects', true, true);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0750, true);
+        }
+        return new SignupRepository($dir . '/event-signups.yaml');
+    }
+
+    /** True when the event's date is strictly before today in Europe/Copenhagen. */
+    private function eventIsPast(array $event): bool
+    {
+        $date = trim((string)($event['event_date'] ?? ''));
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return false; // unparseable date → don't block on it
+        }
+        $today = (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Copenhagen')))->format('Y-m-d');
+        return $date < $today;
+    }
+
+    /**
+     * A same-origin local path from the Referer header, or $fallback. Guards
+     * the no-JS PRG redirect against an open-redirect via a spoofed Referer.
+     */
+    private function safeReferer(string $fallback): string
+    {
+        $referer = (string)($_SERVER['HTTP_REFERER'] ?? '');
+        if ($referer === '') {
+            return $fallback;
+        }
+        $parts = parse_url($referer);
+        if ($parts === false) {
+            return $fallback;
+        }
+        $host = $parts['host'] ?? '';
+        $selfHost = (string)($_SERVER['HTTP_HOST'] ?? '');
+        if ($host !== '' && $host !== $selfHost) {
+            return $fallback; // cross-origin referer — never redirect there
+        }
+        $path = $parts['path'] ?? '';
+        if (!is_string($path) || !str_starts_with($path, '/')) {
+            return $fallback;
+        }
+        return $path . (isset($parts['fragment']) ? '#' . $parts['fragment'] : '');
+    }
+
+    /**
+     * Mount a plugin-bundled virtual page at the current route so a POST-only
+     * endpoint (no page of its own) still fires onPageInitialized. The
+     * contract handler terminates before render, so the page is never shown.
+     */
+    private function mountVirtualRoute(string $file): void
+    {
+        $page = $this->buildVirtualPage($file);
+        if ($page === null) {
+            return;
+        }
+        $grav = $this->grav;
+        unset($grav['page']);
+        $grav['page'] = static function () use ($page) {
+            return $page;
+        };
     }
 
     /**
