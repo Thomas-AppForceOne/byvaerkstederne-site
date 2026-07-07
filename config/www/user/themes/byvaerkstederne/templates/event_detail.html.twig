@@ -57,6 +57,13 @@
                 <p class="bv-body-lg">{{ ev.description }}</p>
             {% endif %}
 
+            {# Rich details body. Safe with |raw ONLY because details_html is
+               DetailsSanitizer output (allowlisted HTML), never raw member
+               input — the plugin sanitizes on write (§5). #}
+            {% if ev.details_html %}
+                <div class="bv-event-detail__body">{{ ev.details_html|raw }}</div>
+            {% endif %}
+
             <dl class="bv-event-detail__facts">
                 <div><dt>Dato</dt><dd>{{ ev.event_date|date('j. F Y') }}</dd></div>
                 {% if ev.event_time %}<div><dt>Tidspunkt</dt><dd>{{ ev.event_time }}</dd></div>{% endif %}

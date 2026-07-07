@@ -181,6 +181,12 @@ final class FormDataProvider
             $capacity = trim((string)($event['capacity'] ?? ''));
             return preg_match('/^\d+$/', $capacity) ? $capacity : null;
         }
+        if ($field === 'details') {
+            // The raw form field is `details`; the stored (sanitized) value
+            // lives under details_html. Feed it back for a round-trip-stable
+            // edit (§5.4). It is sanitizer output, safe to re-edit.
+            return (string)($event['details_html'] ?? '');
+        }
 
         if (!array_key_exists($field, $event)) {
             return null;

@@ -65,6 +65,14 @@ form:
                             data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'description']
                             rows: 3
 
+                        details:
+                            type: textarea
+                            label: Uddybende detaljer
+                            help: "Længere beskrivelse med formatering og billeder. Vises når man åbner begivenheden. Alt indhold renses automatisk på serveren."
+                            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::eventFieldDefault', 'details']
+                            rows: 8
+                            classes: bv-rich-editor
+
                         section_when:
                             type: display
                             display_label: false

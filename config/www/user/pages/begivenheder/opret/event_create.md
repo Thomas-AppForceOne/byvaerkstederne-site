@@ -63,6 +63,14 @@ form:
                             help: "Et par linjer om hvad der sker, hvem det er for, og om man skal medbringe noget."
                             rows: 3
 
+                        details:
+                            type: textarea
+                            data-default@: ['\Grav\Plugin\EventManager\FormDataProvider::oldInputDefault', 'details']
+                            label: Uddybende detaljer
+                            help: "Længere beskrivelse med formatering og billeder. Vises når man åbner begivenheden. Alt indhold renses automatisk på serveren."
+                            rows: 8
+                            classes: bv-rich-editor
+
                         section_when:
                             type: display
                             display_label: false

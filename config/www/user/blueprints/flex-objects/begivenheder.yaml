@@ -157,6 +157,15 @@ form:
       label: Fremhævet tag
       help: "F.eks. 'All Hands' — kun vist når fremhævet"
 
+    # Rich details body (event RSVP §5). Server-managed: the frontend form
+    # posts a raw `details` field which the event-manager plugin sanitizes to
+    # this allowlisted HTML (DetailsSanitizer) before storing. Never edited
+    # directly from the frontend; the stored value is sanitizer output.
+    details_html:
+      type: textarea
+      label: Detaljer (HTML)
+      readonly: true
+
     # ── Server-managed fields (frontend event CRUD) ─────────────────────
     # Stamped exclusively by the event-manager plugin's handlers; readonly
     # in every form and never client-settable. `owner` is the basis of

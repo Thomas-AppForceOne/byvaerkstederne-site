@@ -19,7 +19,7 @@ final class EventValidator
      * the handlers and deliberately absent.
      */
     public const FORM_FIELDS = [
-        'published', 'title', 'description', 'group', 'event_date',
+        'published', 'title', 'description', 'details', 'group', 'event_date',
         'time_start', 'time_end', 'location', 'capacity_unlimited',
         'capacity_count', 'price', 'button_text', 'featured', 'featured_tag',
     ];
@@ -88,12 +88,15 @@ final class EventValidator
     /** @var array<string,string> */
     private array $groupOptions;
 
+    private DetailsSanitizer $detailsSanitizer;
+
     /**
      * @param array<string,string> $groupOptions blueprint `group` enum
      */
-    public function __construct(array $groupOptions)
+    public function __construct(array $groupOptions, ?DetailsSanitizer $detailsSanitizer = null)
     {
         $this->groupOptions = $groupOptions;
+        $this->detailsSanitizer = $detailsSanitizer ?? new DetailsSanitizer();
     }
 
     /**
@@ -195,6 +198,16 @@ final class EventValidator
                 $values[$field] = $value;
             }
         }
+
+        // details — rich WYSIWYG body (§5). Untrusted member HTML: sanitized to
+        // the allowlist here on WRITE and stored under the server-managed name
+        // details_html. The raw `details` field is never persisted; the stored
+        // value is sanitizer output, which is the only reason it may later be
+        // rendered with |raw. Size is bounded inside the sanitizer.
+        $rawDetails = $data['details'] ?? '';
+        $values['details_html'] = $this->detailsSanitizer->sanitize(
+            is_scalar($rawDetails) ? (string)$rawDetails : ''
+        );
 
         // published — strict boolean server-side (the blueprint runs
         // validation: loose, so never rely on it). Only a genuinely absent
