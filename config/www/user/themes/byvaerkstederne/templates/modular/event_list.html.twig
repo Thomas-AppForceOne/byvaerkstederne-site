@@ -58,10 +58,16 @@
                         cta: _cta,
                         capacity: ev.capacity,
                         featured: ev.featured|default(false),
-                        href: '/begivenheder/' ~ key
+                        href: '/begivenheder/' ~ key,
+                        sort_key: event_sort_key(ev.event_date, ev.event_time, ev.group) ~ '|' ~ '%03d'|format(loop.index)
                     }]) %}
                 {% endif %}
             {% endfor %}
+            {# Chronological calendar: date, then start time; simultaneous
+               events follow the house workshop order (makerspace, krea,
+               grønt, eventværkstedet, then fælles). The trailing loop index
+               makes the key a total order, so the sort is deterministic. #}
+            {% set events_list = events_list|sort_by_key('sort_key') %}
         {% else %}
             {# Page-header fallback. Each event from h.events is already in the
                canonical shape (the YAML schema mirrors the partial's contract)

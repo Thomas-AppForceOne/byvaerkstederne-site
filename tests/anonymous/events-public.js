@@ -34,13 +34,13 @@ function readEvents() {
       continue;
     }
     if (!current) continue;
-    const field = line.match(/^ {2}(published|archived|featured|title):\s*(.*)$/);
+    const field = line.match(/^ {2}(published|archived|featured|title|group|event_date|event_time):\s*(.*)$/);
     if (field) {
       const [, name, raw] = field;
-      if (name === 'title') {
-        current.title = raw.replace(/^['"]|['"]$/g, '');
-      } else {
+      if (name === 'published' || name === 'archived' || name === 'featured') {
         current[name] = raw.trim() === 'true';
+      } else {
+        current[name] = raw.replace(/^['"]|['"]$/g, '');
       }
     }
   }
@@ -60,6 +60,26 @@ test.describe('Events — public read (M1)', () => {
     await page.goto('/vaerkstedskalenderen');
     const items = page.locator('.bv-event-list .bv-event-item');
     await expect(items).toHaveCount(visible.length);
+  });
+
+  test('calendar is sorted chronologically, ties by workshop order', async ({ page }) => {
+    // Mirrors the plugin's event_sort_key: date, start time (extracted from
+    // the messy legacy strings), workshop rank (makerspace, krea, grønt,
+    // eventværkstedet, then fælles), insertion order as final tiebreak.
+    const RANK = { makerspace: 1, kreativ: 2, krea: 2, groenne: 3, groent: 3, kulturhus: 4, alle: 5 };
+    const startOf = (time) => {
+      const m = String(time || '').match(/(\d{1,2})(?:[:.](\d{2}))?/);
+      return m ? `${m[1].padStart(2, '0')}:${m[2] || '00'}` : '99:99';
+    };
+    const expected = readEvents()
+      .filter((e) => e.published && !e.archived)
+      .map((e, i) => ({ ...e, sortKey: `${e.event_date}|${startOf(e.event_time)}|${RANK[e.group] || 6}|${String(i).padStart(3, '0')}` }))
+      .sort((a, b) => (a.sortKey < b.sortKey ? -1 : 1))
+      .map((e) => e.title);
+
+    await page.goto('/vaerkstedskalenderen');
+    const rendered = await page.locator('.bv-event-list .bv-event-row__title').allTextContents();
+    expect(rendered.map((t) => t.trim())).toEqual(expected);
   });
 
   test('detail view renders a published event', async ({ page }) => {

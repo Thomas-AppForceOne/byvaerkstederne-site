@@ -127,6 +127,7 @@ class EventManagerPlugin extends Plugin
             // plugin's page-access gate (10) and the feature-flags page gate
             // (100000), before the Form plugin's own processing (0).
             'onPageInitialized' => ['onPageInitialized', 5],
+            'onTwigInitialized' => ['onTwigInitialized', 0],
             'onTwigSiteVariables' => ['onTwigSiteVariables', 0],
         ]);
     }
@@ -580,6 +581,36 @@ class EventManagerPlugin extends Plugin
     // -------------------------------------------------------------------------
     // Twig data injection
     // -------------------------------------------------------------------------
+
+    /**
+     * event_sort_key(date, time, group): the calendar's chronological sort
+     * key — event date, then start time, then the house workshop order
+     * (makerspace, krea, grønt, eventværkstedet; fælles/'alle' events after
+     * those). Lives in PHP because legacy event_time strings are messy
+     * ("18:00 — 20:00", "Fredag 17 - 20") and need a real regex to yield a
+     * comparable HH:MM.
+     */
+    public function onTwigInitialized(): void
+    {
+        $twig = $this->grav['twig']->twig();
+        $twig->addFunction(new \Twig\TwigFunction(
+            'event_sort_key',
+            static function ($date, $time, $group): string {
+                $start = '99:99'; // untimed events sort after timed ones that day
+                if (preg_match('/(\d{1,2})(?:[:.](\d{2}))?/', (string)$time, $m)) {
+                    $start = str_pad($m[1], 2, '0', STR_PAD_LEFT) . ':' . ($m[2] ?? '00');
+                }
+                $rank = [
+                    'makerspace' => 1,
+                    'kreativ' => 2, 'krea' => 2,
+                    'groenne' => 3, 'groent' => 3,
+                    'kulturhus' => 4,
+                    'alle' => 5,
+                ][(string)$group] ?? 6;
+                return sprintf('%s|%s|%d', (string)$date, $start, $rank);
+            }
+        ));
+    }
 
     public function onTwigSiteVariables(): void
     {
