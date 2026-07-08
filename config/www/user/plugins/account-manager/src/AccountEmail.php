@@ -66,6 +66,28 @@ final class AccountEmail
     }
 
     /**
+     * Deletion-request confirmation to the member: the exact hard-delete
+     * date and the sign-in-again reinstatement rule (§2.8). No email is
+     * sent at hard delete itself — this mail IS the notice.
+     */
+    public function sendDeletionRequested(UserInterface $account, string $hardDeleteDate, int $windowDays): void
+    {
+        $this->send('deletion-requested', (string)$account->email, [
+            'user' => $account,
+            'hard_delete_date' => $hardDeleteDate,
+            'window_days' => $windowDays,
+        ]);
+    }
+
+    /** Reinstatement confirmation after a login inside the regret window. */
+    public function sendAccountReinstated(UserInterface $account): void
+    {
+        $this->send('account-reinstated', (string)$account->email, [
+            'user' => $account,
+        ]);
+    }
+
+    /**
      * Access-request notification to the admin recipients (§8). Granting
      * stays a manual super action in the admin panel — this mail is the
      * only automation.

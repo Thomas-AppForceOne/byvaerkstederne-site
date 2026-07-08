@@ -69,6 +69,7 @@ class AccountManagerPlugin extends Plugin
         'cancel-email-change' => ['nonce' => 'account-email-cancel', 'reauth' => false, 'section' => 'email'],
         'request-access' => ['nonce' => 'account-access-request', 'reauth' => false, 'section' => 'roles'],
         'cancel-access-request' => ['nonce' => 'account-access-cancel', 'reauth' => false, 'section' => 'roles'],
+        'request-deletion' => ['nonce' => 'account-deletion', 'reauth' => true, 'section' => 'delete'],
     ];
 
     /** GET route segment for the email-change confirmation link (token+user Grav params). */
@@ -138,6 +139,14 @@ class AccountManagerPlugin extends Plugin
             'onPageInitialized' => ['onPageInitialized', 5],
             'onTwigTemplatePaths' => ['onTwigTemplatePaths', 0],
             'onTwigSiteVariables' => ['onTwigSiteVariables', 0],
+            // Reinstatement-on-login (§2.8). Priority 0: after the login
+            // plugin's own userLogin (10) has placed the user in the session.
+            // Deliberately NOT flag-gated: were the flag turned off while
+            // deletion markers exist, a gated hook would strand members in an
+            // unrecoverable pending-deletion state while the purge job still
+            // deletes them. With the flag off on a clean tier this is an
+            // exact no-op (no marker can be created).
+            'onUserLogin' => ['onUserLogin', 0],
         ]);
     }
 
@@ -231,6 +240,9 @@ class AccountManagerPlugin extends Plugin
                 break;
             case 'cancel-access-request':
                 $this->handleCancelAccessRequest($user);
+                break;
+            case 'request-deletion':
+                $this->handleRequestDeletion($user);
                 break;
         }
     }
@@ -520,6 +532,111 @@ class AccountManagerPlugin extends Plugin
             : '/login';
         $this->grav->redirect($target, 303);
         exit; // @phpstan-ignore-line — redirect() exits; belt for static analysis
+    }
+
+    // -------------------------------------------------------------------------
+    // Deletion lifecycle (§2.8/§7) — soft delete, 30-day regret window
+    // -------------------------------------------------------------------------
+
+    private function handleRequestDeletion(UserInterface $user): void
+    {
+        // Explicit confirmation on top of re-auth (§4.3) — validated
+        // server-side, the checkbox is never the boundary.
+        if ((string)($_POST['confirm_deletion'] ?? '') !== '1') {
+            $this->failWith(400, ['Du skal bekræfte, at kontoen slettes endeligt efter fristen.'], 'delete');
+        }
+
+        $username = (string)$user->username;
+        $windowDays = (int)$this->config->get('plugins.account-manager.deletion.window_days', 30);
+        $hardDeleteDate = $this->danishDate(time() + $windowDays * 86400);
+
+        try {
+            $this->store()->mutate($username, static function (UserInterface $acct): void {
+                $acct->set('deletion_requested_at', gmdate('Y-m-d\TH:i:s\Z'));
+            });
+        } catch (\Throwable $e) {
+            error_log('account-manager request_deletion failed: ' . $e->getMessage());
+            $this->failWith(500, ['Noget gik galt. Prøv igen.'], 'delete');
+        }
+
+        $this->auditLog()->append('request_deletion', $username);
+
+        // Member email with the exact hard-delete date and the reinstatement
+        // rule — sent while the account address is still current.
+        try {
+            $account = $this->store()->read($username);
+            if ($account !== null) {
+                $this->accountEmail()->sendDeletionRequested($account, $hardDeleteDate, $windowDays);
+            }
+        } catch (\Throwable $e) {
+            error_log('account-manager deletion-requested mail failed: ' . $e->getMessage());
+        }
+
+        // Terminate the session AND every remember-me token (§2.8). The
+        // login plugin's own logout handler only cleans triplets when the
+        // remember-me cookie authenticates, so the explicit clean comes
+        // first; logout() then fires onUserLogout (cookie cleared, session
+        // invalidated and restarted).
+        $login = $this->grav['login'];
+        try {
+            $login->rememberMe()->getStorage()->cleanAllTriplets($username);
+        } catch (\Throwable $e) {
+            error_log('account-manager remember-me invalidation failed: ' . $e->getMessage());
+        }
+        $login->logout(['remember_me' => true]);
+
+        // Flash lands in the FRESH session created by the logout handler.
+        $this->grav['messages']->add(
+            "Din konto er markeret til sletning. Den slettes endeligt den {$hardDeleteDate} — log ind inden da for at fortryde.",
+            'success'
+        );
+        $this->grav->redirect('/', 303);
+        exit; // @phpstan-ignore-line — redirect() exits; belt for static analysis
+    }
+
+    /**
+     * Reinstatement (§2.8): a successful login inside the window clears the
+     * deletion marker — the whole regret mechanism. Fired by the login
+     * plugin's event chain; receives the freshly authenticated user.
+     *
+     * @param \RocketTheme\Toolbox\Event\Event $event
+     */
+    public function onUserLogin($event): void
+    {
+        $user = $event['user'] ?? null;
+        if (!$user instanceof UserInterface) {
+            return;
+        }
+        $marker = (string)($user->get('deletion_requested_at') ?? '');
+        if ($marker === '') {
+            return;
+        }
+        $username = (string)$user->username;
+
+        try {
+            $this->store()->mutate($username, static function (UserInterface $acct): void {
+                $acct->undef('deletion_requested_at');
+            });
+        } catch (\Throwable $e) {
+            error_log('account-manager reinstatement failed: ' . $e->getMessage());
+            return;
+        }
+
+        // Keep the live session object coherent with the account file.
+        $user->undef('deletion_requested_at');
+
+        $this->auditLog()->append('reinstate', $username);
+
+        try {
+            $account = $this->store()->read($username);
+            if ($account !== null) {
+                $this->accountEmail()->sendAccountReinstated($account);
+            }
+        } catch (\Throwable $e) {
+            error_log('account-manager reinstatement mail failed: ' . $e->getMessage());
+        }
+
+        $this->grav['messages']->add('Din konto er genaktiveret. Sletningen er fortrudt.', 'success');
     }
 
     // -------------------------------------------------------------------------

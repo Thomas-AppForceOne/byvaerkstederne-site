@@ -203,9 +203,10 @@ function resetEmailChangeThrottle() {
  *
  * @param {import('@playwright/test').Page} page
  * @param {{username: string, password: string}} account
+ * @param {{rememberMe?: boolean}} [options]
  * @returns {Promise<boolean>}
  */
-async function loginAs(page, { username, password }) {
+async function loginAs(page, { username, password }, { rememberMe = false } = {}) {
   await page.goto('/login');
   await page.evaluate(() => {
     const overlay = document.getElementById('bv-login-overlay');
@@ -214,6 +215,9 @@ async function loginAs(page, { username, password }) {
   const form = page.locator('#bv-login-overlay form');
   await form.locator('[name="username"]').fill(username);
   await form.locator('[name="password"]').fill(password);
+  if (rememberMe) {
+    await form.locator('[name="rememberme"]').check();
+  }
   await form.locator('[type="submit"]').click();
   // Success redirects away from /login; failure re-renders with a flash.
   await Promise.race([
@@ -229,6 +233,29 @@ async function logout(page) {
   await page.waitForLoadState('networkidle');
 }
 
+/**
+ * True while a remember-me token file exists for the account
+ * (user/data/rememberme/<sha1(username)>.yaml — the login plugin's
+ * TokenStorage layout).
+ *
+ * @param {string} username
+ * @returns {boolean}
+ */
+function rememberMeFileExists(username) {
+  assertDisposableUsername(username);
+  const hash = require('crypto').createHash('sha1').update(username).digest('hex');
+  try {
+    execFileSync(
+      'docker',
+      ['exec', gravContainer(), 'test', '-f', `/config/www/user/data/rememberme/${hash}.yaml`],
+      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 10_000 },
+    );
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 module.exports = {
   DISPOSABLE_PASSWORD,
   createDisposableAccount,
@@ -240,4 +267,5 @@ module.exports = {
   resetEmailChangeThrottle,
   loginAs,
   logout,
+  rememberMeFileExists,
 };

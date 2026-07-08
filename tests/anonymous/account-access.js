@@ -33,6 +33,7 @@ const ACCOUNT_POST_ENDPOINTS = [
   '/konto/cancel-email-change',
   '/konto/request-access',
   '/konto/cancel-access-request',
+  '/konto/request-deletion',
 ];
 
 // Tokens a flag-off 404 body must never contain (feature-leak guard). The
