@@ -28,6 +28,9 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const ACCOUNT_POST_ENDPOINTS = [
   '/konto/change-fullname',
   '/konto/change-password',
+  '/konto/request-email-change',
+  '/konto/resend-email-change',
+  '/konto/cancel-email-change',
 ];
 
 // Tokens a flag-off 404 body must never contain (feature-leak guard). The
@@ -113,10 +116,12 @@ test.describe('account self-service: anonymous access control', () => {
       const normalize = (body, route) => body
         .split(encodeURIComponent(route)).join('%2FROUTE')
         .split(route).join('/ROUTE')
-        // CSRF nonces and the Form plugin's per-render form id vary per
-        // request — noise, not signal.
+        // CSRF nonces, the Form plugin's per-render form id, and the theme's
+        // per-second asset cache-buster (?v=<unix ts>) vary per request —
+        // noise, not signal.
         .replace(/value="[0-9a-f]{32}"/g, 'value="NONCE"')
-        .replace(/name="__unique_form_id__" value="[a-z0-9]+"/g, 'name="__unique_form_id__" value="FORMID"');
+        .replace(/name="__unique_form_id__" value="[a-z0-9]+"/g, 'name="__unique_form_id__" value="FORMID"')
+        .replace(/\?v=\d+/g, '?v=TS');
       expect(normalize(await kontoResp.text(), '/konto'))
         .toBe(normalize(await controlResp.text(), controlRoute));
     });

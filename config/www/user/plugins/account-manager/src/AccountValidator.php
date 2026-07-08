@@ -38,6 +38,23 @@ final class AccountValidator
     }
 
     /**
+     * Email address for the verify-first change flow. Format-only — whether
+     * the address is available is deliberately NOT validated here (the
+     * no-enumeration contract answers identically either way).
+     *
+     * @return array{value:string,errors:list<string>}
+     */
+    public static function email(string $raw): array
+    {
+        $value = trim($raw);
+        $errors = [];
+        if ($value === '' || mb_strlen($value) > 254 || !filter_var($value, FILTER_VALIDATE_EMAIL)) {
+            $errors[] = 'Indtast en gyldig e-mailadresse.';
+        }
+        return ['value' => $value, 'errors' => $errors];
+    }
+
+    /**
      * New password entered twice, checked against the site policy regex
      * (`system.pwd_regex` — the same rule the registration form enforces).
      *

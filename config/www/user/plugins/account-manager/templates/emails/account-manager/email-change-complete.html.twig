@@ -1,0 +1,18 @@
+{% extends 'email/base.html.twig' %}
+
+{# To the OLD address after the swap — hijack visibility on completion. #}
+
+{%- set subject = 'Din e-mailadresse er ændret — ' ~ site_name %}
+{%- do email.message.setSubject(subject) %}
+
+{%- block content -%}
+<p>Hej {{ user.fullname ?: user.username }},</p>
+<p>
+  E-mailadressen på din konto hos <b>{{ site_name }}</b> er nu ændret.
+  Denne adresse er ikke længere knyttet til kontoen.
+</p>
+<p>
+  Hvis det ikke var dig, bør du straks kontakte foreningen.
+</p>
+<p>Venlig hilsen<br/>{{ site_name }}</p>
+{%- endblock content -%}

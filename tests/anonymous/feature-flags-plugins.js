@@ -208,6 +208,8 @@ const POST_ENDPOINTS = [
     new Set([200, 302, 400, 401, 403, 409, 413, 422])],
   ['POST', '/konto/change-password', 'account change-password',
     new Set([200, 302, 400, 401, 403, 409, 413, 422])],
+  ['POST', '/konto/request-email-change', 'account request-email-change',
+    new Set([200, 302, 400, 401, 403, 409, 413, 422])],
 ];
 
 // Tokens the 404 body must NOT contain — feature-name leak guard

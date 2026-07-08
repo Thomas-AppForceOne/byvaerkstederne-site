@@ -38,6 +38,7 @@ use Grav\Common\User\Interfaces\UserInterface;
 use Grav\Common\Utils;
 use Grav\Framework\Psr7\Response;
 use Grav\Plugin\AccountManager\AccountAuditLog;
+use Grav\Plugin\AccountManager\AccountEmail;
 use Grav\Plugin\AccountManager\AccountStore;
 use Grav\Plugin\AccountManager\AccountValidator;
 use Grav\Plugin\FeatureFlags\FeatureFlag;
@@ -63,7 +64,19 @@ class AccountManagerPlugin extends Plugin
     private const POST_ACTIONS = [
         'change-fullname' => ['nonce' => 'account-fullname', 'reauth' => false, 'section' => 'name'],
         'change-password' => ['nonce' => 'account-password', 'reauth' => true, 'section' => 'password'],
+        'request-email-change' => ['nonce' => 'account-email-change', 'reauth' => true, 'section' => 'email'],
+        'resend-email-change' => ['nonce' => 'account-email-resend', 'reauth' => false, 'section' => 'email'],
+        'cancel-email-change' => ['nonce' => 'account-email-cancel', 'reauth' => false, 'section' => 'email'],
     ];
+
+    /** GET route segment for the email-change confirmation link (token+user Grav params). */
+    private const CONFIRM_EMAIL_PATH = self::ROUTE_BASE . '/confirm-email-change';
+
+    /** The §6 neutral response — identical for available and occupied targets. */
+    private const EMAIL_CHANGE_NEUTRAL_FLASH = 'Hvis adressen kan bruges, har vi sendt en bekræftelse til den nye adresse.';
+
+    /** The §6 generic confirm-link failure — identical for every failure cause. */
+    private const CONFIRM_FAILURE_FLASH = 'Linket er ugyldigt eller udløbet.';
 
     private ?AccountStore $store = null;
 
@@ -121,6 +134,7 @@ class AccountManagerPlugin extends Plugin
             // plugin's page-access gate (10) and the feature-flags page gate
             // (100000), before the Form plugin's own processing (0).
             'onPageInitialized' => ['onPageInitialized', 5],
+            'onTwigTemplatePaths' => ['onTwigTemplatePaths', 0],
             'onTwigSiteVariables' => ['onTwigSiteVariables', 0],
         ]);
     }
@@ -129,9 +143,26 @@ class AccountManagerPlugin extends Plugin
     // Mutating-POST contract (§4.3)
     // -------------------------------------------------------------------------
 
+    /** Register the plugin's templates/ dir (transactional email twigs). */
+    public function onTwigTemplatePaths(): void
+    {
+        $this->grav['twig']->twig_paths[] = __DIR__ . '/templates';
+    }
+
     public function onPageInitialized(): void
     {
-        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+        $method = $_SERVER['REQUEST_METHOD'] ?? '';
+
+        // The email-change confirmation link (§4.3 #2) — the token is the
+        // credential; no session is required.
+        if ($method === 'GET' && $this->grav['uri']->path() === self::CONFIRM_EMAIL_PATH) {
+            if (!$this->featureEnabled()) {
+                $this->sendFlagDisabled404();
+            }
+            $this->handleConfirmEmailChange();
+        }
+
+        if ($method !== 'POST') {
             return;
         }
 
@@ -163,7 +194,14 @@ class AccountManagerPlugin extends Plugin
             $this->sendError(403, 'Ugyldig sikkerhedstoken. Genindlæs siden og prøv igen.');
         }
 
-        // 5. Re-auth (current password) for the sensitive endpoints —
+        // 5. Throttle the mail-sending endpoints (§6) BEFORE re-auth: every
+        //    POST burns the per-IP + per-account budget, so both mail
+        //    bombing and password guessing through this surface are bounded.
+        if ($action === 'request-email-change' || $action === 'resend-email-change') {
+            $this->throttleEmailChange($user->username, $spec['section']);
+        }
+
+        // 6. Re-auth (current password) for the sensitive endpoints —
         //    verified against a FRESHLY LOADED account, never the session
         //    object, so a stale session can never satisfy re-auth.
         if ($spec['reauth']) {
@@ -176,6 +214,15 @@ class AccountManagerPlugin extends Plugin
                 break;
             case 'change-password':
                 $this->handleChangePassword($user);
+                break;
+            case 'request-email-change':
+                $this->handleRequestEmailChange($user);
+                break;
+            case 'resend-email-change':
+                $this->handleResendEmailChange($user);
+                break;
+            case 'cancel-email-change':
+                $this->handleCancelEmailChange($user);
                 break;
         }
     }
@@ -249,6 +296,222 @@ class AccountManagerPlugin extends Plugin
 
         $this->auditLog()->append('change_password', $user->username);
         $this->redirectWithFlash('Din adgangskode er ændret.', 'password');
+    }
+
+    // -------------------------------------------------------------------------
+    // Email change (§6) — verify-new-address-first
+    // -------------------------------------------------------------------------
+
+    private function handleRequestEmailChange(UserInterface $user): void
+    {
+        $result = AccountValidator::email((string)($_POST['new_email'] ?? ''));
+        if ($result['errors'] !== []) {
+            $this->failWith(400, $result['errors'], 'email');
+        }
+        $newAddress = $result['value'];
+        $account = $this->store()->read($user->username);
+        if ($account === null) {
+            $this->failWith(500, ['Noget gik galt. Prøv igen.'], 'email');
+        }
+
+        // Requesting one's own current address is a no-op behind the same
+        // neutral response — nothing observable to distinguish.
+        if (strcasecmp($newAddress, (string)$account->email) === 0) {
+            $this->auditLog()->append('request_email_change', $user->username);
+            $this->redirectWithFlash(self::EMAIL_CHANGE_NEUTRAL_FLASH, 'email');
+        }
+
+        // No-enumeration branch (§6): an occupied address gets the identical
+        // neutral flash; its existing owner receives an informational mail
+        // instead of a confirmation link. No pending state is written.
+        $existing = $this->grav['accounts']->find($newAddress, ['email']);
+        if ($existing && $existing->exists() && $existing->username !== $user->username) {
+            try {
+                $this->accountEmail()->sendEmailChangeOccupied($newAddress);
+            } catch (\Throwable $e) {
+                error_log('account-manager occupied-address mail failed: ' . $e->getMessage());
+            }
+            $this->auditLog()->append('request_email_change', $user->username);
+            $this->redirectWithFlash(self::EMAIL_CHANGE_NEUTRAL_FLASH, 'email');
+        }
+
+        // Token: random 256-bit, stored only as a hash, expiring, single-use,
+        // invalidated by any newer request (this write overwrites).
+        $token = bin2hex(random_bytes(32));
+        $ttlHours = (int)$this->config->get('plugins.account-manager.email_change.token_ttl_hours', 24);
+        $pending = [
+            'address' => $newAddress,
+            'token_hash' => hash('sha256', $token),
+            'expires_at' => gmdate('Y-m-d\TH:i:s\Z', time() + $ttlHours * 3600),
+        ];
+
+        try {
+            $this->store()->mutate($user->username, static function (UserInterface $acct) use ($pending): void {
+                $acct->set('pending_email', $pending);
+            });
+        } catch (\Throwable $e) {
+            error_log('account-manager request_email_change failed: ' . $e->getMessage());
+            $this->failWith(500, ['Noget gik galt. Prøv igen.'], 'email');
+        }
+
+        try {
+            $this->accountEmail()->sendEmailChangeConfirm($account, $newAddress, $token, $ttlHours);
+            $this->accountEmail()->sendEmailChangeNotice($account);
+        } catch (\Throwable $e) {
+            // The pending state is stored — the member can resend. The UI
+            // response stays neutral (no-enumeration).
+            error_log('account-manager email-change mail failed: ' . $e->getMessage());
+        }
+
+        $this->auditLog()->append('request_email_change', $user->username);
+        $this->redirectWithFlash(self::EMAIL_CHANGE_NEUTRAL_FLASH, 'email');
+    }
+
+    /** GET /konto/confirm-email-change/token:<t>/user:<u> — token is the credential. */
+    private function handleConfirmEmailChange(): void
+    {
+        $uri = $this->grav['uri'];
+        $token = (string)$uri->param('token');
+        $username = (string)$uri->param('user');
+
+        $account = ($username !== '' && preg_match('/^[a-z0-9_-]{1,32}$/', $username))
+            ? $this->store()->read($username)
+            : null;
+        $pending = $account?->get('pending_email');
+
+        $valid = is_array($pending)
+            && $token !== ''
+            && !empty($pending['token_hash'])
+            && hash_equals((string)$pending['token_hash'], hash('sha256', $token))
+            && !empty($pending['expires_at'])
+            && strtotime((string)$pending['expires_at']) >= time();
+
+        if (!$valid) {
+            // One generic failure for every cause — unknown user, no pending
+            // change, wrong/reused token, expired token (§6).
+            $this->confirmRedirect(self::CONFIRM_FAILURE_FLASH, 'error');
+        }
+
+        $oldAddress = (string)$account->email;
+        $newAddress = (string)$pending['address'];
+
+        try {
+            $this->store()->mutate($username, static function (UserInterface $acct) use ($newAddress): void {
+                $acct->set('email', $newAddress);
+                $acct->undef('pending_email'); // single-use: consumed here
+            });
+        } catch (\Throwable $e) {
+            error_log('account-manager confirm_email_change failed: ' . $e->getMessage());
+            $this->confirmRedirect(self::CONFIRM_FAILURE_FLASH, 'error');
+        }
+
+        // Keep a live session for the same member coherent.
+        $sessionUser = $this->grav['user'] ?? null;
+        if ($sessionUser && $sessionUser->authenticated && $sessionUser->username === $username) {
+            $sessionUser->set('email', $newAddress);
+        }
+
+        try {
+            $this->accountEmail()->sendEmailChangeComplete($oldAddress, $this->store()->read($username));
+        } catch (\Throwable $e) {
+            error_log('account-manager email-change completion mail failed: ' . $e->getMessage());
+        }
+
+        $this->auditLog()->append('confirm_email_change', $username);
+        $this->confirmRedirect('Din e-mailadresse er opdateret.', 'success');
+    }
+
+    private function handleResendEmailChange(UserInterface $user): void
+    {
+        $account = $this->store()->read($user->username);
+        $pending = $account?->get('pending_email');
+        if (!is_array($pending) || empty($pending['address'])) {
+            $this->failWith(400, ['Der er ingen afventende e-mailændring.'], 'email');
+        }
+
+        // Re-mint: a fresh token + expiry replaces (and invalidates) the old.
+        $token = bin2hex(random_bytes(32));
+        $ttlHours = (int)$this->config->get('plugins.account-manager.email_change.token_ttl_hours', 24);
+        $pending['token_hash'] = hash('sha256', $token);
+        $pending['expires_at'] = gmdate('Y-m-d\TH:i:s\Z', time() + $ttlHours * 3600);
+
+        try {
+            $this->store()->mutate($user->username, static function (UserInterface $acct) use ($pending): void {
+                $acct->set('pending_email', $pending);
+            });
+            $this->accountEmail()->sendEmailChangeConfirm($account, (string)$pending['address'], $token, $ttlHours);
+        } catch (\Throwable $e) {
+            error_log('account-manager resend_email_change failed: ' . $e->getMessage());
+            $this->failWith(500, ['Noget gik galt. Prøv igen.'], 'email');
+        }
+
+        $this->auditLog()->append('resend_email_change', $user->username);
+        $this->redirectWithFlash('Vi har sendt et nyt bekræftelseslink.', 'email');
+    }
+
+    private function handleCancelEmailChange(UserInterface $user): void
+    {
+        try {
+            $this->store()->mutate($user->username, static function (UserInterface $acct): void {
+                $acct->undef('pending_email');
+            });
+        } catch (\Throwable $e) {
+            error_log('account-manager cancel_email_change failed: ' . $e->getMessage());
+            $this->failWith(500, ['Noget gik galt. Prøv igen.'], 'email');
+        }
+
+        $this->auditLog()->append('cancel_email_change', $user->username);
+        $this->redirectWithFlash('E-mailændringen er annulleret.', 'email');
+    }
+
+    /**
+     * §6 throttle — reuses the login plugin's rate-limiter primitives (the
+     * registration-throttle pattern; that plugin itself is untouched).
+     * Every POST registers against BOTH buckets before the check, so the
+     * budget bounds mail volume and password guessing alike.
+     */
+    private function throttleEmailChange(string $username, string $section): void
+    {
+        $login = $this->grav['login'] ?? null;
+        if ($login === null) {
+            return; // login plugin is a declared dependency; defensive only
+        }
+
+        $cfg = (array)$this->config->get('plugins.account-manager.email_change', []);
+        $ipKey = $login->getIpKey();
+
+        $ipLimiter = $login->getRateLimiter(
+            'account_email_change_ip',
+            (int)($cfg['ip_max'] ?? 10),
+            (int)($cfg['ip_interval'] ?? 60)
+        );
+        $ipLimiter->registerRateLimitedAction($ipKey, 'ip');
+
+        $userLimiter = $login->getRateLimiter(
+            'account_email_change_user',
+            (int)($cfg['account_max'] ?? 5),
+            (int)($cfg['account_interval'] ?? 60)
+        );
+        $userLimiter->registerRateLimitedAction($username, 'username');
+
+        if ($ipLimiter->isRateLimited($ipKey, 'ip') || $userLimiter->isRateLimited($username, 'username')) {
+            $this->failWith(429, ['For mange forsøg. Prøv igen senere.'], $section);
+        }
+    }
+
+    /**
+     * PRG for the confirm-link GET: back to /konto for a live session,
+     * otherwise to the login page (where the flash renders in the card).
+     */
+    private function confirmRedirect(string $message, string $scope): never
+    {
+        $this->grav['messages']->add($message, $scope);
+        $user = $this->grav['user'] ?? null;
+        $target = ($user && $user->authenticated && $user->authorized)
+            ? self::ROUTE_BASE . '#email'
+            : '/login';
+        $this->grav->redirect($target, 303);
+        exit; // @phpstan-ignore-line — redirect() exits; belt for static analysis
     }
 
     // -------------------------------------------------------------------------
@@ -405,6 +668,11 @@ class AccountManagerPlugin extends Plugin
     private function auditLog(): AccountAuditLog
     {
         return new AccountAuditLog($this->grav);
+    }
+
+    private function accountEmail(): AccountEmail
+    {
+        return new AccountEmail($this->grav);
     }
 
     /**

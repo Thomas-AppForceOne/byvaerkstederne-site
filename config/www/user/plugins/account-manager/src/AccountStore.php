@@ -31,13 +31,28 @@ final class AccountStore
         $this->grav = $grav;
     }
 
-    /** Fresh, unlocked read. Returns null for unknown accounts. */
+    /**
+     * Fresh, unlocked read. Returns null for unknown accounts.
+     *
+     * "Fresh" is load-bearing: CompiledYamlFile keeps a per-request static
+     * instance per path, and in an authenticated request that instance can
+     * already hold a SESSION-EPOCH snapshot of the account (observed: a
+     * token expiry backdated on disk being served with its original value).
+     * Re-auth and token checks must reflect the on-disk file, so the shared
+     * instance's cached content is freed and the account loaded again.
+     */
     public function read(string $username): ?UserInterface
     {
         if ($username === '') {
             return null;
         }
-        $user = $this->grav['accounts']->load($username);
+        $accounts = $this->grav['accounts'];
+        $user = $accounts->load($username);
+        $file = $user->file();
+        if ($file) {
+            $file->free();
+            $user = $accounts->load($username);
+        }
         return $user->exists() ? $user : null;
     }
 

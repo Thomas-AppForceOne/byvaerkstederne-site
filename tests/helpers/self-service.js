@@ -104,6 +104,7 @@ function grantGroups(username, groups) {
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 10_000,
   });
+  bustCompiledFileCache();
 }
 
 /** Remove a disposable account (idempotent; strict-prefix validated). */
@@ -128,6 +129,69 @@ function readAccountYaml(username) {
     );
   } catch (_) {
     return null;
+  }
+}
+
+/**
+ * Grav serves account YAML through a compiled-file cache (PHP files under
+ * cache/compiled/files/) that is doubly sticky for out-of-band edits:
+ * mtime invalidation has one-second granularity, and the web process's
+ * OPcache re-serves the compiled include for up to opcache.revalidate_freq
+ * (2s, PHP default) without re-stat'ing. Every container-side YAML edit
+ * therefore busts the compiled files AND waits out the OPcache window —
+ * otherwise a request landing within ~2s of the edit still sees the stale
+ * account (observed: a backdated token expiry being honoured as valid).
+ */
+function bustCompiledFileCache() {
+  execFileSync(
+    'docker',
+    ['exec', '-u', 'abc', gravContainer(), 'sh', '-c',
+      'rm -rf /app/www/public/cache/compiled/files/* 2>/dev/null; sleep 3; true'],
+    { stdio: ['ignore', 'pipe', 'pipe'], timeout: 20_000 },
+  );
+}
+
+/**
+ * Backdate a pending email change's expiry so the confirm link is expired
+ * (single-file sed inside the container; the account YAML's only
+ * `expires_at` key lives under pending_email).
+ *
+ * @param {string} username
+ */
+function backdatePendingEmail(username) {
+  assertDisposableUsername(username);
+  const yamlPath = `/config/www/user/accounts/${username}.yaml`;
+  // Same-inode rewrite (read → truncate-write), NOT `sed -i`: sed's
+  // tmp+rename swaps the inode, and the long-running php-fpm worker kept
+  // serving the OLD inode's content through the macOS bind-mount cache —
+  // the backdate was observably ignored. POSIX classes (BusyBox sed).
+  const script = [
+    'set -e',
+    `content="$(sed "s/^\\([[:space:]]*expires_at:[[:space:]]*\\).*/\\1'2020-01-01T00:00:00Z'/" "${yamlPath}")"`,
+    `printf '%s\\n' "$content" > "${yamlPath}"`,
+  ].join('\n');
+  execFileSync('docker', ['exec', '-u', 'abc', gravContainer(), 'sh', '-c', script], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 10_000,
+  });
+  bustCompiledFileCache();
+}
+
+/**
+ * Reset the account-manager email-change rate limiter (login-plugin
+ * FilesystemCache under cache/login/ — NOT cleared by `bin/grav
+ * clearcache`, same as the login-attempt limiter in login.js).
+ */
+function resetEmailChangeThrottle() {
+  try {
+    execFileSync(
+      'docker',
+      ['exec', gravContainer(), 'sh', '-c',
+        'rm -rf /app/www/public/cache/login/account_email_change_ip /app/www/public/cache/login/account_email_change_user 2>/dev/null; true'],
+      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 15_000 },
+    );
+  } catch (_) {
+    /* best-effort */
   }
 }
 
@@ -171,6 +235,9 @@ module.exports = {
   grantGroups,
   removeDisposableAccount,
   readAccountYaml,
+  backdatePendingEmail,
+  bustCompiledFileCache,
+  resetEmailChangeThrottle,
   loginAs,
   logout,
 };

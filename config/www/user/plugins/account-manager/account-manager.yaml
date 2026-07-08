@@ -5,9 +5,11 @@ email_change:
   # request-email-change throttling, reusing the login plugin's rate-limiter
   # primitives (per-IP + per-account buckets, counts within the interval in
   # minutes). The registration-throttle plugin itself is NOT modified.
-  ip_max: 6
+  # Every POST counts (including re-auth failures), so the budget leaves
+  # room for password typos while still bounding mail volume.
+  ip_max: 10
   ip_interval: 60
-  account_max: 3
+  account_max: 5
   account_interval: 60
 
 access_request:
