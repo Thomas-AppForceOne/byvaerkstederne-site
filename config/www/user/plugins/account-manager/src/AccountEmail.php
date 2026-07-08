@@ -65,6 +65,21 @@ final class AccountEmail
         $this->send('email-change-occupied', $address, []);
     }
 
+    /**
+     * Access-request notification to the admin recipients (§8). Granting
+     * stays a manual super action in the admin panel — this mail is the
+     * only automation.
+     */
+    public function sendAccessRequestAdmin(UserInterface $account, string $role, string $roleLabel, string $motivation): void
+    {
+        $this->send('access-request-admin', $this->adminRecipient(), [
+            'user' => $account,
+            'role' => $role,
+            'role_label' => $roleLabel,
+            'motivation' => $motivation,
+        ]);
+    }
+
     /** Public URL of the confirm endpoint (activation-link precedent). */
     public function confirmLink(string $username, string $token): string
     {

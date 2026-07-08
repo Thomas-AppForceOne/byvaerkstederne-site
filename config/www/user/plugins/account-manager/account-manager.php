@@ -67,6 +67,8 @@ class AccountManagerPlugin extends Plugin
         'request-email-change' => ['nonce' => 'account-email-change', 'reauth' => true, 'section' => 'email'],
         'resend-email-change' => ['nonce' => 'account-email-resend', 'reauth' => false, 'section' => 'email'],
         'cancel-email-change' => ['nonce' => 'account-email-cancel', 'reauth' => false, 'section' => 'email'],
+        'request-access' => ['nonce' => 'account-access-request', 'reauth' => false, 'section' => 'roles'],
+        'cancel-access-request' => ['nonce' => 'account-access-cancel', 'reauth' => false, 'section' => 'roles'],
     ];
 
     /** GET route segment for the email-change confirmation link (token+user Grav params). */
@@ -223,6 +225,12 @@ class AccountManagerPlugin extends Plugin
                 break;
             case 'cancel-email-change':
                 $this->handleCancelEmailChange($user);
+                break;
+            case 'request-access':
+                $this->handleRequestAccess($user);
+                break;
+            case 'cancel-access-request':
+                $this->handleCancelAccessRequest($user);
                 break;
         }
     }
@@ -515,6 +523,96 @@ class AccountManagerPlugin extends Plugin
     }
 
     // -------------------------------------------------------------------------
+    // Access request (§8) — request-only; granting stays a manual super action
+    // -------------------------------------------------------------------------
+
+    private function handleRequestAccess(UserInterface $user): void
+    {
+        $role = (string)($_POST['role'] ?? '');
+        $requestable = (array)$this->config->get('plugins.account-manager.access_request.requestable_roles', []);
+        if (!in_array($role, $requestable, true)) {
+            $this->failWith(400, ['Rollen kan ikke anmodes.'], 'roles');
+        }
+
+        $motivation = AccountValidator::motivation(
+            (string)($_POST['motivation'] ?? ''),
+            (int)$this->config->get('plugins.account-manager.access_request.motivation_max_length', 500)
+        );
+        if ($motivation['errors'] !== []) {
+            $this->failWith(400, $motivation['errors'], 'roles');
+        }
+
+        $account = $this->store()->read($user->username);
+        if ($account === null) {
+            $this->failWith(500, ['Noget gik galt. Prøv igen.'], 'roles');
+        }
+
+        $groups = (array)($account->get('groups') ?? []);
+        if (in_array($role, $groups, true)) {
+            $this->failWith(400, ['Du har allerede denne rolle.'], 'roles');
+        }
+        if (is_array($account->get('access_request'))) {
+            $this->failWith(400, ['Du har allerede en åben anmodning.'], 'roles');
+        }
+
+        // Cooldown after clearing (§8 / design note D5): the cancel endpoint
+        // stamps access_request_cleared_at; re-requests wait it out.
+        $clearedAt = (string)($account->get('access_request_cleared_at') ?? '');
+        $cooldownHours = (int)$this->config->get('plugins.account-manager.access_request.cooldown_hours', 24);
+        if ($clearedAt !== '' && strtotime($clearedAt) + $cooldownHours * 3600 > time()) {
+            $this->failWith(429, ['Vent venligst, før du anmoder igen.'], 'roles');
+        }
+
+        $request = [
+            'role' => $role,
+            'motivation' => $motivation['value'],
+            'requested_at' => gmdate('Y-m-d\TH:i:s\Z'),
+        ];
+
+        try {
+            $this->store()->mutate($user->username, static function (UserInterface $acct) use ($request): void {
+                $acct->set('access_request', $request);
+                $acct->undef('access_request_cleared_at');
+            });
+        } catch (\Throwable $e) {
+            error_log('account-manager request_access failed: ' . $e->getMessage());
+            $this->failWith(500, ['Anmodningen kunne ikke gemmes. Prøv igen.'], 'roles');
+        }
+
+        try {
+            $roleLabel = (string)($this->config->get("groups.{$role}.readableName") ?: $role);
+            $this->accountEmail()->sendAccessRequestAdmin($account, $role, $roleLabel, $motivation['value']);
+        } catch (\Throwable $e) {
+            // The request is stored and visible on /konto either way.
+            error_log('account-manager access-request admin mail failed: ' . $e->getMessage());
+        }
+
+        $this->auditLog()->append('request_access', $user->username, ['role' => $role]);
+        $this->redirectWithFlash('Din anmodning er sendt og afventer godkendelse.', 'roles');
+    }
+
+    private function handleCancelAccessRequest(UserInterface $user): void
+    {
+        $account = $this->store()->read($user->username);
+        if ($account === null || !is_array($account->get('access_request'))) {
+            $this->failWith(400, ['Der er ingen åben anmodning.'], 'roles');
+        }
+
+        try {
+            $this->store()->mutate($user->username, static function (UserInterface $acct): void {
+                $acct->undef('access_request');
+                $acct->set('access_request_cleared_at', gmdate('Y-m-d\TH:i:s\Z'));
+            });
+        } catch (\Throwable $e) {
+            error_log('account-manager cancel_access_request failed: ' . $e->getMessage());
+            $this->failWith(500, ['Noget gik galt. Prøv igen.'], 'roles');
+        }
+
+        $this->auditLog()->append('cancel_access_request', $user->username);
+        $this->redirectWithFlash('Anmodningen er fortrudt.', 'roles');
+    }
+
+    // -------------------------------------------------------------------------
     // Twig view model
     // -------------------------------------------------------------------------
 
@@ -535,6 +633,22 @@ class AccountManagerPlugin extends Plugin
         $account = $this->store()->read($user->username);
         if ($account === null) {
             return;
+        }
+
+        // Derived access-request state (§4.2): membership of the group IS the
+        // granted state — a leftover request marker is cleared lazily on the
+        // next /konto load (no cooldown stamp; the grant closed it).
+        $request = $account->get('access_request');
+        $groups = (array)($account->get('groups') ?? []);
+        if (is_array($request) && in_array($request['role'] ?? '', $groups, true)) {
+            try {
+                $this->store()->mutate($user->username, static function (UserInterface $acct): void {
+                    $acct->undef('access_request');
+                });
+                $account = $this->store()->read($user->username) ?? $account;
+            } catch (\Throwable $e) {
+                error_log('account-manager granted-request cleanup failed: ' . $e->getMessage());
+            }
         }
 
         $this->grav['twig']->twig_vars['am_account'] = $this->buildViewModel($account);

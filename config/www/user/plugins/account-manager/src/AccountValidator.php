@@ -55,6 +55,22 @@ final class AccountValidator
     }
 
     /**
+     * Optional access-request motivation: tags stripped, trimmed, bounded.
+     * Rendered into the admin notification email (escaped there as well).
+     *
+     * @return array{value:string,errors:list<string>}
+     */
+    public static function motivation(string $raw, int $maxLength): array
+    {
+        $value = trim(strip_tags($raw));
+        $errors = [];
+        if (mb_strlen($value) > $maxLength) {
+            $errors[] = "Motivationen må højst være {$maxLength} tegn.";
+        }
+        return ['value' => $value, 'errors' => $errors];
+    }
+
+    /**
      * New password entered twice, checked against the site policy regex
      * (`system.pwd_regex` — the same rule the registration form enforces).
      *
