@@ -8,8 +8,11 @@
    centred over the form. The embedding page empties base's {% block flash %}
    so the read-once flash queue is consumed in the card, not at the top of the
    page. No plugin PHP is touched. #}
+{# `auth_card_class` (optional embed variable) adds a page-scoped modifier —
+   e.g. the account page's wider `bv-auth-card--account` — without touching
+   the `.bv-auth-card` selector contract. #}
 <section class="bv-auth-page">
-    <div class="bv-auth-card">
+    <div class="bv-auth-card {{ auth_card_class|default('') }}">
         {# Dismiss back to the site — the card floats over the dimmed site, whose
            header is behind the backdrop and not clickable. Mirrors the login
            overlay's close affordance. #}

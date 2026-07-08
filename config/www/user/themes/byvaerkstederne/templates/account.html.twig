@@ -1,0 +1,164 @@
+{# /konto — account self-service page (account_self_service_specification.md §5).
+   One section per operation, all inside the shared floating auth card. Every
+   form is a raw HTML POST to the account-manager plugin's /konto/<action>
+   endpoints with a per-action nonce (roadmap precedent). The view model
+   `am_account` is injected by the account-manager plugin and never carries
+   token material. Danish visitor copy, English identifiers. #}
+{% extends 'partials/base.html.twig' %}
+
+{# Flash renders inside the card (auth_card includes messages.html.twig), so
+   suppress base's top-of-page flash to keep the read-once queue for the card. #}
+{% block flash %}{% endblock %}
+
+{% block body %}
+{% embed 'partials/auth_card.html.twig' with { auth_card_class: 'bv-auth-card--account' } %}
+    {% block auth_title %}Min konto{% endblock %}
+    {% block auth_intro %}
+        <p class="bv-body-lg">Logget ind som <strong>{{ am_account.fullname ?: am_account.username }}</strong>.</p>
+    {% endblock %}
+    {% block auth_form %}
+    <div class="bv-account-sections">
+
+        {# ---- Ret navn ---------------------------------------------------- #}
+        <section id="name" class="bv-account-section" aria-labelledby="account-name-heading">
+            <h2 id="account-name-heading" class="bv-headline bv-account-section__heading">Ret navn</h2>
+            <p class="bv-account-section__intro">Navnet vises i sidehovedet og p&aring; begivenheder, du st&aring;r for.</p>
+            <form class="bv-account-form" action="/konto/change-fullname" method="post">
+                {{ nonce_field('account-fullname', 'account-nonce')|raw }}
+                <div class="bv-account-form__field">
+                    <label class="bv-form-label" for="account-fullname-input">Navn</label>
+                    <input class="bv-input" id="account-fullname-input" type="text" name="fullname"
+                           value="{{ am_account.fullname|e }}" maxlength="80" required />
+                </div>
+                <button type="submit" class="bv-btn bv-btn--primary">Gem navn</button>
+            </form>
+        </section>
+
+        {# ---- Skift adgangskode ------------------------------------------ #}
+        <section id="password" class="bv-account-section" aria-labelledby="account-password-heading">
+            <h2 id="account-password-heading" class="bv-headline bv-account-section__heading">Skift adgangskode</h2>
+            <form class="bv-account-form" action="/konto/change-password" method="post">
+                {{ nonce_field('account-password', 'account-nonce')|raw }}
+                <div class="bv-account-form__field">
+                    <label class="bv-form-label" for="account-current-password">Nuv&aelig;rende adgangskode</label>
+                    <input class="bv-input" id="account-current-password" type="password" name="current_password"
+                           autocomplete="current-password" required />
+                </div>
+                <div class="bv-account-form__field">
+                    <label class="bv-form-label" for="account-password1">Ny adgangskode</label>
+                    <input class="bv-input" id="account-password1" type="password" name="password1"
+                           autocomplete="new-password" required />
+                </div>
+                <div class="bv-account-form__field">
+                    <label class="bv-form-label" for="account-password2">Gentag ny adgangskode</label>
+                    <input class="bv-input" id="account-password2" type="password" name="password2"
+                           autocomplete="new-password" required />
+                </div>
+                <p class="bv-account-section__hint">Mindst 8 tegn med store og sm&aring; bogstaver samt tal.</p>
+                <button type="submit" class="bv-btn bv-btn--primary">Skift adgangskode</button>
+            </form>
+        </section>
+
+        {# ---- Skift e-mail ------------------------------------------------ #}
+        <section id="email" class="bv-account-section" aria-labelledby="account-email-heading">
+            <h2 id="account-email-heading" class="bv-headline bv-account-section__heading">Skift e-mail</h2>
+            <p class="bv-account-section__intro">Din nuv&aelig;rende adresse er <strong>{{ am_account.email|e }}</strong>.
+               Den nye adresse skal bekr&aelig;ftes via et link, f&oslash;r skiftet tr&aelig;der i kraft.</p>
+            {% if am_account.pending_email %}
+                <p class="bv-account-pending" data-pending="email">
+                    Bekr&aelig;ftelse afventer for <strong>{{ am_account.pending_email.address|e }}</strong>.
+                    Tjek indbakken — linket udl&oslash;ber efter 24 timer.
+                </p>
+                <div class="bv-account-form__row">
+                    <form action="/konto/resend-email-change" method="post">
+                        {{ nonce_field('account-email-resend', 'account-nonce')|raw }}
+                        <button type="submit" class="bv-btn bv-btn--sm">Send nyt link</button>
+                    </form>
+                    <form action="/konto/cancel-email-change" method="post">
+                        {{ nonce_field('account-email-cancel', 'account-nonce')|raw }}
+                        <button type="submit" class="bv-btn bv-btn--sm">Fortryd skiftet</button>
+                    </form>
+                </div>
+            {% endif %}
+            <form class="bv-account-form" action="/konto/request-email-change" method="post">
+                {{ nonce_field('account-email-change', 'account-nonce')|raw }}
+                <div class="bv-account-form__field">
+                    <label class="bv-form-label" for="account-new-email">Ny e-mailadresse</label>
+                    <input class="bv-input" id="account-new-email" type="email" name="new_email"
+                           autocomplete="email" required />
+                </div>
+                <div class="bv-account-form__field">
+                    <label class="bv-form-label" for="account-email-password">Nuv&aelig;rende adgangskode</label>
+                    <input class="bv-input" id="account-email-password" type="password" name="current_password"
+                           autocomplete="current-password" required />
+                </div>
+                <button type="submit" class="bv-btn bv-btn--primary">Send bekr&aelig;ftelseslink</button>
+            </form>
+        </section>
+
+        {# ---- Rettigheder -------------------------------------------------- #}
+        <section id="roles" class="bv-account-section" aria-labelledby="account-roles-heading">
+            <h2 id="account-roles-heading" class="bv-headline bv-account-section__heading">Rettigheder</h2>
+            <ul class="bv-account-roles">
+                {% for role in am_account.roles %}
+                    <li class="bv-account-roles__item">{{ role|e }}</li>
+                {% endfor %}
+            </ul>
+            {% if am_account.access_request %}
+                <p class="bv-account-pending" data-pending="access">
+                    Din anmodning om at blive <strong>{{ am_account.access_request.role_label|e }}</strong> afventer godkendelse.
+                </p>
+                <form action="/konto/cancel-access-request" method="post">
+                    {{ nonce_field('account-access-cancel', 'account-nonce')|raw }}
+                    <button type="submit" class="bv-btn bv-btn--sm">Fortryd anmodning</button>
+                </form>
+            {% elseif am_account.requestable_roles is not empty %}
+                <form class="bv-account-form" action="/konto/request-access" method="post">
+                    {{ nonce_field('account-access-request', 'account-nonce')|raw }}
+                    <div class="bv-account-form__field">
+                        <label class="bv-form-label" for="account-access-role">Anmod om rolle</label>
+                        <select class="bv-input" id="account-access-role" name="role" required>
+                            {% for value, label in am_account.requestable_roles %}
+                                <option value="{{ value|e }}">{{ label|e }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="bv-account-form__field">
+                        <label class="bv-form-label" for="account-access-motivation">Motivation (valgfri)</label>
+                        <textarea class="bv-input" id="account-access-motivation" name="motivation"
+                                  rows="3" maxlength="500"></textarea>
+                    </div>
+                    <button type="submit" class="bv-btn bv-btn--primary">Send anmodning</button>
+                </form>
+            {% endif %}
+        </section>
+
+        {# ---- Slet konto ---------------------------------------------------- #}
+        <section id="delete" class="bv-account-section bv-account-section--danger" aria-labelledby="account-delete-heading">
+            <h2 id="account-delete-heading" class="bv-headline bv-account-section__heading">Slet konto</h2>
+            <p class="bv-account-section__intro">
+                N&aring;r du anmoder om sletning, bliver du logget ud, og kontoen slettes endeligt efter
+                {{ am_account.deletion_window_days }} dage — bekr&aelig;fter du i dag, sker det den
+                <strong>{{ am_account.hard_delete_preview }}</strong>. Logger du ind igen inden da,
+                bliver kontoen genaktiveret, og sletningen fortrydes. Indhold, du har oprettet
+                (fx begivenheder), bevares uden dit navn.
+            </p>
+            <form class="bv-account-form" action="/konto/request-deletion" method="post">
+                {{ nonce_field('account-deletion', 'account-nonce')|raw }}
+                <div class="bv-account-form__field">
+                    <label class="bv-form-label" for="account-delete-password">Nuv&aelig;rende adgangskode</label>
+                    <input class="bv-input" id="account-delete-password" type="password" name="current_password"
+                           autocomplete="current-password" required />
+                </div>
+                <label class="bv-account-confirm">
+                    <input type="checkbox" name="confirm_deletion" value="1" class="bv-checkbox" required />
+                    <span>Jeg forst&aring;r, at min konto slettes endeligt efter {{ am_account.deletion_window_days }} dage.</span>
+                </label>
+                <button type="submit" class="bv-btn bv-btn--danger">Slet min konto</button>
+            </form>
+        </section>
+
+    </div>
+    {% endblock %}
+{% endembed %}
+{% endblock %}

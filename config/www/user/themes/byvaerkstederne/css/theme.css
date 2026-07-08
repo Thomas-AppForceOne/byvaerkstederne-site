@@ -4212,3 +4212,81 @@ a { color: inherit; text-decoration: none; }
     font-size: 0.9rem;
     color: var(--outline);
 }
+
+/* =============================================================================
+   Account self-service (/konto) — account_self_service_specification.md §5.
+   The page reuses the shared .bv-auth-card identity; the --account modifier
+   (set via the auth_card_class embed variable) widens the card and drops the
+   brand image so the stacked operation sections get the full width.
+   ============================================================================= */
+.bv-auth-card--account .bv-auth-card__image { display: none; }
+.bv-auth-card--account .bv-auth-card__body { width: 100%; }
+.bv-auth-card--account { max-width: 56rem; }
+
+.bv-account-sections {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-10);
+}
+.bv-account-section {
+    padding-top: var(--space-8);
+    border-top: 1px solid var(--surface-container-highest);
+    /* Deep links from the header dropdown land here; keep the heading clear
+       of the viewport edge. */
+    scroll-margin-top: 6rem;
+}
+.bv-account-section:first-child { border-top: none; padding-top: 0; }
+.bv-account-section__heading {
+    font-size: 1.25rem;
+    color: var(--primary);
+    margin-bottom: var(--space-4);
+}
+.bv-account-section__intro { margin-bottom: var(--space-4); }
+.bv-account-section__hint { font-size: 0.9rem; color: var(--outline); }
+
+.bv-account-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    align-items: flex-start;
+    max-width: 28rem;
+}
+.bv-account-form__field { width: 100%; }
+.bv-account-form__field .bv-input { width: 100%; margin-top: var(--space-2); }
+.bv-account-form__row { display: flex; gap: var(--space-3); margin-bottom: var(--space-4); }
+
+/* Pending-state notice (unconfirmed email change / open access request). */
+.bv-account-pending {
+    background: #fff3cd;
+    color: #664d03;
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: var(--space-4);
+    font-size: 0.95rem;
+}
+
+.bv-account-roles {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding: 0;
+    margin: 0 0 var(--space-4);
+}
+.bv-account-roles__item {
+    background: var(--surface-variant);
+    color: var(--on-surface);
+    padding: var(--space-1) var(--space-3);
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+/* Destructive action — the delete section's submit. */
+.bv-btn--danger { background: var(--error); color: #fff; }
+.bv-btn--danger:hover { background: #93000a; color: #fff; }
+.bv-account-section--danger .bv-account-section__heading { color: var(--error); }
+.bv-account-confirm {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    cursor: pointer;
+}

@@ -1,0 +1,29 @@
+enabled: true
+
+email_change:
+  token_ttl_hours: 24
+  # request-email-change throttling, reusing the login plugin's rate-limiter
+  # primitives (per-IP + per-account buckets, counts within the interval in
+  # minutes). The registration-throttle plugin itself is NOT modified.
+  ip_max: 6
+  ip_interval: 60
+  account_max: 3
+  account_interval: 60
+
+access_request:
+  # Roles a member may request from /konto. Granting stays a manual super
+  # action in the admin panel — this plugin never writes groups.
+  requestable_roles:
+    - organizers
+  # Hours a member must wait after clearing a request before re-requesting.
+  cooldown_hours: 24
+  motivation_max_length: 500
+
+deletion:
+  # Days between deletion request and the scheduled hard delete. Signing in
+  # again inside the window reinstates the account.
+  window_days: 30
+
+fullname:
+  # Mirrors the registration form's fullname bound (`^[^<>]{1,80}$`).
+  max_length: 80

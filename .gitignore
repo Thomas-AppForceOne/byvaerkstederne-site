@@ -148,3 +148,7 @@ deploy/promotion-log.jsonl
 
 # Event-manager audit trail — live state written by the plugin, per-tier, never committed
 config/www/user/data/flex-objects/events-audit.jsonl
+
+# Account-manager runtime state (audit trail + write lock) — live per-tier
+# state written by the plugin, never committed
+config/www/user/data/account-manager/
