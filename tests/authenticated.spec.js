@@ -28,3 +28,4 @@ require('./authenticated/account-dropdown');
 require('./authenticated/account-email-change');
 require('./authenticated/account-fullname');
 require('./authenticated/account-password-change');
+require('./authenticated/account-purge');

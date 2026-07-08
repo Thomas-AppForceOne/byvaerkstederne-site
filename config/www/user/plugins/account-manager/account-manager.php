@@ -147,6 +147,10 @@ class AccountManagerPlugin extends Plugin
             // deletes them. With the flag off on a clean tier this is an
             // exact no-op (no marker can be created).
             'onUserLogin' => ['onUserLogin', 0],
+            // Daily §7 purge job (fired by `bin/grav scheduler` under cron;
+            // see deploy/SCHEDULER.md). Unflagged like the login hook: a
+            // member who consented to deletion must be deleted on schedule.
+            'onSchedulerInitialized' => ['onSchedulerInitialized', 0],
         ]);
     }
 
@@ -532,6 +536,26 @@ class AccountManagerPlugin extends Plugin
             : '/login';
         $this->grav->redirect($target, 303);
         exit; // @phpstan-ignore-line — redirect() exits; belt for static analysis
+    }
+
+    /**
+     * Register the daily purge job with Grav's scheduler (§4.1). The
+     * scheduler itself is cron-driven (`bin/grav scheduler` every 15 min —
+     * deploy/SCHEDULER.md); PurgeService is idempotent, so granularity is
+     * irrelevant. `bin/plugin account-manager purge-deleted` wraps the same
+     * service for tests and manual runs.
+     *
+     * @param \RocketTheme\Toolbox\Event\Event $event
+     */
+    public function onSchedulerInitialized($event): void
+    {
+        $scheduler = $event['scheduler'];
+        $job = $scheduler->addFunction(
+            'Grav\\Plugin\\AccountManager\\PurgeService::runScheduled',
+            [],
+            'account-manager-purge'
+        );
+        $job->at('0 3 * * *');
     }
 
     // -------------------------------------------------------------------------

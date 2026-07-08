@@ -178,6 +178,76 @@ function backdatePendingEmail(username) {
 }
 
 /**
+ * Stamp a (typically backdated) deletion_requested_at marker directly on a
+ * disposable account's YAML — the purge test's way of fast-forwarding the
+ * 30-day window without waiting.
+ *
+ * @param {string} username
+ * @param {string} isoTimestamp e.g. '2020-01-01T00:00:00Z'
+ */
+function setDeletionMarker(username, isoTimestamp) {
+  assertDisposableUsername(username);
+  if (!/^[0-9T:Z.-]+$/.test(isoTimestamp)) {
+    throw new Error(`self-service: '${isoTimestamp}' is not a plain ISO timestamp`);
+  }
+  const yamlPath = `/config/www/user/accounts/${username}.yaml`;
+  const script = [
+    'set -e',
+    `grep -q '^deletion_requested_at:' "${yamlPath}" || printf "deletion_requested_at: '%s'\\n" "${isoTimestamp}" >> "${yamlPath}"`,
+  ].join('\n');
+  execFileSync('docker', ['exec', '-u', 'abc', gravContainer(), 'sh', '-c', script], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 10_000,
+  });
+  bustCompiledFileCache();
+}
+
+/**
+ * Run the §7 purge CLI inside the container. Returns stdout; throws on a
+ * non-zero exit (which includes a failed zero-hits check).
+ *
+ * @param {{dryRun?: boolean}} [options]
+ * @returns {string}
+ */
+function runPurgeCli({ dryRun = false } = {}) {
+  const args = [
+    'exec', '-u', 'abc', '-w', '/app/www/public', gravContainer(),
+    'bin/plugin', 'account-manager', 'purge-deleted',
+  ];
+  if (dryRun) args.push('--dry-run');
+  return execFileSync('docker', args, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 120_000,
+  });
+}
+
+/**
+ * Case-insensitive recursive grep for a needle across user/accounts/ and
+ * user/data/ inside the container — the §7 zero-hits oracle. Returns the
+ * matching file list (empty = clean).
+ *
+ * @param {string} needle
+ * @returns {string[]}
+ */
+function footprintGrep(needle) {
+  if (!/^[A-Za-z0-9 @._-]+$/.test(needle)) {
+    throw new Error(`self-service: refusing to grep unusual needle '${needle}'`);
+  }
+  try {
+    const out = execFileSync(
+      'docker',
+      ['exec', gravContainer(), 'sh', '-c',
+        `grep -ril -- "${needle}" /config/www/user/accounts /config/www/user/data 2>/dev/null; true`],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60_000 },
+    );
+    return out.split('\n').filter(Boolean);
+  } catch (_) {
+    return [];
+  }
+}
+
+/**
  * Reset the account-manager email-change rate limiter (login-plugin
  * FilesystemCache under cache/login/ — NOT cleared by `bin/grav
  * clearcache`, same as the login-attempt limiter in login.js).
@@ -264,6 +334,9 @@ module.exports = {
   readAccountYaml,
   backdatePendingEmail,
   bustCompiledFileCache,
+  setDeletionMarker,
+  runPurgeCli,
+  footprintGrep,
   resetEmailChangeThrottle,
   loginAs,
   logout,
