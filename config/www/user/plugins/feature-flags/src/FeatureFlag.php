@@ -54,6 +54,13 @@ enum FeatureFlag: string
     // handler in the event-manager plugin.
     case EventManagement = 'event_management';
 
+    // --- Account self-service (account_self_service_specification.md) ---
+    // Gates the header account dropdown, the /konto page, and every
+    // mutating endpoint in the account-manager plugin. The reinstatement
+    // login hook and the scheduled purge job deliberately run unflagged
+    // (see the account-manager plugin README).
+    case AccountSelfService = 'account_self_service';
+
     /**
      * All rollout-catalogue flag string values, in declaration order. Used by
      * tests and profile validators that need to assert "every catalogue flag
@@ -93,6 +100,7 @@ enum FeatureFlag: string
             'social_media_links',
             'makerspace_meeting_link',
             'event_management',
+            'account_self_service',
         ];
     }
 }
