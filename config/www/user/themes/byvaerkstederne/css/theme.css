@@ -4290,3 +4290,44 @@ a { color: inherit; text-decoration: none; }
     gap: var(--space-3);
     cursor: pointer;
 }
+
+/* Header account dropdown (account_self_service). The chip keeps the
+   .bv-nav__user identity; the --menu modifier strips button chrome. */
+.bv-nav__account { position: relative; }
+.bv-nav__user--menu {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+}
+.bv-account-menu {
+    position: absolute;
+    top: calc(100% + 0.75rem);
+    right: 0;
+    min-width: 13rem;
+    background: var(--surface-container-lowest);
+    box-shadow: 0 0.5rem 1.25rem rgba(26, 28, 28, 0.18);
+    list-style: none;
+    margin: 0;
+    padding: var(--space-2) 0;
+    z-index: 60;
+}
+.bv-account-menu__item {
+    display: block;
+    padding: var(--space-2) var(--space-4);
+    color: var(--on-surface);
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+.bv-account-menu__item:hover,
+.bv-account-menu__item:focus-visible {
+    background: var(--surface-variant);
+    outline: none;
+}
+.bv-account-menu__item--danger { color: var(--error); }
+
+/* Mobile overlay: account entries render inline under the user name. */
+.bv-mobile-menu__link--account {
+    padding-left: var(--space-8);
+    font-size: 0.95rem;
+}
