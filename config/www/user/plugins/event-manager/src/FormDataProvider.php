@@ -99,14 +99,88 @@ final class FormDataProvider
 
     /**
      * The full stashed old input from a rejected submission, consumed
-     * read-once, or null. Used by the inline card editor (event_create) to
-     * repopulate its client state after a server-side validation redirect.
+     * read-once, or null. Used by the inline card editor to repopulate its
+     * client state after a server-side validation redirect.
      *
      * @return array<string,mixed>|null
      */
     public static function allOldInput(): ?array
     {
         return self::consumeOldInput();
+    }
+
+    /**
+     * Build the inline card editor's initial client state (event_editor.html.twig)
+     * from an optional stored event and optional rejected-submission old input.
+     * Precedence: old input (a validation redirect) → stored event (edit) →
+     * empty (create). Maps the stored shape onto the editor's shape: event_time
+     * → timeStart/timeEnd, capacity → capacityUnlimited/capacityCount,
+     * details_html → details.
+     *
+     * @param array<string,mixed>|null $event    stored event (edit) or null (create)
+     * @param array<string,mixed>|null $oldInput rejected submission stash or null
+     * @return array<string,mixed>
+     */
+    public static function editorState(?array $event, ?array $oldInput): array
+    {
+        $oi = is_array($oldInput) ? $oldInput : [];
+        $ev = is_array($event) ? $event : [];
+
+        // time: old input time_start/end wins; else parse the stored
+        // "HH:MM - HH:MM" event_time (legacy strings tolerated).
+        $timeStart = isset($oi['time_start']) ? (string)$oi['time_start'] : '';
+        $timeEnd = isset($oi['time_end']) ? (string)$oi['time_end'] : '';
+        if ($timeStart === '' && $timeEnd === '' && isset($ev['event_time'])
+            && preg_match('/(\d{1,2}[:.]\d{2}).*?(\d{1,2}[:.]\d{2})/u', (string)$ev['event_time'], $m)) {
+            $timeStart = str_pad(str_replace('.', ':', $m[1]), 5, '0', STR_PAD_LEFT);
+            $timeEnd = str_pad(str_replace('.', ':', $m[2]), 5, '0', STR_PAD_LEFT);
+        }
+
+        // capacity: old input wins; else derive from the stored capacity
+        // (numeric ⇒ limited with that count; empty/non-numeric ⇒ unlimited).
+        // Create default (neither present): limited (Nej), so a count is asked for.
+        $capacityUnlimited = false;
+        $capacityCount = '';
+        if (array_key_exists('capacity_unlimited', $oi)) {
+            $capacityUnlimited = in_array((string)$oi['capacity_unlimited'], ['1', 'true', 'on'], true);
+            $capacityCount = (string)($oi['capacity_count'] ?? '');
+        } elseif (array_key_exists('capacity', $ev)) {
+            $cap = trim((string)$ev['capacity']);
+            if (preg_match('/^\d+$/', $cap)) {
+                $capacityUnlimited = false;
+                $capacityCount = $cap;
+            } else {
+                $capacityUnlimited = true;
+            }
+        }
+
+        $published = false;
+        if (array_key_exists('published', $oi)) {
+            $published = in_array((string)$oi['published'], ['1', 'true', 'on'], true);
+        } elseif (array_key_exists('published', $ev)) {
+            $published = !empty($ev['published']);
+        }
+
+        $pick = static fn (string $oiKey, string $evKey, string $default = ''): string
+            => (string)($oi[$oiKey] ?? $ev[$evKey] ?? $default);
+
+        return [
+            'title' => $pick('title', 'title'),
+            'group' => $pick('group', 'group'),
+            'description' => $pick('description', 'description'),
+            'location' => $pick('location', 'location'),
+            'eventDate' => $pick('event_date', 'event_date'),
+            'timeStart' => $timeStart,
+            'timeEnd' => $timeEnd,
+            'capacityUnlimited' => $capacityUnlimited,
+            'capacityCount' => $capacityCount,
+            'price' => $pick('price', 'price'),
+            'buttonText' => $pick('button_text', 'button_text', 'Tilmeld'),
+            'published' => $published,
+            // The details textarea is prefilled from the sanitized stored HTML
+            // (round-trip stable, §5.4); old input wins after a redirect.
+            'details' => $pick('details', 'details_html'),
+        ];
     }
 
     /** @return array<string,mixed>|null */
