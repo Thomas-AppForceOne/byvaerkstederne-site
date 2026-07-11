@@ -1156,32 +1156,41 @@ a { color: inherit; text-decoration: none; }
 .bv-event-row__date-month { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--on-surface-variant); }
 .bv-event-row__date-day { font-size: 1.5rem; }
 
-/* Expand affordance: events with rich details show a chevron under the date.
-   It points down when collapsed and flips up when the card is expanded. The
-   chevron only renders (Twig) for expandable cards, so its presence itself
-   signals "there is more to unfold". */
+/* Expand affordance — a large chevron centred at the bottom edge of an
+   expandable card. Points down when collapsed, up when expanded (CSS
+   rotation). Rendered (Twig) only for cards that carry rich details. The
+   double-class selector reserves bottom room even on featured cards, whose
+   padding shorthand would otherwise reset it. */
+.bv-event-row.bv-event-row--expandable { position: relative; padding-bottom: var(--space-12); }
 .bv-event-row__chevron {
-    margin-top: 0.25rem;
-    font-size: 1.25rem;
+    position: absolute;
+    left: 50%;
+    bottom: var(--space-1);
+    transform: translateX(-50%);
+    font-size: 3.75rem;
+    line-height: 1;
     color: var(--bv-accent);
     transition: transform 0.15s ease;
+    pointer-events: none;
 }
-.bv-event-row.is-expanded .bv-event-row__chevron { transform: rotate(180deg); }
+.bv-event-row.is-expanded .bv-event-row__chevron { transform: translateX(-50%) rotate(180deg); }
 
 /* Attending highlight (event_rsvp): a confirmed Tilmeld participant sees the
-   date block filled with a light tint of the event's workshop colour —
-   spanning the full card height between the workshop accent line and the
-   body. */
+   date block filled with a light tint of the event's workshop colour. The
+   fill bleeds only vertically (into the card's top/bottom padding) so it spans
+   the card height; the date's horizontal box is left untouched, keeping the
+   month/day — and every downstream control — aligned across attending and
+   non-attending cards alike. */
 .bv-event-row--attending .bv-event-row__date {
     background: color-mix(in srgb, var(--bv-accent) 18%, white);
     align-self: stretch;
     justify-content: center;
-    margin: calc(-1 * var(--space-6)) 0 calc(-1 * var(--space-6)) calc(-1 * var(--space-4));
-    padding: var(--space-6) var(--space-4);
+    margin-block: calc(-1 * var(--space-6));
+    padding-block: var(--space-6);
 }
 .bv-event-row--featured.bv-event-row--attending .bv-event-row__date {
-    margin: calc(-1 * var(--space-8)) 0 calc(-1 * var(--space-8)) calc(-1 * var(--space-6));
-    padding: var(--space-8) var(--space-6);
+    margin-block: calc(-1 * var(--space-8));
+    padding-block: var(--space-8);
 }
 
 /* BODY: badge + h3 + time + description */
@@ -1313,9 +1322,6 @@ button.bv-event-row__signup { min-width: 141px; padding: var(--space-2) var(--sp
     .bv-event-row__date { flex-direction: row; align-items: baseline; gap: var(--space-2); min-width: auto; text-align: left; }
     .bv-event-row__date-day { order: -1; font-size: 1.25rem; }
     .bv-event-row__date-month { font-size: 0.8rem; }
-    /* Horizontal date row: the chevron sits inline after the month, so drop
-       the stacked-layout top margin. */
-    .bv-event-row__chevron { margin-top: 0; }
     .bv-event-row__body,
     .bv-event-row__meta { width: 100%; }
     .bv-event-row__meta { align-items: flex-start; text-align: left; margin-top: var(--space-2); }

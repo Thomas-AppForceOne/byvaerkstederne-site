@@ -25,7 +25,13 @@
            fed FROM ev.button_style (the colour token). Swapping these
            reproduces the v1 regression where data-group got the accent
            token and site.js's filter at site.js:687 matched nothing. #}
-        {% set filter_map = {makerspace: 'makerspace', krea: 'krea', groent: 'groent', kulturhus: 'kulturhus', alle: 'all'} %}
+        {# Both the current (kreativ/groenne — what the editor and
+           EventValidator persist) and the post-rename (krea/groent — the
+           filter-button IDs) group keys map to the button's data-filter value,
+           so an event saved with either variant filters correctly. Omitting
+           the legacy keys is what left the Krea Café and Grønt BYværksted
+           filters matching nothing. #}
+        {% set filter_map = {makerspace: 'makerspace', krea: 'krea', kreativ: 'krea', groent: 'groent', groenne: 'groent', kulturhus: 'kulturhus', alle: 'all'} %}
 
         {% set events_list = [] %}
         {% if flex_events is not null %}

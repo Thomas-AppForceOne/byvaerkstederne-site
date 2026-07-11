@@ -235,6 +235,10 @@
 
   var openPop = null;   // which popover is open
   var openList = null;  // which time list is open ('start' | 'end' | null)
+  // Per-open-session record of which columns the user has picked. The time
+  // list stays open until BOTH the hour and the minute have been chosen, so a
+  // single pick (of either) never closes it prematurely.
+  var timePick = { start: { h: false, m: false }, end: { h: false, m: false } };
 
   // ── Popover open/close ──────────────────────────────────────────────────
   function closeAll() {
@@ -288,7 +292,7 @@
       var d = document.createElement('div');
       d.className = 'bv-ee-timelist__opt' + (h === curH ? ' is-sel' : '');
       d.textContent = h;
-      d.addEventListener('click', function () { pickHour(which, h); });
+      d.addEventListener('click', function (e) { e.stopPropagation(); pickHour(which, h); });
       hourCol.appendChild(d);
     });
     var minCol = document.createElement('div');
@@ -297,7 +301,7 @@
       var d = document.createElement('div');
       d.className = 'bv-ee-timelist__opt' + (mm === curM ? ' is-sel' : '');
       d.textContent = mm;
-      d.addEventListener('click', function () { pickMinute(which, mm); });
+      d.addEventListener('click', function (e) { e.stopPropagation(); pickMinute(which, mm); });
       minCol.appendChild(d);
     });
     grid.appendChild(hourCol); grid.appendChild(minCol);
@@ -305,24 +309,35 @@
     var sel = hourCol.querySelector('.is-sel');
     if (sel) { hourCol.scrollTop = Math.max(0, sel.offsetTop - hourCol.clientHeight / 2 + sel.clientHeight / 2); }
   }
+  function closeTimeList(which) {
+    openList = null;
+    $(which === 'start' ? 'ee-ts-list' : 'ee-te-list').hidden = true;
+  }
   function toggleTimeList(which) {
-    if (openList === which) { openList = null; $(which === 'start' ? 'ee-ts-list' : 'ee-te-list').hidden = true; return; }
+    if (openList === which) { closeTimeList(which); return; }
     openList = which;
+    // Fresh session: require both an hour AND a minute pick before auto-close.
+    timePick[which] = { h: false, m: false };
     ['start', 'end'].forEach(function (w) { $(w === 'start' ? 'ee-ts-list' : 'ee-te-list').hidden = (w !== which); });
     buildTimeList(which);
+  }
+  function maybeCloseTimeList(which) {
+    if (timePick[which].h && timePick[which].m) { closeTimeList(which); }
+    else { buildTimeList(which); }
   }
   function pickHour(which, h) {
     var cur = which === 'start' ? state.timeStart : state.timeEnd;
     var mm = (cur || '').split(':')[1] || '00';
     setTime(which, h + ':' + mm);
-    buildTimeList(which);
+    timePick[which].h = true;
+    maybeCloseTimeList(which);
   }
   function pickMinute(which, mm) {
     var cur = which === 'start' ? state.timeStart : state.timeEnd;
     var h = (cur || '').split(':')[0] || '00';
     setTime(which, h + ':' + mm);
-    openList = null;
-    $(which === 'start' ? 'ee-ts-list' : 'ee-te-list').hidden = true;
+    timePick[which].m = true;
+    maybeCloseTimeList(which);
   }
   function setTime(which, val) {
     if (which === 'start') { state.timeStart = val; $('ee-ts-input').value = val; }
