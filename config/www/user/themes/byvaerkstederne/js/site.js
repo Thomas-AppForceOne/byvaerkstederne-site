@@ -924,148 +924,54 @@ document.addEventListener('DOMContentLoaded', function () {
 }());
 
 // ============================================================================
-// Event card modal expansion (event_rsvp §4). Clicking a card anywhere that
-// is NOT the signup button or a link floats it modally above the page: dimmed
-// backdrop, Esc/backdrop/close, focus trap, aria-modal, focus restore. The URL
-// updates via history.pushState to /begivenheder/<key> (shareable); a direct
-// load of that URL renders the full server page (no-JS/SEO fallback). Follows
-// the feature-suggestion overlay's focus-trap pattern.
+// Event card inline expansion (event_rsvp §4). Clicking a card anywhere that
+// is NOT the signup button expands it in place: the rich details unfold in a
+// panel below the card and push the other events down (accordion — one open at
+// a time). No modal, no URL change. The title's <a href> still opens the full
+// detail page on cmd/ctrl/middle-click and for no-JS / SEO / crawlers.
 // ============================================================================
 (function () {
     'use strict';
 
-    var FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    function itemOf(card) { return card.closest('.bv-event-item'); }
+    function panelOf(card) { var it = itemOf(card); return it ? it.querySelector('.bv-event-details-panel') : null; }
+    function templateOf(card) { var it = itemOf(card); return it ? it.querySelector('[data-event-details]') : null; }
 
-    var overlay = null;      // the live overlay element while open
-    var prevFocus = null;    // element to restore focus to on close
-    var pushedState = false; // did we push a history entry for this open?
-
-    function isOpen() { return overlay !== null; }
-
-    function buildPanel(card) {
-        var panel = document.createElement('div');
-        panel.className = 'bv-event-modal__panel';
-        panel.setAttribute('role', 'document');
-
-        var closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'bv-event-modal__close';
-        closeBtn.setAttribute('aria-label', 'Luk');
-        closeBtn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">close</span>';
-        closeBtn.addEventListener('click', requestClose);
-        panel.appendChild(closeBtn);
-
-        var content = document.createElement('div');
-        content.className = 'bv-event-modal__content';
-
-        // Clone the card's visible content so the live signup button and
-        // availability line keep working (delegated handler + applyResult
-        // update every [data-rsvp-key]/[data-rsvp-availability] on the page,
-        // this clone included).
-        var clone = card.cloneNode(true);
-        clone.classList.remove('bv-event-row--expandable');
-        clone.removeAttribute('data-event-key');
-        clone.removeAttribute('tabindex');
-        clone.removeAttribute('aria-haspopup');
-
-        // Pull the rich details body out of the clone's <template> and render
-        // it inline below the card summary.
-        var tpl = clone.querySelector('[data-event-details]');
-        var detailsHtml = tpl ? tpl.innerHTML : '';
-        if (tpl) { tpl.parentNode.removeChild(tpl); }
-        content.appendChild(clone);
-
-        if (detailsHtml && detailsHtml.trim() !== '') {
-            var body = document.createElement('div');
-            body.className = 'bv-event-detail__body bv-event-modal__body';
-            body.innerHTML = detailsHtml;
-            body.querySelectorAll('img').forEach(function (img) { img.loading = 'lazy'; });
-            content.appendChild(body);
-        }
-
-        panel.appendChild(content);
-        return panel;
+    function collapse(card) {
+        var panel = panelOf(card);
+        if (panel) { panel.hidden = true; panel.innerHTML = ''; }
+        card.classList.remove('is-expanded');
+        card.setAttribute('aria-expanded', 'false');
     }
 
-    function open(card) {
-        if (isOpen()) { return; }
-        var key = card.getAttribute('data-event-key');
-        if (!key) { return; }
-        prevFocus = document.activeElement;
-
-        overlay = document.createElement('div');
-        overlay.className = 'bv-event-modal';
-        overlay.setAttribute('role', 'dialog');
-        overlay.setAttribute('aria-modal', 'true');
-        var title = card.querySelector('.bv-event-row__title');
-        if (title) { overlay.setAttribute('aria-label', title.textContent.trim()); }
-        overlay.appendChild(buildPanel(card));
-
-        overlay.addEventListener('click', function (e) {
-            if (e.target === overlay) { requestClose(); }
+    function expand(card) {
+        // Accordion: only one card open at a time.
+        document.querySelectorAll('.bv-event-row.is-expanded').forEach(function (c) {
+            if (c !== card) { collapse(c); }
         });
-
-        document.body.appendChild(overlay);
-        document.body.style.overflow = 'hidden';
-        // Force reflow so the transition runs, then open.
-        void overlay.offsetWidth;
-        overlay.classList.add('is-open');
-
-        // Shareable deep link; a direct load renders the server detail page.
-        try {
-            history.pushState({ bvEventModal: key }, '', '/begivenheder/' + key);
-            pushedState = true;
-        } catch (err) { pushedState = false; }
-
-        setTimeout(function () {
-            var f = overlay.querySelector(FOCUSABLE);
-            if (f) { f.focus(); }
-        }, 40);
+        var panel = panelOf(card);
+        if (!panel) { return; }
+        var tpl = templateOf(card);
+        var html = tpl ? tpl.innerHTML : '';
+        panel.innerHTML = (html && html.trim() !== '')
+            ? html
+            : '<p class="bv-event-details-panel__empty">Ingen yderligere detaljer endnu.</p>';
+        panel.querySelectorAll('img').forEach(function (img) { img.loading = 'lazy'; });
+        panel.hidden = false;
+        card.classList.add('is-expanded');
+        card.setAttribute('aria-expanded', 'true');
     }
 
-    // Actually tear down the modal DOM. Does NOT touch history — callers that
-    // came from a UI close go through requestClose (which pops history first).
-    function hide() {
-        if (!overlay) { return; }
-        var node = overlay;
-        overlay = null;
-        node.classList.remove('is-open');
-        document.body.style.overflow = '';
-        setTimeout(function () { if (node.parentNode) { node.parentNode.removeChild(node); } }, 250);
-        if (prevFocus && prevFocus.focus) { try { prevFocus.focus(); } catch (e) {} }
-        prevFocus = null;
+    function toggle(card) {
+        if (card.classList.contains('is-expanded')) { collapse(card); }
+        else { expand(card); }
     }
 
-    // UI close (Esc/backdrop/button): restore the URL by going back, which
-    // fires popstate → hide(). If we never pushed state, just hide.
-    function requestClose() {
-        if (!isOpen()) { return; }
-        if (pushedState) {
-            pushedState = false;
-            history.back();
-        } else {
-            hide();
-        }
-    }
-
-    function trapFocus(e) {
-        if (!overlay) { return; }
-        var focusable = Array.prototype.slice.call(overlay.querySelectorAll(FOCUSABLE));
-        if (focusable.length === 0) { e.preventDefault(); return; }
-        var first = focusable[0];
-        var last = focusable[focusable.length - 1];
-        if (e.shiftKey) {
-            if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-        } else {
-            if (document.activeElement === last) { e.preventDefault(); first.focus(); }
-        }
-    }
-
-    // Expand on card click — a click ANYWHERE on the card except the signup
-    // button opens the event in the modal (§4). The title is an <a> to the
-    // detail page (no-JS / SEO / crawler fallback); a plain click opens the
-    // modal instead of navigating, while cmd/ctrl/shift/middle-click still
-    // opens that deep link in a new tab.
+    // A click ANYWHERE on the card except the signup button toggles the inline
+    // details. The title is an <a> to the detail page (no-JS / SEO / crawler
+    // fallback); a plain click expands in place, while cmd/ctrl/shift/middle-
+    // click still opens that deep link in a new tab. Clicks inside the expanded
+    // panel are NOT on the card (it's a sibling), so links there navigate.
     document.addEventListener('click', function (e) {
         var card = e.target.closest('.bv-event-row[data-event-key]');
         if (!card) { return; }
@@ -1073,25 +979,17 @@ document.addEventListener('DOMContentLoaded', function () {
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) { return; } // open the deep link in a new tab
         if (e.target.closest('input, select, textarea')) { return; }  // real form controls, if any
         e.preventDefault();  // stop the title link (or any link) from navigating
-        open(card);
+        toggle(card);
     });
 
-    // Keyboard: Enter/Space on a focused card expands it; Esc + focus trap
-    // while open.
+    // Keyboard: Enter/Space on a focused card toggles it; Esc collapses the open one.
     document.addEventListener('keydown', function (e) {
-        if (isOpen()) {
-            if (e.key === 'Escape') { e.preventDefault(); requestClose(); return; }
-            if (e.key === 'Tab') { trapFocus(e); }
-            return;
-        }
         if (e.key === 'Enter' || e.key === ' ') {
             var card = e.target.closest && e.target.closest('.bv-event-row[data-event-key]');
-            if (card && e.target === card) { e.preventDefault(); open(card); }
+            if (card && e.target === card) { e.preventDefault(); toggle(card); }
+        } else if (e.key === 'Escape') {
+            var expanded = document.querySelector('.bv-event-row.is-expanded');
+            if (expanded) { collapse(expanded); try { expanded.focus(); } catch (err) {} }
         }
-    });
-
-    // Back button / history.back() from requestClose → tear the modal down.
-    window.addEventListener('popstate', function () {
-        if (isOpen()) { pushedState = false; hide(); }
     });
 }());

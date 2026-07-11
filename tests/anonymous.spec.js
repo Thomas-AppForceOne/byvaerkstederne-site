@@ -42,9 +42,9 @@ require('./anonymous/auth-surface');
 // Frontend event CRUD — public read (M1) + anonymous management gating.
 require('./anonymous/events-public');
 // Event RSVP — anonymous availability, login offer, forced-browsing negatives,
-// and the card modal expansion (no login needed).
+// and the inline card expansion (no login needed).
 require('./anonymous/events-rsvp-public');
-require('./anonymous/events-card-modal');
+require('./anonymous/events-card-expand');
 
 // Visual-parity tests live at tests/anonymous/event-card-visual-parity.js
 // and are picked up directly by the chromium project's testMatch (see

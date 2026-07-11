@@ -57,16 +57,18 @@
 {% set _rsvp_on = feature_enabled('event_rsvp') and _rsvp_key %}
 {% set _info = _rsvp_on ? event_signup_info(_rsvp_key) : null %}
 
-{# Card-modal expansion (§4): clicking anywhere on the card that isn't the
-   button or a link floats it modally with the full details. The detail page
-   passes expandable:false — it already shows the same content inline and must
-   not re-expand into a modal. #}
+{# Inline card expansion (§4): clicking anywhere on the card that isn't the
+   signup button expands it in place — the rich details unfold below the card
+   and push the other events down (accordion), NOT a modal. The detail page
+   passes expandable:false — it already shows the same content inline. The
+   accent is set on the .bv-event-item wrapper too so the sibling details panel
+   inherits it. #}
 {% set _expandable = (expandable ?? true) and _rsvp_on %}
 
-{% if _in_list %}<li class="bv-event-item">{% else %}<div class="bv-event-item">{% endif %}
+{% if _in_list %}<li class="bv-event-item"{% if _expandable %} style="--bv-accent: var(--{{ _accent }});"{% endif %}>{% else %}<div class="bv-event-item"{% if _expandable %} style="--bv-accent: var(--{{ _accent }});"{% endif %}>{% endif %}
   <article class="bv-event-row{% if event.featured %} bv-event-row--featured{% endif %}{% if _expandable %} bv-event-row--expandable{% endif %}"
            {% if event.filter %}data-group="{{ event.filter }}"{% endif %}
-           {% if _expandable %}data-event-key="{{ event.key }}" tabindex="0" aria-haspopup="dialog"{% endif %}
+           {% if _expandable %}data-event-key="{{ event.key }}" tabindex="0" aria-expanded="false" aria-controls="bv-ev-details-{{ event.key }}"{% endif %}
            style="--bv-accent: var(--{{ _accent }});">
 
     <div class="bv-event-row__date">
@@ -149,11 +151,19 @@
       </div>
     {% endif %}
 
-    {% if _expandable %}
-      {# Rich details body delivered inline (no new read endpoint, §4): the
-         modal clones this into the expanded view. details_html is sanitizer
-         output (§5), so |raw is safe; empty until an organizer adds details. #}
-      <template data-event-details="{{ event.key }}">{{ (event.details_html|default(''))|raw }}</template>
-    {% endif %}
   </article>
+
+  {% if _expandable %}
+    {# Inline accordion panel (§4): site.js clones this <template> into the
+       panel below the card on expand — pushing the other events down instead
+       of opening a modal. details_html is sanitizer output (§5), so |raw is
+       safe. Location + a link to the full page make the panel useful even
+       before an organizer adds a rich body. #}
+    <template data-event-details="{{ event.key }}">
+      {%- if event.location -%}<p class="bv-event-details-panel__fact"><span class="material-symbols-outlined" aria-hidden="true">location_on</span>{{ event.location }}</p>{%- endif -%}
+      {{ (event.details_html|default(''))|raw }}
+      {%- if event.href -%}<p class="bv-event-details-panel__more"><a href="{{ event.href }}">Se hele begivenheden</a></p>{%- endif -%}
+    </template>
+    <div class="bv-event-details-panel" id="bv-ev-details-{{ event.key }}" hidden></div>
+  {% endif %}
 {% if _in_list %}</li>{% else %}</div>{% endif %}
