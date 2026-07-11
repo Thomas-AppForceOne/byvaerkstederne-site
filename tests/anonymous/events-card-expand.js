@@ -68,21 +68,9 @@ test.describe('Event card inline expansion', () => {
     await expect(card).not.toHaveClass(/is-expanded/);
   });
 
-  test('the panel link opens the full detail page', async ({ page }) => {
-    const { card, key } = await firstExpandableCard(page);
-    await card.locator('.bv-event-row__date').click();
-    const panel = page.locator(`#bv-ev-details-${key}`);
-    await expect(panel).toBeVisible();
-    await panel.locator('.bv-event-details-panel__more a').click();
-    await expect(page).toHaveURL(new RegExp(`/begivenheder/${key}$`));
-    await expect(page.locator('.bv-event-detail')).toHaveCount(1);
-  });
-
-  test('a direct load of the deep link renders the server detail page, no inline panel', async ({ page }) => {
-    const { key } = await firstExpandableCard(page);
-    await page.goto(`/begivenheder/${key}`);
-    await expect(page.locator('.bv-event-detail')).toHaveCount(1);
-    await expect(page.locator('.bv-event-details-panel')).toHaveCount(0);
+  test('the event title is plain text, not a link', async ({ page }) => {
+    const { card } = await firstExpandableCard(page);
+    await expect(card.locator('.bv-event-row__title a')).toHaveCount(0);
   });
 
   test('clicking the signup button never expands the card (offers login instead)', async ({ page }) => {
