@@ -56,7 +56,7 @@ test.describe('Event RSVP — signup from the card button', () => {
     await expect(line).toHaveText(/0 tilmeldte/);
 
     await btn.click();
-    await expect(btn).toHaveText(/Du er tilmeldt/, { timeout: 10_000 });
+    await expect(btn).toHaveText('Deltager', { timeout: 10_000 });
     await expect(line).toHaveText(/1 tilmeldt/);
     expect(page.url(), 'signup must not navigate').toBe(urlBefore);
     expect(eventAuditContains(`"action":"signup".*"key":"${RSVP_EVENT_ID}"`)).toBe(true);
@@ -98,7 +98,7 @@ test.describe('Event RSVP — capacity enforcement', () => {
       const lineA = pageA.locator(`[data-rsvp-availability="${CAPACITY_EVENT_ID}"]`).first();
       await expect(lineA).toHaveText(/1 plads tilbage/);
       await btnA.click();
-      await expect(btnA).toHaveText(/Du er tilmeldt/, { timeout: 10_000 });
+      await expect(btnA).toHaveText('Deltager', { timeout: 10_000 });
       await expect(lineA).toHaveText(/Alle pladser er optaget/);
 
       // Member B is refused server-side with 409.

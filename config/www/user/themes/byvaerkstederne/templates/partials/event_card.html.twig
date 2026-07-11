@@ -66,7 +66,7 @@
 {% set _expandable = (expandable ?? true) and _rsvp_on %}
 
 {% if _in_list %}<li class="bv-event-item"{% if _expandable %} style="--bv-accent: var(--{{ _accent }});"{% endif %}>{% else %}<div class="bv-event-item"{% if _expandable %} style="--bv-accent: var(--{{ _accent }});"{% endif %}>{% endif %}
-  <article class="bv-event-row{% if event.featured %} bv-event-row--featured{% endif %}{% if _expandable %} bv-event-row--expandable{% endif %}"
+  <article class="bv-event-row{% if event.featured %} bv-event-row--featured{% endif %}{% if _expandable %} bv-event-row--expandable{% endif %}{% if _info and _info.user_signed_up and _info.mode == 'tilmeld' %} bv-event-row--attending{% endif %}"
            {% if event.filter %}data-group="{{ event.filter }}"{% endif %}
            {% if _expandable %}data-event-key="{{ event.key }}" tabindex="0" aria-expanded="false" aria-controls="bv-ev-details-{{ event.key }}"{% endif %}
            style="--bv-accent: var(--{{ _accent }});">
@@ -83,6 +83,7 @@
       {# The title is plain text — never a link. Event cards expand inline on
          click; the (separate) detail page is not linked from the card. #}
       <h3 class="bv-event-row__title">{{ event.title }}</h3>
+      {% if event.location %}<p class="bv-event-row__location"><span class="material-symbols-outlined" aria-hidden="true">location_on</span>{{ event.location }}</p>{% endif %}
       {% if event.time %}<p class="bv-event-row__time">{{ event.time }}</p>{% endif %}
       {% if event.description %}<p class="bv-event-row__desc">{{ event.description|e|regex_replace('/([\\w.%+-]+@[\\w.-]+\\.[A-Za-z]{2,})/', '<a href="mailto:$1">$1</a>')|raw }}</p>{% endif %}
     </div>
@@ -105,7 +106,7 @@
             {% set _label = _signed ? 'Du er interesseret — klik for at fjerne' : 'Interesseret' %}
             {% set _state = _signed ? 'marked' : 'open' %}
           {% elseif _signed %}
-            {% set _label = 'Du er tilmeldt — klik for at framelde' %}{% set _state = 'signed_up' %}
+            {% set _label = 'Deltager' %}{% set _state = 'signed_up' %}
           {% elseif _full %}
             {% set _label = 'Alle pladser er optaget' %}{% set _state = 'full' %}
           {% else %}
@@ -151,13 +152,10 @@
   {% if _expandable %}
     {# Inline accordion panel (§4): site.js clones this <template> into the
        panel below the card on expand — pushing the other events down instead
-       of opening a modal. details_html is sanitizer output (§5), so |raw is
-       safe. Location makes the panel useful even before an organizer adds a
-       rich body. #}
-    <template data-event-details="{{ event.key }}">
-      {%- if event.location -%}<p class="bv-event-details-panel__fact"><span class="material-symbols-outlined" aria-hidden="true">location_on</span>{{ event.location }}</p>{%- endif -%}
-      {{ (event.details_html|default(''))|raw }}
-    </template>
+       of opening a modal. Only the rich details_html body goes here (location
+       is shown on the card itself); details_html is sanitizer output (§5), so
+       |raw is safe. #}
+    <template data-event-details="{{ event.key }}">{{ (event.details_html|default(''))|raw }}</template>
     <div class="bv-event-details-panel" id="bv-ev-details-{{ event.key }}" hidden></div>
   {% endif %}
 {% if _in_list %}</li>{% else %}</div>{% endif %}

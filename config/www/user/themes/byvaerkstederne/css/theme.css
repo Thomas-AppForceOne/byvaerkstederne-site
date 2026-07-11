@@ -1156,6 +1156,21 @@ a { color: inherit; text-decoration: none; }
 .bv-event-row__date-month { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--on-surface-variant); }
 .bv-event-row__date-day { font-size: 1.5rem; }
 
+/* Attending highlight (event_rsvp): a confirmed Tilmeld participant sees the
+   date block filled light green — spanning the full card height between the
+   workshop accent line and the body. */
+.bv-event-row--attending .bv-event-row__date {
+    background: #d4edda;
+    align-self: stretch;
+    justify-content: center;
+    margin: calc(-1 * var(--space-6)) 0 calc(-1 * var(--space-6)) calc(-1 * var(--space-4));
+    padding: var(--space-6) var(--space-4);
+}
+.bv-event-row--featured.bv-event-row--attending .bv-event-row__date {
+    margin: calc(-1 * var(--space-8)) 0 calc(-1 * var(--space-8)) calc(-1 * var(--space-6));
+    padding: var(--space-8) var(--space-6);
+}
+
 /* BODY: badge + h3 + time + description */
 .bv-event-row__body {
     flex: 1;
@@ -1175,6 +1190,15 @@ a { color: inherit; text-decoration: none; }
     font-size: 1.25rem;
     line-height: 1.15;
 }
+.bv-event-row__location {
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.85rem;
+    color: var(--on-surface-variant);
+}
+.bv-event-row__location .material-symbols-outlined { font-size: 1rem; }
 .bv-event-row__time {
     margin: 0;
     font-family: var(--font-headline);

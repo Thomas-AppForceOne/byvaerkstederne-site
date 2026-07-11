@@ -805,7 +805,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (mode === 'interesseret') {
             return signedUp ? 'Du er interesseret — klik for at fjerne' : 'Interesseret';
         }
-        if (signedUp) { return 'Du er tilmeldt — klik for at framelde'; }
+        if (signedUp) { return 'Deltager'; }
         if (isFull) { return 'Alle pladser er optaget'; }
         return 'Tilmeld';
     }
@@ -841,6 +841,11 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         document.querySelectorAll('[data-rsvp-availability="' + cssEscape(key) + '"]').forEach(function (line) {
             line.textContent = availabilityText(mode, count, remaining);
+        });
+        // Highlight the card (light-green date block) while the user is a
+        // confirmed Tilmeld participant.
+        document.querySelectorAll('.bv-event-row[data-event-key="' + cssEscape(key) + '"]').forEach(function (card) {
+            card.classList.toggle('bv-event-row--attending', signedUp && mode === 'tilmeld');
         });
     }
 

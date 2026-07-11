@@ -77,6 +77,7 @@
                         featured: true,
                         key: next_event_key,
                         href: '/begivenheder/' ~ next_event_key,
+                        location: next_event.location|default(''),
                         details_html: next_event.details_html|default('')
                     } %}
                     {% include 'partials/event_card.html.twig' with { event: _event, inList: false } %}
