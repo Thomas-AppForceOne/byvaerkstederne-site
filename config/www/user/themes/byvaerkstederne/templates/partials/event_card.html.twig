@@ -76,6 +76,10 @@
     <div class="bv-event-row__date">
       <span class="bv-event-row__date-month">{{ event.month }}</span>
       <span class="bv-event-row__date-day">{{ event.day }}</span>
+      {# Expand affordance — a large chevron pinned to the bottom of the date
+         column (down collapsed, up expanded). Rendered only for events that
+         carry rich details (see _expandable). #}
+      {% if _expandable %}<span class="material-symbols-outlined bv-event-row__chevron" aria-hidden="true">expand_more</span>{% endif %}
     </div>
 
     <div class="bv-event-row__body">
@@ -148,11 +152,6 @@
         {% endif %}
       </div>
     {% endif %}
-
-    {# Expand affordance — a large chevron centred at the bottom of the card.
-       Rendered only for events that carry rich details (see _expandable);
-       points down when collapsed, up when expanded (CSS rotation). #}
-    {% if _expandable %}<span class="material-symbols-outlined bv-event-row__chevron" aria-hidden="true">expand_more</span>{% endif %}
 
   </article>
 

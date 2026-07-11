@@ -1156,24 +1156,21 @@ a { color: inherit; text-decoration: none; }
 .bv-event-row__date-month { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--on-surface-variant); }
 .bv-event-row__date-day { font-size: 1.5rem; }
 
-/* Expand affordance — a large chevron centred at the bottom edge of an
-   expandable card. Points down when collapsed, up when expanded (CSS
-   rotation). Rendered (Twig) only for cards that carry rich details. The
-   double-class selector reserves bottom room even on featured cards, whose
-   padding shorthand would otherwise reset it. */
-.bv-event-row.bv-event-row--expandable { position: relative; padding-bottom: var(--space-12); }
+/* Expand affordance — a large chevron pinned to the bottom of the date
+   column (under the date, left side). Points down when collapsed, up when
+   expanded (CSS rotation). Rendered (Twig) only for cards that carry rich
+   details. The date column stretches to the card's height and margin-top:auto
+   drops the chevron to its bottom edge — no extra card padding, so the card
+   gains no empty space. */
+.bv-event-row--expandable .bv-event-row__date { align-self: stretch; }
 .bv-event-row__chevron {
-    position: absolute;
-    left: 50%;
-    bottom: var(--space-1);
-    transform: translateX(-50%);
+    margin-top: auto;
     font-size: 3.75rem;
-    line-height: 1;
+    line-height: 0.6;
     color: var(--bv-accent);
     transition: transform 0.15s ease;
-    pointer-events: none;
 }
-.bv-event-row.is-expanded .bv-event-row__chevron { transform: translateX(-50%) rotate(180deg); }
+.bv-event-row.is-expanded .bv-event-row__chevron { transform: rotate(180deg); }
 
 /* Attending highlight (event_rsvp): a confirmed Tilmeld participant sees the
    date block filled with a light tint of the event's workshop colour. The
@@ -1322,6 +1319,9 @@ button.bv-event-row__signup { min-width: 141px; padding: var(--space-2) var(--sp
     .bv-event-row__date { flex-direction: row; align-items: baseline; gap: var(--space-2); min-width: auto; text-align: left; }
     .bv-event-row__date-day { order: -1; font-size: 1.25rem; }
     .bv-event-row__date-month { font-size: 0.8rem; }
+    /* Horizontal date row: the chevron sits inline after the month, so drop
+       the pin-to-bottom margin and scale it back to fit the row. */
+    .bv-event-row__chevron { margin-top: 0; font-size: 2rem; line-height: 1; }
     .bv-event-row__body,
     .bv-event-row__meta { width: 100%; }
     .bv-event-row__meta { align-items: flex-start; text-align: left; margin-top: var(--space-2); }
