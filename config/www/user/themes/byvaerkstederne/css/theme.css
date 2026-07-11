@@ -1244,6 +1244,12 @@ a { color: inherit; text-decoration: none; }
     font-size: 0.875rem;
     color: var(--on-surface-variant);
 }
+/* Uniform Tilmeld/Deltager width: floor every signup button to the wider
+   'Deltager' label (measured ~140px) so 'Tilmeld' renders at the same size,
+   independently of whether any event on the page is currently in Deltager
+   state. Longer labels (full / interesseret) exceed this floor and keep
+   their natural width. */
+.bv-event-row__signup { min-width: 141px; }
 .bv-event-row__signup.is-signed-up { font-weight: 700; }
 .bv-event-row__signup.is-busy { opacity: 0.6; pointer-events: none; }
 .bv-event-row__rsvp-note {
