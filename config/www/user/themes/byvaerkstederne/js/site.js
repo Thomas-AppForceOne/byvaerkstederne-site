@@ -842,10 +842,14 @@ document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('[data-rsvp-availability="' + cssEscape(key) + '"]').forEach(function (line) {
             line.textContent = availabilityText(mode, count, remaining);
         });
-        // Highlight the card (light-green date block) while the user is a
-        // confirmed Tilmeld participant.
-        document.querySelectorAll('.bv-event-row[data-event-key="' + cssEscape(key) + '"]').forEach(function (card) {
-            card.classList.toggle('bv-event-row--attending', signedUp && mode === 'tilmeld');
+        // Highlight the card (light workshop-colour date block) while the user
+        // is a confirmed Tilmeld participant. Resolve the card off the signup
+        // button rather than [data-event-key]: an event without rich details is
+        // not expandable and carries no data-event-key, but can still be
+        // attended and must still get the highlight.
+        document.querySelectorAll('[data-rsvp-key="' + cssEscape(key) + '"]').forEach(function (b) {
+            var card = b.closest('.bv-event-row');
+            if (card) { card.classList.toggle('bv-event-row--attending', signedUp && mode === 'tilmeld'); }
         });
     }
 
@@ -957,10 +961,10 @@ document.addEventListener('DOMContentLoaded', function () {
         var panel = panelOf(card);
         if (!panel) { return; }
         var tpl = templateOf(card);
-        var html = tpl ? tpl.innerHTML : '';
-        panel.innerHTML = (html && html.trim() !== '')
-            ? html
-            : '<p class="bv-event-details-panel__empty">Ingen yderligere detaljer endnu.</p>';
+        // Only cards that carry rich details are expandable (the chevron and
+        // click target render solely for them), so the template is always
+        // non-empty here — no placeholder branch.
+        panel.innerHTML = tpl ? tpl.innerHTML : '';
         panel.querySelectorAll('img').forEach(function (img) { img.loading = 'lazy'; });
         panel.hidden = false;
         card.classList.add('is-expanded');

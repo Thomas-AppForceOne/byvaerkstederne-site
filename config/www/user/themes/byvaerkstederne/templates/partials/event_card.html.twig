@@ -59,11 +59,13 @@
 
 {# Inline card expansion (§4): clicking anywhere on the card that isn't the
    signup button expands it in place — the rich details unfold below the card
-   and push the other events down (accordion), NOT a modal. The detail page
-   passes expandable:false — it already shows the same content inline. The
-   accent is set on the .bv-event-item wrapper too so the sibling details panel
-   inherits it. #}
-{% set _expandable = (expandable ?? true) and _rsvp_on %}
+   and push the other events down (accordion), NOT a modal. The accent is set
+   on the .bv-event-item wrapper too so the sibling details panel inherits it.
+   Only events that actually carry rich details are expandable — a card with
+   an empty details_html has nothing to unfold, so it stays inert (no chevron,
+   no click target, no panel). #}
+{% set _has_details = (event.details_html|default('')|trim) is not empty %}
+{% set _expandable = (expandable ?? true) and _rsvp_on and _has_details %}
 
 {% if _in_list %}<li class="bv-event-item"{% if _expandable %} style="--bv-accent: var(--{{ _accent }});"{% endif %}>{% else %}<div class="bv-event-item"{% if _expandable %} style="--bv-accent: var(--{{ _accent }});"{% endif %}>{% endif %}
   <article class="bv-event-row{% if event.featured %} bv-event-row--featured{% endif %}{% if _expandable %} bv-event-row--expandable{% endif %}{% if _info and _info.user_signed_up and _info.mode == 'tilmeld' %} bv-event-row--attending{% endif %}"
@@ -74,6 +76,7 @@
     <div class="bv-event-row__date">
       <span class="bv-event-row__date-month">{{ event.month }}</span>
       <span class="bv-event-row__date-day">{{ event.day }}</span>
+      {% if _expandable %}<span class="material-symbols-outlined bv-event-row__chevron" aria-hidden="true">expand_more</span>{% endif %}
     </div>
 
     <div class="bv-event-row__body">

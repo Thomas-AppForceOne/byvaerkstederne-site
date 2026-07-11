@@ -138,7 +138,7 @@ const ARCHIVED_EVENT_YAML = `${ARCHIVED_EVENT_ID}:
   published: false
   title: '[FIXTURE] Archived event for Playwright tests'
   description: 'Seeded by tests/helpers/fixtures.js; do not edit.'
-  group: kreativ
+  group: krea
   badge: 'Krea Café'
   event_date: '2030-02-15'
   event_time: '10:00 - 12:00'
@@ -208,7 +208,7 @@ const RSVP_EVENT_YAML = `${RSVP_EVENT_ID}:
   updated_by: pw-test-org
   updated_at: '2026-06-01T00:00:00Z'
   archived: false
-  details_html: ''
+  details_html: '<p>Medbring dit eget projekt — vi har værktøj og loddekolber klar.</p>'
 `;
 
 const CAPACITY_EVENT_YAML = `${CAPACITY_EVENT_ID}:
@@ -240,7 +240,7 @@ const INTEREST_EVENT_YAML = `${INTEREST_EVENT_ID}:
   published: true
   title: '[FIXTURE] Interesseret event for Playwright tests'
   description: 'Seeded by tests/helpers/fixtures.js; do not edit.'
-  group: kreativ
+  group: krea
   badge: 'Krea Café'
   event_date: '2030-05-17'
   event_time: '10:00 - 12:00'
@@ -258,7 +258,7 @@ const INTEREST_EVENT_YAML = `${INTEREST_EVENT_ID}:
   updated_by: pw-test-org
   updated_at: '2026-06-01T00:00:00Z'
   archived: false
-  details_html: ''
+  details_html: '<p>Kom og vær kreativ i Krea Café — kaffe på kanden.</p>'
 `;
 
 function ensureRsvpEvent() {
