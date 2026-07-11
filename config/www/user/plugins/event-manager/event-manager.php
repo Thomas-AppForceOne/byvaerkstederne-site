@@ -934,6 +934,15 @@ class EventManagerPlugin extends Plugin
             $twig->twig_vars['em_event_key'] = $this->currentKey;
         }
 
+        // The inline card editor (event_create) is a custom form, not a
+        // Form-plugin form: inject the pre-generated key (adopted by
+        // handleCreate so pre-save image uploads land in the right folder) and
+        // any stashed old input for repopulation after a validation redirect.
+        if ($template === 'event_create') {
+            $twig->twig_vars['em_new_key'] = FormDataProvider::newEventKey();
+            $twig->twig_vars['em_old_input'] = FormDataProvider::allOldInput();
+        }
+
         if ($template === 'event_dashboard') {
             $user = $this->grav['user'] ?? null;
             if ($user && $user->authenticated && $user->authorized) {

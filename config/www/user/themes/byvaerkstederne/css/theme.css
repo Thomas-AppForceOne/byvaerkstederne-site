@@ -4304,3 +4304,244 @@ a { color: inherit; text-decoration: none; }
     font-size: 0.9rem;
     color: var(--outline);
 }
+
+/* ============================================================================
+   Inline card editor — /begivenheder/opret (event_create.html.twig).
+   The organizer edits the event directly on the card as it will appear in the
+   calendar; popovers capture each value. "Industrial Brutalism Refined":
+   border-radius 0, hard offset shadows, Space Grotesk structure.
+   ============================================================================ */
+/* Honeypot anti-spam field — off-screen, never shown or focusable. Global so
+   every honeypot (event editor, Form-plugin honeypots) is hidden without an
+   inline <style>. */
+.form-honeybear {
+    position: absolute !important; left: -10000px !important;
+    width: 1px; height: 1px; overflow: hidden;
+}
+
+.bv-event-editor {
+    background-color: #f0f4ff;
+    background-image:
+        linear-gradient(rgba(26, 28, 28, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(26, 28, 28, 0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+    padding: var(--space-16) 0 6rem;
+}
+.bv-event-editor__inner { max-width: 70rem; }
+.bv-event-editor__head { max-width: 46rem; margin-bottom: var(--space-10); }
+.bv-event-editor__title { font-size: 2.75rem; margin-bottom: var(--space-4); }
+.bv-event-editor__head p { color: var(--on-surface-variant); }
+
+/* Invisible click-outside layer for popovers. */
+.bv-ee-backdrop { position: fixed; inset: 0; z-index: 60; }
+
+/* Control line: draft/public + Gem. */
+.bv-ee-controls {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: var(--space-4); margin-bottom: var(--space-4); flex-wrap: wrap;
+}
+.bv-ee-seg { display: inline-flex; }
+.bv-ee-seg__btn {
+    font-family: var(--font-headline); font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; font-size: 0.875rem; padding: 10px 24px;
+    border: 1px solid var(--outline); background: #fff; color: var(--on-surface-variant);
+    cursor: pointer; border-radius: 0; transition: all 0.15s;
+}
+.bv-ee-seg__btn:active { transform: scale(0.97); }
+.bv-ee-seg__btn.is-active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.bv-ee-seg--sm .bv-ee-seg__btn { padding: 8px 18px; font-size: 0.8rem; }
+.bv-ee-save {
+    font-family: var(--font-headline); font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; font-size: 0.875rem; padding: 12px 40px;
+    border: none; border-radius: 0; cursor: pointer; transition: all 0.15s;
+    background: var(--primary); color: #fff;
+}
+.bv-ee-save:not(:disabled):hover { background: var(--primary-container, #2e6052); }
+.bv-ee-save:not(:disabled):active { transform: scale(0.97); }
+.bv-ee-save:disabled { background: var(--surface-container-highest); color: var(--outline); cursor: not-allowed; }
+
+/* The editable card — builds on .bv-event-row but heavier chrome, no hover slide. */
+.bv-ee-card {
+    align-items: center; gap: var(--space-6); padding: var(--space-8) var(--space-6);
+    background: #fff; border-left-width: 8px;
+    box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.15);
+    transition: none; margin-bottom: var(--space-12); position: relative;
+}
+.bv-ee-card:hover { transform: none; }
+.bv-ee-field { position: relative; }
+
+/* Editable-element hover affordance (dashed outline). The transparent
+   triggers reset their background/border; the badge + CTA keep their accent
+   background (added by bv-badge--*/bv-btn--*), so they are excluded here. */
+.bv-ee-datebtn, .bv-ee-line, .bv-ee-metaval, .bv-ee-capchip {
+    cursor: pointer; background: none; border: none; font: inherit;
+}
+.bv-ee-badge, .bv-ee-cta { cursor: pointer; }
+.bv-ee-datebtn:hover, .bv-ee-badge:hover, .bv-ee-line:hover,
+.bv-ee-metaval:hover, .bv-ee-cta:hover, .bv-ee-capchip:hover,
+.bv-ee-title:hover, .bv-ee-desc:hover {
+    outline: 2px dashed var(--outline); outline-offset: 2px;
+}
+.bv-ee-title:focus, .bv-ee-desc:focus { outline: 2px dashed var(--secondary); outline-offset: 2px; }
+
+/* Date block button. */
+.bv-ee-datebtn {
+    min-width: 4.5rem; text-align: center; display: flex; flex-direction: column;
+    align-items: center; gap: 2px; padding: 8px; font-family: var(--font-headline); font-weight: 700; line-height: 1;
+}
+.bv-ee-datebtn .bv-event-row__date-day { font-size: 1.75rem; }
+
+/* Group badge (button). Empty = dashed ghost. */
+.bv-ee-badge {
+    display: inline-block; border: none; font-family: var(--font-headline); font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.15em; font-size: 0.75rem;
+    padding: 4px 12px; margin-bottom: var(--space-1); color: #fff;
+}
+.bv-ee-badge--empty {
+    background: transparent !important; color: var(--outline);
+    border: 2px dashed var(--outline); font-style: italic; font-weight: 400; letter-spacing: 0.05em;
+}
+
+/* Title input (transparent, in-card). */
+.bv-ee-title {
+    box-sizing: border-box; width: 100%; border: none; background: transparent;
+    margin: 0; padding: 4px 0; font-family: var(--font-headline); font-weight: 700;
+    text-transform: uppercase; letter-spacing: var(--tracking-tight); font-size: 1.5rem;
+    line-height: 1.15; color: var(--on-surface); cursor: text;
+}
+.bv-ee-title::placeholder { color: var(--outline); font-style: italic; font-weight: 400; }
+
+/* Time / location clickable lines. */
+.bv-ee-line {
+    display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px;
+    font-family: var(--font-headline); font-weight: 700; font-size: 0.875rem; color: var(--on-surface);
+}
+.bv-ee-line .material-symbols-outlined { font-size: 16px; color: var(--on-surface-variant); }
+.bv-ee-line--ghost { color: var(--outline); font-style: italic; font-weight: 400; }
+#ee-loc-line { font-family: 'Work Sans', sans-serif; font-weight: 400; }
+
+/* Description textarea (transparent). */
+.bv-ee-desc {
+    box-sizing: border-box; width: 100%; border: none; background: transparent; margin: 0;
+    padding: 2px 0; font-family: 'Work Sans', sans-serif; font-size: 0.875rem; line-height: 1.5;
+    color: var(--on-surface-variant); resize: none; cursor: text;
+}
+.bv-ee-desc::placeholder { color: var(--outline); font-style: italic; }
+
+/* Meta column. */
+.bv-ee-meta { min-width: 10rem; gap: 10px; }
+.bv-ee-metaval { font-family: var(--font-headline); font-weight: 700; font-size: 0.95rem; line-height: 1.2; padding: 2px 4px; }
+.bv-ee-cta {
+    display: inline-block; font-family: var(--font-headline); font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; font-size: 0.875rem; padding: 8px 24px; color: #fff; border: none;
+}
+.bv-ee-capchip { display: inline-flex; align-items: center; gap: 4px; font-size: 0.875rem; padding: 2px 4px; color: var(--on-surface-variant); }
+.bv-ee-capchip .material-symbols-outlined { font-size: 17px; }
+.bv-ee-ghost { color: var(--outline) !important; font-style: italic; font-weight: 400; }
+
+/* Popovers. */
+.bv-ee-pop {
+    position: absolute; top: 100%; margin-top: 12px; z-index: 70; background: #fff;
+    border: 2px solid var(--on-surface); box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.25);
+    padding: 20px; width: max-content; max-width: min(24rem, 90vw); text-align: left;
+}
+.bv-ee-pop--left { left: 0; }
+.bv-ee-pop--right { right: 0; }
+.bv-ee-pop__label {
+    display: block; font-family: var(--font-headline); font-weight: 700; font-size: 0.75rem;
+    text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 4px;
+}
+.bv-ee-pop__help { margin: 0 0 12px; font-size: 0.85rem; line-height: 1.4; color: var(--outline); }
+.bv-ee-popinput {
+    box-sizing: border-box; width: 100%; padding: 12px; border: 1px solid var(--outline);
+    border-radius: 0; background: #fff; color: var(--on-surface); font-size: 1rem;
+}
+.bv-ee-popinput--num { width: 96px; }
+.bv-ee-dateinput { width: 170px; }
+
+/* Option lists (group / price / cta). */
+.bv-ee-optlist { display: flex; flex-direction: column; gap: 8px; }
+.bv-ee-opt {
+    display: block; width: 100%; text-align: left; font-family: var(--font-headline); font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.875rem; padding: 12px 16px;
+    border: 1px solid var(--outline-variant); cursor: pointer; border-radius: 0; background: #fff;
+    color: var(--on-surface); transition: all 0.15s;
+}
+.bv-ee-opt:hover { background: var(--surface-container-high); }
+.bv-ee-groupopt { border-left: 8px solid var(--opt-accent, var(--primary)); }
+.bv-ee-groupopt.is-active { background: var(--surface-container-high); }
+.bv-ee-priceopt.is-active, .bv-ee-ctaopt.is-active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* Location chips. */
+.bv-ee-chips { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.bv-ee-chip {
+    font-family: var(--font-headline); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+    font-size: 0.8rem; padding: 8px 14px; border: 1px solid var(--outline-variant); background: #fff;
+    color: var(--on-surface); cursor: pointer; border-radius: 0; transition: all 0.15s;
+}
+.bv-ee-chip:hover { background: var(--surface-container-high); }
+
+/* Time picker. */
+.bv-ee-timegrid { display: flex; gap: 16px; }
+.bv-ee-timefield { position: relative; width: 128px; }
+.bv-ee-timefield > div:first-child, .bv-ee-timefield { }
+.bv-ee-timefield { display: flex; flex-direction: column; }
+.bv-ee-timeinput {
+    box-sizing: border-box; width: 100%; padding: 12px 4px 12px 12px; border: 1px solid var(--outline);
+    border-right: none; background: #fff; color: var(--on-surface); font-size: 1rem;
+}
+.bv-ee-timefield { border: none; }
+.bv-ee-timefield > .bv-ee-timeinput { border-right: none; }
+.bv-ee-timefield { }
+.bv-ee-timeicon {
+    position: absolute; top: 0; right: 0; height: 100%; display: flex; align-items: center;
+    padding: 0 8px; border: 1px solid var(--outline); border-left: none; background: #fff;
+    cursor: pointer; color: var(--on-surface-variant);
+}
+.bv-ee-timeicon .material-symbols-outlined { font-size: 20px; }
+.bv-ee-timelist {
+    position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px; z-index: 80;
+    background: #fff; border: 2px solid var(--on-surface); box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.25);
+    height: 240px; overflow: hidden;
+}
+.bv-ee-timelist__grid { display: grid; grid-template-columns: 1fr 1fr; height: 100%; }
+.bv-ee-timelist__col { overflow-y: auto; min-height: 0; }
+.bv-ee-timelist__col--hours { border-right: 1px solid var(--outline-variant); }
+.bv-ee-timelist__opt {
+    padding: 10px 16px; text-align: center; font-family: var(--font-headline); font-weight: 700;
+    font-size: 0.95rem; cursor: pointer;
+}
+.bv-ee-timelist__opt:hover { background: var(--primary); color: #fff; }
+.bv-ee-timelist__opt.is-sel { background: var(--primary); color: #fff; }
+
+/* Capacity count field disabled state. */
+.bv-ee-cap-count { margin-top: 16px; }
+.bv-ee-cap-count.is-disabled { opacity: 0.45; }
+
+/* Details panel. */
+.bv-ee-details { background: var(--surface); border-top: 4px solid var(--primary); padding: var(--space-10); }
+.bv-ee-details__title { margin: 0 0 8px; font-family: var(--font-headline); font-weight: 700; font-size: 1.125rem; }
+.bv-ee-details__help { font-size: 0.85rem; line-height: 1.4; color: var(--outline); margin: 2px 0 16px; }
+.bv-ee-details .tox-tinymce { border: 1px solid var(--outline); }
+.bv-ee-foot { margin-top: var(--space-8); }
+
+/* ── Responsive: stacked card, popovers open upward ── */
+@media (max-width: 720px) {
+    .bv-event-editor { padding: var(--space-8) 0 3rem; }
+    .bv-event-editor__title { font-size: 1.875rem; }
+    .bv-ee-card {
+        flex-direction: column; align-items: stretch; gap: 10px;
+        padding: var(--space-5) var(--space-4); box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.15);
+    }
+    .bv-ee-title { font-size: 1.25rem; }
+    /* date + badge on one row */
+    .bv-ee-card > .bv-event-row__date { flex-direction: row; align-items: flex-start; }
+    .bv-ee-meta {
+        flex-direction: row; align-items: center; flex-wrap: wrap; min-width: 0;
+        border-top: 1px solid var(--surface-container-highest); padding-top: 10px; text-align: left;
+    }
+    .bv-ee-meta > .bv-ee-field:has(.bv-ee-cta) { margin-left: auto; }
+    /* Meta-row popovers open upward to stay on screen. */
+    .bv-ee-meta .bv-ee-pop { top: auto; bottom: 100%; margin-top: 0; margin-bottom: 12px; }
+    .bv-ee-details { padding: var(--space-6) var(--space-4); }
+}

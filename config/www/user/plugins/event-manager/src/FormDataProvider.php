@@ -97,6 +97,18 @@ final class FormDataProvider
         return $old !== null && array_key_exists($field, $old) ? $old[$field] : null;
     }
 
+    /**
+     * The full stashed old input from a rejected submission, consumed
+     * read-once, or null. Used by the inline card editor (event_create) to
+     * repopulate its client state after a server-side validation redirect.
+     *
+     * @return array<string,mixed>|null
+     */
+    public static function allOldInput(): ?array
+    {
+        return self::consumeOldInput();
+    }
+
     /** @return array<string,mixed>|null */
     private static function consumeOldInput(): ?array
     {
