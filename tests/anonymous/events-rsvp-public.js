@@ -27,11 +27,12 @@ test.describe('Event RSVP — public availability (anonymous)', () => {
 
   test('an unlimited event shows only the count, never "pladser tilbage"', async ({ page }) => {
     await page.goto('/vaerkstedskalenderen');
-    // event001 is a committed unlimited seed (capacity ''); its line reads as a
-    // running count, never remaining seats. (Capacity-limited events, e.g. the
-    // seeded capacity-1 fixture, legitimately show "pladser tilbage" — that
-    // path is covered in the authenticated capacity suite.)
-    const line = page.locator('[data-rsvp-availability="event001"]').first();
+    // ev_demo_makerspace is an unconditionally-seeded, future-dated unlimited
+    // demo event (no capacity); its line reads as a running count, never
+    // remaining seats. (The committed seeds are all past → auto-archived off
+    // the calendar; capacity-limited events legitimately show "pladser tilbage",
+    // covered in the authenticated capacity suite.)
+    const line = page.locator('[data-rsvp-availability="ev_demo_makerspace"]').first();
     await expect(line).toHaveText(/\d+ tilmeldt/);
     await expect(line).not.toHaveText(/pladser tilbage/);
   });

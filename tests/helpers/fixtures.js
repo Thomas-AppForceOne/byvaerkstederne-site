@@ -285,6 +285,59 @@ function removeInterestEvent() {
   return removeFixture(EVENTS_YAML_PATH, INTEREST_EVENT_ID);
 }
 
+// Public demo events — seeded UNCONDITIONALLY (no credentials needed) so the
+// calendar always carries forward-looking, detail-bearing content. Without
+// them, the auto-archive rule (events that ran >1 day ago are hidden) plus
+// details-gated card expansion would leave the anonymous/mobile calendar
+// suites with nothing to assert on a credential-less machine. Dates are
+// computed at seed time so they never age into staleness. Groups span
+// makerspace + krea + kulturhus to cover the calendar filter tests; groent is
+// intentionally left empty (the green filter's "no events" assumption).
+const DEMO_EVENTS = [
+  { key: 'ev_demo_makerspace', group: 'makerspace', style: 'secondary', badge: 'Makerspace & Reparation', title: '[DEMO] Åbent makerspace', days: 30 },
+  { key: 'ev_demo_krea', group: 'krea', style: 'tertiary', badge: 'Krea Café', title: '[DEMO] Krea Café', days: 33 },
+  { key: 'ev_demo_kulturhus', group: 'kulturhus', style: 'kulturhus', badge: 'Eventværkstedet', title: '[DEMO] Eventværkstedet', days: 37 },
+];
+
+function futureDateString(daysAhead) {
+  const d = new Date();
+  d.setDate(d.getDate() + daysAhead);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function demoEventYaml(e) {
+  return `${e.key}:
+  published: true
+  title: '${e.title}'
+  description: 'Seeded by tests/helpers/fixtures.js; do not edit.'
+  group: ${e.group}
+  badge: '${e.badge}'
+  event_date: '${futureDateString(e.days)}'
+  event_time: '10:00 - 12:00'
+  location: 'Store Rum'
+  button_style: ${e.style}
+  button_text: 'Tilmeld'
+  featured: false
+  archived: false
+  details_html: '<p>Kom forbi og vær med — alle er velkomne.</p>'
+`;
+}
+
+function ensurePublicDemoEvents() {
+  let seeded = false;
+  for (const e of DEMO_EVENTS) {
+    seeded = appendIfMissing(EVENTS_YAML_PATH, e.key, demoEventYaml(e)).seeded || seeded;
+  }
+  return { seeded };
+}
+
+function removePublicDemoEvents() {
+  for (const e of DEMO_EVENTS) {
+    removeFixture(EVENTS_YAML_PATH, e.key);
+  }
+}
+
 /**
  * Remove the whole event-signups store (runtime, gitignored). Resets every
  * RSVP test to zero signups; safe if the file is already absent.
@@ -476,6 +529,8 @@ module.exports = {
   ensureRsvpEvent,
   ensureCapacityEvent,
   ensureInterestEvent,
+  ensurePublicDemoEvents,
+  removePublicDemoEvents,
   removeLockedRoadmapItem,
   removeReleasableRoadmapItem,
   removeUnpromotedBugReport,

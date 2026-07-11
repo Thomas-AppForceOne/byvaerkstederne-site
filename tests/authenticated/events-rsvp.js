@@ -152,8 +152,9 @@ test.describe('Event RSVP — forced-browsing negatives (after auth+CSRF)', () =
     expect((await post('ev_does_not_exist')).status(), 'unknown key').toBe(404);
     expect((await post('ev_fixture_draft')).status(), 'unpublished').toBe(404);
     expect((await post('ev_fixture_archived')).status(), 'archived').toBe(404);
-    // event001 is a published but past legacy seed → 409.
-    expect((await post('event001')).status(), 'past event').toBe(409);
+    // event001 is a legacy seed that ran long ago → auto-archived (stale) →
+    // 404, indistinguishable from missing (existence not disclosed).
+    expect((await post('event001')).status(), 'stale (auto-archived) event').toBe(404);
   });
 });
 
@@ -194,5 +195,36 @@ test.describe('Event RSVP — attendee visibility', () => {
       await ctxU.close();
       await ctxO.close();
     }
+  });
+});
+
+test.describe('Event auto-archive — events that ran more than a day ago', () => {
+  test.skip(!haveCreds, 'TEST_PASSWORD + TEST_ORGANIZER_PASSWORD required');
+  test.beforeAll(() => { test.skip(!fixturesSeeded(), 'RSVP fixtures not seeded'); });
+
+  /** The persisted `archived:` value of one event key, or null if unset. */
+  function eventArchived(key) {
+    let inBlock = false;
+    let archived = null;
+    for (const line of fs.readFileSync(EVENTS_YAML, 'utf8').split('\n')) {
+      const km = line.match(/^([A-Za-z0-9_-]+):\s*$/);
+      if (km) { inBlock = km[1] === key; continue; }
+      if (inBlock) {
+        const m = line.match(/^ {2}archived:\s*(.*)$/);
+        if (m) { archived = m[1].trim() === 'true'; }
+      }
+    }
+    return archived;
+  }
+
+  test('opening the dashboard persists archived=true on stale events, leaves future ones alone', async ({ page }) => {
+    // event001 is a legacy 2026 seed (ran long ago) → must be swept to archived.
+    // ev_fixture_rsvp is dated 2030 (future) → must stay active.
+    await loginAsOrganizer(page);
+    await page.goto('/begivenheder/mine');
+    // The sweep runs server-side during the GET; the flag is on disk by the
+    // time the response lands. Poll to be robust against fs flush timing.
+    await expect.poll(() => eventArchived('event001'), { timeout: 10_000 }).toBe(true);
+    expect(eventArchived(RSVP_EVENT_ID), 'a future event is never auto-archived').toBe(false);
   });
 });

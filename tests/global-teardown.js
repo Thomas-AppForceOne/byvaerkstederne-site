@@ -31,6 +31,7 @@ const {
   removeRsvpEvent,
   removeCapacityEvent,
   removeInterestEvent,
+  removePublicDemoEvents,
   clearEventSignups,
   clearEventImages,
 } = require('./helpers/fixtures');
@@ -72,6 +73,7 @@ module.exports = async function globalTeardown() {
   try { removeRsvpEvent(); } catch (_) { /* non-fatal */ }
   try { removeCapacityEvent(); } catch (_) { /* non-fatal */ }
   try { removeInterestEvent(); } catch (_) { /* non-fatal */ }
+  try { removePublicDemoEvents(); } catch (_) { /* non-fatal */ }
   // Signups + uploaded images are gitignored runtime state — `git checkout`
   // won't restore them, so clear explicitly.
   try { clearEventSignups(); } catch (_) { /* non-fatal */ }

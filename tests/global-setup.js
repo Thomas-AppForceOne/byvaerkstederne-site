@@ -32,6 +32,7 @@ const {
   ensureRsvpEvent,
   ensureCapacityEvent,
   ensureInterestEvent,
+  ensurePublicDemoEvents,
   clearEventSignups,
   clearEventImages,
   clearGravCache,
@@ -82,6 +83,10 @@ module.exports = async function globalSetup() {
     await ensureAccount(TEST_ORGANIZER, password);
   }
   let seeded = false;
+  // Forward-looking public demo events — seeded regardless of credentials so
+  // the calendar is never empty (auto-archive hides the committed past seeds).
+  // The anonymous + mobile calendar suites depend on this content.
+  seeded = ensurePublicDemoEvents().seeded || seeded;
   if (hasUserPassword) {
     try { seeded = ensureLockedRoadmapItem().seeded || seeded; } catch (_) { /* non-fatal */ }
   }

@@ -169,6 +169,10 @@ class EventManagerPlugin extends Plugin
             }
             if ($slug === 'mine') {
                 $this->enforceManagementAccess('read');
+                // Opportunistic auto-archive: an organizer opening the dashboard
+                // persists archived=true on every event that ran more than a day
+                // ago (behaviour-neutral — reads already treat them as archived).
+                $this->archiveStaleEvents();
                 return;
             }
             if ($slug === 'opret') {
@@ -556,9 +560,11 @@ class EventManagerPlugin extends Plugin
         }
 
         $event = $this->repository()->findArray($key);
-        if ($event === null || empty($event['published']) || !empty($event['archived'])) {
-            // Unknown, unpublished, or archived — indistinguishable from
-            // missing, same posture as the detail route (§8.2).
+        if ($event === null || empty($event['published']) || !empty($event['archived'])
+            || $this->eventDateIsStale((string)($event['event_date'] ?? ''))) {
+            // Unknown, unpublished, archived, or auto-archived (ran more than a
+            // day ago) — indistinguishable from missing, same posture as the
+            // detail route (§8.2).
             $this->sendError(404, 'Begivenheden findes ikke.');
         }
 
@@ -789,6 +795,12 @@ class EventManagerPlugin extends Plugin
             'event_attendees',
             fn (string $key): ?array => $this->attendeeList($key)
         ));
+        // Calendar guard: an event that ran more than a day ago is stale and
+        // must not render on the (upcoming-activities) calendar.
+        $twig->addFunction(new \Twig\TwigFunction(
+            'event_is_stale',
+            fn ($date): bool => $this->eventDateIsStale((string)$date)
+        ));
     }
 
     /**
@@ -805,7 +817,8 @@ class EventManagerPlugin extends Plugin
             return null;
         }
         $event = $this->repository()->findArray($key);
-        if ($event === null || empty($event['published']) || !empty($event['archived'])) {
+        if ($event === null || empty($event['published']) || !empty($event['archived'])
+            || $this->eventDateIsStale((string)($event['event_date'] ?? ''))) {
             return null;
         }
 
@@ -1070,6 +1083,52 @@ class EventManagerPlugin extends Plugin
         }
         $today = (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Copenhagen')))->format('Y-m-d');
         return $date < $today;
+    }
+
+    /**
+     * The cutoff date (Europe/Copenhagen) an event must be on or after to still
+     * count as current: today minus one day. An event dated strictly before it
+     * ran "more than a day ago" and is treated as archived (auto-archive rule).
+     */
+    private function staleCutoffDate(): string
+    {
+        return (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Copenhagen')))
+            ->modify('-1 day')->format('Y-m-d');
+    }
+
+    /**
+     * True when an event ran more than a day ago (date strictly before the
+     * stale cutoff). Such events are archived — hidden from the calendar and
+     * no longer signup-able. An unparseable date is never stale.
+     */
+    public function eventDateIsStale(string $date): bool
+    {
+        $date = trim($date);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return false;
+        }
+        return $date < $this->staleCutoffDate();
+    }
+
+    /**
+     * Auto-archive (persist archived=true) every published event that ran more
+     * than a day ago. Runs opportunistically when an organizer opens the
+     * dashboard, so stale events leave both the public calendar and the
+     * dashboard's active list. Idempotent — only writes when something actually
+     * needs archiving. Read-path callers already treat stale events as archived
+     * (see eventDateIsStale usage), so this sweep is behaviour-neutral; it only
+     * makes the stored flag match what the reads already compute.
+     */
+    private function archiveStaleEvents(): void
+    {
+        try {
+            $archived = $this->repository()->archiveStale($this->staleCutoffDate());
+        } catch (\Throwable $e) {
+            return; // housekeeping must never break the dashboard
+        }
+        if ($archived !== []) {
+            $this->repository()->bustRenderCache();
+        }
     }
 
     /**

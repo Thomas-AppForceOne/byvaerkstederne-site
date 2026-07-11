@@ -47,15 +47,31 @@ function readEvents() {
   return events;
 }
 
+/**
+ * Mirrors the plugin's auto-archive cutoff: an event that ran more than a day
+ * ago (event_date strictly before today − 1 day) is stale and never renders on
+ * the calendar. Unparseable dates are never stale (same as the plugin). The
+ * seed/fixture dates sit years either side of today, so the exact timezone of
+ * the boundary is immaterial here.
+ */
+function notStale(e) {
+  const d = String(e.event_date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return true;
+  const c = new Date();
+  c.setDate(c.getDate() - 1);
+  const p = (n) => String(n).padStart(2, '0');
+  const cutoff = `${c.getFullYear()}-${p(c.getMonth() + 1)}-${p(c.getDate())}`;
+  return d >= cutoff;
+}
+
 test.describe('Events — public read (M1)', () => {
-  test('calendar lists every published, non-archived event (legacy seeds intact)', async ({ page }) => {
+  test('calendar lists every published, non-archived, non-stale event', async ({ page }) => {
     const events = readEvents();
     // Featured events are part of the list too (they only get a styling
-    // boost) — the only exclusions are unpublished and archived.
-    const visible = events.filter((e) => e.published && !e.archived);
-    // Regression guard for the legacy seeds: the repo ships 16 events and
-    // all of them must still render. Assert against the file, not a literal.
-    expect(visible.length).toBeGreaterThanOrEqual(16);
+    // boost) — the exclusions are unpublished, archived, and stale (ran more
+    // than a day ago; the auto-archive rule keeps the upcoming-activities
+    // calendar forward-looking). Assert against the file, not a literal.
+    const visible = events.filter((e) => e.published && !e.archived && notStale(e));
 
     await page.goto('/vaerkstedskalenderen');
     const items = page.locator('.bv-event-list .bv-event-item');
@@ -72,7 +88,7 @@ test.describe('Events — public read (M1)', () => {
       return m ? `${m[1].padStart(2, '0')}:${m[2] || '00'}` : '99:99';
     };
     const expected = readEvents()
-      .filter((e) => e.published && !e.archived)
+      .filter((e) => e.published && !e.archived && notStale(e))
       .map((e, i) => ({ ...e, sortKey: `${e.event_date}|${startOf(e.event_time)}|${RANK[e.group] || 6}|${String(i).padStart(3, '0')}` }))
       .sort((a, b) => (a.sortKey < b.sortKey ? -1 : 1))
       .map((e) => e.title);
