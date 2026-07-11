@@ -1061,12 +1061,18 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Expand on card click — but not when the click landed on the signup
-    // button, a link, or another control (those have their own behaviour).
+    // Expand on card click — a click ANYWHERE on the card except the signup
+    // button opens the event in the modal (§4). The title is an <a> to the
+    // detail page (no-JS / SEO / crawler fallback); a plain click opens the
+    // modal instead of navigating, while cmd/ctrl/shift/middle-click still
+    // opens that deep link in a new tab.
     document.addEventListener('click', function (e) {
         var card = e.target.closest('.bv-event-row[data-event-key]');
         if (!card) { return; }
-        if (e.target.closest('button, a, [data-rsvp-key], input, select, textarea')) { return; }
+        if (e.target.closest('[data-rsvp-key]')) { return; }          // signup button → RSVP handler
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) { return; } // open the deep link in a new tab
+        if (e.target.closest('input, select, textarea')) { return; }  // real form controls, if any
+        e.preventDefault();  // stop the title link (or any link) from navigating
         open(card);
     });
 

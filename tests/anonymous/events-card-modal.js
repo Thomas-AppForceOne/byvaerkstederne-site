@@ -28,6 +28,15 @@ test.describe('Event card modal', () => {
     await expect(page.locator('.bv-event-modal .bv-event-row__title')).toHaveCount(1);
   });
 
+  test('clicking the title opens the modal in place, it does NOT navigate to the detail page', async ({ page }) => {
+    const { card } = await firstExpandableCard(page);
+    await card.locator('.bv-event-row__title').click();
+    await expect(page.locator('.bv-event-modal.is-open')).toHaveCount(1);
+    // Still the calendar with the modal over it — not a full detail-page load
+    // (the detail page has no .bv-event-list).
+    await expect(page.locator('.bv-event-list')).toHaveCount(1);
+  });
+
   test('Esc closes the modal and restores the calendar URL', async ({ page }) => {
     const { card } = await firstExpandableCard(page);
     await card.locator('.bv-event-row__date').click();
