@@ -1288,7 +1288,6 @@ button.bv-event-row__signup { min-width: 141px; padding: var(--space-2) var(--sp
    .bv-event-item and inherits --bv-accent from that wrapper. */
 .bv-event-row--expandable { cursor: pointer; }
 .bv-event-row--expandable:focus-visible { outline: 2px solid var(--secondary); outline-offset: 2px; }
-.bv-event-row--expandable.is-expanded { background: var(--surface-container-high); }
 .bv-event-details-panel {
     padding: var(--space-5) var(--space-6);
     border-left: var(--border-thick) solid var(--bv-accent, var(--primary));
