@@ -225,47 +225,19 @@ class EventManagerPlugin extends Plugin
     }
 
     /**
-     * Public detail route /begivenheder/<key> (§8.2).
-     *
-     * Every denial — feature flag off, malformed key, unknown key, or an
-     * unpublished/archived event the viewer may not read — falls through by
-     * simply returning: no page is mounted at the route, so Grav serves its
-     * natural themed 404, indistinguishable from a missing page (no
-     * existence leak).
+     * Route /begivenheder/<key>. The standalone public detail page has been
+     * retired — event details are shown inline on the calendar (card
+     * expansion), so any /begivenheder/<key> URL redirects to the calendar.
+     * Redirecting every key uniformly (published, unpublished, unknown alike)
+     * means no event's existence leaks via a distinct 404 (§8.2). Feature off
+     * still falls through to the natural themed 404.
      */
     private function resolveDetailRoute(string $key): void
     {
         if (!$this->featureEnabled()) {
-            return;
+            return; // feature off → natural themed 404 (the page's `feature:` gate)
         }
-        if (!preg_match(self::KEY_PATTERN, $key)) {
-            return;
-        }
-
-        $event = $this->repository()->findArray($key);
-        if ($event === null) {
-            return;
-        }
-
-        $user = $this->grav['user'] ?? null;
-        if (!EventAuthorizer::canRead($user, $event)) {
-            return;
-        }
-
-        $page = $this->buildVirtualPage('event-detail.md');
-        if ($page === null) {
-            return;
-        }
-        $page->title((string)($event['title'] ?? 'Begivenhed'));
-
-        $this->currentEvent = $event;
-        $this->currentKey = $key;
-
-        $grav = $this->grav;
-        unset($grav['page']);
-        $grav['page'] = static function () use ($page) {
-            return $page;
-        };
+        $this->grav->redirect('/vaerkstedskalenderen', 302);
     }
 
     /**
@@ -929,7 +901,7 @@ class EventManagerPlugin extends Plugin
         $template = $page->template();
         $twig = $this->grav['twig'];
 
-        if (in_array($template, ['event_detail', 'event_edit', 'event_delete'], true) && $this->currentEvent !== null) {
+        if (in_array($template, ['event_edit', 'event_delete'], true) && $this->currentEvent !== null) {
             $twig->twig_vars['em_event'] = $this->currentEvent;
             $twig->twig_vars['em_event_key'] = $this->currentKey;
         }

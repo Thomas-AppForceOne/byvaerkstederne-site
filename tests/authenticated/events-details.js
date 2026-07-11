@@ -157,7 +157,7 @@ test.describe('Event details — image upload', () => {
     expect([401, 403]).toContain(res.status());
   });
 
-  test('a valid upload is stored and renders on the detail page', async ({ page }) => {
+  test('a valid upload is stored and renders in the inline card expansion', async ({ page }) => {
     await loginAsOrganizer(page);
     await page.goto('/begivenheder/opret');
     const formNonce = await eventForm(page).locator('[name="form-nonce"]').inputValue();
@@ -201,8 +201,10 @@ test.describe('Event details — image upload', () => {
     expect(create.status()).toBe(303);
     created.push(key);
 
-    await page.goto(`/begivenheder/${key}`);
-    const detailImg = page.locator(`.bv-event-detail__body img[src="${location}"]`);
-    await expect(detailImg).toHaveCount(1);
+    // The image renders in the inline card expansion on the calendar (the
+    // standalone detail page is retired). Expand the event's card and assert it.
+    await page.goto('/vaerkstedskalenderen');
+    await page.locator(`.bv-event-row[data-event-key="${key}"] .bv-event-row__date`).click();
+    await expect(page.locator(`#bv-ev-details-${key} img[src="${location}"]`)).toHaveCount(1);
   });
 });

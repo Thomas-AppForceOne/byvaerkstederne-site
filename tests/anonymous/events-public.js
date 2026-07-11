@@ -82,33 +82,26 @@ test.describe('Events — public read (M1)', () => {
     expect(rendered.map((t) => t.trim())).toEqual(expected);
   });
 
-  test('detail view renders a published event', async ({ page }) => {
-    const first = readEvents().find((e) => e.published && !e.archived);
-    if (!first) test.skip(true, 'no published event in the data file');
-    const response = await page.goto(`/begivenheder/${first.key}`);
-    expect(response?.status()).toBe(200);
-    await expect(page.locator('.bv-event-row__title')).toContainText(first.title.slice(0, 30));
-    await expect(page.locator('.bv-event-detail')).toBeVisible();
+  test('the detail route redirects to the calendar for every key (page retired, no existence leak)', async ({ page }) => {
+    // The standalone detail page is retired — details are shown inline on the
+    // calendar. Every /begivenheder/<key> redirects to the calendar, whether
+    // the key is published, unknown, or a draft/archived fixture, so no event's
+    // existence leaks via a distinct 404.
+    const events = readEvents();
+    const keys = ['ev_does_not_exist'];
+    const first = events.find((e) => e.published && !e.archived);
+    if (first) keys.push(first.key);
+    if (events.some((e) => e.key === 'ev_fixture_draft')) keys.push('ev_fixture_draft');
+    if (events.some((e) => e.key === 'ev_fixture_archived')) keys.push('ev_fixture_archived');
+    for (const key of keys) {
+      await page.goto(`/begivenheder/${key}`);
+      await expect(page, `${key} should land on the calendar`).toHaveURL(/\/vaerkstedskalenderen$/);
+      await expect(page.locator('.bv-event-detail')).toHaveCount(0);
+    }
   });
 
-  test('unknown event key returns 404', async ({ page }) => {
-    const response = await page.goto('/begivenheder/ev_does_not_exist');
-    expect(response?.status()).toBe(404);
-  });
-
-  test('unpublished event returns 404 for anonymous (no existence leak)', async ({ page }) => {
-    const hasFixture = readEvents().some((e) => e.key === 'ev_fixture_draft');
-    test.skip(!hasFixture, 'ev_fixture_draft not seeded (TEST_ORGANIZER_PASSWORD unset)');
-    const response = await page.goto('/begivenheder/ev_fixture_draft');
-    expect(response?.status()).toBe(404);
-  });
-
-  test('archived event returns 404 for anonymous and is absent from the calendar', async ({ page }) => {
-    const hasFixture = readEvents().some((e) => e.key === 'ev_fixture_archived');
-    test.skip(!hasFixture, 'ev_fixture_archived not seeded (TEST_ORGANIZER_PASSWORD unset)');
-    const response = await page.goto('/begivenheder/ev_fixture_archived');
-    expect(response?.status()).toBe(404);
-
+  test('an archived event is absent from the calendar', async ({ page }) => {
+    test.skip(!readEvents().some((e) => e.key === 'ev_fixture_archived'), 'ev_fixture_archived not seeded');
     await page.goto('/vaerkstedskalenderen');
     await expect(page.locator('body')).not.toContainText('[FIXTURE] Archived event');
   });

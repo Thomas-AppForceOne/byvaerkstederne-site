@@ -30,7 +30,7 @@
                     <span class="bv-badge bv-badge--{{ ev.status == 'publiceret' ? 'primary' : (ev.status == 'arkiveret' ? 'tertiary' : 'secondary') }}">
                         {{ ev.status|capitalize }}
                     </span>
-                    <a class="bv-event-dashboard__title" href="/begivenheder/{{ ev.key }}">{{ ev.title }}</a>
+                    <a class="bv-event-dashboard__title" href="/begivenheder/rediger/{{ ev.key }}">{{ ev.title }}</a>
                     <span class="bv-event-dashboard__date">{{ ev.event_date }}</span>
                     {% if ev.owner and grav.user.authorize('admin.super') %}
                         <span class="bv-event-dashboard__owner">({{ ev.owner }})</span>

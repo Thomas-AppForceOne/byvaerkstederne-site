@@ -75,10 +75,14 @@ test.describe('Events — member without the organizer role', () => {
     await expect(page.locator('[data-testid="calendar-create-link"]')).toHaveCount(0);
   });
 
-  test('member cannot read another owner\'s draft (404, no existence leak)', async ({ page }) => {
+  test('member cannot read another owner\'s draft — it redirects to the calendar (no leak)', async ({ page }) => {
     await login(page);
-    const response = await page.goto('/begivenheder/ev_fixture_draft');
-    expect(response?.status()).toBe(404);
+    // The detail page is retired; every /begivenheder/<key> redirects to the
+    // calendar, so a draft is indistinguishable from any other key and its
+    // content is never shown.
+    await page.goto('/begivenheder/ev_fixture_draft');
+    await expect(page).toHaveURL(/\/vaerkstedskalenderen$/);
+    await expect(page.locator('body')).not.toContainText('[FIXTURE] Draft event');
   });
 });
 

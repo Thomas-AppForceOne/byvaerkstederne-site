@@ -132,8 +132,6 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
       const anonPage = await anon.newPage();
       await anonPage.goto('/vaerkstedskalenderen');
       await expect(anonPage.locator('.bv-event-list')).toContainText(title);
-      const detail = await anonPage.goto(`/begivenheder/${key}`);
-      expect(detail?.status()).toBe(200);
     } finally {
       await anon.close();
     }
@@ -145,21 +143,20 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     const key = await createEvent(page, { title, published: '0' });
     createdKeys.push(key);
 
+    // Owner sees the draft on the dashboard with a 'kladde' chip.
     await page.goto('/begivenheder/mine');
     await expect(page.locator(`[data-event-key="${key}"]`)).toHaveAttribute('data-event-status', 'kladde');
-
-    // Owner can preview the draft detail.
-    const ownerDetail = await page.goto(`/begivenheder/${key}`);
-    expect(ownerDetail?.status()).toBe(200);
-    await expect(page.locator('.bv-message--warning')).toContainText('kladde');
 
     const anon = await browser.newContext();
     try {
       const anonPage = await anon.newPage();
+      // Absent from the public calendar...
       await anonPage.goto('/vaerkstedskalenderen');
       await expect(anonPage.locator('body')).not.toContainText(title);
-      const detail = await anonPage.goto(`/begivenheder/${key}`);
-      expect(detail?.status()).toBe(404);
+      // ...and the detail route redirects to the calendar (no preview, no leak).
+      await anonPage.goto(`/begivenheder/${key}`);
+      await expect(anonPage).toHaveURL(/\/vaerkstedskalenderen$/);
+      await expect(anonPage.locator('body')).not.toContainText(title);
     } finally {
       await anon.close();
     }
@@ -242,8 +239,8 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
       const anonPage = await anon.newPage();
       await anonPage.goto('/vaerkstedskalenderen');
       await expect(anonPage.locator('body')).not.toContainText(title);
-      const detail = await anonPage.goto(`/begivenheder/${key}`);
-      expect(detail?.status()).toBe(404);
+      await anonPage.goto(`/begivenheder/${key}`);
+      await expect(anonPage).toHaveURL(/\/vaerkstedskalenderen$/);
     } finally {
       await anon.close();
     }
