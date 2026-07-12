@@ -123,11 +123,12 @@
             {% set _label = 'Deltag' %}
             {% set _state = _signed ? 'signed_up' : 'open' %}
           {% endif %}
-          {# The signup button uses ONE calm neutral colour on every card (not
-             the workshop accent) — the workshop identity stays on the badge and
-             the accent line, so the calendar reads quietly. #}
+          {# The signup button uses ONE colour on every card (the brand primary,
+             same as the site's other primary CTAs) — not the workshop accent —
+             so the calendar reads quietly; the workshop identity stays on the
+             badge and the accent line. #}
           <button type="button"
-                  class="bv-btn bv-btn--dark bv-btn--sm bv-event-row__signup{{ _signed ? ' is-signed-up' : '' }}"
+                  class="bv-btn bv-btn--primary bv-btn--sm bv-event-row__signup{{ _signed ? ' is-signed-up' : '' }}"
                   data-rsvp-key="{{ event.key }}"
                   data-rsvp-mode="{{ _info.mode }}"
                   data-rsvp-state="{{ _state }}"
