@@ -1195,6 +1195,11 @@ a { color: inherit; text-decoration: none; }
     margin-block: calc(-1 * var(--space-8));
     padding-block: var(--space-8);
 }
+/* The attending state adds vertical padding to the date column, which would
+   drop the absolutely-positioned chevron by that amount. Offset its bottom by
+   the same padding so it stays put whether or not you've joined. */
+.bv-event-row--attending .bv-event-row__chevron { bottom: var(--space-6); }
+.bv-event-row--featured.bv-event-row--attending .bv-event-row__chevron { bottom: var(--space-8); }
 
 /* BODY: badge + h3 + time + description */
 .bv-event-row__body {
