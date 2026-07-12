@@ -431,8 +431,10 @@
     cta.classList.toggle('is-signed-up', false);
     cta.disabled = true;
     cta.title = _dropin ? 'Drop-in-arrangementer bruger altid "Interesseret"' : 'Knappen følger begivenhedstypen';
+    // The signup button is one neutral colour on every card (not the accent),
+    // so the preview shows it that way too.
     ['primary', 'secondary', 'tertiary', 'kulturhus'].forEach(function (a) { cta.classList.remove('bv-btn--' + a); });
-    cta.classList.add('bv-btn--' + accent);
+    cta.classList.add('bv-btn--dark');
 
     var capChip = $('ee-cap-val');
     var showCap = !state.capacityUnlimited && String(state.capacityCount).trim() !== '';
