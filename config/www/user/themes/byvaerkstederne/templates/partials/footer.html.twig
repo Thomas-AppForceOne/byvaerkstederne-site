@@ -49,7 +49,14 @@
                 <a href="/roadmap">Roadmap</a>
                 {% endif %}
                 {% if feature_enabled('feature_suggestion') %}
-                <button type="button" onclick="bvFeatureSuggestion.open(); return false;">Forsl&aring; feature</button>
+                {# Anchor (not a bare button) so the affordance degrades to the
+                   /foreslaa-feature landing page when JS is off — the same
+                   progressive-enhancement pattern as "Bliv medlem" →
+                   /opret-medlemskab in the nav. With JS the onclick opens the
+                   overlay and cancels navigation, so the page stays a fallback,
+                   not the primary path. Bug report has no standalone page, so
+                   it stays a bare <button>. #}
+                <a href="/foreslaa-feature" data-footer-fs-trigger onclick="bvFeatureSuggestion.open(); return false;">Forsl&aring; feature</a>
                 {% endif %}
                 {% if feature_enabled('bug_report') %}
                 <button type="button" onclick="bvBugReport.open(); return false;">Rapport&eacute;r fejl</button>
