@@ -174,8 +174,9 @@ test.describe('Events — anonymous management gating (M2 negatives)', () => {
     await expect(page.locator('.bv-footer')).not.toContainText('Mine begivenheder');
   });
 
-  test('calendar shows no create button to anonymous visitors', async ({ page }) => {
+  test('calendar shows no arrangør buttons (create / Mine begivenheder) to anonymous visitors', async ({ page }) => {
     await page.goto('/vaerkstedskalenderen');
     await expect(page.locator('[data-testid="calendar-create-link"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="calendar-mine-link"]')).toHaveCount(0);
   });
 });

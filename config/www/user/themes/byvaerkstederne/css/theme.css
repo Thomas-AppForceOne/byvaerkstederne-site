@@ -4323,6 +4323,14 @@ button.bv-event-row__signup {
     flex-wrap: wrap;
     margin-bottom: var(--space-8);
 }
+/* Arrangør actions on the calendar header: Mine begivenheder + Opret begivenhed
+   on one line. */
+.bv-event-list__head-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+}
 
 /* Form pages (create / edit / delete): two-column surface — grouped form in
    a house-style card on the left, sticky live event-card preview on the
