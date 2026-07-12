@@ -4242,9 +4242,7 @@ button.bv-event-row__signup { min-width: 141px; padding: var(--space-2) var(--sp
 .bv-event-dashboard__attendees { grid-column: 1 / -1; margin-top: var(--space-1); }
 .bv-event-dashboard__attendees > summary {
     cursor: pointer;
-    display: block;
-    width: 100%;
-    text-align: right;
+    display: inline-block;
     font-family: var(--font-headline);
     font-weight: 700;
     font-size: 0.85rem;
@@ -4275,7 +4273,6 @@ button.bv-event-row__signup { min-width: 141px; padding: var(--space-2) var(--sp
 @media (max-width: 640px) {
     .bv-event-dashboard__item { grid-template-columns: 1fr; }
     .bv-event-dashboard__actions { justify-self: stretch; flex-wrap: wrap; }
-    .bv-event-dashboard__attendees > summary { text-align: left; }
     .bv-event-dashboard__confirm-pop { right: auto; left: 0; }
     .bv-event-dashboard__confirm-pop::before { right: auto; left: 1.75rem; }
 }
