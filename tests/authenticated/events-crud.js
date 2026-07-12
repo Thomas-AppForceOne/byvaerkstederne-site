@@ -363,27 +363,44 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     expect(eventBlock(key2) || '').toContain("event_date: '2030-06-01'");
   });
 
-  test('Drop-in forces the Interesseret CTA server-side, even if Tilmeld is submitted', async ({ page }) => {
+  test('the CTA is derived from the event type server-side, ignoring any submitted button_text', async ({ page }) => {
     await loginAsOrganizer(page);
+
+    // Drop-in + submitted "Tilmeld" ⇒ stored "Interesseret".
     await page.goto('/begivenheder/opret');
-    const title = `PW dropin ${Date.now()}`;
-    const key = await page.locator('[name="data[key]"]').inputValue();
-    const nonce = await getFormNonce(page);
-    const res = await page.request.post('/begivenheder/opret', {
+    const t1 = `PW dropin ${Date.now()}`;
+    const k1 = await page.locator('[name="data[key]"]').inputValue();
+    const n1 = await getFormNonce(page);
+    const r1 = await page.request.post('/begivenheder/opret', {
       form: {
-        'data[key]': key, 'data[title]': title, 'data[group]': 'makerspace',
+        'data[key]': k1, 'data[title]': t1, 'data[group]': 'makerspace',
         'data[event_date]': '2030-06-01', 'data[time_start]': '10:00', 'data[time_end]': '12:00',
-        'data[price]': 'Drop-in', 'data[button_text]': 'Tilmeld', // submit Tilmeld…
-        'data[capacity_unlimited]': '1', 'data[published]': '1', 'form-nonce': nonce,
+        'data[price]': 'Drop-in', 'data[button_text]': 'Tilmeld',
+        'data[capacity_unlimited]': '1', 'data[published]': '1', 'form-nonce': n1,
       },
       maxRedirects: 0,
     });
-    expect(res.status()).toBe(303);
-    createdKeys.push(key);
-    // …but a Drop-in event is always stored as Interesseret.
-    const block = eventBlock(key) || '';
-    expect(block).toMatch(/button_text:\s*'?Interesseret'?/);
-    expect(block).toMatch(/price:\s*'?Drop-in'?/);
+    expect(r1.status()).toBe(303);
+    createdKeys.push(k1);
+    expect(eventBlock(k1) || '').toMatch(/button_text:\s*'?Interesseret'?/);
+
+    // A non-Drop-in type + submitted "Interesseret" ⇒ stored "Tilmeld".
+    await page.goto('/begivenheder/opret');
+    const t2 = `PW gratis ${Date.now()}`;
+    const k2 = await page.locator('[name="data[key]"]').inputValue();
+    const n2 = await getFormNonce(page);
+    const r2 = await page.request.post('/begivenheder/opret', {
+      form: {
+        'data[key]': k2, 'data[title]': t2, 'data[group]': 'makerspace',
+        'data[event_date]': '2030-06-01', 'data[time_start]': '10:00', 'data[time_end]': '12:00',
+        'data[price]': 'Gratis', 'data[button_text]': 'Interesseret',
+        'data[capacity_unlimited]': '1', 'data[published]': '1', 'form-nonce': n2,
+      },
+      maxRedirects: 0,
+    });
+    expect(r2.status()).toBe(303);
+    createdKeys.push(k2);
+    expect(eventBlock(k2) || '').toMatch(/button_text:\s*'?Tilmeld'?/);
   });
 
   test('super: sees all events in the dashboard and can hard-delete permanently', async ({ page, browser }) => {

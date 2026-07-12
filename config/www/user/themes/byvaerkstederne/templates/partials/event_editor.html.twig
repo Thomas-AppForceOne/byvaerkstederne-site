@@ -382,8 +382,7 @@
   document.querySelectorAll('.bv-ee-priceopt').forEach(function (o) {
     o.addEventListener('click', function () {
       state.price = o.getAttribute('data-price');
-      // Drop-in ⇒ unlimited + CTA locked to "Interesseret".
-      if (state.price === 'Drop-in') { state.capacityUnlimited = true; state.buttonText = 'Interesseret'; }
+      if (state.price === 'Drop-in') { state.capacityUnlimited = true; } // Drop-in ⇒ unlimited
       render(); closeAll();
     });
   });
@@ -429,14 +428,15 @@
     priceVal.textContent = state.price === '' ? '+ Begivenhedstype' : state.price;
     priceVal.classList.toggle('bv-ee-ghost', state.price === '');
 
-    // Drop-in shows the CTA too, but locked to "Interesseret" (not changeable).
+    // The CTA follows the event type and is ALWAYS locked (not a free choice):
+    // Drop-in ⇒ "Interesseret", every other type ⇒ "Tilmeld".
     var _dropin = state.price === 'Drop-in';
-    if (_dropin) { state.buttonText = 'Interesseret'; }
+    state.buttonText = _dropin ? 'Interesseret' : 'Tilmeld';
     $('ee-cta-field').hidden = false;
     var cta = $('ee-cta-val');
-    cta.textContent = state.buttonText || 'Tilmeld';
-    cta.disabled = _dropin;
-    cta.title = _dropin ? 'Drop-in-arrangementer bruger altid "Interesseret"' : 'Vælg knap';
+    cta.textContent = state.buttonText;
+    cta.disabled = true;
+    cta.title = _dropin ? 'Drop-in-arrangementer bruger altid "Interesseret"' : 'Knappen følger begivenhedstypen — "Tilmeld"';
     ['primary', 'secondary', 'tertiary', 'kulturhus'].forEach(function (a) { cta.classList.remove('bv-btn--' + a); });
     cta.classList.add('bv-btn--' + accent);
 

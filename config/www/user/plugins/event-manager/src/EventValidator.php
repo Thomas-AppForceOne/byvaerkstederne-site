@@ -173,18 +173,7 @@ final class EventValidator
             }
         }
 
-        // button_text — closed choice; the button always renders and links
-        // to the event's detail page (button_url retired).
-        $buttonText = $this->str($data, 'button_text');
-        if ($buttonText === '') {
-            $buttonText = 'Tilmeld';
-        }
-        if (!in_array($buttonText, self::BUTTON_TEXT_OPTIONS, true)) {
-            $errors['button_text'] = 'Knappen kan kun være Tilmeld eller Interesseret.';
-        } else {
-            $values['button_text'] = $buttonText;
-        }
-        $values['button_url'] = '';
+        $values['button_url'] = ''; // retired — the card button IS the signup action.
 
         // price — closed set (select in the form; anything else is tampering).
         $price = $this->str($data, 'price');
@@ -194,14 +183,11 @@ final class EventValidator
             $values['price'] = $price;
         }
 
-        // Drop-in ⇒ the CTA is ALWAYS "Interesseret" (uforpligtende, no fixed
-        // signup), locked and not client-settable — force it regardless of the
-        // submitted button_text, and clear any button_text complaint since that
-        // value is ignored for Drop-in.
-        if (($values['price'] ?? '') === 'Drop-in') {
-            $values['button_text'] = 'Interesseret';
-            unset($errors['button_text']);
-        }
+        // button_text is NOT a free choice — it follows the event type and is
+        // never client-settable: a Drop-in event is always "Interesseret"
+        // (uforpligtende, no fixed signup), every other type is always
+        // "Tilmeld". Any submitted button_text is ignored.
+        $values['button_text'] = (($values['price'] ?? '') === 'Drop-in') ? 'Interesseret' : 'Tilmeld';
 
         // Bounded free-text fields.
         foreach (self::MAX_LENGTHS as $field => $max) {

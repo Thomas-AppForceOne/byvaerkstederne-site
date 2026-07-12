@@ -144,16 +144,19 @@ test.describe('Events — organizer forced browsing (per-object authz)', () => {
         'data[capacity_unlimited]': '0',
         'data[capacity_count]': 'mange', // must be a number
         'data[price]': '1000 kr. kontant', // price is a closed choice
-        'data[button_text]': 'Køb nu', // only Tilmeld/Interesseret
+        'data[button_text]': 'Køb nu', // ignored — button_text is derived from the type
         'form-nonce': nonce,
       },
       maxRedirects: 0,
     });
     expect(response.status()).toBe(400);
     const body = await response.json();
+    // button_text is no longer validated (it is derived from the event type),
+    // so it never appears in the field errors.
     expect(Object.keys(body.errors)).toEqual(
-      expect.arrayContaining(['title', 'group', 'event_date', 'time_end', 'capacity_count', 'price', 'button_text'])
+      expect.arrayContaining(['title', 'group', 'event_date', 'time_end', 'capacity_count', 'price'])
     );
+    expect(Object.keys(body.errors)).not.toContain('button_text');
     expect(readEventsFile()).toBe(before);
   });
 
