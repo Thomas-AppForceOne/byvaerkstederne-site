@@ -4543,6 +4543,9 @@ button.bv-event-row__signup { min-width: 141px; padding: var(--space-2) var(--sp
     display: inline-block; font-family: var(--font-headline); font-weight: 700; text-transform: uppercase;
     letter-spacing: 0.1em; font-size: 0.875rem; padding: 8px 24px; color: #fff; border: none;
 }
+/* Drop-in locks the CTA to "Interesseret": still readable, but clearly not
+   changeable. */
+.bv-ee-cta:disabled { cursor: not-allowed; opacity: 0.9; }
 .bv-ee-capchip { display: inline-flex; align-items: center; gap: 4px; font-size: 0.875rem; padding: 2px 4px; color: var(--on-surface-variant); }
 .bv-ee-capchip .material-symbols-outlined { font-size: 17px; }
 .bv-ee-ghost { color: var(--outline) !important; font-style: italic; font-weight: 400; }

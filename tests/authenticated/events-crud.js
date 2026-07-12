@@ -363,6 +363,29 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     expect(eventBlock(key2) || '').toContain("event_date: '2030-06-01'");
   });
 
+  test('Drop-in forces the Interesseret CTA server-side, even if Tilmeld is submitted', async ({ page }) => {
+    await loginAsOrganizer(page);
+    await page.goto('/begivenheder/opret');
+    const title = `PW dropin ${Date.now()}`;
+    const key = await page.locator('[name="data[key]"]').inputValue();
+    const nonce = await getFormNonce(page);
+    const res = await page.request.post('/begivenheder/opret', {
+      form: {
+        'data[key]': key, 'data[title]': title, 'data[group]': 'makerspace',
+        'data[event_date]': '2030-06-01', 'data[time_start]': '10:00', 'data[time_end]': '12:00',
+        'data[price]': 'Drop-in', 'data[button_text]': 'Tilmeld', // submit Tilmeld…
+        'data[capacity_unlimited]': '1', 'data[published]': '1', 'form-nonce': nonce,
+      },
+      maxRedirects: 0,
+    });
+    expect(res.status()).toBe(303);
+    createdKeys.push(key);
+    // …but a Drop-in event is always stored as Interesseret.
+    const block = eventBlock(key) || '';
+    expect(block).toMatch(/button_text:\s*'?Interesseret'?/);
+    expect(block).toMatch(/price:\s*'?Drop-in'?/);
+  });
+
   test('super: sees all events in the dashboard and can hard-delete permanently', async ({ page, browser }) => {
     test.skip(!hasAdminPassword, 'TEST_ADMIN_PASSWORD not set');
 

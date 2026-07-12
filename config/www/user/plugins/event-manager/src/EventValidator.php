@@ -194,6 +194,15 @@ final class EventValidator
             $values['price'] = $price;
         }
 
+        // Drop-in ⇒ the CTA is ALWAYS "Interesseret" (uforpligtende, no fixed
+        // signup), locked and not client-settable — force it regardless of the
+        // submitted button_text, and clear any button_text complaint since that
+        // value is ignored for Drop-in.
+        if (($values['price'] ?? '') === 'Drop-in') {
+            $values['button_text'] = 'Interesseret';
+            unset($errors['button_text']);
+        }
+
         // Bounded free-text fields.
         foreach (self::MAX_LENGTHS as $field => $max) {
             $value = $this->str($data, $field);

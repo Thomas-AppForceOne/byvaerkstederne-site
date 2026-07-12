@@ -66,12 +66,17 @@ test.describe('Event create — inline card editor', () => {
     await expect(row).toHaveAttribute('data-event-status', 'publiceret');
   });
 
-  test('Drop-in hides the CTA and forces unlimited capacity', async ({ page }) => {
+  test('Drop-in locks the CTA to Interesseret and forces unlimited capacity', async ({ page }) => {
     await loginAsOrganizer(page);
     await page.goto('/begivenheder/opret');
     await page.locator('[data-ee-open="price"]').click();
     await page.locator('.bv-ee-priceopt[data-price="Drop-in"]').click();
-    await expect(page.locator('#ee-cta-field')).toBeHidden();
+    // The CTA is still shown, reads "Interesseret", and cannot be changed.
+    const cta = page.locator('#ee-cta-val');
+    await expect(cta).toBeVisible();
+    await expect(cta).toHaveText('Interesseret');
+    await expect(cta).toBeDisabled();
+    await expect(page.locator('#ee-button-text')).toHaveValue('Interesseret');
     await expect(page.locator('#ee-cap-unlim')).toHaveValue('1');
   });
 
