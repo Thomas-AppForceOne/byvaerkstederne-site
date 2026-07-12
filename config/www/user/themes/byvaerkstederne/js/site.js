@@ -803,9 +803,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // must mirror the Twig-rendered initial state in partials/event_card.html.twig.
     // The label is a fixed word per mode; the joined/marked state is shown by
     // the checkbox before it (CSS ::before on .is-signed-up), not the text.
-    function labelFor(mode, signedUp, isFull) {
+    function labelFor(mode) {
         if (mode === 'interesseret') { return 'Interesseret'; }
-        if (isFull && !signedUp) { return 'Alle pladser er optaget'; }
+        // A full event keeps the 'Deltag' label but is disabled (see the button
+        // markup); the availability line carries "Alle pladser er optaget".
         return 'Deltag';
     }
     function stateFor(mode, signedUp, isFull) {
@@ -833,7 +834,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         document.querySelectorAll(sel).forEach(function (btn) {
             var m = btn.getAttribute('data-rsvp-mode') || 'tilmeld';
-            btn.textContent = labelFor(m, signedUp, isFull);
+            btn.textContent = labelFor(m);
             btn.setAttribute('data-rsvp-state', stateFor(m, signedUp, isFull));
             btn.classList.toggle('is-signed-up', signedUp);
             btn.disabled = isFull;

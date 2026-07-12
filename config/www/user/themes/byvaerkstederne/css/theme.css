@@ -1307,9 +1307,11 @@ button.bv-event-row__signup {
     flex: none;
 }
 .bv-event-row__signup.is-signed-up::before { content: 'check_box'; }
-.bv-event-row__signup[data-rsvp-state="full"]::before { display: none; }
 .bv-event-row__signup.is-signed-up { font-weight: 700; }
 .bv-event-row__signup.is-busy { opacity: 0.6; pointer-events: none; }
+/* A full (or past) event keeps the 'Deltag' label but is greyed + not clickable
+   — the availability line carries the "Alle pladser er optaget" message. */
+.bv-event-row__signup:disabled { opacity: 0.5; cursor: not-allowed; }
 .bv-event-row__rsvp-note {
     display: block;
     font-size: 0.8rem;

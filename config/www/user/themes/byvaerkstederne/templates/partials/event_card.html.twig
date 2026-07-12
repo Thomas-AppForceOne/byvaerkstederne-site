@@ -111,12 +111,14 @@
           {# The label is a fixed word per mode ('Deltag' / 'Interesseret'); a
              checkbox before it (CSS ::before, driven by .is-signed-up) shows
              whether you've joined/marked. Clicking toggles it — no verbose
-             "klik for at fjerne". #}
+             "klik for at fjerne". A full event keeps the 'Deltag' label but the
+             button is disabled; the availability line says "Alle pladser er
+             optaget". #}
           {% if _info.mode == 'interesseret' %}
             {% set _label = 'Interesseret' %}
             {% set _state = _signed ? 'marked' : 'open' %}
           {% elseif _full %}
-            {% set _label = 'Alle pladser er optaget' %}{% set _state = 'full' %}
+            {% set _label = 'Deltag' %}{% set _state = 'full' %}
           {% else %}
             {% set _label = 'Deltag' %}
             {% set _state = _signed ? 'signed_up' : 'open' %}
