@@ -898,14 +898,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 var remaining = (res.data.remaining === undefined) ? null : res.data.remaining;
                 applyResult(key, signedUp, res.data.count, remaining);
             } else {
-                // Rollback and surface the server message (409 full/past, 403 stale nonce).
+                // Roll back the optimistic UI first.
                 btn.textContent = prev.label;
                 btn.setAttribute('data-rsvp-state', prev.state);
                 btn.classList.toggle('is-signed-up', prev.signed);
-                var msg = (res.data && res.data.data && res.data.data.error)
-                    || (res.data && res.data.error)
-                    || 'Handlingen mislykkedes. Prøv igen.';
-                announce(btn, msg);
+                if (res.status === 401) {
+                    // The session expired mid-action (typically after a redeploy):
+                    // the stale page still carries the user's nonce input so the
+                    // client thought it was logged in. Send the user to log in
+                    // rather than showing a dead "not authorized" message.
+                    if (typeof bvOpenOverlay === 'function') { bvOpenOverlay('bv-login-overlay'); }
+                    else { window.location.href = '/login'; }
+                } else {
+                    // Surface the server message (409 full/past, 403 stale nonce).
+                    var msg = (res.data && res.data.data && res.data.data.error)
+                        || (res.data && res.data.error)
+                        || 'Handlingen mislykkedes. Prøv igen.';
+                    announce(btn, msg);
+                }
             }
         })
         .catch(function () {

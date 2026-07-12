@@ -68,6 +68,23 @@ test.describe('Event RSVP — signup from the card button', () => {
     expect(eventAuditContains(`"action":"withdraw".*"key":"${RSVP_EVENT_ID}"`)).toBe(true);
   });
 
+  test('an expired session mid-signup opens the login overlay, not a dead error note', async ({ page }) => {
+    await login(page);
+    await page.goto(`/begivenheder/${RSVP_EVENT_ID}`);
+    // Simulate a session that expired server-side after the page loaded (e.g. a
+    // redeploy): the page still carries the user's nonce input, so the client
+    // thinks it is logged in, but the POST comes back 401.
+    await page.route('**/begivenheder/tilmeld', (route) => route.fulfill({
+      status: 401,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: false, error: 'Ikke autoriseret. Log ind for at fortsætte.' }),
+    }));
+    await page.locator(`[data-rsvp-key="${RSVP_EVENT_ID}"]`).first().click();
+    // The login overlay opens; no dead "not authorized" note is left on the card.
+    await expect(page.locator('#bv-login-overlay.is-open')).toHaveCount(1);
+    await expect(page.locator('.bv-event-row__rsvp-note')).toHaveCount(0);
+  });
+
   test('Interesseret is never capacity-blocked', async ({ page }) => {
     await login(page);
     await page.goto(`/begivenheder/${INTEREST_EVENT_ID}`);
