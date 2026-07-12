@@ -71,10 +71,12 @@ test.describe('Event create — inline card editor', () => {
     await page.goto('/begivenheder/opret');
     const cta = page.locator('#ee-cta-val');
 
-    // Default (no type chosen yet): locked to Tilmeld.
+    // Default (no type chosen yet): a Tilmeld event → shows "Deltag" (the
+    // visitor label), locked. The stored button_text stays "Tilmeld".
     await expect(cta).toBeVisible();
-    await expect(cta).toHaveText('Tilmeld');
+    await expect(cta).toHaveText('Deltag');
     await expect(cta).toBeDisabled();
+    await expect(page.locator('#ee-button-text')).toHaveValue('Tilmeld');
 
     // Drop-in ⇒ Interesseret (locked) + unlimited capacity.
     await page.locator('[data-ee-open="price"]').click();
@@ -84,10 +86,10 @@ test.describe('Event create — inline card editor', () => {
     await expect(page.locator('#ee-button-text')).toHaveValue('Interesseret');
     await expect(page.locator('#ee-cap-unlim')).toHaveValue('1');
 
-    // Back to a non-Drop-in type ⇒ Tilmeld (locked) again.
+    // Back to a non-Drop-in type ⇒ "Deltag" again (stored "Tilmeld").
     await page.locator('[data-ee-open="price"]').click();
     await page.locator('.bv-ee-priceopt[data-price="Gratis"]').click();
-    await expect(cta).toHaveText('Tilmeld');
+    await expect(cta).toHaveText('Deltag');
     await expect(cta).toBeDisabled();
     await expect(page.locator('#ee-button-text')).toHaveValue('Tilmeld');
   });

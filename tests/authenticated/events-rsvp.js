@@ -52,17 +52,18 @@ test.describe('Event RSVP — signup from the card button', () => {
     const btn = page.locator(`[data-rsvp-key="${RSVP_EVENT_ID}"]`).first();
     const line = page.locator(`[data-rsvp-availability="${RSVP_EVENT_ID}"]`).first();
 
-    await expect(btn).toHaveText(/^Tilmeld$/);
+    await expect(btn).toHaveText(/^Deltag$/);
+    await expect(btn).not.toHaveClass(/is-signed-up/);
     await expect(line).toHaveText(/0 tilmeldte/);
 
     await btn.click();
-    await expect(btn).toHaveText('Deltager', { timeout: 10_000 });
+    await expect(btn).toHaveText('Deltag', { timeout: 10_000 });
     await expect(line).toHaveText(/1 tilmeldt/);
     expect(page.url(), 'signup must not navigate').toBe(urlBefore);
     expect(eventAuditContains(`"action":"signup".*"key":"${RSVP_EVENT_ID}"`)).toBe(true);
 
     await btn.click();
-    await expect(btn).toHaveText(/^Tilmeld$/, { timeout: 10_000 });
+    await expect(btn).toHaveText(/^Deltag$/, { timeout: 10_000 });
     await expect(line).toHaveText(/0 tilmeldte/);
     expect(eventAuditContains(`"action":"withdraw".*"key":"${RSVP_EVENT_ID}"`)).toBe(true);
   });
@@ -73,9 +74,12 @@ test.describe('Event RSVP — signup from the card button', () => {
     const btn = page.locator(`[data-rsvp-key="${INTEREST_EVENT_ID}"]`).first();
     // Capacity is 1 on the fixture, but Interesseret ignores it entirely.
     await expect(btn).toBeEnabled();
-    await expect(btn).toHaveText(/Interesseret/);
+    await expect(btn).toHaveText(/^Interesseret$/);
+    await expect(btn).not.toHaveClass(/is-signed-up/);
     await btn.click();
-    await expect(btn).toHaveText(/Du er interesseret/, { timeout: 10_000 });
+    // The label stays "Interesseret"; the marked state shows via the checkbox
+    // (is-signed-up) and the availability count.
+    await expect(btn).toHaveClass(/is-signed-up/, { timeout: 10_000 });
     await expect(page.locator(`[data-rsvp-availability="${INTEREST_EVENT_ID}"]`).first())
       .toHaveText(/1 interesseret/);
   });
@@ -98,7 +102,7 @@ test.describe('Event RSVP — capacity enforcement', () => {
       const lineA = pageA.locator(`[data-rsvp-availability="${CAPACITY_EVENT_ID}"]`).first();
       await expect(lineA).toHaveText(/1 plads tilbage/);
       await btnA.click();
-      await expect(btnA).toHaveText('Deltager', { timeout: 10_000 });
+      await expect(btnA).toHaveText('Deltag', { timeout: 10_000 });
       await expect(lineA).toHaveText(/Alle pladser er optaget/);
 
       // Member B is refused server-side with 409.
@@ -114,7 +118,7 @@ test.describe('Event RSVP — capacity enforcement', () => {
 
       // A withdraws → the seat frees → B can now sign up.
       await btnA.click();
-      await expect(btnA).toHaveText(/^Tilmeld$/, { timeout: 10_000 });
+      await expect(btnA).toHaveText(/^Deltag$/, { timeout: 10_000 });
       const nonceB2 = await readRsvpNonce(pageB, CAPACITY_EVENT_ID);
       const resB2 = await pageB.request.post('/begivenheder/tilmeld', {
         form: { 'data[key]': CAPACITY_EVENT_ID, rsvp_nonce: nonceB2 },

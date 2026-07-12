@@ -429,14 +429,17 @@
     priceVal.classList.toggle('bv-ee-ghost', state.price === '');
 
     // The CTA follows the event type and is ALWAYS locked (not a free choice):
-    // Drop-in ⇒ "Interesseret", every other type ⇒ "Tilmeld".
+    // Drop-in ⇒ Interesseret, every other type ⇒ Tilmeld. The STORED value is
+    // the mode word (button_text); the shown label mirrors the live card —
+    // 'Deltag' for a Tilmeld event, 'Interesseret' for a Drop-in one.
     var _dropin = state.price === 'Drop-in';
     state.buttonText = _dropin ? 'Interesseret' : 'Tilmeld';
     $('ee-cta-field').hidden = false;
     var cta = $('ee-cta-val');
-    cta.textContent = state.buttonText;
+    cta.textContent = _dropin ? 'Interesseret' : 'Deltag';
+    cta.classList.toggle('is-signed-up', false);
     cta.disabled = true;
-    cta.title = _dropin ? 'Drop-in-arrangementer bruger altid "Interesseret"' : 'Knappen følger begivenhedstypen — "Tilmeld"';
+    cta.title = _dropin ? 'Drop-in-arrangementer bruger altid "Interesseret"' : 'Knappen følger begivenhedstypen';
     ['primary', 'secondary', 'tertiary', 'kulturhus'].forEach(function (a) { cta.classList.remove('bv-btn--' + a); });
     cta.classList.add('bv-btn--' + accent);
 

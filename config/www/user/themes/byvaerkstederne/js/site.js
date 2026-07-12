@@ -801,13 +801,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Danish label/state for a button given mode + signed-up + availability —
     // must mirror the Twig-rendered initial state in partials/event_card.html.twig.
+    // The label is a fixed word per mode; the joined/marked state is shown by
+    // the checkbox before it (CSS ::before on .is-signed-up), not the text.
     function labelFor(mode, signedUp, isFull) {
-        if (mode === 'interesseret') {
-            return signedUp ? 'Du er interesseret — klik for at fjerne' : 'Interesseret';
-        }
-        if (signedUp) { return 'Deltager'; }
-        if (isFull) { return 'Alle pladser er optaget'; }
-        return 'Tilmeld';
+        if (mode === 'interesseret') { return 'Interesseret'; }
+        if (isFull && !signedUp) { return 'Alle pladser er optaget'; }
+        return 'Deltag';
     }
     function stateFor(mode, signedUp, isFull) {
         if (mode === 'interesseret') { return signedUp ? 'marked' : 'open'; }
@@ -843,13 +842,13 @@ document.addEventListener('DOMContentLoaded', function () {
             line.textContent = availabilityText(mode, count, remaining);
         });
         // Highlight the card (light workshop-colour date block) while the user
-        // is a confirmed Tilmeld participant. Resolve the card off the signup
-        // button rather than [data-event-key]: an event without rich details is
-        // not expandable and carries no data-event-key, but can still be
-        // attended and must still get the highlight.
+        // has joined — SAME treatment whether they are tilmeldt or interesseret.
+        // Resolve the card off the signup button rather than [data-event-key]:
+        // an event without rich details is not expandable and carries no
+        // data-event-key, but can still be joined and must still get the highlight.
         document.querySelectorAll('[data-rsvp-key="' + cssEscape(key) + '"]').forEach(function (b) {
             var card = b.closest('.bv-event-row');
-            if (card) { card.classList.toggle('bv-event-row--attending', signedUp && mode === 'tilmeld'); }
+            if (card) { card.classList.toggle('bv-event-row--attending', signedUp); }
         });
     }
 

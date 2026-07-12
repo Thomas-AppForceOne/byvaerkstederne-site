@@ -1277,7 +1277,33 @@ a { color: inherit; text-decoration: none; }
    outranks every single-class .bv-btn--<variant> rule regardless of source
    order, so a tertiary/kulturhus accent button is the same height as a
    primary/secondary one. */
-button.bv-event-row__signup { min-width: 141px; padding: var(--space-2) var(--space-6); }
+button.bv-event-row__signup {
+    min-width: 141px;
+    padding: var(--space-2) var(--space-6);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4em;
+}
+/* Checkbox before the label — empty until you have joined/marked, checked once
+   you have (driven by .is-signed-up; JS just toggles that class). Rendered with
+   the Material Symbols font on a ::before so the label itself stays a plain word
+   ('Deltag' / 'Interesseret'). text-transform/letter-spacing are reset so the
+   uppercase button styling doesn't break the icon ligature. */
+.bv-event-row__signup::before {
+    font-family: 'Material Symbols Outlined';
+    content: 'check_box_outline_blank';
+    text-transform: none;
+    letter-spacing: normal;
+    font-weight: normal;
+    font-feature-settings: 'liga';
+    -webkit-font-feature-settings: 'liga';
+    font-size: 1.35em;
+    line-height: 1;
+    flex: none;
+}
+.bv-event-row__signup.is-signed-up::before { content: 'check_box'; }
+.bv-event-row__signup[data-rsvp-state="full"]::before { display: none; }
 .bv-event-row__signup.is-signed-up { font-weight: 700; }
 .bv-event-row__signup.is-busy { opacity: 0.6; pointer-events: none; }
 .bv-event-row__rsvp-note {
@@ -4540,8 +4566,18 @@ button.bv-event-row__signup { min-width: 141px; padding: var(--space-2) var(--sp
 .bv-ee-meta { min-width: 10rem; gap: 10px; }
 .bv-ee-metaval { font-family: var(--font-headline); font-weight: 700; font-size: 0.95rem; line-height: 1.2; padding: 2px 4px; }
 .bv-ee-cta {
-    display: inline-block; font-family: var(--font-headline); font-weight: 700; text-transform: uppercase;
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.4em;
+    font-family: var(--font-headline); font-weight: 700; text-transform: uppercase;
     letter-spacing: 0.1em; font-size: 0.875rem; padding: 8px 24px; color: #fff; border: none;
+}
+/* Preview the live card's checkbox affordance (always the unmarked default in
+   the editor). */
+.bv-ee-cta::before {
+    font-family: 'Material Symbols Outlined';
+    content: 'check_box_outline_blank';
+    text-transform: none; letter-spacing: normal; font-weight: normal;
+    font-feature-settings: 'liga'; -webkit-font-feature-settings: 'liga';
+    font-size: 1.35em; line-height: 1; flex: none;
 }
 /* Drop-in locks the CTA to "Interesseret": still readable, but clearly not
    changeable. */
