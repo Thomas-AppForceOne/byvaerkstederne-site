@@ -164,17 +164,11 @@
             </div>
           </div>
 
-          {# CTA button (hidden for Drop-in) #}
+          {# CTA button — derived from the event type and locked (see render()
+             in the inline JS): a preview of the visitor's signup button, shown
+             as 'Deltag' (Tilmeld event) or 'Interesseret' (Drop-in). No chooser. #}
           <div class="bv-ee-field" id="ee-cta-field">
-            <button type="button" class="bv-btn bv-btn--sm bv-ee-cta" id="ee-cta-val" data-ee-open="cta" title="Vælg knap">Tilmeld</button>
-            <div class="bv-ee-pop bv-ee-pop--right" data-ee-pop="cta" hidden>
-              <span class="bv-ee-pop__label">Knap</span>
-              <p class="bv-ee-pop__help">Knappen vises altid på kortet og åbner begivenheden.</p>
-              <div class="bv-ee-optlist">
-                <button type="button" class="bv-ee-opt bv-ee-ctaopt" data-cta="Tilmeld">Tilmeld</button>
-                <button type="button" class="bv-ee-opt bv-ee-ctaopt" data-cta="Interesseret">Interesseret</button>
-              </div>
-            </div>
+            <button type="button" class="bv-btn bv-btn--sm bv-ee-cta" id="ee-cta-val" disabled>Deltag</button>
           </div>
 
           {# capacity #}
@@ -386,9 +380,6 @@
       render(); closeAll();
     });
   });
-  document.querySelectorAll('.bv-ee-ctaopt').forEach(function (o) {
-    o.addEventListener('click', function () { state.buttonText = o.getAttribute('data-cta'); render(); closeAll(); });
-  });
   document.querySelectorAll('[data-unlim]').forEach(function (b) {
     b.addEventListener('click', function () { state.capacityUnlimited = b.getAttribute('data-unlim') === '1'; render(); });
   });
@@ -453,7 +444,6 @@
     setActive('[data-published]', 'data-published', state.published ? '1' : '0');
     setActive('.bv-ee-groupopt', 'data-group', state.group);
     setActive('.bv-ee-priceopt', 'data-price', state.price);
-    setActive('.bv-ee-ctaopt', 'data-cta', state.buttonText);
 
     $('ee-group').value = state.group;
     $('ee-date').value = state.eventDate;

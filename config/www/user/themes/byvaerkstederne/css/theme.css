@@ -1269,16 +1269,15 @@ a { color: inherit; text-decoration: none; }
     font-size: 0.875rem;
     color: var(--on-surface-variant);
 }
-/* Uniform Tilmeld/Deltager size. Width: floor every signup button to the
-   wider 'Deltager' label (measured ~140px) so 'Tilmeld' renders at the same
-   size, independently of whether any event on the page is in Deltager state
-   (longer full / interesseret labels exceed this floor and keep their natural
-   width). Height: pin the small-button padding — the element+class selector
-   outranks every single-class .bv-btn--<variant> rule regardless of source
-   order, so a tertiary/kulturhus accent button is the same height as a
-   primary/secondary one. */
+/* Uniform Deltag/Interesseret size. Width: floor every signup button to the
+   wider 'Interesseret' label incl. its checkbox (measured ~185px) so 'Deltag'
+   renders at the exact same size on every surface (the 141px measured for
+   'Deltag' is padded up to the floor). Height: pin the small-button padding —
+   the element+class selector outranks every single-class .bv-btn--<variant>
+   rule regardless of source order, so a tertiary/kulturhus accent button is
+   the same height as a primary/secondary one. */
 button.bv-event-row__signup {
-    min-width: 141px;
+    min-width: 188px;
     padding: var(--space-2) var(--space-6);
     display: inline-flex;
     align-items: center;
@@ -4567,6 +4566,7 @@ button.bv-event-row__signup {
 .bv-ee-metaval { font-family: var(--font-headline); font-weight: 700; font-size: 0.95rem; line-height: 1.2; padding: 2px 4px; }
 .bv-ee-cta {
     display: inline-flex; align-items: center; justify-content: center; gap: 0.4em;
+    min-width: 188px; /* same fixed size as the live Deltag/Interesseret button */
     font-family: var(--font-headline); font-weight: 700; text-transform: uppercase;
     letter-spacing: 0.1em; font-size: 0.875rem; padding: 8px 24px; color: #fff; border: none;
 }
