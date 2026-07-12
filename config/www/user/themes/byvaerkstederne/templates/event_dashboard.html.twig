@@ -75,7 +75,7 @@
                         <details class="bv-event-dashboard__confirm">
                             <summary class="bv-btn bv-btn--tertiary bv-btn--sm bv-event-dashboard__btn">Slet</summary>
                             <div class="bv-event-dashboard__confirm-pop" role="dialog" aria-label="Bekræft sletning">
-                                <p class="bv-event-dashboard__confirm-text">Skjul <strong>{{ ev.title }}</strong> fra dine begivenheder?</p>
+                                <p class="bv-event-dashboard__confirm-text">Er du sikker på at du vil slette <strong>{{ ev.title }}</strong>?</p>
                                 <form method="post" action="/begivenheder/slet" class="bv-event-dashboard__confirm-actions">
                                     {{ nonce_field('form', 'form-nonce')|raw }}
                                     <input type="hidden" name="data[key]" value="{{ ev.key }}">
