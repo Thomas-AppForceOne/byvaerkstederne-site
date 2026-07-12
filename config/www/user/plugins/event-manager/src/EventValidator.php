@@ -125,11 +125,16 @@ final class EventValidator
             $values['group'] = $group;
         }
 
-        // event_date — strict YYYY-MM-DD and a real calendar date.
+        // event_date — strict YYYY-MM-DD, a real calendar date, and today or
+        // later. Events may not be created or edited into the past (the past-
+        // date guard mirrors the editor's date `min`, which is not a trust
+        // boundary).
         $date = $this->str($data, 'event_date');
         if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date, $m)
             || !checkdate((int)$m[2], (int)$m[3], (int)$m[1])) {
             $errors['event_date'] = 'Datoen skal have formatet ÅÅÅÅ-MM-DD og være en gyldig dato.';
+        } elseif ($date < self::today()) {
+            $errors['event_date'] = 'Datoen kan ikke ligge før i dag.';
         } else {
             $values['event_date'] = $date;
         }
@@ -229,6 +234,12 @@ final class EventValidator
     {
         $value = $data[$key] ?? '';
         return is_scalar($value) ? trim((string)$value) : '';
+    }
+
+    /** Today in Europe/Copenhagen (Y-m-d) — the earliest allowed event date. */
+    private static function today(): string
+    {
+        return (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Copenhagen')))->format('Y-m-d');
     }
 
     private static function toBool(mixed $value): bool

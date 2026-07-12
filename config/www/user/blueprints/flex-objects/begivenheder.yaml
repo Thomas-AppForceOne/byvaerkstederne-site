@@ -209,3 +209,20 @@ form:
         0: Nej
       validate:
         type: bool
+
+    # Soft-delete (frontend event CRUD). Set by the arrangør's "Slet" action:
+    # the event is hidden from their dashboard and every public surface but
+    # retained in storage. Only admin.super (or a future cleanup job) removes
+    # it permanently. Distinct from `archived` (which stays visible on the
+    # owner's dashboard as "Arkiveret").
+    deleted:
+      type: toggle
+      label: Slettet
+      readonly: true
+      highlight: 1
+      default: 0
+      options:
+        1: Ja
+        0: Nej
+      validate:
+        type: bool

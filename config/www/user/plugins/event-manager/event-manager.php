@@ -428,6 +428,7 @@ class EventManagerPlugin extends Plugin
         $values['updated_by'] = $user->username;
         $values['updated_at'] = $now;
         $values['archived'] = false;
+        $values['deleted'] = false;
 
         // Adopt the create form's pre-generated key when it is well-formed and
         // still unused, so images uploaded before first save (§5.2/§6) land in
@@ -462,7 +463,14 @@ class EventManagerPlugin extends Plugin
         $values['owner'] = (string)($stored['owner'] ?? '');
         $values['created_by'] = (string)($stored['created_by'] ?? '');
         $values['created_at'] = (string)($stored['created_at'] ?? '');
-        $values['archived'] = !empty($stored['archived']);
+        // Editing lifts the archive: an organizer reactivates an archived (or
+        // auto-archived) event simply by saving it. The no-past-date rule +
+        // date-bump (FormDataProvider::editorState / EventValidator) guarantees
+        // the saved date is today or later, so it will not be re-archived by the
+        // stale sweep. The soft-delete flag is NOT cleared here — a deleted
+        // event is restored only by a super via the dashboard's "Gendan".
+        $values['archived'] = false;
+        $values['deleted'] = !empty($stored['deleted']);
         $values['updated_by'] = $user->username;
         $values['updated_at'] = gmdate('Y-m-d\TH:i:s\Z');
 
@@ -507,11 +515,17 @@ class EventManagerPlugin extends Plugin
         }
 
         if ($mode === 'restore') {
-            // Reverse of the soft archive — the owner's self-service undo.
-            // `published` stays false; the event comes back as a draft.
+            // Restore is a super-only action (the dashboard's "Gendan"): it
+            // lifts BOTH the soft-delete and the archive, bringing the event
+            // back as a draft. Organizers reactivate their OWN archived events
+            // by editing them instead — they never see a Gendan button.
+            if (!$user->authorize('admin.super')) {
+                $this->sendError(403, 'Gendannelse kræver administrator-rettigheder.');
+            }
             try {
                 $this->repository()->update($object, [
                     'archived' => false,
+                    'deleted' => false,
                     'updated_by' => $user->username,
                     'updated_at' => $now,
                 ]);
@@ -523,8 +537,28 @@ class EventManagerPlugin extends Plugin
             $this->redirectWithFlash('Begivenheden er gendannet som kladde.');
         }
 
-        // Default: soft archive — retain the object, unpublish, hide from
-        // all public views; reversible by the owner from the dashboard.
+        if ($mode === 'delete') {
+            // Soft delete (the arrangør's "Slet"): retain the object but hide it
+            // from the owner's dashboard and every public surface. Reversible
+            // only by a super ("Gendan") or a future cleanup job — never a hard
+            // delete here, so an accidental click is fully recoverable.
+            try {
+                $this->repository()->update($object, [
+                    'deleted' => true,
+                    'published' => false,
+                    'updated_by' => $user->username,
+                    'updated_at' => $now,
+                ]);
+            } catch (\Throwable $e) {
+                $this->sendError(500, 'Begivenheden kunne ikke slettes. Prøv igen.');
+            }
+            $this->auditLog()->append('delete', $key, $user->username, ['before' => $this->auditSnapshot($stored)]);
+            $this->repository()->bustRenderCache();
+            $this->redirectWithFlash('Begivenheden er slettet.');
+        }
+
+        // Default: soft archive — retain the object, unpublish, hide from all
+        // public views; still shown on the owner's dashboard as "Arkiveret".
         try {
             $this->repository()->update($object, [
                 'archived' => true,
@@ -560,7 +594,7 @@ class EventManagerPlugin extends Plugin
         }
 
         $event = $this->repository()->findArray($key);
-        if ($event === null || empty($event['published']) || !empty($event['archived'])
+        if ($event === null || empty($event['published']) || !empty($event['archived']) || !empty($event['deleted'])
             || $this->eventDateIsStale((string)($event['event_date'] ?? ''))) {
             // Unknown, unpublished, archived, or auto-archived (ran more than a
             // day ago) — indistinguishable from missing, same posture as the
@@ -817,7 +851,7 @@ class EventManagerPlugin extends Plugin
             return null;
         }
         $event = $this->repository()->findArray($key);
-        if ($event === null || empty($event['published']) || !empty($event['archived'])
+        if ($event === null || empty($event['published']) || !empty($event['archived']) || !empty($event['deleted'])
             || $this->eventDateIsStale((string)($event['event_date'] ?? ''))) {
             return null;
         }
@@ -856,7 +890,7 @@ class EventManagerPlugin extends Plugin
      * null for anyone else. Full names are resolved from Grav's accounts at
      * render time, never stored in the signup file (§2).
      *
-     * @return list<array{username:string, fullname:string, mode:string, ts:string}>|null
+     * @return list<array{username:string, fullname:string, email:string, mode:string, ts:string}>|null
      */
     private function attendeeList(string $key): ?array
     {
@@ -872,9 +906,12 @@ class EventManagerPlugin extends Plugin
             return null;
         }
 
+        // Email is resolved here (owner/super-gated) so the organizer can
+        // contact attendees; it is never exposed on any public surface.
         $rows = $this->signupRepository()->attendeesFor($key);
         foreach ($rows as &$row) {
             $row['fullname'] = $this->resolveFullName($row['username']);
+            $row['email'] = $this->resolveAccountField($row['username'], 'email');
         }
         unset($row);
         return $rows;
@@ -882,6 +919,16 @@ class EventManagerPlugin extends Plugin
 
     /** Best-effort full-name lookup via Grav's accounts; falls back to ''. */
     private function resolveFullName(string $username): string
+    {
+        return $this->resolveAccountField($username, 'fullname');
+    }
+
+    /**
+     * Read one field off a Grav account, or '' when unavailable. Used to
+     * resolve attendee display data (fullname, email) at render time — the
+     * signup file only stores usernames (§2). Owner/super-gated by the caller.
+     */
+    private function resolveAccountField(string $username, string $field): string
     {
         try {
             $accounts = $this->grav['accounts'] ?? null;
@@ -892,14 +939,14 @@ class EventManagerPlugin extends Plugin
             if (!$account) {
                 return '';
             }
-            $name = '';
+            $value = '';
             if (method_exists($account, 'get')) {
-                $name = (string)($account->get('fullname') ?? '');
+                $value = (string)($account->get($field) ?? '');
             }
-            if ($name === '' && isset($account->fullname)) {
-                $name = (string)$account->fullname;
+            if ($value === '' && isset($account->{$field})) {
+                $value = (string)$account->{$field};
             }
-            return $name;
+            return $value;
         } catch (\Throwable $e) {
             return '';
         }

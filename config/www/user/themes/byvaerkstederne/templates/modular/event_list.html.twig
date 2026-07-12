@@ -45,7 +45,7 @@
                 {# Auto-archive rule: an event that ran more than a day ago is
                    stale and drops off the (upcoming-activities) calendar, even
                    before the dashboard sweep persists archived=true. #}
-                {% if ev.published and not ev.archived and not event_is_stale(ev.event_date) %}
+                {% if ev.published and not ev.archived and not ev.deleted and not event_is_stale(ev.event_date) %}
                     {% set _accent = ev.button_style|default('primary') %}
                     {% set _filter = filter_map[ev.group]|default(ev.group) %}
                     {# The card button is a signup affordance: it always

@@ -164,12 +164,24 @@ final class FormDataProvider
         $pick = static fn (string $oiKey, string $evKey, string $default = ''): string
             => (string)($oi[$oiKey] ?? $ev[$evKey] ?? $default);
 
+        // Date prefill: a stored date in the past is no longer selectable
+        // (events must be today or later), so default the field to today so a
+        // reactivating edit lands on a valid date. Old input (after a
+        // validation bounce) always wins, so the user's own entry is kept.
+        $eventDate = (string)($oi['event_date'] ?? $ev['event_date'] ?? '');
+        if (!array_key_exists('event_date', $oi) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $eventDate)) {
+            $today = (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Copenhagen')))->format('Y-m-d');
+            if ($eventDate < $today) {
+                $eventDate = $today;
+            }
+        }
+
         return [
             'title' => $pick('title', 'title'),
             'group' => $pick('group', 'group'),
             'description' => $pick('description', 'description'),
             'location' => $pick('location', 'location'),
-            'eventDate' => $pick('event_date', 'event_date'),
+            'eventDate' => $eventDate,
             'timeStart' => $timeStart,
             'timeEnd' => $timeEnd,
             'capacityUnlimited' => $capacityUnlimited,

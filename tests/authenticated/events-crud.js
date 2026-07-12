@@ -212,28 +212,34 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     expect(eventBlock(key)).toContain('published: false');
   });
 
-  test('delete = soft archive: retained, hidden publicly, restorable from the dashboard', async ({ page, browser }) => {
+  test('Slet = soft delete: retained but hidden from the owner + public; super sees it and restores', async ({ page, browser }) => {
+    test.skip(!hasAdminPassword, 'TEST_ADMIN_PASSWORD not set');
     await loginAsOrganizer(page);
-    const title = `PW arkiv ${Date.now()}`;
+    const title = `PW slet ${Date.now()}`;
     const key = await createEvent(page, { title, published: '1' });
     createdKeys.push(key);
     const auditBefore = readAuditLog();
 
-    // Confirmation page, then archive via its form.
-    await page.goto(`/begivenheder/slet/${key}`);
-    await expect(page.locator('body')).toContainText(title);
-    await page.click('form [type="submit"]');
-    await page.waitForURL(/\/begivenheder\/mine/);
+    // Owner soft-deletes from the dashboard (mode=delete).
+    await page.goto('/begivenheder/mine');
+    const nonce = await getFormNonce(page);
+    const res = await page.request.post('/begivenheder/slet', {
+      form: { 'data[key]': key, 'data[mode]': 'delete', 'form-nonce': nonce },
+      maxRedirects: 0,
+    });
+    expect(res.status()).toBe(303);
 
-    // Retained with archived:true + unpublished; audit row is an append.
+    // Retained with deleted:true + unpublished; audit appends a 'delete' row.
     const block = eventBlock(key) || '';
-    expect(block).toContain('archived: true');
+    expect(block).toContain('deleted: true');
     expect(block).toContain('published: false');
-    const auditAfter = readAuditLog();
-    expect(auditAfter.startsWith(auditBefore)).toBe(true);
-    expect(auditAfter.slice(auditBefore.length)).toContain('"action":"archive"');
+    expect(readAuditLog().slice(auditBefore.length)).toContain('"action":"delete"');
 
-    // Gone from the public surface.
+    // Gone from the OWNER's own dashboard.
+    await page.goto('/begivenheder/mine');
+    await expect(page.locator(`[data-event-key="${key}"]`)).toHaveCount(0);
+
+    // Gone from the public surface + not signup-able (detail route redirects).
     const anon = await browser.newContext();
     try {
       const anonPage = await anon.newPage();
@@ -245,13 +251,116 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
       await anon.close();
     }
 
-    // Owner restores it from the dashboard (reversible delete).
+    // A super DOES see it (status 'slettet') and can restore it (both flags cleared).
+    const adminCtx = await browser.newContext();
+    try {
+      const adminPage = await adminCtx.newPage();
+      await loginAsSiteAdmin(adminPage);
+      await adminPage.goto('/begivenheder/mine');
+      const item = adminPage.locator(`[data-event-key="${key}"]`);
+      await expect(item).toHaveAttribute('data-event-status', 'slettet');
+      // Super's actions on a deleted event are Gendan + Slet helt (the
+      // owner-facing Slet/Arkiver are gone).
+      await expect(item.locator('button:has-text("Gendan")')).toHaveCount(1);
+      await expect(item.locator('.bv-event-dashboard__confirm > summary')).toHaveText('Slet helt');
+      const anonce = await getFormNonce(adminPage);
+      const rres = await adminPage.request.post('/begivenheder/slet', {
+        form: { 'data[key]': key, 'data[mode]': 'restore', 'form-nonce': anonce },
+        maxRedirects: 0,
+      });
+      expect(rres.status()).toBe(303);
+    } finally {
+      await adminCtx.close();
+    }
+    const restored = eventBlock(key) || '';
+    expect(restored).toContain('deleted: false');
+    expect(restored).toContain('archived: false');
+  });
+
+  test('Arkiver: hidden publicly, stays on the owner dashboard as arkiveret; editing lifts the archive', async ({ page, browser }) => {
+    await loginAsOrganizer(page);
+    const title = `PW arkiv ${Date.now()}`;
+    const key = await createEvent(page, { title, published: '1' });
+    createdKeys.push(key);
+
+    // Owner archives (mode=archive).
+    await page.goto('/begivenheder/mine');
+    const nonce = await getFormNonce(page);
+    const res = await page.request.post('/begivenheder/slet', {
+      form: { 'data[key]': key, 'data[mode]': 'archive', 'form-nonce': nonce },
+      maxRedirects: 0,
+    });
+    expect(res.status()).toBe(303);
+    expect(eventBlock(key) || '').toContain('archived: true');
+
+    // Still on the owner's dashboard (arkiveret), with Arkiver disabled.
     await page.goto('/begivenheder/mine');
     const item = page.locator(`[data-event-key="${key}"]`);
     await expect(item).toHaveAttribute('data-event-status', 'arkiveret');
-    await item.locator('button:has-text("Gendan")').click();
-    await page.waitForURL(/\/begivenheder\/mine/);
-    expect(eventBlock(key)).toContain('archived: false');
+    await expect(item.locator('.bv-event-dashboard__actions .bv-btn', { hasText: 'Arkiver' })).toBeDisabled();
+
+    // Gone from the public calendar.
+    const anon = await browser.newContext();
+    try {
+      const anonPage = await anon.newPage();
+      await anonPage.goto('/vaerkstedskalenderen');
+      await expect(anonPage.locator('body')).not.toContainText(title);
+    } finally {
+      await anon.close();
+    }
+
+    // Editing lifts the archive (archived → false) — the organizer's reactivation.
+    await page.goto(`/begivenheder/rediger/${key}`);
+    const enonce = await getFormNonce(page);
+    const eres = await page.request.post('/begivenheder/rediger', {
+      form: {
+        'data[key]': key, 'data[title]': title, 'data[group]': 'makerspace',
+        'data[event_date]': '2030-06-02', 'data[time_start]': '10:00', 'data[time_end]': '12:00',
+        'data[published]': '1', 'form-nonce': enonce,
+      },
+      maxRedirects: 0,
+    });
+    expect(eres.status()).toBe(303);
+    expect(eventBlock(key) || '').toContain('archived: false');
+  });
+
+  test('past dates are rejected server-side on create and on edit', async ({ page }) => {
+    await loginAsOrganizer(page);
+
+    // Create with a clearly-past date → 400 with a date error; nothing persisted.
+    await page.goto('/begivenheder/opret');
+    const title = `PW fortid ${Date.now()}`;
+    const key = await page.locator('[name="data[key]"]').inputValue();
+    const nonce = await getFormNonce(page);
+    const res = await page.request.post('/begivenheder/opret', {
+      form: {
+        'data[key]': key, 'data[title]': title, 'data[group]': 'makerspace',
+        'data[event_date]': '2020-01-01', 'data[time_start]': '10:00', 'data[time_end]': '12:00',
+        'data[published]': '1', 'form-nonce': nonce,
+      },
+      headers: { Accept: 'application/json' },
+      maxRedirects: 0,
+    });
+    expect(res.status()).toBe(400);
+    expect(JSON.stringify(await res.json())).toContain('event_date');
+    expect(eventBlock(key)).toBeNull();
+
+    // A valid event, then an edit INTO the past → rejected; the date is unchanged.
+    const key2 = await createEvent(page, { title: `${title} ok`, published: '1' });
+    createdKeys.push(key2);
+    await page.goto(`/begivenheder/rediger/${key2}`);
+    const enonce = await getFormNonce(page);
+    const eres = await page.request.post('/begivenheder/rediger', {
+      form: {
+        'data[key]': key2, 'data[title]': `${title} ok`, 'data[group]': 'makerspace',
+        'data[event_date]': '2020-01-01', 'data[time_start]': '10:00', 'data[time_end]': '12:00',
+        'data[published]': '1', 'form-nonce': enonce,
+      },
+      headers: { Accept: 'application/json' },
+      maxRedirects: 0,
+    });
+    expect(eres.status()).toBe(400);
+    expect(eventBlock(key2) || '').toContain("event_date: '2030-06-01'");
   });
 
   test('super: sees all events in the dashboard and can hard-delete permanently', async ({ page, browser }) => {
@@ -272,10 +381,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
       await adminPage.goto('/begivenheder/mine');
       await expect(adminPage.locator(`[data-event-key="${key}"]`)).toBeVisible();
 
-      // The hard-delete choice is rendered for super only.
-      await adminPage.goto(`/begivenheder/slet/${key}`);
-      const hardOption = adminPage.locator('input[name="data[mode]"][value="hard"]');
-      await expect(hardOption).toHaveCount(1);
+      // Super escalates to a permanent hard delete (mode=hard).
       const nonce = await getFormNonce(adminPage);
       const response = await adminPage.request.post('/begivenheder/slet', {
         form: { 'data[key]': key, 'data[mode]': 'hard', 'form-nonce': nonce },

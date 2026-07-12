@@ -176,7 +176,11 @@ final class EventRepository
         foreach ($collection as $object) {
             $data = $this->toArray($object);
             $owner = (string)($data['owner'] ?? '');
-            if (!$isSuper && ($owner === '' || $owner !== $username)) {
+            $isDeleted = !empty($data['deleted']);
+            // Non-supers see only their OWN, non-(soft-)deleted events. A super
+            // sees everything — including soft-deleted events — so they can
+            // restore or permanently remove them.
+            if (!$isSuper && ($owner === '' || $owner !== $username || $isDeleted)) {
                 continue;
             }
             $key = method_exists($object, 'getStorageKey') ? $object->getStorageKey() : null;
@@ -187,9 +191,11 @@ final class EventRepository
                 continue;
             }
             $data['key'] = (string)$key;
-            $data['status'] = !empty($data['archived'])
-                ? 'arkiveret'
-                : (!empty($data['published']) ? 'publiceret' : 'kladde');
+            $data['status'] = $isDeleted
+                ? 'slettet'
+                : (!empty($data['archived'])
+                    ? 'arkiveret'
+                    : (!empty($data['published']) ? 'publiceret' : 'kladde'));
             $rows[] = $data;
         }
 

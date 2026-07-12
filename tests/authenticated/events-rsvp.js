@@ -178,15 +178,20 @@ test.describe('Event RSVP — attendee visibility', () => {
       });
       expect(res.status()).toBe(200);
 
-      // Owner (organizer) sees the attendee list with the username.
+      // Owner (organizer) sees the attendee list — columns tidspunkt · navn ·
+      // email, and NO per-attendee mode chip (the event's own mode already
+      // says whether these are tilmeldte or interesserede).
       const pageO = await ctxO.newPage();
       await loginAsOrganizer(pageO);
       await pageO.goto('/begivenheder/mine');
       const row = pageO.locator(`.bv-event-dashboard__item[data-event-key="${RSVP_EVENT_ID}"]`);
       await expect(row.locator('.bv-event-dashboard__attendees')).toHaveCount(1);
-      await expect(row).toContainText('pw-test-user');
+      // The email is shown so the organizer can make contact.
+      await expect(row.locator('.bv-event-dashboard__attendee-email')).toContainText('pw-test-user@');
+      // No status badge inside the attendee table.
+      await expect(row.locator('.bv-event-dashboard__attendee-table .bv-badge')).toHaveCount(0);
 
-      // The public detail page never carries the attendee name or list markup.
+      // The public surface never carries the attendee's name/email/list markup.
       await pageU.goto(`/begivenheder/${RSVP_EVENT_ID}`);
       await expect(pageU.locator('.bv-event-dashboard__attendees')).toHaveCount(0);
       const body = await pageU.locator('body').innerText();

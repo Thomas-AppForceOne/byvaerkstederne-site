@@ -71,7 +71,7 @@
           </button>
           <div class="bv-ee-pop bv-ee-pop--left" data-ee-pop="date" hidden>
             <span class="bv-ee-pop__label">Dato</span>
-            <input type="date" lang="da-DK" class="bv-ee-popinput bv-ee-dateinput" id="ee-date-input">
+            <input type="date" lang="da-DK" min="{{ 'now'|date('Y-m-d') }}" class="bv-ee-popinput bv-ee-dateinput" id="ee-date-input">
           </div>
         </div>
 
@@ -225,6 +225,9 @@
   var $ = function (id) { return document.getElementById(id); };
   var initEl = $('ee-initial');
   var state = JSON.parse(initEl ? initEl.textContent : '{}');
+  // Earliest selectable event date (today) — mirrors the input's `min` and the
+  // server-side guard; events may not be created/edited into the past.
+  var minDate = ($('ee-date-input') && $('ee-date-input').getAttribute('min')) || '';
 
   // Group → accent token + badge label (mirrors EventValidator maps).
   var ACCENT = { alle: 'primary', makerspace: 'secondary', kreativ: 'tertiary', groenne: 'primary', kulturhus: 'kulturhus' };
@@ -458,6 +461,7 @@
     if (!state.title || state.title.trim() === '') { missing.push('Titel'); }
     if (!state.group) { missing.push('Værksted'); }
     if (!m) { missing.push('Dato'); }
+    else if (minDate && state.eventDate < minDate) { missing.push('Dato kan ikke være i fortiden'); }
     if (!state.timeStart || !state.timeEnd) { missing.push('Tidspunkt'); }
     else if (state.timeEnd <= state.timeStart) { missing.push('Sluttid efter start'); }
     if (!state.capacityUnlimited && !/^\d+$/.test(String(state.capacityCount).trim())) { missing.push('Antal pladser'); }

@@ -4152,42 +4152,133 @@ button.bv-event-row__signup { min-width: 141px; padding: var(--space-2) var(--sp
     flex-wrap: wrap;
     margin-bottom: var(--space-8);
 }
-.bv-event-dashboard__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); }
+.bv-event-dashboard__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+
+/* Compact row grid: [status] [title+date] [actions]. Fixed status/button
+   widths keep every column vertically aligned across rows, whatever the
+   status. Attendees fold out full-width beneath (row 2). */
 .bv-event-dashboard__item {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 7rem 1fr auto;
     align-items: center;
-    gap: var(--space-4);
-    flex-wrap: wrap;
-    padding: var(--space-4);
+    column-gap: var(--space-4);
+    row-gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
     background: var(--surface);
     border-left: 4px solid var(--primary);
 }
 .bv-event-dashboard__item[data-event-status="kladde"] { border-left-color: var(--secondary); }
-.bv-event-dashboard__item[data-event-status="arkiveret"] { border-left-color: var(--outline); opacity: 0.75; }
-.bv-event-dashboard__main { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
+.bv-event-dashboard__item[data-event-status="arkiveret"] { border-left-color: var(--outline); }
+.bv-event-dashboard__item[data-event-status="slettet"] { border-left-color: var(--outline); opacity: 0.72; }
+
+/* Status badge — fixed size so the first column lines up on every row. */
+.bv-event-dashboard__status {
+    width: 7rem;
+    text-align: center;
+    box-sizing: border-box;
+    align-self: center;
+}
+.bv-event-dashboard__status--publiceret { background: var(--primary); color: var(--on-primary); }
+.bv-event-dashboard__status--kladde { background: var(--secondary); color: var(--on-secondary); }
+.bv-event-dashboard__status--arkiveret { background: var(--tertiary); color: var(--on-tertiary); }
+.bv-event-dashboard__status--slettet { background: var(--outline); color: #fff; }
+
+.bv-event-dashboard__body { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
 .bv-event-dashboard__title { font-weight: 700; color: var(--on-surface); text-decoration: none; }
 .bv-event-dashboard__title:hover { text-decoration: underline; text-underline-offset: 4px; }
-.bv-event-dashboard__date { color: var(--outline); font-size: 0.875rem; }
-.bv-event-dashboard__owner { color: var(--outline); font-size: 0.875rem; }
-.bv-event-dashboard__actions { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
-.bv-event-dashboard__inline-form { display: inline; margin: 0; }
+.bv-event-dashboard__date { color: var(--on-surface-variant); font-size: 0.875rem; }
+.bv-event-dashboard__owner { color: var(--outline); font-size: 0.8rem; }
 
-/* RSVP attendee list on the dashboard (owner/super only). Native <details>
-   expander — no JS needed. */
-.bv-event-dashboard__attendees { grid-column: 1 / -1; margin-top: var(--space-3); }
-.bv-event-dashboard__attendees summary {
+/* Actions — right-aligned, Rediger flush with the card's right edge. */
+.bv-event-dashboard__actions { justify-self: end; display: flex; align-items: center; gap: var(--space-2); }
+.bv-event-dashboard__inline-form { display: inline; margin: 0; }
+/* Uniform button size (width + height). The two-class selector outranks every
+   single-class .bv-btn--<variant> so padding stays constant regardless of the
+   cascade order that bit the calendar buttons. */
+.bv-event-dashboard__actions .bv-btn {
+    min-width: 6.5rem;
+    padding: var(--space-2) var(--space-4);
+    text-align: center;
+    box-sizing: border-box;
+}
+.bv-event-dashboard__actions .bv-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+
+/* Slet / Slet-helt confirmation — a floating popover hanging from the button
+   (native <details>, so it also works without JS; JS adds cancel/outside/Esc). */
+.bv-event-dashboard__confirm { position: relative; display: inline-block; }
+.bv-event-dashboard__confirm > summary { cursor: pointer; list-style: none; }
+.bv-event-dashboard__confirm > summary::-webkit-details-marker { display: none; }
+.bv-event-dashboard__confirm > summary::marker { content: ''; }
+.bv-event-dashboard__confirm-pop {
+    position: absolute;
+    top: calc(100% + 0.6rem);
+    right: 0;
+    z-index: 30;
+    width: 17rem;
+    max-width: 82vw;
+    background: var(--surface-container-lowest);
+    border: 1px solid var(--outline);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+    padding: var(--space-4);
+    text-align: left;
+}
+.bv-event-dashboard__confirm-pop::before {
+    content: '';
+    position: absolute;
+    top: -7px;
+    right: 1.75rem;
+    width: 12px;
+    height: 12px;
+    background: inherit;
+    border-left: 1px solid var(--outline);
+    border-top: 1px solid var(--outline);
+    transform: rotate(45deg);
+}
+.bv-event-dashboard__confirm-text { margin: 0 0 var(--space-3); font-size: 0.9rem; line-height: 1.4; }
+.bv-event-dashboard__confirm-actions { display: flex; gap: var(--space-2); justify-content: flex-end; margin: 0; }
+
+/* RSVP attendee list (owner/super only). Native <details>; the summary sits
+   under the actions (right), the table folds out full-width below. */
+.bv-event-dashboard__attendees { grid-column: 1 / -1; margin-top: var(--space-1); }
+.bv-event-dashboard__attendees > summary {
     cursor: pointer;
+    display: block;
+    width: 100%;
+    text-align: right;
     font-family: var(--font-headline);
     font-weight: 700;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     color: var(--secondary);
 }
-.bv-event-dashboard__attendee-list { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
-.bv-event-dashboard__attendee { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); font-size: 0.875rem; }
+.bv-event-dashboard__attendee-empty { margin: var(--space-3) 0 0; }
+.bv-event-dashboard__attendee-table {
+    display: grid;
+    grid-template-columns: max-content minmax(6rem, auto) 1fr;
+    gap: var(--space-1) var(--space-6);
+    margin-top: var(--space-3);
+    font-size: 0.875rem;
+    align-items: baseline;
+}
+.bv-event-dashboard__attendee-head {
+    font-family: var(--font-headline);
+    font-weight: 700;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--on-surface-variant);
+}
+.bv-event-dashboard__attendee-ts { color: var(--on-surface-variant); white-space: nowrap; }
 .bv-event-dashboard__attendee-name { font-weight: 600; }
-.bv-event-dashboard__attendee-user { color: var(--outline); }
-.bv-event-dashboard__attendee-ts { color: var(--outline); margin-left: auto; }
+.bv-event-dashboard__attendee-email { word-break: break-word; }
+
+/* Narrow screens: stack the row so nothing overflows. */
+@media (max-width: 640px) {
+    .bv-event-dashboard__item { grid-template-columns: 1fr; }
+    .bv-event-dashboard__actions { justify-self: stretch; flex-wrap: wrap; }
+    .bv-event-dashboard__attendees > summary { text-align: left; }
+    .bv-event-dashboard__confirm-pop { right: auto; left: 0; }
+    .bv-event-dashboard__confirm-pop::before { right: auto; left: 1.75rem; }
+}
 
 /* Orange button variant — Eventværkstedet. Completes the accent set the
    event cards use (primary/secondary/tertiary/kulturhus). */

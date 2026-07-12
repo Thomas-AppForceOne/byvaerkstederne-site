@@ -1001,3 +1001,44 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 }());
+
+// ============================================================================
+// Dashboard "Slet"/"Slet helt" confirmation popovers ("Mine begivenheder").
+// The popover is a native <details> (so it opens and the form submits without
+// JS); this progressive enhancement adds the Annullér button, click-outside
+// and Esc to close, and a single-open-at-a-time behaviour.
+// ============================================================================
+(function () {
+    'use strict';
+    var SEL = 'details.bv-event-dashboard__confirm';
+
+    function closeAll(except) {
+        document.querySelectorAll(SEL + '[open]').forEach(function (d) {
+            if (d !== except) { d.removeAttribute('open'); }
+        });
+    }
+
+    document.addEventListener('click', function (e) {
+        // Annullér inside a popover closes it (never submits).
+        var cancel = e.target.closest('[data-confirm-cancel]');
+        if (cancel) {
+            e.preventDefault();
+            var owner = cancel.closest(SEL);
+            if (owner) { owner.removeAttribute('open'); }
+            return;
+        }
+        // Opening one summary collapses the others (after the native toggle).
+        var summary = e.target.closest(SEL + ' > summary');
+        if (summary) {
+            var d = summary.parentNode;
+            setTimeout(function () { if (d.open) { closeAll(d); } }, 0);
+            return;
+        }
+        // A click anywhere else closes any open confirm popover.
+        if (!e.target.closest(SEL)) { closeAll(null); }
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { closeAll(null); }
+    });
+}());

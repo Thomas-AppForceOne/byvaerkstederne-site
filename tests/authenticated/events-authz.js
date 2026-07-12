@@ -254,6 +254,20 @@ test.describe('Events — organizer forced browsing (per-object authz)', () => {
     expect(readEventsFile()).toContain('ev_fixture_draft:');
   });
 
+  test('organizer cannot restore (mode=restore is super-only, 403)', async ({ page }) => {
+    // Restore is the super's "Gendan"; organizers reactivate their own events
+    // by editing them, never via mode=restore.
+    await loginAsOrganizer(page);
+    const nonce = await organizerNonce(page);
+    const response = await page.request.post('/begivenheder/slet', {
+      form: { 'data[key]': 'ev_fixture_archived', 'data[mode]': 'restore', 'form-nonce': nonce },
+      maxRedirects: 0,
+    });
+    expect(response.status()).toBe(403);
+    // The archived fixture is untouched (still archived).
+    expect(readEventsFile()).toContain('ev_fixture_archived:');
+  });
+
   test('audit log is append-only across mutations', async ({ page }) => {
     await loginAsOrganizer(page);
     const nonce = await organizerNonce(page);
