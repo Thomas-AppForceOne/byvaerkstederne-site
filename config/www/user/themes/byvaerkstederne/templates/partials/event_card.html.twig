@@ -148,7 +148,7 @@
               {%- if _info.remaining > 0 -%}{{ _info.remaining }} plads{{ _info.remaining == 1 ? '' : 'er' }} tilbage
               {%- else -%}Alle pladser er optaget{%- endif -%}
             {%- elseif _info.mode == 'interesseret' -%}
-              {{ _info.count }} interesseret{{ _info.count == 1 ? '' : 'e' }}
+              {{ _info.count }} {{ _info.count == 1 ? 'interesseret' : 'interesserede' }}
             {%- else -%}
               {{ _info.count }} tilmeldt{{ _info.count == 1 ? '' : 'e' }}
             {%- endif -%}

@@ -100,6 +100,35 @@ test.describe('Event RSVP — signup from the card button', () => {
     await expect(page.locator(`[data-rsvp-availability="${INTEREST_EVENT_ID}"]`).first())
       .toHaveText(/1 interesseret/);
   });
+
+  test('the interesseret count uses correct Danish for any number (1 interesseret → 2 interesserede)', async ({ browser }) => {
+    const ctxA = await browser.newContext();
+    const ctxB = await browser.newContext();
+    try {
+      const pageA = await ctxA.newPage();
+      await login(pageA);
+      await pageA.goto(`/begivenheder/${INTEREST_EVENT_ID}`);
+      const lineA = pageA.locator(`[data-rsvp-availability="${INTEREST_EVENT_ID}"]`).first();
+      await pageA.locator(`[data-rsvp-key="${INTEREST_EVENT_ID}"]`).first().click();
+      // One → singular "interesseret" (live JS), never the "interesserete" bug.
+      await expect(lineA).toHaveText(/^\s*1 interesseret\s*$/, { timeout: 10_000 });
+
+      const pageB = await ctxB.newPage();
+      await loginAsOrganizer(pageB);
+      await pageB.goto(`/begivenheder/${INTEREST_EVENT_ID}`);
+      const lineB = pageB.locator(`[data-rsvp-availability="${INTEREST_EVENT_ID}"]`).first();
+      await pageB.locator(`[data-rsvp-key="${INTEREST_EVENT_ID}"]`).first().click();
+      // Two → plural "interesserede" (live JS path), NOT "interesserete".
+      await expect(lineB).toHaveText(/^\s*2 interesserede\s*$/, { timeout: 10_000 });
+
+      // Server-rendered plural too (a fresh load reads the stored count).
+      await pageA.reload();
+      await expect(lineA).toHaveText(/^\s*2 interesserede\s*$/);
+    } finally {
+      await ctxA.close();
+      await ctxB.close();
+    }
+  });
 });
 
 test.describe('Event RSVP — capacity enforcement', () => {

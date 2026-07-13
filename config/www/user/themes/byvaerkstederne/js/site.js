@@ -820,7 +820,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (remaining > 0) { return remaining + ' plads' + (remaining === 1 ? '' : 'er') + ' tilbage'; }
             return 'Alle pladser er optaget';
         }
-        if (mode === 'interesseret') { return count + ' interesseret' + (count === 1 ? '' : 'e'); }
+        if (mode === 'interesseret') { return count + ' ' + (count === 1 ? 'interesseret' : 'interesserede'); }
         return count + ' tilmeldt' + (count === 1 ? '' : 'e');
     }
 
