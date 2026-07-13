@@ -18,4 +18,13 @@
 # The file contains flag metadata only. No credentials, tokens, API keys,
 # or secrets of any kind may appear in this file; FlagStore will log a
 # warning and fail closed for any non-`"true"`/`"false"` value anyway.
-enabled: {}
+#
+# ─── Reviewed exceptions ──────────────────────────────────────────────
+# account_self_service: enabled for super sign-off of the member
+# self-service surface (/konto) on the test tier — the verification step
+# the prod profile's governance requires before a production flip.
+# Remove the key (back to the empty map) once sign-off is done or the
+# flag ships to staging/prod. Mirrored by the exception list in
+# plugins/feature-flags/tests/Unit/FeatureFlagCatalogueTest.php.
+enabled:
+  account_self_service: "true"

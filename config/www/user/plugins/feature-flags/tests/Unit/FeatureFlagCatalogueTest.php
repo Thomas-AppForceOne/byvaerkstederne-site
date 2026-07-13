@@ -8,7 +8,8 @@
  *      enum case.
  *   2. The `staging.hackersbychoice.dk` profile's features.yaml resolves to N/N
  *      catalogue flags enabled; the `test.hackersbychoice.dk` profile's
- *      features.yaml resolves to 0/N catalogue flags enabled (where N is
+ *      features.yaml resolves to 0/N catalogue flags enabled EXCEPT the
+ *      reviewed exceptions in TEST_TIER_ENABLED_EXCEPTIONS (where N is
  *      count(self::CATALOGUE) — the count is no longer a stable 17 after
  *      post-Sprint-1 additions like privacy_policy and placeholder-CTA
  *      gates).
@@ -63,6 +64,16 @@ final class FeatureFlagCatalogueTest extends TestCase
         'social_media_links',
         'makerspace_meeting_link',
         'event_management',
+        'account_self_service',
+    ];
+
+    /**
+     * Reviewed exceptions to the test tier's all-off rule (the profile
+     * file's "Reviewed exceptions" section is the human-facing half of
+     * this list). Every flag NOT listed here must stay off and
+     * unconfigured on test.hackersbychoice.dk.
+     */
+    private const TEST_TIER_ENABLED_EXCEPTIONS = [
         'account_self_service',
     ];
 
@@ -202,14 +213,16 @@ final class FeatureFlagCatalogueTest extends TestCase
         }
     }
 
-    public function testPublicDemoProfileDisablesAllCatalogueFlags(): void
+    public function testPublicDemoProfileDisablesAllButReviewedExceptions(): void
     {
         $enabled = self::loadProfileYaml('test.hackersbychoice.dk');
-        // `enabled: {}` parses to an empty array, which FlagStore treats
-        // identically to "no overrides" (no warnings).
-        $this->assertTrue(
-            $enabled === null || $enabled === [],
-            'test.hackersbychoice.dk features.yaml must declare an empty enabled map.'
+        // The enabled map may carry ONLY the reviewed exceptions — every
+        // other key would silently flip a surface on for the test tier.
+        $keys = is_array($enabled) ? array_keys($enabled) : [];
+        $this->assertSame(
+            self::TEST_TIER_ENABLED_EXCEPTIONS,
+            $keys,
+            'test.hackersbychoice.dk features.yaml must declare exactly the reviewed exceptions.'
         );
 
         $logger = new ArrayLogger();
@@ -217,9 +230,16 @@ final class FeatureFlagCatalogueTest extends TestCase
 
         foreach (self::CATALOGUE as $flagValue) {
             $case = FeatureFlag::from($flagValue);
+            if (in_array($flagValue, self::TEST_TIER_ENABLED_EXCEPTIONS, true)) {
+                $this->assertTrue(
+                    $store->isEnabled($case),
+                    "Test-tier reviewed exception `{$flagValue}` must be enabled."
+                );
+                continue;
+            }
             $this->assertFalse(
                 $store->isEnabled($case),
-                "Public-demo profile must disable `{$flagValue}` (0/N rule)."
+                "Public-demo profile must disable `{$flagValue}` (all-off rule, reviewed exceptions aside)."
             );
             $this->assertFalse(
                 $store->isConfigured($case),
@@ -230,7 +250,7 @@ final class FeatureFlagCatalogueTest extends TestCase
         $this->assertSame(
             [],
             $logger->warnings(),
-            'Empty enabled map must not warn.'
+            'The test-tier enabled map must load cleanly with zero warnings.'
         );
     }
 
