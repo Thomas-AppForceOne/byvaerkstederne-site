@@ -182,8 +182,10 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     expect(block).toContain(`title: '${newTitle}'`);
     expect(block).toContain('owner: pw-test-org');
     expect(block).toContain('updated_by: pw-test-org');
-    // Flash rendered through the shared component.
-    await expect(page.locator('.bv-message--success')).toContainText('opdateret');
+    // No success confirmation bar: the "…er opdateret" flash was removed as
+    // noise (the reloaded dashboard already reflects the edit; the YAML-block
+    // assertions above prove it persisted).
+    await expect(page.locator('.bv-message--success')).toHaveCount(0);
   });
 
   test('publish/unpublish own event through the Synlig toggle', async ({ page }) => {

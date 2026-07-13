@@ -448,7 +448,7 @@ class EventManagerPlugin extends Plugin
 
         $this->auditLog()->append('create', $key, $user->username, ['after' => $this->auditSnapshot($values)]);
         $this->repository()->bustRenderCache();
-        $this->redirectWithFlash('Begivenheden "' . $values['title'] . '" er oprettet.');
+        $this->redirectToDashboard();
     }
 
     /** @param array<string,mixed> $data */
@@ -485,7 +485,7 @@ class EventManagerPlugin extends Plugin
             'after' => $this->auditSnapshot($values),
         ]);
         $this->repository()->bustRenderCache();
-        $this->redirectWithFlash('Begivenheden "' . $values['title'] . '" er opdateret.');
+        $this->redirectToDashboard();
     }
 
     /** @param array<string,mixed> $data */
@@ -511,7 +511,7 @@ class EventManagerPlugin extends Plugin
             $this->imageStore()->deleteEventImages($key);
             $this->auditLog()->append('hard_delete', $key, $user->username, ['before' => $this->auditSnapshot($stored)]);
             $this->repository()->bustRenderCache();
-            $this->redirectWithFlash('Begivenheden er slettet permanent.');
+            $this->redirectToDashboard();
         }
 
         if ($mode === 'restore') {
@@ -534,7 +534,7 @@ class EventManagerPlugin extends Plugin
             }
             $this->auditLog()->append('restore', $key, $user->username, []);
             $this->repository()->bustRenderCache();
-            $this->redirectWithFlash('Begivenheden er gendannet som kladde.');
+            $this->redirectToDashboard();
         }
 
         if ($mode === 'delete') {
@@ -554,7 +554,7 @@ class EventManagerPlugin extends Plugin
             }
             $this->auditLog()->append('delete', $key, $user->username, ['before' => $this->auditSnapshot($stored)]);
             $this->repository()->bustRenderCache();
-            $this->redirectWithFlash('Begivenheden er slettet.');
+            $this->redirectToDashboard();
         }
 
         // Default: soft archive — retain the object, unpublish, hide from all
@@ -571,7 +571,7 @@ class EventManagerPlugin extends Plugin
         }
         $this->auditLog()->append('archive', $key, $user->username, ['before' => $this->auditSnapshot($stored)]);
         $this->repository()->bustRenderCache();
-        $this->redirectWithFlash('Begivenheden er arkiveret.');
+        $this->redirectToDashboard();
     }
 
     /**
@@ -639,8 +639,8 @@ class EventManagerPlugin extends Plugin
             : null;
 
         // AJAX button (Accept not text/html) gets JSON with a fresh rotating
-        // nonce; a no-JS form submit (Accept: text/html) gets PRG-with-flash
-        // back to the page it came from — mirrors validateOr400()'s split.
+        // nonce; a no-JS form submit (Accept: text/html) gets a plain PRG
+        // redirect back to the page it came from — mirrors validateOr400()'s split.
         if (!str_contains((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'text/html')) {
             $this->sendJson([
                 'success' => true,
@@ -651,10 +651,9 @@ class EventManagerPlugin extends Plugin
             ]);
         }
 
-        $flash = $result === SignupRepository::SIGNED_UP
-            ? ($mode === SignupRepository::MODE_TILMELD ? 'Du er nu tilmeldt.' : 'Du er nu noteret som interesseret.')
-            : 'Din tilmelding er annulleret.';
-        $this->grav['messages']->add($flash, 'success');
+        // No success flash: the reloaded card already reflects the new state
+        // (signed-up checkbox + updated count), matching the AJAX path which
+        // never showed a confirmation bar either. Errors still flash upstream.
         $this->grav->redirect($this->safeReferer('/vaerkstedskalenderen'), 303);
         exit; // @phpstan-ignore-line — redirect() exits; belt for static analysis
     }
@@ -777,10 +776,15 @@ class EventManagerPlugin extends Plugin
         ];
     }
 
-    /** §8.1.10 — PRG: flash + 303 redirect to the dashboard. */
-    private function redirectWithFlash(string $message): never
+    /**
+     * §8.1.10 — PRG: 303 redirect back to the dashboard after a mutation.
+     * No success flash: the outcome is self-evident on the reloaded dashboard
+     * (the event moves to its new status / disappears), so the transient
+     * "…er arkiveret/oprettet/…" confirmation bars were removed as noise.
+     * Error feedback still flashes from the error paths above.
+     */
+    private function redirectToDashboard(): never
     {
-        $this->grav['messages']->add($message, 'success');
         $this->grav->redirect(self::ROUTE_BASE . '/mine', 303);
         exit; // @phpstan-ignore-line — redirect() exits; belt for static analysis
     }

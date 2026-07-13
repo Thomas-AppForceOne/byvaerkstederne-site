@@ -13,7 +13,13 @@
 {% set bv_all_messages = [] %}
 {% for scope in bv_message_scopes %}
     {% for message in grav.messages.fetch(scope) %}
+        {# Skip blank flashes. Some success confirmations (login/logout) are
+           intentionally emptied via the PLUGIN_LOGIN.* language overrides so
+           their transient bar no longer renders; the plugin still enqueues an
+           (empty) message, which we drop here. #}
+        {% if message.message|trim is not empty %}
         {% set bv_all_messages = bv_all_messages|merge([{ 'scope': scope, 'message': message.message }]) %}
+        {% endif %}
     {% endfor %}
 {% endfor %}
 {% if bv_all_messages|length %}

@@ -47,6 +47,15 @@ PLUGIN_LOGIN:
   TOO_MANY_LOGIN_ATTEMPTS: "For mange mislykkede loginforsøg inden for det tilladte tidsrum (%s minutter). Prøv igen senere."
   LOGIN_FAILED: "Login mislykkedes. Tjek brugernavn og adgangskode."
 
+  # Success confirmations suppressed by design: logging in / out is self-evident
+  # from the reloaded nav (username shown / gone), so these transient bars were
+  # removed as noise. Emptied here rather than in vendor code; the messages
+  # partial skips blank flashes so nothing renders. Failure/rate-limit above and
+  # the activation/reset instructions still flash — those are the user's only
+  # feedback for an otherwise-invisible action.
+  LOGIN_SUCCESSFUL: ""
+  LOGGED_OUT: ""
+
   # WI-1: auth-page button labels (themed forgot/reset pages reuse plugin partials).
   BTN_SEND_INSTRUCTIONS: "Send nulstillingslink"
   BTN_RESET_PASSWORD: "Nulstil adgangskode"
