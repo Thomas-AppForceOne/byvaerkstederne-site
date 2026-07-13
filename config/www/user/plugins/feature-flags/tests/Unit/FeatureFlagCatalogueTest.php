@@ -63,6 +63,7 @@ final class FeatureFlagCatalogueTest extends TestCase
         'social_media_links',
         'makerspace_meeting_link',
         'event_management',
+        'account_self_service',
     ];
 
     /** Absolute path to `config/www/user/env/`. */

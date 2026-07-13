@@ -20,3 +20,12 @@ require('./authenticated/login');
 // Frontend event CRUD — organizer success paths + forced-browsing authz.
 require('./authenticated/events-crud');
 require('./authenticated/events-authz');
+// Account self-service (/konto) — one file per operation; destructive flows
+// run on disposable accounts only.
+require('./authenticated/account-access-request');
+require('./authenticated/account-deletion');
+require('./authenticated/account-dropdown');
+require('./authenticated/account-email-change');
+require('./authenticated/account-fullname');
+require('./authenticated/account-password-change');
+require('./authenticated/account-purge');

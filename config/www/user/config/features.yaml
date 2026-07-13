@@ -42,3 +42,4 @@ enabled:
   social_media_links: "true"
   makerspace_meeting_link: "true"
   event_management: "true"
+  account_self_service: "true"

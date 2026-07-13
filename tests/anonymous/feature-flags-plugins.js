@@ -203,6 +203,13 @@ const POST_ENDPOINTS = [
   // GET — admin bug-report image endpoint is GET per plugin code.
   ['GET', '/admin/bug-report-image/does-not-exist.png', 'bug-report admin image',
     new Set([200, 302, 400, 401, 403, 404, 413, 422])],
+  // account-manager mutation endpoints (anonymous POST under internal → 401).
+  ['POST', '/konto/change-fullname', 'account change-fullname',
+    new Set([200, 302, 400, 401, 403, 409, 413, 422])],
+  ['POST', '/konto/change-password', 'account change-password',
+    new Set([200, 302, 400, 401, 403, 409, 413, 422])],
+  ['POST', '/konto/request-email-change', 'account request-email-change',
+    new Set([200, 302, 400, 401, 403, 409, 413, 422])],
 ];
 
 // Tokens the 404 body must NOT contain — feature-name leak guard
@@ -212,6 +219,7 @@ const LEAK_DENYLIST = [
   'roadmap', 'vote', 'feature-suggestion', 'bug-report',
   'admin/bug-report', 'submit', 'approve', 'decline',
   'Stack trace', '/app/www/', 'FeatureFlag', 'FlagStore',
+  'account-manager', 'konto',
 ];
 
 function assertNoLeak(body, description) {
@@ -570,6 +578,22 @@ const FLAG_PROBES = [
       expect(/bv-footer__social/.test(body)).toBe(true);
       expect(/aria-label="Facebook"/.test(body)).toBe(true);
       expect(/aria-label="Instagram"/.test(body)).toBe(true);
+    },
+  },
+  {
+    flag: 'account_self_service',
+    desc: 'GET /konto 404 under public-demo; login-gated (302) under internal; POST endpoints gated',
+    async publicDemo(ctx) {
+      const r = await ctx.get('/konto', { maxRedirects: 0 });
+      expect(r.status()).toBe(404);
+      const p = await ctx.post('/konto/change-fullname', { maxRedirects: 0 });
+      expect(p.status()).toBe(404);
+    },
+    async internal(ctx) {
+      // Anonymous GET under internal → redirect_to_login (never a 404, never
+      // a content leak).
+      const r = await ctx.get('/konto', { maxRedirects: 0 });
+      expect([200, 301, 302].includes(r.status())).toBe(true);
     },
   },
   {

@@ -1,0 +1,30 @@
+{% extends 'email/base.html.twig' %}
+
+{# To the NEW address: the single-use confirmation link (verify-new-address-
+   first — the account keeps the old email until this link is clicked). #}
+
+{%- set subject = 'Bekræft din nye e-mailadresse — ' ~ site_name %}
+{%- do email.message.setSubject(subject) %}
+
+{%- block content -%}
+<p>Hej {{ user.fullname ?: user.username }},</p>
+<p>
+  Du har anmodet om at ændre e-mailadressen på din konto hos <b>{{ site_name }}</b>
+  til denne adresse. Ændringen træder først i kraft, når du bekræfter den:
+</p>
+<p>
+  <a href="{{ confirm_link }}" class="btn-primary">Bekræft ny e-mailadresse</a>
+</p>
+<p>
+  Alternativt kan du kopiere dette link ind i din browsers adresselinje:
+</p>
+<p class="word-break">
+  <a href="{{ confirm_link }}">{{ confirm_link }}</a>
+</p>
+<p>
+  Linket udløber efter {{ ttl_hours }} timer og kan kun bruges én gang.
+  Har du ikke anmodet om ændringen, kan du se bort fra denne mail — din
+  konto er uændret.
+</p>
+<p>Venlig hilsen<br/>{{ site_name }}</p>
+{%- endblock content -%}
