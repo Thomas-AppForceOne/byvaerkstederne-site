@@ -94,6 +94,29 @@ test.describe('Event create — inline card editor', () => {
     await expect(page.locator('#ee-button-text')).toHaveValue('Tilmeld');
   });
 
+  test('Drop-in locks capacity to unlimited; another type lifts the lock', async ({ page }) => {
+    await loginAsOrganizer(page);
+    await page.goto('/begivenheder/opret');
+    const nej = page.locator('[data-unlim="0"]');
+
+    // Default type: capacity is a free choice — the "Nej" (limited) option is
+    // selectable.
+    await expect(nej).toBeEnabled();
+
+    // Drop-in ⇒ forced unlimited, and the "Nej" option is locked out so a cap
+    // can't be turned on.
+    await page.locator('[data-ee-open="price"]').click();
+    await page.locator('.bv-ee-priceopt[data-price="Drop-in"]').click();
+    await expect(page.locator('#ee-cap-unlim')).toHaveValue('1');
+    await expect(page.locator('#ee-cap-text')).toHaveText('Ubegrænset');
+    await expect(nej).toBeDisabled();
+
+    // Selecting any other type lifts the lock — "Nej" is selectable again.
+    await page.locator('[data-ee-open="price"]').click();
+    await page.locator('.bv-ee-priceopt[data-price="Brugerbetaling"]').click();
+    await expect(nej).toBeEnabled();
+  });
+
   test('Gem stays disabled and names the missing fields until required data is valid', async ({ page }) => {
     await loginAsOrganizer(page);
     await page.goto('/begivenheder/opret');

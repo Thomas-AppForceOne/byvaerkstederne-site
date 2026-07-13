@@ -189,6 +189,17 @@ final class EventValidator
         // "Tilmeld". Any submitted button_text is ignored.
         $values['button_text'] = (($values['price'] ?? '') === 'Drop-in') ? 'Interesseret' : 'Tilmeld';
 
+        // A Drop-in event never carries a capacity cap — it is uforpligtende, so
+        // "unlimited" is not a choice but a rule. The editor locks the capacity
+        // field to unlimited for Drop-in; enforce the same server-side so a
+        // tampered POST (capacity_unlimited=0 + a count) cannot slip a cap
+        // through, and drop any capacity_count error that stale/limited input
+        // would otherwise raise.
+        if (($values['price'] ?? '') === 'Drop-in') {
+            $values['capacity'] = '';
+            unset($errors['capacity_count']);
+        }
+
         // Bounded free-text fields.
         foreach (self::MAX_LENGTHS as $field => $max) {
             $value = $this->str($data, $field);

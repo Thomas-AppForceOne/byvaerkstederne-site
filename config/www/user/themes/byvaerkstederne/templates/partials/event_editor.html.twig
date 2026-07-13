@@ -376,12 +376,14 @@
   document.querySelectorAll('.bv-ee-priceopt').forEach(function (o) {
     o.addEventListener('click', function () {
       state.price = o.getAttribute('data-price');
-      if (state.price === 'Drop-in') { state.capacityUnlimited = true; } // Drop-in ⇒ unlimited
-      render(); closeAll();
+      render(); closeAll();   // render() enforces Drop-in ⇒ locked-unlimited capacity
     });
   });
   document.querySelectorAll('[data-unlim]').forEach(function (b) {
-    b.addEventListener('click', function () { state.capacityUnlimited = b.getAttribute('data-unlim') === '1'; render(); });
+    b.addEventListener('click', function () {
+      if (state.price === 'Drop-in') { return; } // capacity is locked to unlimited for Drop-in
+      state.capacityUnlimited = b.getAttribute('data-unlim') === '1'; render();
+    });
   });
   document.querySelectorAll('[data-published]').forEach(function (b) {
     b.addEventListener('click', function () { state.published = b.getAttribute('data-published') === '1'; render(); });
@@ -436,13 +438,21 @@
     ['primary', 'secondary', 'tertiary', 'kulturhus'].forEach(function (a) { cta.classList.remove('bv-btn--' + a); });
     cta.classList.add('bv-btn--primary');
 
+    // Drop-in events never have a capacity cap: force "Ubegrænset" and lock the
+    // toggle so the limit can't be turned on. Selecting any other type lifts it.
+    if (_dropin) { state.capacityUnlimited = true; }
     var capChip = $('ee-cap-val');
     var showCap = !state.capacityUnlimited && String(state.capacityCount).trim() !== '';
     $('ee-cap-text').textContent = showCap ? String(state.capacityCount).trim() : (state.capacityUnlimited ? 'Ubegrænset' : '+ Pladser');
     capChip.classList.toggle('bv-ee-ghost', !showCap);
+    capChip.title = _dropin ? 'Drop-in har altid ubegrænset antal pladser' : 'Antal pladser';
     $('ee-cap-input').disabled = state.capacityUnlimited;
     $('ee-cap-count-wrap').classList.toggle('is-disabled', state.capacityUnlimited);
     setActive('[data-unlim]', 'data-unlim', state.capacityUnlimited ? '1' : '0');
+    // Lock the "Nej" (limited) option for Drop-in — the cap can't be turned on;
+    // re-enabled for every other type so the lock lifts on switch-away.
+    var capNej = document.querySelector('[data-unlim="0"]');
+    if (capNej) { capNej.disabled = _dropin; }
     setActive('[data-published]', 'data-published', state.published ? '1' : '0');
     setActive('.bv-ee-groupopt', 'data-group', state.group);
     setActive('.bv-ee-priceopt', 'data-price', state.price);

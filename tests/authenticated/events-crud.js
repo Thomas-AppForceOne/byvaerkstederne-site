@@ -405,6 +405,32 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     expect(eventBlock(k2) || '').toMatch(/button_text:\s*'?Tilmeld'?/);
   });
 
+  test('a Drop-in event is forced to unlimited capacity server-side, ignoring a submitted cap', async ({ page }) => {
+    await loginAsOrganizer(page);
+    await page.goto('/begivenheder/opret');
+    const t = `PW dropin cap ${Date.now()}`;
+    const k = await page.locator('[name="data[key]"]').inputValue();
+    const n = await getFormNonce(page);
+    const r = await page.request.post('/begivenheder/opret', {
+      form: {
+        'data[key]': k, 'data[title]': t, 'data[group]': 'makerspace',
+        'data[event_date]': '2030-06-01', 'data[time_start]': '10:00', 'data[time_end]': '12:00',
+        'data[price]': 'Drop-in',
+        // Tampered: try to force a bounded capacity onto a Drop-in event.
+        'data[capacity_unlimited]': '0', 'data[capacity_count]': '20',
+        'data[published]': '1', 'form-nonce': n,
+      },
+      maxRedirects: 0,
+    });
+    // Accepted (303), NOT rejected (400): the bogus cap is ignored, not an error.
+    expect(r.status()).toBe(303);
+    createdKeys.push(k);
+    const block = eventBlock(k) || '';
+    expect(block).toMatch(/button_text:\s*'?Interesseret'?/);   // recognised as Drop-in
+    expect(block).not.toMatch(/capacity:\s*['"]?20['"]?/);      // the submitted 20 never stuck
+    expect(block).toMatch(/capacity:\s*(''|"")/);               // stored unlimited (empty)
+  });
+
   test('super: sees all events in the dashboard and can hard-delete permanently', async ({ page, browser }) => {
     test.skip(!hasAdminPassword, 'TEST_ADMIN_PASSWORD not set');
 
