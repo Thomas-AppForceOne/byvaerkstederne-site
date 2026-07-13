@@ -1,0 +1,20 @@
+{% extends 'email/base.html.twig' %}
+
+{# To the OLD address when a change is requested — hijack visibility. #}
+
+{%- set subject = 'Anmodning om ændring af e-mailadresse — ' ~ site_name %}
+{%- do email.message.setSubject(subject) %}
+
+{%- block content -%}
+<p>Hej {{ user.fullname ?: user.username }},</p>
+<p>
+  Der er netop anmodet om at ændre e-mailadressen på din konto hos
+  <b>{{ site_name }}</b>. Kontoen beholder denne adresse, indtil den nye
+  adresse er bekræftet.
+</p>
+<p>
+  Hvis det ikke var dig, bør du straks skifte din adgangskode på
+  {{ site_host }}/konto og kontakte foreningen.
+</p>
+<p>Venlig hilsen<br/>{{ site_name }}</p>
+{%- endblock content -%}

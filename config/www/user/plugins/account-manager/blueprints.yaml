@@ -1,0 +1,30 @@
+name: Account Manager
+version: 1.0.0
+description: "Member self-service on /konto: change email (verified), change password, edit display name, view roles, request access rights, and delete the account with a 30-day regret window followed by GDPR-compliant hard delete + anonymization."
+icon: user
+author:
+  name: Byværkstederne
+homepage: https://byvaerkstederne.dk
+keywords: accounts, self-service, gdpr
+bugs: https://byvaerkstederne.dk
+license: MIT
+
+dependencies:
+  - { name: grav, version: '>=1.7.25' }
+  - { name: login }
+  - { name: email }
+  - { name: feature-flags }
+
+form:
+  validation: strict
+  fields:
+    enabled:
+      type: toggle
+      label: PLUGIN_ADMIN.PLUGIN_STATUS
+      highlight: 1
+      default: 0
+      options:
+        1: PLUGIN_ADMIN.ENABLED
+        0: PLUGIN_ADMIN.DISABLED
+      validate:
+        type: bool

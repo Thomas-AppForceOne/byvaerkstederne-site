@@ -1,0 +1,32 @@
+{% extends 'email/base.html.twig' %}
+
+{# To the admin recipients (per-tier plugins.email.to, fallback
+   site.author.email): a member requests an access role. Granting stays
+   manual — a super adds the group in the admin panel. #}
+
+{%- set subject = 'Anmodning om rettigheder: ' ~ (user.fullname ?: user.username) ~ ' — ' ~ site_name %}
+{%- do email.message.setSubject(subject) %}
+
+{%- block content -%}
+<p>Hej,</p>
+<p>
+  Et medlem har anmodet om en rolle på <b>{{ site_name }}</b>:
+</p>
+<p>
+  Medlem: <b>{{ user.fullname ?: user.username }}</b> ({{ user.username }})<br/>
+  E-mail: {{ user.email }}<br/>
+  Rolle: <b>{{ role_label }}</b> ({{ role }})
+</p>
+{% if motivation %}
+<p>
+  Motivation:<br/>
+  {{ motivation|e|nl2br }}
+</p>
+{% endif %}
+<p>
+  Tildeling sker manuelt: åbn medlemmets konto i admin-panelet og tilføj
+  gruppen under &quot;groups&quot;. Medlemmet ser status som afventende,
+  indtil rollen er tildelt.
+</p>
+<p>Venlig hilsen<br/>{{ site_name }}</p>
+{%- endblock content -%}

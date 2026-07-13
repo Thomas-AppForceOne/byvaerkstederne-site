@@ -51,3 +51,4 @@ enabled:
   social_media_links: "false"
   makerspace_meeting_link: "false"
   event_management: "false"
+  account_self_service: "false"

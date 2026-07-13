@@ -1052,3 +1052,85 @@ document.addEventListener('DOMContentLoaded', function () {
         if (e.key === 'Escape') { closeAll(null); }
     });
 }());
+
+// ============================================================================
+// Header account menu (account_self_service) — accessible dropdown on the
+// logged-in user chip. Opens on click (or ArrowDown/ArrowUp from the button),
+// closes on Escape (focus returns to the button), click-outside, focus-out,
+// and item selection. Items are keyboard-navigable (arrows, Home/End). No
+// hover behaviour. The chip is a dead <span> when the flag is off — this
+// module then finds nothing and does nothing.
+// ============================================================================
+(function () {
+    'use strict';
+
+    function init() {
+        var button = document.querySelector('.bv-nav__user--menu');
+        var menu = document.getElementById('bv-account-menu');
+        if (!button || !menu) { return; }
+
+        function items() {
+            return Array.prototype.slice.call(menu.querySelectorAll('[role="menuitem"]'));
+        }
+
+        function isOpen() { return !menu.hidden; }
+
+        function open(focusTarget) {
+            menu.hidden = false;
+            button.setAttribute('aria-expanded', 'true');
+            var list = items();
+            if (focusTarget === 'first' && list.length) { list[0].focus(); }
+            if (focusTarget === 'last' && list.length) { list[list.length - 1].focus(); }
+        }
+
+        function close(returnFocus) {
+            if (!isOpen()) { return; }
+            menu.hidden = true;
+            button.setAttribute('aria-expanded', 'false');
+            if (returnFocus) { button.focus(); }
+        }
+
+        button.addEventListener('click', function () {
+            if (isOpen()) { close(false); } else { open(null); }
+        });
+
+        button.addEventListener('keydown', function (e) {
+            if (e.key === 'ArrowDown') { e.preventDefault(); open('first'); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); open('last'); }
+            else if (e.key === 'Escape') { close(true); }
+        });
+
+        menu.addEventListener('keydown', function (e) {
+            var list = items();
+            if (!list.length) { return; }
+            var idx = list.indexOf(document.activeElement);
+            if (e.key === 'Escape') { e.preventDefault(); close(true); }
+            else if (e.key === 'ArrowDown') { e.preventDefault(); list[(idx + 1) % list.length].focus(); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); list[(idx - 1 + list.length) % list.length].focus(); }
+            else if (e.key === 'Home') { e.preventDefault(); list[0].focus(); }
+            else if (e.key === 'End') { e.preventDefault(); list[list.length - 1].focus(); }
+        });
+
+        // Selecting an item closes the menu; navigation proceeds normally.
+        menu.addEventListener('click', function (e) {
+            var item = e.target instanceof Element ? e.target.closest('[role="menuitem"]') : null;
+            if (item) { close(false); }
+        });
+
+        // Click-outside and focus-out both dismiss.
+        document.addEventListener('click', function (e) {
+            if (isOpen() && e.target instanceof Node
+                && !menu.contains(e.target) && !button.contains(e.target)) { close(false); }
+        });
+        document.addEventListener('focusin', function (e) {
+            if (isOpen() && e.target instanceof Node
+                && !menu.contains(e.target) && !button.contains(e.target)) { close(false); }
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
