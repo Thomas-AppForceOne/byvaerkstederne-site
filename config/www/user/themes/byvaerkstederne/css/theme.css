@@ -4221,8 +4221,7 @@ button.bv-event-row__signup {
 .bv-event-dashboard__status--slettet { background: var(--outline); color: #fff; }
 
 .bv-event-dashboard__body { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
-.bv-event-dashboard__title { font-weight: 700; color: var(--on-surface); text-decoration: none; }
-.bv-event-dashboard__title:hover { text-decoration: underline; text-underline-offset: 4px; }
+.bv-event-dashboard__title { font-weight: 700; color: var(--on-surface); }
 .bv-event-dashboard__date { color: var(--on-surface-variant); font-size: 0.875rem; }
 .bv-event-dashboard__owner { color: var(--outline); font-size: 0.8rem; }
 

@@ -41,7 +41,10 @@
                 <span class="bv-badge bv-event-dashboard__status bv-event-dashboard__status--{{ ev.status }}">{{ ev.status|capitalize }}</span>
 
                 <div class="bv-event-dashboard__body">
-                    <a class="bv-event-dashboard__title" href="/begivenheder/rediger/{{ ev.key }}">{{ ev.title }}</a>
+                    {# Plain text, not a link — editing happens via the Rediger
+                       button in the actions column, so the title no longer
+                       navigates to the edit page. #}
+                    <span class="bv-event-dashboard__title">{{ ev.title }}</span>
                     <span class="bv-event-dashboard__date">{{ ev.event_date }}</span>
                     {% if ev.owner and is_super %}
                         <span class="bv-event-dashboard__owner">({{ ev.owner }})</span>
