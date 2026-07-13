@@ -76,9 +76,44 @@ final class PurgeService
     {
         $grav = Grav::instance();
         $service = new self($grav);
-        foreach ($service->findLapsed(time()) as $username) {
+        $lapsed = $service->findLapsed(time());
+        if ($service->capTripped(count($lapsed))) {
+            return;
+        }
+        foreach ($lapsed as $username) {
             $service->purge($username);
         }
+    }
+
+    /**
+     * Blast-radius circuit breaker: a destructive job running unattended
+     * under cron must not act on an anomalous mass lapse (bug, malicious
+     * mass-marking). Over the cap: purge NOTHING, log, and alert the
+     * admins — cron output is discarded on shared hosting, so the mail is
+     * the signal a human actually sees. The CLI's --ignore-cap is the
+     * deliberate manual override.
+     */
+    public function capTripped(int $lapsedCount): bool
+    {
+        $cap = (int)$this->grav['config']->get('plugins.account-manager.deletion.max_per_run', 5);
+        if ($cap <= 0 || $lapsedCount <= $cap) {
+            return false;
+        }
+        $message = "account-manager purge: {$lapsedCount} lapsed deletion requests exceed the per-run cap of {$cap} — "
+            . 'refusing to purge anything. Inspect with `bin/plugin account-manager purge-deleted --dry-run` '
+            . 'and run with --ignore-cap once verified.';
+        error_log($message);
+        try {
+            (new AccountEmail($this->grav))->sendOpsAlert(
+                'Sletningsjob stoppet af sikkerhedsgrænse',
+                "Sletningsjobbet fandt {$lapsedCount} konti med udløbet slettefrist — over grænsen på {$cap} pr. kørsel. "
+                . 'Ingen konti er slettet. Undersøg med `bin/plugin account-manager purge-deleted --dry-run` '
+                . 'og kør med --ignore-cap, hvis det er korrekt.'
+            );
+        } catch (\Throwable $e) {
+            error_log('account-manager purge cap alert mail failed: ' . $e->getMessage());
+        }
+        return true;
     }
 
     /**

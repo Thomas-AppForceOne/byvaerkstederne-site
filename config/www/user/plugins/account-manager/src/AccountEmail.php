@@ -66,6 +66,19 @@ final class AccountEmail
     }
 
     /**
+     * Operational alert to the admin recipients — used by the fail-loud
+     * paths (purge circuit breaker, missing scheduler heartbeat) where a
+     * cron job's discarded output would otherwise hide a broken promise.
+     */
+    public function sendOpsAlert(string $alertSubject, string $alertBody): void
+    {
+        $this->send('ops-alert', $this->adminRecipient(), [
+            'alert_subject' => $alertSubject,
+            'alert_body' => $alertBody,
+        ]);
+    }
+
+    /**
      * Deletion-request confirmation to the member: the exact hard-delete
      * date and the sign-in-again reinstatement rule (§2.8). No email is
      * sent at hard delete itself — this mail IS the notice.

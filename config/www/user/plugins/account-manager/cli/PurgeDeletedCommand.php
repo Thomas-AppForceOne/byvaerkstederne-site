@@ -29,6 +29,12 @@ class PurgeDeletedCommand extends ConsoleCommand
                 InputOption::VALUE_NONE,
                 'List the accounts whose regret window has lapsed without deleting anything'
             )
+            ->addOption(
+                'ignore-cap',
+                null,
+                InputOption::VALUE_NONE,
+                'Proceed even when the lapsed count exceeds deletion.max_per_run (after a manual dry-run inspection)'
+            )
             ->setDescription('Hard-deletes accounts whose 30-day deletion window has lapsed and anonymizes their footprint')
             ->setHelp('Runs the account_self_service §7 purge: removes lapsed accounts, rewrites every inventoried store to a per-account tombstone, and verifies the zero-hits completeness check.');
     }
@@ -54,6 +60,14 @@ class PurgeDeletedCommand extends ConsoleCommand
                 $this->output->writeln("<comment>[dry-run]</comment> would purge: {$username}");
             }
             return 0;
+        }
+
+        // Blast-radius circuit breaker (deletion.max_per_run) — same rule
+        // the scheduled job enforces; --ignore-cap is the manual override.
+        if (!$this->input->getOption('ignore-cap') && $service->capTripped(count($lapsed))) {
+            $this->output->writeln('<error>Lapsed count exceeds deletion.max_per_run — nothing purged.</error>');
+            $this->output->writeln('Inspect with --dry-run, then re-run with --ignore-cap to proceed deliberately.');
+            return 1;
         }
 
         $failures = 0;

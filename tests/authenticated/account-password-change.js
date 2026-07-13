@@ -14,13 +14,18 @@
  */
 
 const { test, expect } = require('@playwright/test');
+const path = require('path');
 const { hasUserPassword } = require('../helpers/auth');
+const { discoverGravEnv } = require(path.join(__dirname, '..', '..', 'scripts', 'discover-grav-port.js'));
 const {
   createDisposableAccount,
   removeDisposableAccount,
   loginAs,
   logout,
 } = require('../helpers/self-service');
+
+const { port: PORT } = discoverGravEnv(path.resolve(__dirname, '..', '..'));
+const BASE = `http://127.0.0.1:${PORT}`;
 
 const NEW_PASSWORD = 'Zyxwvut9';
 
@@ -82,5 +87,54 @@ test.describe('account self-service: change password', () => {
     expect(await loginAs(page, { username: acct.username, password: acct.password })).toBe(false);
     // …new password accepted.
     expect(await loginAs(page, { username: acct.username, password: NEW_PASSWORD })).toBe(true);
+  });
+
+  test('a second device cannot re-auth with the OLD password after a change', async ({ page, browser }) => {
+    // Regression guard for the session-epoch read hazard: device B's
+    // session snapshot predates the password change made on device A —
+    // re-auth must verify against the on-disk hash, never the snapshot.
+    const xdAcct = createDisposableAccount({ tag: 'xd' });
+    const changed = 'Qwertyu7';
+    const ctxB = await browser.newContext({ baseURL: BASE });
+    try {
+      // Device B logs in FIRST (its session snapshot holds the old hash)
+      // and mints an email-change nonce while the form is rendered.
+      const pageB = await ctxB.newPage();
+      expect(await loginAs(pageB, xdAcct)).toBe(true);
+      await pageB.goto('/konto');
+      const nonceB = await pageB
+        .locator('#email form[action="/konto/request-email-change"] input[name="account-nonce"]')
+        .inputValue();
+
+      // Device A changes the password.
+      expect(await loginAs(page, xdAcct)).toBe(true);
+      await submitPasswordChange(page, { current: xdAcct.password, new1: changed, new2: changed });
+      await expect(page.locator('.bv-message--success')).toContainText('Din adgangskode er ændret');
+
+      // Device B: re-auth with the OLD password must be refused…
+      const oldResp = await pageB.request.post('/konto/request-email-change', {
+        maxRedirects: 0,
+        form: {
+          'account-nonce': nonceB,
+          new_email: `${xdAcct.username}-xd@example.invalid`,
+          current_password: xdAcct.password,
+        },
+      });
+      expect(oldResp.status()).toBe(403);
+
+      // …and with the NEW password accepted from the same stale session.
+      const newResp = await pageB.request.post('/konto/request-email-change', {
+        maxRedirects: 0,
+        form: {
+          'account-nonce': nonceB,
+          new_email: `${xdAcct.username}-xd@example.invalid`,
+          current_password: changed,
+        },
+      });
+      expect(newResp.status()).toBe(303);
+    } finally {
+      await ctxB.close();
+      removeDisposableAccount(xdAcct.username);
+    }
   });
 });

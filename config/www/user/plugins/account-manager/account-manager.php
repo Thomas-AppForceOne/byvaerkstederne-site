@@ -31,6 +31,7 @@
 
 namespace Grav\Plugin;
 
+use Grav\Common\File\CompiledYamlFile;
 use Grav\Common\Grav;
 use Grav\Common\Page\Interfaces\PageInterface;
 use Grav\Common\Plugin;
@@ -166,6 +167,11 @@ class AccountManagerPlugin extends Plugin
 
     public function onPageInitialized(): void
     {
+        // Request hygiene FIRST — before any dispatch decision, so every
+        // account read later in this request (ours or another plugin's)
+        // reflects the on-disk file, not the session's snapshot.
+        $this->freeStaleSessionAccountInstance();
+
         $method = $_SERVER['REQUEST_METHOD'] ?? '';
 
         // The email-change confirmation link (§4.3 #2) — the token is the
@@ -248,6 +254,38 @@ class AccountManagerPlugin extends Plugin
             case 'request-deletion':
                 $this->handleRequestDeletion($user);
                 break;
+        }
+    }
+
+    /**
+     * Session-epoch read repair. In an authenticated request, the static
+     * per-path CompiledYamlFile registry can hold the member's account file
+     * pre-populated with the SESSION's snapshot instead of disk content —
+     * observed as a backdated token expiry being served with its original
+     * value while file_get_contents() of the same path returned the fresh
+     * bytes. free() unregisters the poisoned instance, so every subsequent
+     * $grav['accounts']->load() in this request builds a fresh instance
+     * from disk. AccountStore::read() keeps its own free-and-reload as a
+     * second belt for its security checks.
+     *
+     * Deliberately avoids $grav['accounts']->load() itself (the source
+     * guard in tests/anonymous/account-access.js confines that call to
+     * AccountStore) and never lets hygiene break a request.
+     */
+    private function freeStaleSessionAccountInstance(): void
+    {
+        try {
+            $user = $this->grav['user'] ?? null;
+            $username = $user && $user->authenticated ? (string)$user->username : '';
+            if ($username === '') {
+                return;
+            }
+            $path = $this->grav['locator']->findResource('account://' . $username . YAML_EXT);
+            if (is_string($path)) {
+                CompiledYamlFile::instance($path)->free();
+            }
+        } catch (\Throwable $e) {
+            error_log('account-manager session-instance hygiene failed: ' . $e->getMessage());
         }
     }
 
@@ -596,6 +634,11 @@ class AccountManagerPlugin extends Plugin
             error_log('account-manager deletion-requested mail failed: ' . $e->getMessage());
         }
 
+        // The member was just PROMISED a hard-delete date; without a wired
+        // cron that promise is silently broken (retention past the stated
+        // date). Fail loud the moment the obligation becomes concrete.
+        $this->warnIfSchedulerUnwired($hardDeleteDate);
+
         // Terminate the session AND every remember-me token (§2.8). The
         // login plugin's own logout handler only cleans triplets when the
         // remember-me cookie authenticates, so the explicit clean comes
@@ -616,6 +659,37 @@ class AccountManagerPlugin extends Plugin
         );
         $this->grav->redirect('/', 303);
         exit; // @phpstan-ignore-line — redirect() exits; belt for static analysis
+    }
+
+    /**
+     * Deletion promises require the cron-driven scheduler. If its heartbeat
+     * (user/data/scheduler/last_run.txt, touched on every `bin/grav
+     * scheduler` tick) is missing or older than 26 h, the tier's cron is
+     * effectively unwired: log AND alert the admins — the one failure mode
+     * of the unflagged purge design that code can catch is "flag turned on
+     * without the operational wiring".
+     */
+    private function warnIfSchedulerUnwired(string $hardDeleteDate): void
+    {
+        try {
+            $dir = $this->grav['locator']->findResource('user-data://scheduler');
+            $heartbeat = is_string($dir) ? $dir . '/last_run.txt' : null;
+            if ($heartbeat !== null && is_file($heartbeat) && time() - (int)filemtime($heartbeat) < 26 * 3600) {
+                return; // scheduler ticked within the last cron day — wired
+            }
+            error_log(
+                'account-manager: a deletion was requested but the Grav scheduler has no recent heartbeat — '
+                . 'the promised hard delete will NOT run until cron is wired (deploy/SCHEDULER.md).'
+            );
+            $this->accountEmail()->sendOpsAlert(
+                'Sletteanmodning uden aktiv planlægger',
+                "Et medlem har anmodet om sletning af sin konto (lovet slettedato: {$hardDeleteDate}), "
+                . 'men Grav-planlæggeren har ikke kørt inden for det seneste døgn på denne server. '
+                . 'Sletningen sker IKKE, før cron-linjen er sat op — se deploy/SCHEDULER.md.'
+            );
+        } catch (\Throwable $e) {
+            error_log('account-manager scheduler-heartbeat warning failed: ' . $e->getMessage());
+        }
     }
 
     /**

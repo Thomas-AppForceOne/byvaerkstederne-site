@@ -18,6 +18,7 @@
  */
 
 const { test, expect, request: apiRequest } = require('@playwright/test');
+const fs = require('fs');
 const path = require('path');
 const { discoverGravEnv } = require(path.join(__dirname, '..', '..', 'scripts', 'discover-grav-port.js'));
 
@@ -83,6 +84,40 @@ test.describe('account self-service: anonymous access control', () => {
     } finally {
       await ctx.dispose();
     }
+  });
+
+  test.describe('source guard: fresh account reads', () => {
+    // The session-epoch read hazard: in authenticated requests, a bare
+    // $grav['accounts']->load() can serve the session's snapshot instead of
+    // the on-disk account. Security decisions must go through
+    // AccountStore.read() (which frees the shared file instance and
+    // reloads) — this guard keeps the bare call confined there.
+    test("bare $grav['accounts']->load() is confined to AccountStore", () => {
+      const pluginDir = path.resolve(
+        __dirname, '..', '..', 'config', 'www', 'user', 'plugins', 'account-manager',
+      );
+      const offenders = [];
+      const walk = (dir) => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          const full = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            walk(full);
+          } else if (entry.name.endsWith('.php') && entry.name !== 'AccountStore.php') {
+            // Comment lines may (and do) mention the call while explaining
+            // the rule — only executable lines count.
+            const code = fs.readFileSync(full, 'utf8')
+              .split('\n')
+              .filter((line) => !/^\s*(\*|\/\/|\/\*|#)/.test(line))
+              .join('\n');
+            if (code.includes("accounts']->load(")) {
+              offenders.push(path.relative(pluginDir, full));
+            }
+          }
+        }
+      };
+      walk(pluginDir);
+      expect(offenders).toEqual([]);
+    });
   });
 
   test.describe('flag off (public-demo profile)', () => {

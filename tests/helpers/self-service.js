@@ -16,6 +16,7 @@
  */
 
 const { execFileSync } = require('child_process');
+const fs = require('fs');
 const path = require('path');
 const { discoverGravEnv } = require(path.join(__dirname, '..', '..', 'scripts', 'discover-grav-port.js'));
 const { SIGNUP_USERNAME, removeSignupAccount } = require('./registration');
@@ -204,22 +205,62 @@ function setDeletionMarker(username, isoTimestamp) {
 
 /**
  * Run the §7 purge CLI inside the container. Returns stdout; throws on a
- * non-zero exit (which includes a failed zero-hits check).
+ * non-zero exit (failed zero-hits check or tripped per-run cap — the
+ * thrown error carries `.status` and `.stdout`).
  *
- * @param {{dryRun?: boolean}} [options]
+ * @param {{dryRun?: boolean, ignoreCap?: boolean}} [options]
  * @returns {string}
  */
-function runPurgeCli({ dryRun = false } = {}) {
+function runPurgeCli({ dryRun = false, ignoreCap = false } = {}) {
   const args = [
     'exec', '-u', 'abc', '-w', '/app/www/public', gravContainer(),
     'bin/plugin', 'account-manager', 'purge-deleted',
   ];
   if (dryRun) args.push('--dry-run');
+  if (ignoreCap) args.push('--ignore-cap');
   return execFileSync('docker', args, {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 120_000,
   });
+}
+
+/** Full Grav cache clear as `abc` (root-owned cache files 500 the site). */
+function clearGravCache() {
+  execFileSync(
+    'docker',
+    ['exec', '-u', 'abc', '-w', '/app/www/public', gravContainer(), 'bin/grav', 'clearcache'],
+    { stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 },
+  );
+}
+
+/**
+ * Flip a base-profile flag (config/www/user/config/features.yaml — what the
+ * 127.0.0.1 test origin resolves) to "false" + clear the cache. Returns a
+ * restore function; callers MUST invoke it in finally. Throws if the flag
+ * isn't currently "true", so a double flip can never persist.
+ *
+ * @param {string} flag
+ * @returns {() => void}
+ */
+function withBaseFlagOff(flag) {
+  if (!/^[a-z0-9_]+$/.test(flag)) {
+    throw new Error(`self-service: '${flag}' is not a flag identifier`);
+  }
+  const yamlPath = path.join(REPO_ROOT, 'config', 'www', 'user', 'config', 'features.yaml');
+  const original = fs.readFileSync(yamlPath, 'utf8');
+  const flipped = original.replace(new RegExp(`(\\n\\s*${flag}:\\s*)"true"`), '$1"false"');
+  if (flipped === original) {
+    throw new Error(`self-service: flag '${flag}' is not "true" in the base profile`);
+  }
+  fs.writeFileSync(yamlPath, flipped, 'utf8');
+  clearGravCache();
+  return () => {
+    try {
+      fs.writeFileSync(yamlPath, original, 'utf8');
+      clearGravCache();
+    } catch (_) { /* best-effort — global-teardown does not cover this file */ }
+  };
 }
 
 /**
@@ -337,6 +378,8 @@ module.exports = {
   setDeletionMarker,
   runPurgeCli,
   footprintGrep,
+  clearGravCache,
+  withBaseFlagOff,
   resetEmailChangeThrottle,
   loginAs,
   logout,

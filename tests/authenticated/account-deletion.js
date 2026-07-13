@@ -30,6 +30,8 @@ const {
   createDisposableAccount,
   removeDisposableAccount,
   readAccountYaml,
+  setDeletionMarker,
+  withBaseFlagOff,
   loginAs,
   rememberMeFileExists,
 } = require('../helpers/self-service');
@@ -123,6 +125,28 @@ test.describe('account self-service: deletion request + reinstatement', () => {
       await expect(page.locator('.bv-nav__user')).toBeVisible();
       expect(readAccountYaml(acct.username)).not.toContain('deletion_requested_at');
     } finally {
+      removeDisposableAccount(acct.username);
+    }
+  });
+
+  test('reinstatement still works with the flag OFF (unflagged by design)', async ({ page }) => {
+    // Load-bearing test for the design decision: gating the login hook on
+    // the flag would strand pending-deletion members while the purge still
+    // deletes them. A future "cleanup" that adds the flag check must fail
+    // here.
+    const acct = createDisposableAccount({ tag: 'df' });
+    const restoreFlag = withBaseFlagOff('account_self_service');
+    try {
+      // Marker inside the window (as if requested while the flag was on).
+      setDeletionMarker(acct.username, new Date().toISOString().replace(/\.\d+Z$/, 'Z'));
+
+      expect(await loginAs(page, acct)).toBe(true);
+      await expect(
+        page.locator('.bv-message--success', { hasText: 'genaktiveret' }),
+      ).toBeVisible();
+      expect(readAccountYaml(acct.username)).not.toContain('deletion_requested_at');
+    } finally {
+      restoreFlag();
       removeDisposableAccount(acct.username);
     }
   });
