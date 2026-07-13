@@ -24,7 +24,7 @@
 
         {# Pull from Flex Objects if available, fall back to page header. The
            canonical event-data shape (event.day, .month, .title, .badge,
-           .time, .description, .accent, .filter, .price, .cta, .capacity,
+           .time, .description, .accent, .filter, .event_type, .cta, .capacity,
            .featured) is what partials/event_card.html.twig consumes; build it
            here from whichever source has data. #}
         {% set flex = grav.get('flex_objects') %}{% set flex_dir = flex ? flex.directory('begivenheder') : null %}{% set flex_events = flex_dir ? flex_dir.collection : null %}
@@ -74,7 +74,7 @@
                         description: ev.description,
                         accent: _accent,
                         filter: _filter,
-                        price: ev.price,
+                        event_type: ev.event_type,
                         cta: _cta,
                         capacity: ev.capacity,
                         featured: ev.featured|default(false),
@@ -114,7 +114,7 @@
                     description: ev.description,
                     accent: _accent,
                     filter: _filter,
-                    price: ev.price,
+                    event_type: ev.event_type,
                     cta: _cta,
                     capacity: ev.capacity,
                     featured: ev.featured|default(false)

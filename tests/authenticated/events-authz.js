@@ -143,7 +143,7 @@ test.describe('Events — organizer forced browsing (per-object authz)', () => {
         'data[time_end]': '10:00', // ends before it starts
         'data[capacity_unlimited]': '0',
         'data[capacity_count]': 'mange', // must be a number
-        'data[price]': '1000 kr. kontant', // price is a closed choice
+        'data[event_type]': '1000 kr. kontant', // event_type is a closed choice
         'data[button_text]': 'Køb nu', // ignored — button_text is derived from the type
         'form-nonce': nonce,
       },
@@ -154,7 +154,7 @@ test.describe('Events — organizer forced browsing (per-object authz)', () => {
     // button_text is no longer validated (it is derived from the event type),
     // so it never appears in the field errors.
     expect(Object.keys(body.errors)).toEqual(
-      expect.arrayContaining(['title', 'group', 'event_date', 'time_end', 'capacity_count', 'price'])
+      expect.arrayContaining(['title', 'group', 'event_date', 'time_end', 'capacity_count', 'event_type'])
     );
     expect(Object.keys(body.errors)).not.toContain('button_text');
     expect(readEventsFile()).toBe(before);

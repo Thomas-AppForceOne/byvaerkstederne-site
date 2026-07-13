@@ -79,16 +79,16 @@ test.describe('Event create — inline card editor', () => {
     await expect(page.locator('#ee-button-text')).toHaveValue('Tilmeld');
 
     // Drop-in ⇒ Interesseret (locked) + unlimited capacity.
-    await page.locator('[data-ee-open="price"]').click();
-    await page.locator('.bv-ee-priceopt[data-price="Drop-in"]').click();
+    await page.locator('[data-ee-open="event-type"]').click();
+    await page.locator('.bv-ee-typeopt[data-event-type="Drop-in"]').click();
     await expect(cta).toHaveText('Interesseret');
     await expect(cta).toBeDisabled();
     await expect(page.locator('#ee-button-text')).toHaveValue('Interesseret');
     await expect(page.locator('#ee-cap-unlim')).toHaveValue('1');
 
     // Back to a non-Drop-in type ⇒ "Deltag" again (stored "Tilmeld").
-    await page.locator('[data-ee-open="price"]').click();
-    await page.locator('.bv-ee-priceopt[data-price="Gratis"]').click();
+    await page.locator('[data-ee-open="event-type"]').click();
+    await page.locator('.bv-ee-typeopt[data-event-type="Gratis"]').click();
     await expect(cta).toHaveText('Deltag');
     await expect(cta).toBeDisabled();
     await expect(page.locator('#ee-button-text')).toHaveValue('Tilmeld');
@@ -105,15 +105,15 @@ test.describe('Event create — inline card editor', () => {
 
     // Drop-in ⇒ forced unlimited, and the "Nej" option is locked out so a cap
     // can't be turned on.
-    await page.locator('[data-ee-open="price"]').click();
-    await page.locator('.bv-ee-priceopt[data-price="Drop-in"]').click();
+    await page.locator('[data-ee-open="event-type"]').click();
+    await page.locator('.bv-ee-typeopt[data-event-type="Drop-in"]').click();
     await expect(page.locator('#ee-cap-unlim')).toHaveValue('1');
     await expect(page.locator('#ee-cap-text')).toHaveText('Ubegrænset');
     await expect(nej).toBeDisabled();
 
     // Selecting any other type lifts the lock — "Nej" is selectable again.
-    await page.locator('[data-ee-open="price"]').click();
-    await page.locator('.bv-ee-priceopt[data-price="Brugerbetaling"]').click();
+    await page.locator('[data-ee-open="event-type"]').click();
+    await page.locator('.bv-ee-typeopt[data-event-type="Brugerbetaling"]').click();
     await expect(nej).toBeEnabled();
   });
 

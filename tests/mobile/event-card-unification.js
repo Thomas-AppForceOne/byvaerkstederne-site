@@ -425,7 +425,7 @@ test.describe('mobile-event-card-unification', () => {
 
   test('F3 all-empty — synthetic row with no meta fields renders NO .bv-event-row__meta element', async ({ page }) => {
     // The partial's outer guard
-    //   {% if event.price or (event.cta and event.cta.label and event.cta.href) or event.capacity %}
+    //   {% if event.event_type or (event.cta and event.cta.label and event.cta.href) or event.capacity %}
     // skips the entire meta <div> when no slot is present. Inject a
     // row with NO meta and assert .bv-event-row__meta count is 0.
     await page.goto(CALENDAR_ROUTE);

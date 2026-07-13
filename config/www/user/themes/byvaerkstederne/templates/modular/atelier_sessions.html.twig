@@ -29,7 +29,7 @@
                 {#
                    Meta-column rules per the source spec's atelier_sessions
                    mapping:
-                     - s.no_signup: true  →  price = 'Drop-in', NO cta, NO capacity.
+                     - s.no_signup: true  →  event_type = 'Drop-in', NO cta, NO capacity.
                        no_signup wins: if both no_signup AND contact_* are set,
                        the drop-in form takes precedence and the contact fields
                        are ignored.
@@ -39,17 +39,17 @@
                      - else: no meta slots.
                 #}
                 {% if s.no_signup %}
-                    {% set _price = 'Drop-in' %}
+                    {% set _type = 'Drop-in' %}
                     {% set _cta = null %}
                 {% elseif s.contact_name and s.contact_sms %}
-                    {% set _price = null %}
+                    {% set _type = null %}
                     {% set _cta = {
                         label: s.contact_name,
                         href: 'sms:+45' ~ (s.contact_sms|replace({' ': ''})),
                         variant: _page_accent
                     } %}
                 {% else %}
-                    {% set _price = null %}
+                    {% set _type = null %}
                     {% set _cta = null %}
                 {% endif %}
 
@@ -62,7 +62,7 @@
                     description: s.description,
                     accent: _page_accent,
                     filter: s.filter|default(h.filter|default(null)),
-                    price: _price,
+                    event_type: _type,
                     cta: _cta,
                     capacity: s.capacity|default(null),
                     featured: false

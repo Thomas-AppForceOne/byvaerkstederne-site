@@ -120,7 +120,7 @@ const DRAFT_EVENT_YAML = `${DRAFT_EVENT_ID}:
   event_time: '10:00 - 12:00'
   location: 'Makerspace lokalet'
   capacity: ''
-  price: ''
+  event_type: ''
   button_text: ''
   button_url: ''
   button_style: primary
@@ -144,7 +144,7 @@ const ARCHIVED_EVENT_YAML = `${ARCHIVED_EVENT_ID}:
   event_time: '10:00 - 12:00'
   location: 'Krea lokalet'
   capacity: ''
-  price: ''
+  event_type: ''
   button_text: ''
   button_url: ''
   button_style: secondary
@@ -168,7 +168,7 @@ const FOREIGN_EVENT_YAML = `${FOREIGN_EVENT_ID}:
   event_time: '10:00 - 12:00'
   location: 'Eventværkstedet'
   capacity: ''
-  price: ''
+  event_type: ''
   button_text: ''
   button_url: ''
   button_style: tertiary
@@ -196,7 +196,7 @@ const RSVP_EVENT_YAML = `${RSVP_EVENT_ID}:
   event_time: '10:00 - 12:00'
   location: 'Makerspace lokalet'
   capacity: ''
-  price: ''
+  event_type: ''
   button_text: 'Tilmeld'
   button_url: ''
   button_style: primary
@@ -221,7 +221,7 @@ const CAPACITY_EVENT_YAML = `${CAPACITY_EVENT_ID}:
   event_time: '10:00 - 12:00'
   location: 'Makerspace lokalet'
   capacity: '1'
-  price: ''
+  event_type: ''
   button_text: 'Tilmeld'
   button_url: ''
   button_style: primary
@@ -246,7 +246,7 @@ const INTEREST_EVENT_YAML = `${INTEREST_EVENT_ID}:
   event_time: '10:00 - 12:00'
   location: 'Krea lokalet'
   capacity: '1'
-  price: ''
+  event_type: ''
   button_text: 'Interesseret'
   button_url: ''
   button_style: tertiary

@@ -8,7 +8,7 @@
        badge, time, description             (optional body content)
        accent                               (visual; closed-set token)
        filter                               (behaviour; data-group filter ID)
-       price, cta { label, href, variant? } (optional meta slots)
+       event_type, cta { label, href, variant? } (optional meta slots)
        capacity, featured                   (optional)
 
    The accent value is validated against a closed set before being
@@ -94,10 +94,10 @@
       {% if event.description %}<p class="bv-event-row__desc">{{ event.description|e|regex_replace('/([\\w.%+-]+@[\\w.-]+\\.[A-Za-z]{2,})/', '<a href="mailto:$1">$1</a>')|raw }}</p>{% endif %}
     </div>
 
-    {% if _info or event.price or (event.cta and event.cta.label and event.cta.href) or event.capacity %}
+    {% if _info or event.event_type or (event.cta and event.cta.label and event.cta.href) or event.capacity %}
       <div class="bv-event-row__meta">
-        {% if event.price %}
-          <span class="bv-event-row__price">{{ event.price }}</span>
+        {% if event.event_type %}
+          <span class="bv-event-row__price">{{ event.event_type }}</span>
         {% endif %}
 
         {% if _info %}

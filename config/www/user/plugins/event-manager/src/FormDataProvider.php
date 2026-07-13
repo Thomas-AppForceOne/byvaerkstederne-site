@@ -35,16 +35,16 @@ final class FormDataProvider
     }
 
     /**
-     * Price choices for the form select — keys are the stored/displayed
-     * values (EventValidator::PRICE_OPTIONS is the single source).
+     * Event-type choices for the form select — keys are the stored/displayed
+     * values (EventValidator::EVENT_TYPE_OPTIONS is the single source).
      *
      * @return array<string,string>
      */
-    public static function priceOptions(): array
+    public static function eventTypeOptions(): array
     {
         $options = [];
-        foreach (EventValidator::PRICE_OPTIONS as $value) {
-            $options[$value] = $value === '' ? 'Ingen prisvisning' : $value;
+        foreach (EventValidator::EVENT_TYPE_OPTIONS as $value) {
+            $options[$value] = $value === '' ? 'Ingen visning' : $value;
         }
         return $options;
     }
@@ -186,10 +186,7 @@ final class FormDataProvider
             'timeEnd' => $timeEnd,
             'capacityUnlimited' => $capacityUnlimited,
             'capacityCount' => $capacityCount,
-            // The editor's view-model calls this the event *type* (Gratis /
-            // Brugerbetaling / Drop-in); it is still sourced from and persisted
-            // as the `price` field — only the client-facing state name differs.
-            'type' => $pick('price', 'price'),
+            'eventType' => $pick('event_type', 'event_type'),
             'buttonText' => $pick('button_text', 'button_text', 'Tilmeld'),
             'published' => $published,
             // The details textarea is prefilled from the sanitized stored HTML

@@ -50,7 +50,7 @@ form:
                 .capacity:
                   type: text
                   label: Kapacitet
-                .price:
+                .event_type:
                   type: text
                   label: Pris
                 .url:

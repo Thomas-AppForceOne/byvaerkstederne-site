@@ -112,10 +112,10 @@ form:
       label: Kapacitet
       help: "F.eks. '8 Pladser', 'Begrænset plads' eller tom for ubegrænset"
 
-    price:
+    event_type:
       type: text
-      label: Pris
-      help: "F.eks. '50 kr. voksne', 'Gratis entrè' eller tom"
+      label: Begivenhedstype
+      help: "Gratis, Brugerbetaling eller Drop-in (styrer kortets CTA). Ældre begivenheder kan have fri tekst."
 
     button_text:
       type: text

@@ -45,7 +45,7 @@
       <input type="hidden" name="data[location]" id="ee-location" value="{{ st.location|default('') }}">
       <input type="hidden" name="data[capacity_unlimited]" id="ee-cap-unlim" value="{{ st.capacityUnlimited ? '1' : '0' }}">
       <input type="hidden" name="data[capacity_count]" id="ee-cap-count" value="{{ st.capacityCount|default('') }}">
-      <input type="hidden" name="data[price]" id="ee-price" value="{{ st.type|default('') }}">
+      <input type="hidden" name="data[event_type]" id="ee-event-type" value="{{ st.eventType|default('') }}">
       <input type="hidden" name="data[button_text]" id="ee-button-text" value="{{ st.buttonText|default('Tilmeld') }}">
       <input type="hidden" name="data[published]" id="ee-published" value="{{ st.published ? '1' : '0' }}">
       {# Honeypot — humans never see it; a filled value is a bot (checked by handleCreate). #}
@@ -151,15 +151,15 @@
         {# META #}
         <div class="bv-event-row__meta bv-ee-meta">
 
-          {# price / event type #}
+          {# event type #}
           <div class="bv-ee-field">
-            <button type="button" class="bv-ee-metaval bv-ee-ghost" id="ee-price-val" data-ee-open="price" title="Vælg begivenhedstype">+ Begivenhedstype</button>
-            <div class="bv-ee-pop bv-ee-pop--right" data-ee-pop="price" hidden>
+            <button type="button" class="bv-ee-metaval bv-ee-ghost" id="ee-event-type-val" data-ee-open="event-type" title="Vælg begivenhedstype">+ Begivenhedstype</button>
+            <div class="bv-ee-pop bv-ee-pop--right" data-ee-pop="event-type" hidden>
               <span class="bv-ee-pop__label">Begivenhedstype</span>
               <div class="bv-ee-optlist">
-                <button type="button" class="bv-ee-opt bv-ee-priceopt" data-price="Gratis">Gratis</button>
-                <button type="button" class="bv-ee-opt bv-ee-priceopt" data-price="Brugerbetaling">Brugerbetaling</button>
-                <button type="button" class="bv-ee-opt bv-ee-priceopt" data-price="Drop-in">Drop-in</button>
+                <button type="button" class="bv-ee-opt bv-ee-typeopt" data-event-type="Gratis">Gratis</button>
+                <button type="button" class="bv-ee-opt bv-ee-typeopt" data-event-type="Brugerbetaling">Brugerbetaling</button>
+                <button type="button" class="bv-ee-opt bv-ee-typeopt" data-event-type="Drop-in">Drop-in</button>
               </div>
             </div>
           </div>
@@ -373,18 +373,16 @@
   document.querySelectorAll('.bv-ee-groupopt').forEach(function (o) {
     o.addEventListener('click', function () { state.group = o.getAttribute('data-group'); render(); closeAll(); });
   });
-  document.querySelectorAll('.bv-ee-priceopt').forEach(function (o) {
+  document.querySelectorAll('.bv-ee-typeopt').forEach(function (o) {
     o.addEventListener('click', function () {
-      // state.type = the event type (Gratis / Brugerbetaling / Drop-in). The DOM
-      // attribute and the persisted field are still named `price`; only the
-      // editor state uses the clearer `type`.
-      state.type = o.getAttribute('data-price');
+      // state.eventType = the event type (Gratis / Brugerbetaling / Drop-in).
+      state.eventType = o.getAttribute('data-event-type');
       render(); closeAll();   // render() enforces Drop-in ⇒ locked-unlimited capacity
     });
   });
   document.querySelectorAll('[data-unlim]').forEach(function (b) {
     b.addEventListener('click', function () {
-      if (state.type === 'Drop-in') { return; } // capacity is locked to unlimited for Drop-in
+      if (state.eventType === 'Drop-in') { return; } // capacity is locked to unlimited for Drop-in
       state.capacityUnlimited = b.getAttribute('data-unlim') === '1'; render();
     });
   });
@@ -420,15 +418,15 @@
     $('ee-loc-text').textContent = state.location || 'Vælg lokation';
     $('ee-loc-line').classList.toggle('bv-ee-line--ghost', !state.location);
 
-    var priceVal = $('ee-price-val');
-    priceVal.textContent = state.type === '' ? '+ Begivenhedstype' : state.type;
-    priceVal.classList.toggle('bv-ee-ghost', state.type === '');
+    var typeVal = $('ee-event-type-val');
+    typeVal.textContent = state.eventType === '' ? '+ Begivenhedstype' : state.eventType;
+    typeVal.classList.toggle('bv-ee-ghost', state.eventType === '');
 
     // The CTA follows the event type and is ALWAYS locked (not a free choice):
     // Drop-in ⇒ Interesseret, every other type ⇒ Tilmeld. The STORED value is
     // the mode word (button_text); the shown label mirrors the live card —
     // 'Deltag' for a Tilmeld event, 'Interesseret' for a Drop-in one.
-    var _dropin = state.type === 'Drop-in';
+    var _dropin = state.eventType === 'Drop-in';
     state.buttonText = _dropin ? 'Interesseret' : 'Tilmeld';
     $('ee-cta-field').hidden = false;
     var cta = $('ee-cta-val');
@@ -458,7 +456,7 @@
     if (capNej) { capNej.disabled = _dropin; }
     setActive('[data-published]', 'data-published', state.published ? '1' : '0');
     setActive('.bv-ee-groupopt', 'data-group', state.group);
-    setActive('.bv-ee-priceopt', 'data-price', state.type);
+    setActive('.bv-ee-typeopt', 'data-event-type', state.eventType);
 
     $('ee-group').value = state.group;
     $('ee-date').value = state.eventDate;
@@ -467,7 +465,7 @@
     $('ee-location').value = state.location;
     $('ee-cap-unlim').value = state.capacityUnlimited ? '1' : '0';
     $('ee-cap-count').value = state.capacityUnlimited ? '' : String(state.capacityCount).trim();
-    $('ee-price').value = state.type;
+    $('ee-event-type').value = state.eventType;
     $('ee-button-text').value = state.buttonText;
     $('ee-published').value = state.published ? '1' : '0';
 

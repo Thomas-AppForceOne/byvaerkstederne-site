@@ -4630,7 +4630,7 @@ button.bv-event-row__signup {
 .bv-ee-popinput--num { width: 96px; }
 .bv-ee-dateinput { width: 170px; }
 
-/* Option lists (group / price / cta). */
+/* Option lists (group / type / cta). */
 .bv-ee-optlist { display: flex; flex-direction: column; gap: 8px; }
 .bv-ee-opt {
     display: block; width: 100%; text-align: left; font-family: var(--font-headline); font-weight: 700;
@@ -4641,7 +4641,7 @@ button.bv-event-row__signup {
 .bv-ee-opt:hover { background: var(--surface-container-high); }
 .bv-ee-groupopt { border-left: 8px solid var(--opt-accent, var(--primary)); }
 .bv-ee-groupopt.is-active { background: var(--surface-container-high); }
-.bv-ee-priceopt.is-active, .bv-ee-ctaopt.is-active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.bv-ee-typeopt.is-active, .bv-ee-ctaopt.is-active { background: var(--primary); color: #fff; border-color: var(--primary); }
 
 /* Location chips. */
 .bv-ee-chips { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }

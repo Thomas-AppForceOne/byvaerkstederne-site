@@ -21,7 +21,7 @@ final class EventValidator
     public const FORM_FIELDS = [
         'published', 'title', 'description', 'details', 'group', 'event_date',
         'time_start', 'time_end', 'location', 'capacity_unlimited',
-        'capacity_count', 'price', 'button_text', 'featured', 'featured_tag',
+        'capacity_count', 'event_type', 'button_text', 'featured', 'featured_tag',
     ];
 
     /**
@@ -72,11 +72,12 @@ final class EventValidator
     ];
 
     /**
-     * Price is a closed choice, stored as the display text the card renders.
-     * '' = no price shown on the card. Legacy events keep their free-text
-     * prices until they are edited, at which point one of these is chosen.
+     * Event type is a closed choice, stored as the display text the card
+     * renders. '' = nothing shown on the card. Legacy events keep whatever
+     * free-text value they carried until edited, at which point one of these
+     * is chosen. (Stored field: event_type — historically named `price`.)
      */
-    public const PRICE_OPTIONS = ['', 'Gratis', 'Brugerbetaling', 'Drop-in'];
+    public const EVENT_TYPE_OPTIONS = ['', 'Gratis', 'Brugerbetaling', 'Drop-in'];
 
     /** Bounded lengths for free-text fields (defense against unbounded payloads). */
     private const MAX_LENGTHS = [
@@ -175,19 +176,19 @@ final class EventValidator
 
         $values['button_url'] = ''; // retired — the card button IS the signup action.
 
-        // price — closed set (select in the form; anything else is tampering).
-        $price = $this->str($data, 'price');
-        if (!in_array($price, self::PRICE_OPTIONS, true)) {
-            $errors['price'] = 'Ugyldig pris — vælg Gratis, Brugerbetaling eller Drop-in.';
+        // event type — closed set (select in the form; anything else is tampering).
+        $eventType = $this->str($data, 'event_type');
+        if (!in_array($eventType, self::EVENT_TYPE_OPTIONS, true)) {
+            $errors['event_type'] = 'Ugyldig begivenhedstype — vælg Gratis, Brugerbetaling eller Drop-in.';
         } else {
-            $values['price'] = $price;
+            $values['event_type'] = $eventType;
         }
 
         // button_text is NOT a free choice — it follows the event type and is
         // never client-settable: a Drop-in event is always "Interesseret"
         // (uforpligtende, no fixed signup), every other type is always
         // "Tilmeld". Any submitted button_text is ignored.
-        $values['button_text'] = (($values['price'] ?? '') === 'Drop-in') ? 'Interesseret' : 'Tilmeld';
+        $values['button_text'] = (($values['event_type'] ?? '') === 'Drop-in') ? 'Interesseret' : 'Tilmeld';
 
         // A Drop-in event never carries a capacity cap — it is uforpligtende, so
         // "unlimited" is not a choice but a rule. The editor locks the capacity
@@ -195,7 +196,7 @@ final class EventValidator
         // tampered POST (capacity_unlimited=0 + a count) cannot slip a cap
         // through, and drop any capacity_count error that stale/limited input
         // would otherwise raise.
-        if (($values['price'] ?? '') === 'Drop-in') {
+        if (($values['event_type'] ?? '') === 'Drop-in') {
             $values['capacity'] = '';
             unset($errors['capacity_count']);
         }

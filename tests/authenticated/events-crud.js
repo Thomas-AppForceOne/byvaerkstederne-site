@@ -64,7 +64,7 @@ async function createEvent(page, { title, published }) {
       'data[event_date]': '2030-06-01',
       'data[time_start]': '10:00',
       'data[time_end]': '12:00',
-      'data[price]': 'Gratis',
+      'data[event_type]': 'Gratis',
       'data[published]': published,
       'form-nonce': nonce,
     },
@@ -110,7 +110,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     // cannot choose them.
     expect(block).toContain('button_style: secondary');
     expect(block).toContain("badge: 'Makerspace & Reparation'");
-    expect(block).toContain('price: Gratis');
+    expect(block).toContain('event_type: Gratis');
     // The two native time inputs compose the stored card string.
     expect(block).toContain("event_time: '10:00 - 12:00'");
 
@@ -377,7 +377,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
       form: {
         'data[key]': k1, 'data[title]': t1, 'data[group]': 'makerspace',
         'data[event_date]': '2030-06-01', 'data[time_start]': '10:00', 'data[time_end]': '12:00',
-        'data[price]': 'Drop-in', 'data[button_text]': 'Tilmeld',
+        'data[event_type]': 'Drop-in', 'data[button_text]': 'Tilmeld',
         'data[capacity_unlimited]': '1', 'data[published]': '1', 'form-nonce': n1,
       },
       maxRedirects: 0,
@@ -395,7 +395,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
       form: {
         'data[key]': k2, 'data[title]': t2, 'data[group]': 'makerspace',
         'data[event_date]': '2030-06-01', 'data[time_start]': '10:00', 'data[time_end]': '12:00',
-        'data[price]': 'Gratis', 'data[button_text]': 'Interesseret',
+        'data[event_type]': 'Gratis', 'data[button_text]': 'Interesseret',
         'data[capacity_unlimited]': '1', 'data[published]': '1', 'form-nonce': n2,
       },
       maxRedirects: 0,
@@ -415,7 +415,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
       form: {
         'data[key]': k, 'data[title]': t, 'data[group]': 'makerspace',
         'data[event_date]': '2030-06-01', 'data[time_start]': '10:00', 'data[time_end]': '12:00',
-        'data[price]': 'Drop-in',
+        'data[event_type]': 'Drop-in',
         // Tampered: try to force a bounded capacity onto a Drop-in event.
         'data[capacity_unlimited]': '0', 'data[capacity_count]': '20',
         'data[published]': '1', 'form-nonce': n,

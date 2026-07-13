@@ -8,7 +8,7 @@ event001:
   event_time: "18:00 — 20:00"
   location: "Nørregade 21, Hundested"
   capacity: ""
-  price: "Drop-in"
+  event_type: "Drop-in"
   button_text: "Se Makerspace"
   button_url: "/vaerksteder/makerspace"
   button_style: secondary
@@ -24,7 +24,7 @@ event002:
   event_time: "18:00 — 20:00"
   location: "Nørregade 21, Hundested"
   capacity: ""
-  price: "Drop-in"
+  event_type: "Drop-in"
   button_text: "Se Makerspace"
   button_url: "/vaerksteder/makerspace"
   button_style: secondary
@@ -40,7 +40,7 @@ event003:
   event_time: "18:00 — 20:00"
   location: "Nørregade 21, Hundested"
   capacity: ""
-  price: "Drop-in"
+  event_type: "Drop-in"
   button_text: "Se Makerspace"
   button_url: "/vaerksteder/makerspace"
   button_style: secondary
@@ -56,7 +56,7 @@ event004:
   event_time: "15:00 — 17:00"
   location: "Nørregade 21, Hundested"
   capacity: ""
-  price: "Brugerbetaling"
+  event_type: "Brugerbetaling"
   button_text: "Se billedkunst"
   button_url: "/vaerksteder/krea-cafe/billedkunst"
   button_style: tertiary
@@ -72,7 +72,7 @@ event005:
   event_time: "11:00 — 13:00"
   location: "Nørregade 21, Hundested"
   capacity: "Max 3 rammer"
-  price: "Brugerbetaling"
+  event_type: "Brugerbetaling"
   button_text: "Se billedkunst"
   button_url: "/vaerksteder/krea-cafe/billedkunst"
   button_style: tertiary
@@ -88,7 +88,7 @@ event006:
   event_time: "18:00 — 20:00"
   location: "Nørregade 21, Hundested"
   capacity: ""
-  price: "Drop-in"
+  event_type: "Drop-in"
   button_text: "Se syværkstedet"
   button_url: "/vaerksteder/krea-cafe/syvaerkstedet"
   button_style: tertiary
@@ -104,7 +104,7 @@ event007:
   event_time: "11:00 — 14:00"
   location: "Nørregade 21, Hundested"
   capacity: ""
-  price: "Brugerbetaling"
+  event_type: "Brugerbetaling"
   button_text: "SMS Bitten 22 39 54 80"
   button_url: "sms:+4522395480"
   button_style: tertiary
@@ -120,7 +120,7 @@ event008:
   event_time: "18:00 — 21:30"
   location: "Nørregade 21, Hundested"
   capacity: ""
-  price: "Brugerbetaling"
+  event_type: "Brugerbetaling"
   button_text: "SMS Birgit 30 13 42 33"
   button_url: "sms:+4530134233"
   button_style: tertiary
@@ -136,7 +136,7 @@ event009:
   event_time: "13:00 — 18:00"
   location: "Nørregade 21, Hundested"
   capacity: ""
-  price: "Brugerbetaling"
+  event_type: "Brugerbetaling"
   button_text: "SMS Birgit 30 13 42 33"
   button_url: "sms:+4530134233"
   button_style: tertiary
@@ -152,7 +152,7 @@ event010:
   event_time: "19:00 — 20:30"
   location: "Nørregade 21, Hundested"
   capacity: ""
-  price: "Gratis"
+  event_type: "Gratis"
   button_text: "Se Eventværkstedet"
   button_url: "/vaerksteder/eventvaerkstedet"
   button_style: primary
@@ -168,7 +168,7 @@ event011:
   event_time: "19:00 — 20:30"
   location: "Nørregade 21, Hundested"
   capacity: ""
-  price: "Gratis"
+  event_type: "Gratis"
   button_text: "Se Eventværkstedet"
   button_url: "/vaerksteder/eventvaerkstedet"
   button_style: primary
@@ -184,7 +184,7 @@ event012:
   event_time: "19:00 — 20:30"
   location: "Nørregade 21, Hundested"
   capacity: ""
-  price: "Gratis"
+  event_type: "Gratis"
   button_text: "Skriv om optræden"
   button_url: "mailto:byvaerkstederne@halsnaes.dk"
   button_style: primary
@@ -200,7 +200,7 @@ event013:
   event_time: "Fredag 17 - 20"
   location: "Nørregade 21, Hundested"
   capacity: ""
-  price: "Brugerbetaling"
+  event_type: "Brugerbetaling"
   button_text: "Se billedkunst"
   button_url: "/vaerksteder/krea-cafe/billedkunst"
   button_style: tertiary
@@ -216,7 +216,7 @@ event014:
   event_time: "Torsdag 17 - 20"
   location: "Nørregade 21, Hundested"
   capacity: ""
-  price: "Brugerbetaling"
+  event_type: "Brugerbetaling"
   button_text: "Se billedkunst"
   button_url: "/vaerksteder/krea-cafe/billedkunst"
   button_style: tertiary
@@ -232,7 +232,7 @@ event015:
   event_time: "Torsdag 17 - 20"
   location: "Nørregade 21, Hundested"
   capacity: ""
-  price: "Brugerbetaling"
+  event_type: "Brugerbetaling"
   button_text: "Se billedkunst"
   button_url: "/vaerksteder/krea-cafe/billedkunst"
   button_style: tertiary
@@ -248,7 +248,7 @@ event016:
   event_time: "Torsdag 17 - 20"
   location: "Nørregade 21, Hundested"
   capacity: ""
-  price: "Brugerbetaling"
+  event_type: "Brugerbetaling"
   button_text: "Se billedkunst"
   button_url: "/vaerksteder/krea-cafe/billedkunst"
   button_style: tertiary
