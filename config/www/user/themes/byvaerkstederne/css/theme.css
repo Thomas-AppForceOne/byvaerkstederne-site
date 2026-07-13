@@ -1100,6 +1100,10 @@ a { color: inherit; text-decoration: none; }
 .bv-filter-btn--secondary.is-active { background: var(--secondary); border-color: var(--secondary); }
 .bv-filter-btn--tertiary.is-active { background: var(--tertiary); border-color: var(--tertiary); }
 .bv-filter-btn--kulturhus.is-active { background: var(--kulturhus); border-color: var(--kulturhus); }
+/* "Alle aktiviteter" is not a workshop — give it a neutral slate so it reads as
+   distinct from Grønt BYværksted (which owns --primary/green). Must sit after
+   the generic .bv-filter-btn.is-active rule to win the same-specificity fill. */
+.bv-filter-btn--all.is-active { background: var(--on-surface-variant); border-color: var(--on-surface-variant); }
 
 .bv-filter-dot {
     width: 0.5rem;
@@ -1110,6 +1114,7 @@ a { color: inherit; text-decoration: none; }
 .bv-filter-dot--secondary { background: var(--secondary); }
 .bv-filter-dot--tertiary { background: var(--tertiary); }
 .bv-filter-dot--kulturhus { background: var(--kulturhus); }
+.bv-filter-dot--all { background: var(--on-surface-variant); }
 
 /* Event list — v2 handoff canonical layout. The <ul> wrapper is just a
    semantic container for the .bv-event-item entries; reset its default

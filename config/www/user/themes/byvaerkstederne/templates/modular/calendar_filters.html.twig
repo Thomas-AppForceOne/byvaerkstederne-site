@@ -3,8 +3,8 @@
     <div class="bv-container">
         <div class="bv-filters">
             <span class="bv-label" style="margin-right: var(--space-4);">Filtr&eacute;r efter:</span>
-            <button class="bv-filter-btn is-active" data-filter="all">
-                <span class="bv-filter-dot bv-filter-dot--primary"></span>
+            <button class="bv-filter-btn bv-filter-btn--all is-active" data-filter="all">
+                <span class="bv-filter-dot bv-filter-dot--all"></span>
                 Alle aktiviteter
             </button>
             {% for filter in h.filters|default([
