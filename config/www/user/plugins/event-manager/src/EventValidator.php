@@ -72,12 +72,14 @@ final class EventValidator
     ];
 
     /**
-     * Event type is a closed choice, stored as the display text the card
-     * renders. '' = nothing shown on the card. Legacy events keep whatever
-     * free-text value they carried until edited, at which point one of these
-     * is chosen. (Stored field: event_type — historically named `price`.)
+     * Event type is a REQUIRED closed choice — stored as the display text the
+     * card renders and the source the CTA is derived from. One of these must be
+     * chosen; an empty value is rejected as a missing required field. Legacy
+     * events keep whatever free-text value they carried until edited, at which
+     * point one of these must be chosen. (Stored field: event_type —
+     * historically named `price`.)
      */
-    public const EVENT_TYPE_OPTIONS = ['', 'Gratis', 'Brugerbetaling', 'Drop-in'];
+    public const EVENT_TYPE_OPTIONS = ['Gratis', 'Brugerbetaling', 'Drop-in'];
 
     /** Bounded lengths for free-text fields (defense against unbounded payloads). */
     private const MAX_LENGTHS = [
@@ -176,10 +178,13 @@ final class EventValidator
 
         $values['button_url'] = ''; // retired — the card button IS the signup action.
 
-        // event type — closed set (select in the form; anything else is tampering).
+        // event type — REQUIRED closed set (select in the form). Empty is a
+        // missing required field; a non-empty value outside the set is tampering.
         $eventType = $this->str($data, 'event_type');
-        if (!in_array($eventType, self::EVENT_TYPE_OPTIONS, true)) {
-            $errors['event_type'] = 'Ugyldig begivenhedstype — vælg Gratis, Brugerbetaling eller Drop-in.';
+        if ($eventType === '') {
+            $errors['event_type'] = 'Vælg en begivenhedstype: Gratis, Brugerbetaling eller Drop-in.';
+        } elseif (!in_array($eventType, self::EVENT_TYPE_OPTIONS, true)) {
+            $errors['event_type'] = 'Ugyldig begivenhedstype.';
         } else {
             $values['event_type'] = $eventType;
         }

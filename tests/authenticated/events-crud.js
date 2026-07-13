@@ -205,6 +205,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
         'data[event_date]': '2030-06-01',
         'data[time_start]': '10:00',
         'data[time_end]': '12:00',
+        'data[event_type]': 'Gratis',
         'data[published]': '0',
         'form-nonce': nonce,
       },
@@ -318,6 +319,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
       form: {
         'data[key]': key, 'data[title]': title, 'data[group]': 'makerspace',
         'data[event_date]': '2030-06-02', 'data[time_start]': '10:00', 'data[time_end]': '12:00',
+        'data[event_type]': 'Gratis',
         'data[published]': '1', 'form-nonce': enonce,
       },
       maxRedirects: 0,
@@ -338,6 +340,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
       form: {
         'data[key]': key, 'data[title]': title, 'data[group]': 'makerspace',
         'data[event_date]': '2020-01-01', 'data[time_start]': '10:00', 'data[time_end]': '12:00',
+        'data[event_type]': 'Gratis',
         'data[published]': '1', 'form-nonce': nonce,
       },
       headers: { Accept: 'application/json' },
@@ -356,6 +359,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
       form: {
         'data[key]': key2, 'data[title]': `${title} ok`, 'data[group]': 'makerspace',
         'data[event_date]': '2020-01-01', 'data[time_start]': '10:00', 'data[time_end]': '12:00',
+        'data[event_type]': 'Gratis',
         'data[published]': '1', 'form-nonce': enonce,
       },
       headers: { Accept: 'application/json' },
@@ -429,6 +433,28 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     expect(block).toMatch(/button_text:\s*'?Interesseret'?/);   // recognised as Drop-in
     expect(block).not.toMatch(/capacity:\s*['"]?20['"]?/);      // the submitted 20 never stuck
     expect(block).toMatch(/capacity:\s*(''|"")/);               // stored unlimited (empty)
+  });
+
+  test('event_type is required: an empty type is rejected 400 and no object is written', async ({ page }) => {
+    await loginAsOrganizer(page);
+    await page.goto('/begivenheder/opret');
+    const before = readEventsFile();
+    const key = await page.locator('[name="data[key]"]').inputValue();
+    const nonce = await getFormNonce(page);
+    const r = await page.request.post('/begivenheder/opret', {
+      form: {
+        'data[key]': key, 'data[title]': `PW ingen type ${Date.now()}`, 'data[group]': 'makerspace',
+        'data[event_date]': '2030-06-01', 'data[time_start]': '10:00', 'data[time_end]': '12:00',
+        'data[event_type]': '',           // <- the whole point: no type chosen
+        'data[capacity_unlimited]': '1', 'data[published]': '1', 'form-nonce': nonce,
+      },
+      maxRedirects: 0,
+    });
+    expect(r.status()).toBe(400);
+    const body = await r.json();
+    expect(Object.keys(body.errors)).toContain('event_type');
+    // Nothing persisted — the store is byte-identical.
+    expect(readEventsFile()).toBe(before);
   });
 
   test('super: sees all events in the dashboard and can hard-delete permanently', async ({ page, browser }) => {

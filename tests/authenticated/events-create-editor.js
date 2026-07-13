@@ -54,6 +54,10 @@ test.describe('Event create — inline card editor', () => {
     await page.locator('#ee-backdrop').click();
     await expect(page.locator('#ee-cap-text')).toHaveText('8');
 
+    // event type — required; pick one before Gem can enable
+    await page.locator('[data-ee-open="event-type"]').click();
+    await page.locator('.bv-ee-typeopt[data-event-type="Gratis"]').click();
+
     // publish
     await page.locator('[data-published="1"]').click();
     await expect(save).toBeEnabled();
@@ -125,5 +129,38 @@ test.describe('Event create — inline card editor', () => {
     await expect(save).toBeDisabled();
     await expect(save).toHaveAttribute('title', /Mangler:/);
     await expect(save).toHaveAttribute('title', /Værksted/);
+    // Begivenhedstype is required too — it must be named among the missing fields.
+    await expect(save).toHaveAttribute('title', /Begivenhedstype/);
+  });
+
+  test('Gem enables only once a begivenhedstype is chosen (type is required)', async ({ page }) => {
+    await loginAsOrganizer(page);
+    await page.goto('/begivenheder/opret');
+    const save = page.locator('#ee-save');
+
+    // Fill everything required EXCEPT the type.
+    await page.locator('#ee-title').fill('Type-krav test');
+    await page.locator('#ee-badge').click();
+    await page.locator('.bv-ee-groupopt[data-group="makerspace"]').click();
+    await page.locator('[data-ee-open="date"]').click();
+    await page.locator('#ee-date-input').fill('2030-08-15');
+    await page.locator('#ee-backdrop').click();
+    await page.locator('[data-ee-open="time"]').click();
+    await page.locator('#ee-ts-input').fill('10:00');
+    await page.locator('#ee-te-input').fill('12:00');
+    await page.locator('#ee-te-input').blur();
+    await page.locator('#ee-backdrop').click();
+    await page.locator('[data-ee-open="capacity"]').click();
+    await page.locator('#ee-cap-input').fill('8');
+    await page.locator('#ee-backdrop').click();
+
+    // Still blocked purely on the missing type.
+    await expect(save).toBeDisabled();
+    await expect(save).toHaveAttribute('title', /Begivenhedstype/);
+
+    // Choosing a type is the last thing needed → Gem enables.
+    await page.locator('[data-ee-open="event-type"]').click();
+    await page.locator('.bv-ee-typeopt[data-event-type="Drop-in"]').click();
+    await expect(save).toBeEnabled();
   });
 });

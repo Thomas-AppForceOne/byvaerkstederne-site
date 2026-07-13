@@ -472,6 +472,7 @@
     var missing = [];
     if (!state.title || state.title.trim() === '') { missing.push('Titel'); }
     if (!state.group) { missing.push('Værksted'); }
+    if (!state.eventType) { missing.push('Begivenhedstype'); }
     if (!m) { missing.push('Dato'); }
     else if (minDate && state.eventDate < minDate) { missing.push('Dato kan ikke være i fortiden'); }
     if (!state.timeStart || !state.timeEnd) { missing.push('Tidspunkt'); }
