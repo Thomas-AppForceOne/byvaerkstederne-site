@@ -120,19 +120,19 @@ test.describe('account self-service: anonymous access control', () => {
     });
   });
 
-  test.describe('flag off (staging profile)', () => {
-    // The flag-off fixture is the STAGING profile (explicit all-"false"):
-    // the test tier now carries a reviewed account_self_service exception
-    // (its features.yaml governance block), so it no longer represents
-    // "flag off" for this feature. The test-tier state itself is pinned in
-    // the dedicated test below this describe.
+  test.describe('flag off (fixture profile)', () => {
+    // The flag-off fixture is the dedicated `flags-off.invalid` profile
+    // (env/flags-off.invalid — never deployed, always all-off). Tier
+    // profiles (test/staging) are OPERATIONAL state: flags there may be
+    // flipped at any time to preview unreleased features, so no test may
+    // assume anything about them.
     /** @type {import('@playwright/test').APIRequestContext} */
     let ctx;
 
     test.beforeAll(async () => {
       ctx = await apiRequest.newContext({
         baseURL: BASE,
-        extraHTTPHeaders: { Host: 'staging.hackersbychoice.dk' },
+        extraHTTPHeaders: { Host: 'flags-off.invalid' },
       });
     });
 
@@ -178,24 +178,4 @@ test.describe('account self-service: anonymous access control', () => {
     }
   });
 
-  test.describe('test tier (reviewed account_self_service exception)', () => {
-    // Pins the test tier's reviewed-exception state (its features.yaml
-    // governance block): the flag is ON there for super sign-off, so
-    // anonymous /konto behaves like the internal profile — login redirect,
-    // never a 404, never a content leak.
-    test('anonymous GET /konto redirects to login under the test-tier profile', async () => {
-      const ctx = await apiRequest.newContext({
-        baseURL: BASE,
-        extraHTTPHeaders: { Host: 'test.hackersbychoice.dk' },
-      });
-      try {
-        const resp = await ctx.get('/konto', { maxRedirects: 0 });
-        expect(resp.status()).toBe(302);
-        expect(resp.headers()['location'] || '').toContain('/login');
-        assertNoLeak(await resp.text(), 'GET /konto (test tier)');
-      } finally {
-        await ctx.dispose();
-      }
-    });
-  });
 });

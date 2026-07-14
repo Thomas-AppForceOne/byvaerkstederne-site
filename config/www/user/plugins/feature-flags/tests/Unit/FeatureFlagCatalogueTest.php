@@ -6,13 +6,14 @@
  *
  *   1. Every flag named in the rollout catalogue is a declared FeatureFlag
  *      enum case.
- *   2. The `staging.hackersbychoice.dk` profile's features.yaml resolves to N/N
- *      catalogue flags enabled; the `test.hackersbychoice.dk` profile's
- *      features.yaml resolves to 0/N catalogue flags enabled EXCEPT the
- *      reviewed exceptions in TEST_TIER_ENABLED_EXCEPTIONS (where N is
- *      count(self::CATALOGUE) — the count is no longer a stable 17 after
- *      post-Sprint-1 additions like privacy_policy and placeholder-CTA
- *      gates).
+ *   2. The `dev.hackersbychoice.dk` profile enables every catalogue flag
+ *      (the all-on tier; also catches "new enum case forgot the dev
+ *      profile line"). The other tier profiles (test/staging/prod) are
+ *      OPERATIONAL state — flags there are flipped to preview unreleased
+ *      or temporary features and are deliberately NOT pinned by tests;
+ *      only their payload SHAPE (declared flags, strict strings, no
+ *      secrets) is enforced. The always-off profile the browser suites
+ *      rely on is the dedicated `flags-off.invalid` fixture.
  *   3. The strict-string `"true"`/`"false"` rule still holds for the newly
  *      added flags (typos fail closed with a warning), and a missing
  *      features.yaml does not crash — it just resolves everything false
@@ -64,16 +65,6 @@ final class FeatureFlagCatalogueTest extends TestCase
         'social_media_links',
         'makerspace_meeting_link',
         'event_management',
-        'account_self_service',
-    ];
-
-    /**
-     * Reviewed exceptions to the test tier's all-off rule (the profile
-     * file's "Reviewed exceptions" section is the human-facing half of
-     * this list). Every flag NOT listed here must stay off and
-     * unconfigured on test.hackersbychoice.dk.
-     */
-    private const TEST_TIER_ENABLED_EXCEPTIONS = [
         'account_self_service',
     ];
 
@@ -153,10 +144,12 @@ final class FeatureFlagCatalogueTest extends TestCase
 
     public function testDevProfileEnablesAllCatalogueFlags(): void
     {
-        // dev is the SOLE all-on tier (the "internal" profile). test, staging
-        // and prod are always all-off — see the disables-all tests below. An
-        // earlier version of this test read the staging tier and asserted
-        // all-on, which is backwards: staging ships every flag "false".
+        // dev is the all-on tier (the "internal" profile) — this test also
+        // catches "new enum case forgot its dev profile line". The other
+        // tier profiles (test/staging/prod) are operational state and are
+        // deliberately NOT pinned: flags there flip to preview unreleased
+        // features without code changes. Only their payload shape is
+        // enforced (the metadata-only tests below).
         $enabled = self::loadProfileYaml('dev.hackersbychoice.dk');
         $this->assertIsArray($enabled, 'dev.hackersbychoice.dk features.yaml must parse to an array.');
 
@@ -184,77 +177,32 @@ final class FeatureFlagCatalogueTest extends TestCase
         );
     }
 
-    public function testStagingAndProdProfilesDisableAllCatalogueFlags(): void
+    /**
+     * The all-off FIXTURE profile the browser suites rely on must actually
+     * be all-off — this is the only profile with a pinned flag state
+     * besides dev, and it is never deployed.
+     */
+    public function testFlagsOffFixtureProfileDisablesEverything(): void
     {
-        // Policy: test, staging and prod are ALWAYS all-off. staging and prod
-        // spell this out with explicit `"false"` values (each flag is
-        // configured-but-disabled); the public-demo/test tier uses an empty
-        // map, covered by testPublicDemoProfileDisablesAllCatalogueFlags.
-        foreach (['staging.hackersbychoice.dk', 'www.byvaerkstederne.dk'] as $host) {
-            $enabled = self::loadProfileYaml($host);
-            $this->assertIsArray($enabled, "{$host} features.yaml must parse to an array.");
-
-            $logger = new ArrayLogger();
-            $store = new FlagStore($enabled, $logger, $host);
-
-            foreach (self::CATALOGUE as $flagValue) {
-                $case = FeatureFlag::from($flagValue);
-                $this->assertFalse(
-                    $store->isEnabled($case),
-                    "{$host} must disable `{$flagValue}` (non-dev tiers are always off)."
-                );
-            }
-
-            $this->assertSame(
-                [],
-                $logger->warnings(),
-                "{$host} profile must load cleanly with zero FlagStore warnings."
-            );
-        }
-    }
-
-    public function testPublicDemoProfileDisablesAllButReviewedExceptions(): void
-    {
-        $enabled = self::loadProfileYaml('test.hackersbychoice.dk');
-        // The enabled map may carry ONLY the reviewed exceptions — every
-        // other key would silently flip a surface on for the test tier.
-        $keys = is_array($enabled) ? array_keys($enabled) : [];
-        $this->assertSame(
-            self::TEST_TIER_ENABLED_EXCEPTIONS,
-            $keys,
-            'test.hackersbychoice.dk features.yaml must declare exactly the reviewed exceptions.'
+        $enabled = self::loadProfileYaml('flags-off.invalid');
+        $this->assertTrue(
+            $enabled === null || $enabled === [],
+            'flags-off.invalid features.yaml must declare an empty enabled map — its entire purpose.'
         );
 
         $logger = new ArrayLogger();
-        $store = new FlagStore($enabled, $logger, 'test.hackersbychoice.dk');
+        $store = new FlagStore($enabled, $logger, 'flags-off.invalid');
 
         foreach (self::CATALOGUE as $flagValue) {
             $case = FeatureFlag::from($flagValue);
-            if (in_array($flagValue, self::TEST_TIER_ENABLED_EXCEPTIONS, true)) {
-                $this->assertTrue(
-                    $store->isEnabled($case),
-                    "Test-tier reviewed exception `{$flagValue}` must be enabled."
-                );
-                continue;
-            }
-            $this->assertFalse(
-                $store->isEnabled($case),
-                "Public-demo profile must disable `{$flagValue}` (all-off rule, reviewed exceptions aside)."
-            );
-            $this->assertFalse(
-                $store->isConfigured($case),
-                "Public-demo profile must leave `{$flagValue}` unconfigured (missing-key rule)."
-            );
+            $this->assertFalse($store->isEnabled($case));
+            $this->assertFalse($store->isConfigured($case));
         }
 
-        $this->assertSame(
-            [],
-            $logger->warnings(),
-            'The test-tier enabled map must load cleanly with zero warnings.'
-        );
+        $this->assertSame([], $logger->warnings(), 'Empty enabled map must not warn.');
     }
 
-    public function testPublicDemoYamlPayloadIsFlagMetadataOnly(): void
+    public function testTestTierYamlPayloadIsFlagMetadataOnly(): void
     {
         $this->assertFlagPayloadIsMetadataOnly('test.hackersbychoice.dk');
     }
@@ -262,6 +210,11 @@ final class FeatureFlagCatalogueTest extends TestCase
     public function testStagingYamlPayloadIsFlagMetadataOnly(): void
     {
         $this->assertFlagPayloadIsMetadataOnly('staging.hackersbychoice.dk');
+    }
+
+    public function testProdYamlPayloadIsFlagMetadataOnly(): void
+    {
+        $this->assertFlagPayloadIsMetadataOnly('www.byvaerkstederne.dk');
     }
 
     /**

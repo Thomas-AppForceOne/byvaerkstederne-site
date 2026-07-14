@@ -296,6 +296,35 @@ fi
 # blessing so the FAIL stand-ins below mutate a CURRENTLY-valid baseline.
 regen_good_bless
 
+# WARN (non-fatal): a "true" flag in prod features.yaml must produce the
+# flags-on warning, listing the flag, WITHOUT failing the gate. Git file
+# and live stand-in move in lockstep so the drift check stays green; both
+# are restored (and the blessing regenerated) before the FAIL cases below.
+TIER_FLAGWARN="$TMP/tier-flagwarn"; mkdir -p "$TIER_FLAGWARN"; make_tier "$TIER_FLAGWARN"
+printf 'features:\n  prod_flag: "true"\n' > "$WR_PROD_FEATURES"
+PROD_LIVE_TRUE="$TMP/prod-live-true.yaml"
+cp "$WR_PROD_FEATURES" "$PROD_LIVE_TRUE"
+regen_good_bless
+set +e
+out="$(PROMOTE_PROD_LOCAL_TIER_DIR="$TIER_FLAGWARN" \
+    PROMOTE_PROD_LOCAL_BLESSING_FILE="$GOOD_BLESS" \
+    PROMOTE_PROD_LOCAL_PROD_FEATURES="$PROD_LIVE_TRUE" \
+    PROMOTE_PROD_LOG_FILE="$TMP/jrnl-flagwarn.jsonl" \
+    "$PROMOTE_WR" --reason "prod flags-on warning run" 2>&1)"
+rc=$?
+set -e
+if [ "$rc" -eq 0 ] \
+   && printf '%s' "$out" | grep -q "enables the following feature flags" \
+   && printf '%s' "$out" | grep -q "prod_flag"; then
+    report_pass "prod flags-on warning lists enabled flags and stays non-fatal"
+else
+    report_fail "prod flags-on warning missing or fatal (rc=$rc)"
+    printf '%s\n' "$out" | tail -12 >&2
+fi
+# Restore the all-false prod baseline for every scenario below.
+printf 'features:\n  prod_flag: "false"\n' > "$WR_PROD_FEATURES"
+regen_good_bless
+
 # FAIL: commit mismatch.
 BLESS_BADCOMMIT="$TMP/bless-badcommit.yaml"
 sed "s/code_commit: \"$WR_HEAD\"/code_commit: \"deadbee\"/" "$GOOD_BLESS" > "$BLESS_BADCOMMIT"

@@ -385,6 +385,20 @@ run_blessing_gate() {
         fi
         note "prod-flag drift check passed (prod live == git)"
     fi
+
+    # (7) Prod flags-on WARNING (non-fatal). Flags are flipped freely on
+    # the preview tiers, but a "true" flag shipping to PROD deserves an
+    # explicit eyeball from whoever runs the promote — list them and
+    # proceed. (A gate would block legitimate rollouts; the warning IS the
+    # policy.)
+    local enabled_prod_flags
+    enabled_prod_flags="$(grep -E '^[[:space:]]+[a-z0-9_]+:[[:space:]]*"true"' "$PROD_FEATURES" 2>/dev/null \
+                          | sed 's/^[[:space:]]*//; s/:.*$//' || true)"
+    if [ -n "$enabled_prod_flags" ]; then
+        warn "prod features.yaml enables the following feature flags:"
+        printf '%s\n' "$enabled_prod_flags" | sed 's/^/⚠    /' >&2
+        warn "these ship live with this promote — confirm that is intended."
+    fi
     return 0
 }
 

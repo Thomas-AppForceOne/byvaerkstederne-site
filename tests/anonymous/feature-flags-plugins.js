@@ -203,11 +203,13 @@ const POST_ENDPOINTS = [
   // GET — admin bug-report image endpoint is GET per plugin code.
   ['GET', '/admin/bug-report-image/does-not-exist.png', 'bug-report admin image',
     new Set([200, 302, 400, 401, 403, 404, 413, 422])],
-  // account-manager mutation endpoints are NOT in this matrix: the test
-  // tier (this matrix's public-demo Host) carries a reviewed
-  // account_self_service exception, so the flag-off 404 contract for those
-  // endpoints is asserted against the staging profile in
-  // tests/anonymous/account-access.js instead.
+  // account-manager mutation endpoints (anonymous POST under internal → 401).
+  ['POST', '/konto/change-fullname', 'account change-fullname',
+    new Set([200, 302, 400, 401, 403, 409, 413, 422])],
+  ['POST', '/konto/change-password', 'account change-password',
+    new Set([200, 302, 400, 401, 403, 409, 413, 422])],
+  ['POST', '/konto/request-email-change', 'account request-email-change',
+    new Set([200, 302, 400, 401, 403, 409, 413, 422])],
 ];
 
 // Tokens the 404 body must NOT contain — feature-name leak guard
@@ -242,7 +244,7 @@ test.describe('feature-flags Sprint-4: POST endpoint gate matrix', () => {
     let ctx;
 
     test.beforeAll(async () => {
-      ctx = await profileContext('test.hackersbychoice.dk');
+      ctx = await profileContext('flags-off.invalid');
     });
 
     test.afterAll(async () => {
@@ -580,27 +582,12 @@ const FLAG_PROBES = [
   },
   {
     flag: 'account_self_service',
-    desc: 'reviewed test-tier exception: /konto login-gated (302) under public-demo AND internal; flag-off 404 pinned against staging',
+    desc: 'GET /konto 404 under the all-off fixture; login-gated (302) under internal; POST endpoints gated',
     async publicDemo(ctx) {
-      // The test tier carries a reviewed account_self_service exception
-      // (env features.yaml governance block), so the surface is ON here:
-      // anonymous GET redirects to login, never 404s, never leaks.
       const r = await ctx.get('/konto', { maxRedirects: 0 });
-      expect(r.status()).toBe(302);
-      // The flag-off contract is pinned against the staging profile
-      // (explicit all-"false") so this flag keeps a genuine off-probe.
-      const off = await apiRequest.newContext({
-        baseURL: BASE,
-        extraHTTPHeaders: { Host: 'staging.hackersbychoice.dk' },
-      });
-      try {
-        const g = await off.get('/konto', { maxRedirects: 0 });
-        expect(g.status()).toBe(404);
-        const p = await off.post('/konto/change-fullname', { maxRedirects: 0 });
-        expect(p.status()).toBe(404);
-      } finally {
-        await off.dispose();
-      }
+      expect(r.status()).toBe(404);
+      const p = await ctx.post('/konto/change-fullname', { maxRedirects: 0 });
+      expect(p.status()).toBe(404);
     },
     async internal(ctx) {
       // Anonymous GET under internal → redirect_to_login (never a 404, never
@@ -638,7 +625,7 @@ test.describe('feature-flags Sprint-4: per-flag matrix (catalogue flags)', () =>
     let ctx;
 
     test.beforeAll(async () => {
-      ctx = await profileContext('test.hackersbychoice.dk');
+      ctx = await profileContext('flags-off.invalid');
     });
 
     test.afterAll(async () => {
@@ -793,7 +780,7 @@ test.describe('feature-flags Sprint-4: canonical-link / home-page route audit', 
 
   test.beforeAll(async () => {
     clearGravCache();
-    ctx = await profileContext('test.hackersbychoice.dk');
+    ctx = await profileContext('flags-off.invalid');
   });
 
   test.afterAll(async () => {

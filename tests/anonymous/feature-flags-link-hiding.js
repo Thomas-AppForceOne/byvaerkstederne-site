@@ -151,7 +151,7 @@ test.describe('feature-flags link-hiding audit: public-demo must not link to any
 
   test.beforeAll(async () => {
     clearGravCache();
-    ctx = await profileContext('test.hackersbychoice.dk');
+    ctx = await profileContext('flags-off.invalid');
     pages = await crawlPublicDemo(ctx);
   });
 
