@@ -1364,9 +1364,20 @@ button.bv-event-row__signup {
     /* Horizontal date row: the chevron sits inline after the month (static,
        not the desktop absolute pin), the date content stays left-aligned, and
        the chevron scales back to fit the row. */
-    .bv-event-row--expandable .bv-event-row__date { justify-content: flex-start; }
-    .bv-event-row__chevron { position: static; transform: none; font-size: 2rem; line-height: 1; }
-    .bv-event-row.is-expanded .bv-event-row__chevron { transform: rotate(180deg); }
+    /* Chevron: when the card stacks on mobile, drop the expand affordance to
+       the bottom-centre of the CARD — horizontally centred, under the
+       availability ("tilmeldte") line — instead of leaving it inline beside the
+       date. It is positioned against the card (padding-bottom reserves the room)
+       rather than the date column, so the date is no longer its positioning
+       context here. The --expandable qualifier + later source order let this win
+       over the desktop and attending chevron rules on mobile. */
+    .bv-event-row--expandable { position: relative; padding-bottom: var(--space-12); }
+    .bv-event-row--expandable .bv-event-row__date { justify-content: flex-start; position: static; }
+    .bv-event-row--expandable .bv-event-row__chevron {
+        position: absolute; left: 50%; bottom: var(--space-2); transform: translateX(-50%);
+        font-size: 2rem; line-height: 1;
+    }
+    .bv-event-row--expandable.is-expanded .bv-event-row__chevron { transform: translateX(-50%) rotate(180deg); }
     .bv-event-row__body,
     .bv-event-row__meta { width: 100%; }
     .bv-event-row__meta { align-items: flex-start; text-align: left; margin-top: var(--space-2); }
