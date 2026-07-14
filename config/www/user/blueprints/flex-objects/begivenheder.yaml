@@ -140,23 +140,6 @@ form:
         tertiary: Terracotta
         kulturhus: Orange (Eventværkstedet)
 
-    featured:
-      type: toggle
-      label: Fremhævet begivenhed
-      help: Vises stort øverst på kalendersiden
-      highlight: 1
-      default: 0
-      options:
-        1: Ja
-        0: Nej
-      validate:
-        type: bool
-
-    featured_tag:
-      type: text
-      label: Fremhævet tag
-      help: "F.eks. 'All Hands' — kun vist når fremhævet"
-
     # Rich details body (event RSVP §5). Server-managed: the frontend form
     # posts a raw `details` field which the event-manager plugin sanitizes to
     # this allowlisted HTML (DetailsSanitizer) before storing. Never edited

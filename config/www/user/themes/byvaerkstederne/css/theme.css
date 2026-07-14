@@ -1378,6 +1378,15 @@ button.bv-event-row__signup {
         font-size: 2rem; line-height: 1;
     }
     .bv-event-row--expandable.is-expanded .bv-event-row__chevron { transform: translateX(-50%) rotate(180deg); }
+    /* Attending, stacked: keep the date left-aligned (not centred) and stop the
+       date tint bleeding down into the workshop badge — restore air below it.
+       The desktop full-height left-stripe design doesn't translate to the
+       column layout, so neutralise the vertical bleed here. */
+    .bv-event-row--attending .bv-event-row__date {
+        justify-content: flex-start;
+        margin-block: 0;
+        padding-block: var(--space-3);
+    }
     .bv-event-row__body,
     .bv-event-row__meta { width: 100%; }
     .bv-event-row__meta { align-items: flex-start; text-align: left; margin-top: var(--space-2); }

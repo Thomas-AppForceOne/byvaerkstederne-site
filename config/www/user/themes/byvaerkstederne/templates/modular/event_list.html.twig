@@ -24,9 +24,9 @@
 
         {# Pull from Flex Objects if available, fall back to page header. The
            canonical event-data shape (event.day, .month, .title, .badge,
-           .time, .description, .accent, .filter, .event_type, .cta, .capacity,
-           .featured) is what partials/event_card.html.twig consumes; build it
-           here from whichever source has data. #}
+           .time, .description, .accent, .filter, .event_type, .cta, .capacity)
+           is what partials/event_card.html.twig consumes; build it here from
+           whichever source has data. #}
         {% set flex = grav.get('flex_objects') %}{% set flex_dir = flex ? flex.directory('begivenheder') : null %}{% set flex_events = flex_dir ? flex_dir.collection : null %}
 
         {# filter_map maps the YAML 'group' field (filter ID candidates) to
@@ -46,12 +46,9 @@
 
         {% set events_list = [] %}
         {% if flex_events is not null %}
-            {# Every published, non-archived event renders here — INCLUDING
-               featured ones. The old `not ev.featured` exclusion dated from
-               when a separate calendar_featured module showed them at the
-               top; that module was removed, which left featured events
-               invisible on the calendar entirely. Featured now opts into the
-               .bv-event-row--featured styling boost instead. #}
+            {# Every published, non-archived, non-stale event renders here.
+               (There is no per-event "featured/larger" treatment on the
+               calendar — that mechanism was removed.) #}
             {% for key, ev in flex_events %}
                 {# Auto-archive rule: an event that ran more than a day ago is
                    stale and drops off the (upcoming-activities) calendar, even
@@ -77,7 +74,6 @@
                         event_type: ev.event_type,
                         cta: _cta,
                         capacity: ev.capacity,
-                        featured: ev.featured|default(false),
                         href: '/begivenheder/' ~ key,
                         key: key,
                         location: ev.location|default(''),
@@ -116,8 +112,7 @@
                     filter: _filter,
                     event_type: ev.event_type,
                     cta: _cta,
-                    capacity: ev.capacity,
-                    featured: ev.featured|default(false)
+                    capacity: ev.capacity
                 }]) %}
             {% endfor %}
         {% endif %}

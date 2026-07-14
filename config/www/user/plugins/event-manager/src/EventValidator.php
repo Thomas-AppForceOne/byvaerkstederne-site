@@ -21,7 +21,7 @@ final class EventValidator
     public const FORM_FIELDS = [
         'published', 'title', 'description', 'details', 'group', 'event_date',
         'time_start', 'time_end', 'location', 'capacity_unlimited',
-        'capacity_count', 'event_type', 'button_text', 'featured', 'featured_tag',
+        'capacity_count', 'event_type', 'button_text',
     ];
 
     /**
@@ -85,7 +85,6 @@ final class EventValidator
     private const MAX_LENGTHS = [
         'description' => 2000,
         'location' => 120,
-        'featured_tag' => 60,
     ];
 
     /** @var array<string,string> */
@@ -232,11 +231,6 @@ final class EventValidator
         $values['published'] = array_key_exists('published', $data)
             ? self::toBool($data['published'])
             : true;
-
-        // featured — same strict coercion; absent means false.
-        $values['featured'] = array_key_exists('featured', $data)
-            ? self::toBool($data['featured'])
-            : false;
 
         return ['values' => $values, 'errors' => $errors];
     }
