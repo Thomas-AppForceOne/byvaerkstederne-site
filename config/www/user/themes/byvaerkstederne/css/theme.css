@@ -238,7 +238,13 @@ a { color: inherit; text-decoration: none; }
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     display: none;
-    padding: 6rem var(--space-8) var(--space-8);
+    padding: 6rem var(--space-8) var(--space-10);
+    /* When the menu is taller than the screen (logged-in members get the extra
+       account entries, and short phones have little height), the overflowing
+       items were clipped with no way to reach them. Let the menu scroll. */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
 }
 .menu-open .bv-mobile-menu { display: block; }
 .menu-open .bv-nav { z-index: 51; }
