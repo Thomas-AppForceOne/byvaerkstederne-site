@@ -1836,7 +1836,11 @@ button.bv-event-row__signup {
 
 @media (max-width: 767px) {
     /* Fluid typography: scale headings to fill container width on mobile */
-    .bv-display, .bv-display[style*="font-size"] { font-size: clamp(1.75rem, 9vw, 5rem) !important; width: 100%; }
+    /* A single long compound word (e.g. "Værkstedskalenderen") must not spill
+       past the viewport at 9vw — wrap/hyphenate it instead (lang="da" drives
+       the hyphenation; break-word is the guaranteed fallback). Short headlines
+       are unaffected. Mobile-only — desktop typography is untouched. */
+    .bv-display, .bv-display[style*="font-size"] { font-size: clamp(1.75rem, 9vw, 5rem) !important; width: 100%; overflow-wrap: break-word; hyphens: auto; }
     .bv-headline, .bv-headline[style*="font-size"] { font-size: clamp(1.5rem, 7vw, 3rem) !important; width: 100%; }
     .bv-title, .bv-title[style*="font-size"] { font-size: clamp(1rem, 3.5vw, 1.5rem) !important; }
     .bv-hero__title { font-size: clamp(1.75rem, 8.5vw, 7rem) !important; max-width: calc(100vw - var(--space-8)); word-break: break-word; }
