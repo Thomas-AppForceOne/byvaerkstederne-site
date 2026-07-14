@@ -118,16 +118,24 @@
                     {% if _attendees is empty %}
                         <p class="bv-body-sm u-text-muted bv-event-dashboard__attendee-empty">Ingen {{ _label|lower }} endnu.</p>
                     {% else %}
+                    {# One role=row per attendee. On desktop the rows are
+                       display:contents so the cells flow into the 3-column grid
+                       unchanged; on mobile the row becomes a stacked block with a
+                       divider between attendees. #}
                     <div class="bv-event-dashboard__attendee-table" role="table">
-                        <span class="bv-event-dashboard__attendee-head" role="columnheader">{{ ev.button_text == 'Interesseret' ? 'Interesseret' : 'Tilmeldt' }}</span>
-                        <span class="bv-event-dashboard__attendee-head" role="columnheader">Navn</span>
-                        <span class="bv-event-dashboard__attendee-head" role="columnheader">Email</span>
+                        <div class="bv-event-dashboard__attendee-row bv-event-dashboard__attendee-row--head" role="row">
+                            <span class="bv-event-dashboard__attendee-head" role="columnheader">{{ ev.button_text == 'Interesseret' ? 'Interesseret' : 'Tilmeldt' }}</span>
+                            <span class="bv-event-dashboard__attendee-head" role="columnheader">Navn</span>
+                            <span class="bv-event-dashboard__attendee-head" role="columnheader">Email</span>
+                        </div>
                         {% for a in _attendees %}
+                        <div class="bv-event-dashboard__attendee-row" role="row">
                             <span class="bv-event-dashboard__attendee-ts" role="cell">{{ a.ts ? a.ts|date('j. M Y H:i') : '—' }}</span>
                             <span class="bv-event-dashboard__attendee-name" role="cell">{{ a.fullname ?: a.username }}</span>
                             <span class="bv-event-dashboard__attendee-email" role="cell">
                                 {%- if a.email -%}<a href="mailto:{{ a.email }}">{{ a.email }}</a>{%- else -%}<span class="u-text-muted">—</span>{%- endif -%}
                             </span>
+                        </div>
                         {% endfor %}
                     </div>
                     {% endif %}

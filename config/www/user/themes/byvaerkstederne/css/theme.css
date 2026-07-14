@@ -4317,6 +4317,10 @@ button.bv-event-row__signup {
     font-size: 0.875rem;
     align-items: baseline;
 }
+/* Row wrappers are transparent on desktop — their cells flow into the grid
+   above exactly as when they were direct children (mobile turns them into
+   stacked blocks; see the @media rule below). */
+.bv-event-dashboard__attendee-row { display: contents; }
 .bv-event-dashboard__attendee-head {
     font-family: var(--font-headline);
     font-weight: 700;
@@ -4328,6 +4332,25 @@ button.bv-event-row__signup {
 .bv-event-dashboard__attendee-ts { color: var(--on-surface-variant); white-space: nowrap; }
 .bv-event-dashboard__attendee-name { font-weight: 600; }
 .bv-event-dashboard__attendee-email { word-break: break-word; }
+/* Mobile: stack each attendee's tidspunkt / navn / email under one another,
+   centred, with a horizontal rule (2/3 of the card width, centred) between
+   attendees. The desktop 3-column grid is untouched (rules above). */
+@media (max-width: 767px) {
+    .bv-event-dashboard__attendee-table { display: block; }
+    .bv-event-dashboard__attendee-row { display: block; text-align: center; }
+    /* Hide the column header on the stacked layout — must come AFTER the row
+       rule above so it wins the same-specificity tie. */
+    .bv-event-dashboard__attendee-row--head { display: none; }
+    .bv-event-dashboard__attendee-row > span { display: block; }
+    .bv-event-dashboard__attendee-ts { white-space: normal; }
+    .bv-event-dashboard__attendee-row:not(:last-child)::after {
+        content: "";
+        display: block;
+        width: 66.6667%;
+        margin: var(--space-4) auto 0;
+        border-top: 1px solid var(--outline-variant);
+    }
+}
 
 /* Narrow screens: stack the row so nothing overflows. */
 @media (max-width: 640px) {
@@ -4738,6 +4761,10 @@ button.bv-event-row__signup {
     .bv-ee-meta > .bv-ee-field:has(.bv-ee-cta) { margin-left: auto; }
     /* Meta-row popovers open upward to stay on screen. */
     .bv-ee-meta .bv-ee-pop { top: auto; bottom: 100%; margin-top: 0; margin-bottom: 12px; }
+    /* The begivenhedstype field sits at the left of the meta row, so its
+       right-aligned popover spilled off the left edge — anchor it to the left
+       here (and clamp width) so it stays fully on screen. */
+    .bv-ee-meta [data-ee-pop="event-type"] { left: 0; right: auto; max-width: calc(100vw - var(--space-8)); }
     .bv-ee-details { padding: var(--space-6) var(--space-4); }
 }
 

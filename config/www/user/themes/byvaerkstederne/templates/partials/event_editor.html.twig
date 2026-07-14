@@ -220,7 +220,17 @@
   var initEl = $('ee-initial');
   var state = JSON.parse(initEl ? initEl.textContent : '{}');
   // Earliest selectable event date (today) — mirrors the input's `min` and the
-  // server-side guard; events may not be created/edited into the past.
+  // server-side guard; events may not be created/edited into the past. The
+  // Twig-rendered `min` can go stale if the page is cached, so freshen it
+  // client-side to the visitor's today — this disables past days in the native
+  // date picker regardless of when the page was cached.
+  (function () {
+    var di = $('ee-date-input');
+    if (!di) { return; }
+    var d = new Date();
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    di.min = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  })();
   var minDate = ($('ee-date-input') && $('ee-date-input').getAttribute('min')) || '';
 
   // Group → accent token + badge label (mirrors EventValidator maps).
