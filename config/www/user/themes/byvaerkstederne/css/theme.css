@@ -4343,7 +4343,9 @@ button.bv-event-row__signup {
    attendees. The desktop 3-column grid is untouched (rules above). */
 @media (max-width: 767px) {
     .bv-event-dashboard__attendee-table { display: block; }
-    .bv-event-dashboard__attendee-row { display: block; text-align: center; }
+    /* Each attendee's data stays left-aligned; only the divider (below) is
+       centred. */
+    .bv-event-dashboard__attendee-row { display: block; text-align: left; }
     /* Hide the column header on the stacked layout — must come AFTER the row
        rule above so it wins the same-specificity tie. */
     .bv-event-dashboard__attendee-row--head { display: none; }
