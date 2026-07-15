@@ -12,7 +12,7 @@
             {% set _can_read = feature_enabled('event_management') and (grav.user.authorize('admin.events.read') or grav.user.authorize('admin.super')) %}
             {% if _can_read %}
                 <div class="bv-event-list__head-actions">
-                    <a class="bv-btn bv-btn--outlined" href="/begivenheder/arrangoerpanel" data-testid="calendar-mine-link">Arrangørpanel</a>
+                    <a class="bv-btn bv-btn--primary" href="/begivenheder/arrangoerpanel" data-testid="calendar-mine-link">Arrangørpanel</a>
                 </div>
             {% endif %}
         </div>

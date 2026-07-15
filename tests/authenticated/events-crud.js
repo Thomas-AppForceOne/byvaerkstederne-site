@@ -546,6 +546,9 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     await page.goto('/vaerkstedskalenderen');
     const mine = page.locator('[data-testid="calendar-mine-link"]');
     await expect(mine).toBeVisible();
+    // Styled as a green (primary) button, like the site's other primary CTAs.
+    await expect(mine).toHaveClass(/bv-btn--primary/);
+    await expect(mine).not.toHaveClass(/bv-btn--outlined/);
     // The "Opret begivenhed" button was removed from the calendar — creating an
     // event now happens from the Arrangørpanel.
     await expect(page.locator('[data-testid="calendar-create-link"]')).toHaveCount(0);

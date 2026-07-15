@@ -215,4 +215,13 @@ test.describe('Events — anonymous management gating (M2 negatives)', () => {
     // "Alle aktiviteter" remains the default active filter.
     await expect(page.locator('.bv-filter-btn[data-filter="all"]')).toHaveClass(/is-active/);
   });
+
+  test('all calendar filters sit on one line on desktop', async ({ page }) => {
+    await page.goto('/vaerkstedskalenderen');
+    const btns = page.locator('.bv-filter-btn');
+    expect(await btns.count()).toBeGreaterThan(1);
+    const tops = await btns.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+    // A single shared top offset → one row (mobile stacks them, tested in tests/mobile).
+    expect(new Set(tops).size).toBe(1);
+  });
 });
