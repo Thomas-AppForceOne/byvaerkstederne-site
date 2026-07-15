@@ -457,6 +457,57 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     expect(readEventsFile()).toBe(before);
   });
 
+  test('a draft (published=0) saves with almost nothing filled in — the required set is relaxed', async ({ page }) => {
+    await loginAsOrganizer(page);
+    await page.goto('/begivenheder/opret');
+    const key = await page.locator('[name="data[key]"]').inputValue();
+    const nonce = await getFormNonce(page);
+    // No group, date, time, event type, or capacity — only a title. As a DRAFT
+    // this is accepted and persisted, not rejected: an in-progress event saves
+    // even when nothing is filled in correctly.
+    const res = await page.request.post('/begivenheder/opret', {
+      form: {
+        'data[key]': key,
+        'data[title]': `PW kladde ${Date.now()}`,
+        'data[published]': '0',
+        'form-nonce': nonce,
+      },
+      maxRedirects: 0,
+    });
+    expect(res.status()).toBe(303);
+    expect(res.headers()['location']).toContain('/begivenheder/mine');
+    createdKeys.push(key);
+    const block = eventBlock(key) || '';
+    expect(block).toContain('published: false');
+    // The omitted required fields are stored empty, not errored.
+    expect(block).toMatch(/event_date:\s*(''|"")/);
+    expect(block).toMatch(/event_type:\s*(''|"")/);
+    expect(block).toMatch(/event_time:\s*(''|"")/);
+  });
+
+  test('publishing (published=1) the same near-empty payload is rejected 400 and writes nothing', async ({ page }) => {
+    await loginAsOrganizer(page);
+    await page.goto('/begivenheder/opret');
+    const key = await page.locator('[name="data[key]"]').inputValue();
+    const nonce = await getFormNonce(page);
+    const before = readEventsFile();
+    const res = await page.request.post('/begivenheder/opret', {
+      form: {
+        'data[key]': key,
+        'data[title]': `PW udgiv ufuldstændig ${Date.now()}`,
+        'data[published]': '1',
+        'form-nonce': nonce,
+      },
+      headers: { Accept: 'application/json' },
+      maxRedirects: 0,
+    });
+    expect(res.status()).toBe(400);
+    const errs = Object.keys((await res.json()).errors);
+    // The completeness checks the draft skipped all fire when publishing.
+    expect(errs).toEqual(expect.arrayContaining(['group', 'event_date', 'time_start', 'event_type']));
+    expect(readEventsFile()).toBe(before); // byte-identical — nothing persisted
+  });
+
   test('super: sees all events in the dashboard and can hard-delete permanently', async ({ page, browser }) => {
     test.skip(!hasAdminPassword, 'TEST_ADMIN_PASSWORD not set');
 

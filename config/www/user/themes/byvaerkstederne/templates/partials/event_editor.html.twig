@@ -57,7 +57,10 @@
           <button type="button" class="bv-ee-seg__btn" data-published="0">Kladde</button>
           <button type="button" class="bv-ee-seg__btn" data-published="1">Offentlig</button>
         </div>
-        <button type="submit" class="bv-ee-save" id="ee-save" disabled>{{ _submit }}</button>
+        {# Gem is always available: an in-progress event saves as a draft even
+           with nothing (or nothing valid) filled in. Only "Offentlig" is gated
+           on completeness (see render()). #}
+        <button type="submit" class="bv-ee-save" id="ee-save">{{ _submit }}</button>
       </div>
 
       {# ── The editable event card ── #}
@@ -471,6 +474,35 @@
     // re-enabled for every other type so the lock lifts on switch-away.
     var capNej = document.querySelector('[data-unlim="0"]');
     if (capNej) { capNej.disabled = _dropin; }
+    // Required-to-publish set (the "Offentlig" gate). Mirrors the fields an
+    // organizer must fill before an event may go public: værkstedsbanner
+    // (group), titel, dato, tid, beskrivelse, begivenhedstype, and — only when
+    // a limit is actually selectable — antal. Saving a DRAFT never checks any
+    // of these; only "Offentlig" does.
+    var missing = [];
+    if (!state.group) { missing.push('Værkstedsbanner'); }
+    if (!state.title || state.title.trim() === '') { missing.push('Titel'); }
+    if (!m) { missing.push('Dato'); }
+    else if (minDate && state.eventDate < minDate) { missing.push('Dato kan ikke være i fortiden'); }
+    if (!state.timeStart || !state.timeEnd) { missing.push('Tid'); }
+    else if (state.timeEnd <= state.timeStart) { missing.push('Sluttid efter start'); }
+    if (!state.description || state.description.trim() === '') { missing.push('Beskrivelse'); }
+    if (!state.eventType) { missing.push('Begivenhedstype'); }
+    // A Drop-in (or an event left unlimited) never needs a count; the antal is
+    // only "missing" when a limit is selectable and left blank/invalid.
+    if (!_dropin && !state.capacityUnlimited && !/^\d+$/.test(String(state.capacityCount).trim())) { missing.push('Antal pladser'); }
+
+    // An incomplete event can never be public: disable "Offentlig" until the
+    // set is filled, and if it was already selected, fall back to "Kladde" so a
+    // Gem never submits an incomplete PUBLIC event.
+    var canPublish = missing.length === 0;
+    if (!canPublish && state.published) { state.published = false; }
+    var pubBtn = document.querySelector('[data-published="1"]');
+    if (pubBtn) {
+      pubBtn.disabled = !canPublish;
+      pubBtn.title = canPublish ? '' : ('Udfyld for at kunne udgive: ' + missing.join(' · '));
+    }
+
     setActive('[data-published]', 'data-published', state.published ? '1' : '0');
     setActive('.bv-ee-groupopt', 'data-group', state.group);
     setActive('.bv-ee-typeopt', 'data-event-type', state.eventType);
@@ -486,18 +518,8 @@
     $('ee-button-text').value = state.buttonText;
     $('ee-published').value = state.published ? '1' : '0';
 
-    var missing = [];
-    if (!state.title || state.title.trim() === '') { missing.push('Titel'); }
-    if (!state.group) { missing.push('Værksted'); }
-    if (!state.eventType) { missing.push('Begivenhedstype'); }
-    if (!m) { missing.push('Dato'); }
-    else if (minDate && state.eventDate < minDate) { missing.push('Dato kan ikke være i fortiden'); }
-    if (!state.timeStart || !state.timeEnd) { missing.push('Tidspunkt'); }
-    else if (state.timeEnd <= state.timeStart) { missing.push('Sluttid efter start'); }
-    if (!state.capacityUnlimited && !/^\d+$/.test(String(state.capacityCount).trim())) { missing.push('Antal pladser'); }
-    var save = $('ee-save');
-    save.disabled = missing.length > 0;
-    save.title = missing.length ? 'Mangler: ' + missing.join(' · ') : '';
+    // Gem is always enabled — the in-progress event saves as a draft.
+    $('ee-save').disabled = false;
   }
 
   function setActive(selector, attr, value) {

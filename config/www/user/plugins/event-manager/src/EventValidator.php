@@ -110,32 +110,65 @@ final class EventValidator
         $errors = [];
         $values = [];
 
-        // title — required, ≤80, no angle brackets (house ^[^<>]{1,80}$ rule;
-        // the title reaches flash messages rendered with |raw).
+        // Validation MODE. A draft (published=false) is a work-in-progress
+        // save: the completeness requirements below are relaxed so an organizer
+        // can store a half-filled event and finish it later (§ "save an
+        // in-progress event even if nothing is filled in correctly").
+        // Publishing (published=true) enforces the full required set. Absent ⇒
+        // publishing (the strict API default), so a bare POST can never slip an
+        // incomplete PUBLIC event through. Format / security / length checks
+        // apply in BOTH modes — "empty is allowed for a draft" never means
+        // "garbage is".
+        $publishing = array_key_exists('published', $data)
+            ? self::toBool($data['published'])
+            : true;
+        $values['published'] = $publishing;
+
+        // title — required to PUBLISH; a non-empty title must be ≤80 and carry
+        // no angle brackets in EITHER mode (it reaches flash messages rendered
+        // with |raw, so the format guard is a security boundary, not a
+        // completeness check).
         $title = $this->str($data, 'title');
-        if (!preg_match('/^[^<>]{1,80}$/u', $title)) {
+        if ($title === '') {
+            $values['title'] = '';
+            if ($publishing) {
+                $errors['title'] = 'Titlen er påkrævet.';
+            }
+        } elseif (!preg_match('/^[^<>]{1,80}$/u', $title)) {
             $errors['title'] = 'Titlen skal være 1-80 tegn og må ikke indeholde tegnene < eller >.';
         } else {
             $values['title'] = $title;
         }
 
-        // group — must be a blueprint enum key.
+        // group — required to PUBLISH; a non-empty value must be a blueprint
+        // enum key.
         $group = $this->str($data, 'group');
-        if ($this->groupOptions !== [] && !array_key_exists($group, $this->groupOptions)) {
+        if ($group === '') {
+            $values['group'] = '';
+            if ($publishing) {
+                $errors['group'] = 'Vælg et værksted.';
+            }
+        } elseif ($this->groupOptions !== [] && !array_key_exists($group, $this->groupOptions)) {
             $errors['group'] = 'Ugyldig værkstedsgruppe.';
         } else {
             $values['group'] = $group;
         }
 
-        // event_date — strict YYYY-MM-DD, a real calendar date, and today or
-        // later. Events may not be created or edited into the past (the past-
-        // date guard mirrors the editor's date `min`, which is not a trust
-        // boundary).
+        // event_date — required to PUBLISH; a non-empty value must be a real
+        // YYYY-MM-DD date. The no-past-date rule bites only when publishing (a
+        // draft may hold a stale date; the editor bumps it to today on the next
+        // edit). The past-date guard mirrors the editor's date `min`, which is
+        // not a trust boundary.
         $date = $this->str($data, 'event_date');
-        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date, $m)
+        if ($date === '') {
+            $values['event_date'] = '';
+            if ($publishing) {
+                $errors['event_date'] = 'Datoen er påkrævet.';
+            }
+        } elseif (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date, $m)
             || !checkdate((int)$m[2], (int)$m[3], (int)$m[1])) {
             $errors['event_date'] = 'Datoen skal have formatet ÅÅÅÅ-MM-DD og være en gyldig dato.';
-        } elseif ($date < self::today()) {
+        } elseif ($publishing && $date < self::today()) {
             $errors['event_date'] = 'Datoen kan ikke ligge før i dag.';
         } else {
             $values['event_date'] = $date;
@@ -147,17 +180,25 @@ final class EventValidator
         $values['button_style'] = self::ACCENT_BY_GROUP[$group] ?? 'primary';
         $values['badge'] = self::BADGE_BY_GROUP[$group] ?? '';
 
-        // event_time — composed from two required native time inputs
-        // (HH:MM), end after start; stored in the card's established
-        // "HH:MM - HH:MM" shape so rendering and legacy data are untouched.
+        // event_time — required to PUBLISH: two HH:MM inputs, end after start,
+        // stored in the card's established "HH:MM - HH:MM" shape. A draft
+        // stores the time only when both are valid; a partial/invalid time is
+        // dropped (stored empty), not an error.
         $timeStart = $this->str($data, 'time_start');
         $timeEnd = $this->str($data, 'time_end');
-        if (!preg_match('/^\d{2}:\d{2}$/', $timeStart) || !preg_match('/^\d{2}:\d{2}$/', $timeEnd)) {
-            $errors['time_start'] = 'Vælg både start- og sluttidspunkt.';
-        } elseif ($timeEnd <= $timeStart) {
-            $errors['time_end'] = 'Sluttidspunktet skal være efter starttidspunktet.';
-        } else {
+        $startOk = (bool)preg_match('/^\d{2}:\d{2}$/', $timeStart);
+        $endOk = (bool)preg_match('/^\d{2}:\d{2}$/', $timeEnd);
+        if ($startOk && $endOk && $timeEnd > $timeStart) {
             $values['event_time'] = $timeStart . ' - ' . $timeEnd;
+        } else {
+            $values['event_time'] = '';
+            if ($publishing) {
+                if (!$startOk || !$endOk) {
+                    $errors['time_start'] = 'Vælg både start- og sluttidspunkt.';
+                } else {
+                    $errors['time_end'] = 'Sluttidspunktet skal være efter starttidspunktet.';
+                }
+            }
         }
 
         // capacity — unlimited (default, stored '') or a bounded integer.
@@ -168,20 +209,28 @@ final class EventValidator
             $values['capacity'] = '';
         } else {
             $count = $this->str($data, 'capacity_count');
-            if (!preg_match('/^\d{1,4}$/', $count) || (int)$count < 1) {
-                $errors['capacity_count'] = 'Angiv antal pladser som et tal (mindst 1), eller vælg ubegrænset.';
-            } else {
+            if (preg_match('/^\d{1,4}$/', $count) && (int)$count >= 1) {
                 $values['capacity'] = (string)(int)$count;
+            } else {
+                // A limit was chosen but the count is empty/invalid: required to
+                // publish, but a draft just falls back to unlimited (no error).
+                $values['capacity'] = '';
+                if ($publishing) {
+                    $errors['capacity_count'] = 'Angiv antal pladser som et tal (mindst 1), eller vælg ubegrænset.';
+                }
             }
         }
 
         $values['button_url'] = ''; // retired — the card button IS the signup action.
 
-        // event type — REQUIRED closed set (select in the form). Empty is a
-        // missing required field; a non-empty value outside the set is tampering.
+        // event type — required to PUBLISH (closed set). Empty is only an error
+        // when publishing; a non-empty value outside the set is always tampering.
         $eventType = $this->str($data, 'event_type');
         if ($eventType === '') {
-            $errors['event_type'] = 'Vælg en begivenhedstype: Gratis, Brugerbetaling eller Drop-in.';
+            $values['event_type'] = '';
+            if ($publishing) {
+                $errors['event_type'] = 'Vælg en begivenhedstype: Gratis, Brugerbetaling eller Drop-in.';
+            }
         } elseif (!in_array($eventType, self::EVENT_TYPE_OPTIONS, true)) {
             $errors['event_type'] = 'Ugyldig begivenhedstype.';
         } else {
@@ -205,7 +254,11 @@ final class EventValidator
             unset($errors['capacity_count']);
         }
 
-        // Bounded free-text fields.
+        // Bounded free-text fields (description, location) — length-capped in
+        // BOTH modes; neither is a server publish requirement. The "Offentlig"
+        // button gates on a non-empty description client-side (a completeness
+        // nicety), but an empty description is never a server error — it is not
+        // a security concern, so the contract stays lenient.
         foreach (self::MAX_LENGTHS as $field => $max) {
             $value = $this->str($data, $field);
             if (mb_strlen($value) > $max) {
@@ -225,12 +278,8 @@ final class EventValidator
             is_scalar($rawDetails) ? (string)$rawDetails : ''
         );
 
-        // published — strict boolean server-side (the blueprint runs
-        // validation: loose, so never rely on it). Only a genuinely absent
-        // field means "default visible" (§0/§8.1.6).
-        $values['published'] = array_key_exists('published', $data)
-            ? self::toBool($data['published'])
-            : true;
+        // published — resolved once at the top of the method (it selects the
+        // validation mode), already stored in $values['published'].
 
         return ['values' => $values, 'errors' => $errors];
     }

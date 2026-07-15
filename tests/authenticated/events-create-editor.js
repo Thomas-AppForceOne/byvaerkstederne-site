@@ -18,12 +18,16 @@ test.describe('Event create — inline card editor', () => {
   const created = [];
   test.afterAll(() => { for (const k of created) { try { removeEventByKey(k); } catch (_) { /* */ } } });
 
-  test('gates Gem, reflects edits live on the card, and creates the event', async ({ page }) => {
+  test('Gem is always available; Offentlig gates on the full set, then creates a public event', async ({ page }) => {
     await loginAsOrganizer(page);
     await page.goto('/begivenheder/opret');
     const key = await page.locator('[name="data[key]"]').inputValue();
     const save = page.locator('#ee-save');
-    await expect(save).toBeDisabled();
+    const publish = page.locator('[data-published="1"]');
+    // Gem is available from the very start — an empty in-progress event is a
+    // saveable draft. Offentlig is gated until every required field is filled.
+    await expect(save).toBeEnabled();
+    await expect(publish).toBeDisabled();
 
     // date → the date block updates
     await page.locator('[data-ee-open="date"]').click();
@@ -48,18 +52,23 @@ test.describe('Event create — inline card editor', () => {
     await page.locator('#ee-backdrop').click();
     await expect(page.locator('#ee-time-text')).toHaveText('10:00 - 12:00');
 
+    // description — now a publish requirement
+    await page.locator('#ee-desc').fill('En kort beskrivelse af begivenheden.');
+
     // capacity (default limited → count required)
     await page.locator('[data-ee-open="capacity"]').click();
     await page.locator('#ee-cap-input').fill('8');
     await page.locator('#ee-backdrop').click();
     await expect(page.locator('#ee-cap-text')).toHaveText('8');
 
-    // event type — required; pick one before Gem can enable
+    // event type is the last required field — Offentlig stays gated until it is set
+    await expect(publish).toBeDisabled();
     await page.locator('[data-ee-open="event-type"]').click();
     await page.locator('.bv-ee-typeopt[data-event-type="Gratis"]').click();
 
-    // publish
-    await page.locator('[data-published="1"]').click();
+    // set complete → Offentlig unlocks; select it (Gem stays available throughout)
+    await expect(publish).toBeEnabled();
+    await publish.click();
     await expect(save).toBeEnabled();
 
     // submit → PRG to the dashboard, event present and published
@@ -144,24 +153,28 @@ test.describe('Event create — inline card editor', () => {
     await expect(nej).toBeEnabled();
   });
 
-  test('Gem stays disabled and names the missing fields until required data is valid', async ({ page }) => {
+  test('Offentlig stays disabled and names the missing fields; Gem is unaffected', async ({ page }) => {
     await loginAsOrganizer(page);
     await page.goto('/begivenheder/opret');
     const save = page.locator('#ee-save');
+    const publish = page.locator('[data-published="1"]');
     await page.locator('#ee-title').fill('Kun en titel');
-    await expect(save).toBeDisabled();
-    await expect(save).toHaveAttribute('title', /Mangler:/);
-    await expect(save).toHaveAttribute('title', /Værksted/);
-    // Begivenhedstype is required too — it must be named among the missing fields.
-    await expect(save).toHaveAttribute('title', /Begivenhedstype/);
+    // A draft with just a title still saves.
+    await expect(save).toBeEnabled();
+    // Offentlig is disabled and its tooltip names what is still missing.
+    await expect(publish).toBeDisabled();
+    await expect(publish).toHaveAttribute('title', /Udfyld for at kunne udgive/);
+    await expect(publish).toHaveAttribute('title', /Værkstedsbanner/);
+    await expect(publish).toHaveAttribute('title', /Beskrivelse/);
+    await expect(publish).toHaveAttribute('title', /Begivenhedstype/);
   });
 
-  test('Gem enables only once a begivenhedstype is chosen (type is required)', async ({ page }) => {
+  test('Offentlig enables only once the last field (begivenhedstype) is chosen', async ({ page }) => {
     await loginAsOrganizer(page);
     await page.goto('/begivenheder/opret');
-    const save = page.locator('#ee-save');
+    const publish = page.locator('[data-published="1"]');
 
-    // Fill everything required EXCEPT the type.
+    // Fill everything required for publishing EXCEPT the type.
     await page.locator('#ee-title').fill('Type-krav test');
     await page.locator('#ee-badge').click();
     await page.locator('.bv-ee-groupopt[data-group="makerspace"]').click();
@@ -173,17 +186,18 @@ test.describe('Event create — inline card editor', () => {
     await page.locator('#ee-te-input').fill('12:00');
     await page.locator('#ee-te-input').blur();
     await page.locator('#ee-backdrop').click();
+    await page.locator('#ee-desc').fill('Beskrivelse til udgivelse.');
     await page.locator('[data-ee-open="capacity"]').click();
     await page.locator('#ee-cap-input').fill('8');
     await page.locator('#ee-backdrop').click();
 
     // Still blocked purely on the missing type.
-    await expect(save).toBeDisabled();
-    await expect(save).toHaveAttribute('title', /Begivenhedstype/);
+    await expect(publish).toBeDisabled();
+    await expect(publish).toHaveAttribute('title', /Begivenhedstype/);
 
-    // Choosing a type is the last thing needed → Gem enables.
+    // Choosing a type is the last thing needed → Offentlig enables.
     await page.locator('[data-ee-open="event-type"]').click();
     await page.locator('.bv-ee-typeopt[data-event-type="Drop-in"]').click();
-    await expect(save).toBeEnabled();
+    await expect(publish).toBeEnabled();
   });
 });
