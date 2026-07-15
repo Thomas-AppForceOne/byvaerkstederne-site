@@ -147,7 +147,7 @@ test.describe('Events — anonymous management gating (M2 negatives)', () => {
     // The test-tier host profile resolves every flag false; Grav picks the
     // profile from the Host header (same technique as the mobile suite).
     const context = await browser.newContext({
-      extraHTTPHeaders: { Host: 'test.hackersbychoice.dk' },
+      extraHTTPHeaders: { Host: 'flags-off.invalid' },
     });
     try {
       const req = context.request;

@@ -15,7 +15,7 @@
  *   the server verbatim, which is exactly what the Grav env-switch needs.
  *
  *   Host 'dev.hackersbychoice.dk'       -> PROFILE=internal   (all 17 flags "true")
- *   Host 'test.hackersbychoice.dk'   -> PROFILE=public_demo (0 flags enabled)
+ *   Host 'flags-off.invalid'   -> PROFILE=public_demo (0 flags enabled)
  *
  *   Other specs continue to hit 127.0.0.1 directly and resolve to whatever
  *   default profile the Grav container ships — unchanged by this spec.
@@ -165,7 +165,7 @@ test.describe('feature-flags: public-demo profile 404s flagged pages', () => {
   test.beforeAll(async () => {
     seedAdminIfPossible();
     clearGravCache();
-    ctx = await profileContext('test.hackersbychoice.dk');
+    ctx = await profileContext('flags-off.invalid');
   });
 
   test.afterAll(async () => {

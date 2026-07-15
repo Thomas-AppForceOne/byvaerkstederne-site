@@ -244,7 +244,7 @@ test.describe('feature-flags Sprint-4: POST endpoint gate matrix', () => {
     let ctx;
 
     test.beforeAll(async () => {
-      ctx = await profileContext('test.hackersbychoice.dk');
+      ctx = await profileContext('flags-off.invalid');
     });
 
     test.afterAll(async () => {
@@ -582,7 +582,7 @@ const FLAG_PROBES = [
   },
   {
     flag: 'account_self_service',
-    desc: 'GET /konto 404 under public-demo; login-gated (302) under internal; POST endpoints gated',
+    desc: 'GET /konto 404 under the all-off fixture; login-gated (302) under internal; POST endpoints gated',
     async publicDemo(ctx) {
       const r = await ctx.get('/konto', { maxRedirects: 0 });
       expect(r.status()).toBe(404);
@@ -625,7 +625,7 @@ test.describe('feature-flags Sprint-4: per-flag matrix (catalogue flags)', () =>
     let ctx;
 
     test.beforeAll(async () => {
-      ctx = await profileContext('test.hackersbychoice.dk');
+      ctx = await profileContext('flags-off.invalid');
     });
 
     test.afterAll(async () => {
@@ -780,7 +780,7 @@ test.describe('feature-flags Sprint-4: canonical-link / home-page route audit', 
 
   test.beforeAll(async () => {
     clearGravCache();
-    ctx = await profileContext('test.hackersbychoice.dk');
+    ctx = await profileContext('flags-off.invalid');
   });
 
   test.afterAll(async () => {

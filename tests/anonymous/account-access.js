@@ -120,14 +120,19 @@ test.describe('account self-service: anonymous access control', () => {
     });
   });
 
-  test.describe('flag off (public-demo profile)', () => {
+  test.describe('flag off (fixture profile)', () => {
+    // The flag-off fixture is the dedicated `flags-off.invalid` profile
+    // (env/flags-off.invalid — never deployed, always all-off). Tier
+    // profiles (test/staging) are OPERATIONAL state: flags there may be
+    // flipped at any time to preview unreleased features, so no test may
+    // assume anything about them.
     /** @type {import('@playwright/test').APIRequestContext} */
     let ctx;
 
     test.beforeAll(async () => {
       ctx = await apiRequest.newContext({
         baseURL: BASE,
-        extraHTTPHeaders: { Host: 'test.hackersbychoice.dk' },
+        extraHTTPHeaders: { Host: 'flags-off.invalid' },
       });
     });
 
@@ -172,4 +177,5 @@ test.describe('account self-service: anonymous access control', () => {
       });
     }
   });
+
 });
