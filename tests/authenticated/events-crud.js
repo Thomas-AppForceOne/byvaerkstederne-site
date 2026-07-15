@@ -541,19 +541,15 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     }
   });
 
-  test('organizer sees the create + Arrangørpanel buttons on the calendar page', async ({ page }) => {
+  test('organizer sees the Arrangørpanel button, and no Opret button, on the calendar page', async ({ page }) => {
     await loginAsOrganizer(page);
     await page.goto('/vaerkstedskalenderen');
-    const create = page.locator('[data-testid="calendar-create-link"]');
     const mine = page.locator('[data-testid="calendar-mine-link"]');
-    await expect(create).toBeVisible();
     await expect(mine).toBeVisible();
-    // Same line, Mine to the LEFT of Opret.
-    const mineBox = await mine.boundingBox();
-    const createBox = await create.boundingBox();
-    expect(mineBox.x).toBeLessThan(createBox.x);
-    expect(Math.abs(mineBox.y - createBox.y)).toBeLessThan(5);
-    // The Mine button reaches the dashboard.
+    // The "Opret begivenhed" button was removed from the calendar — creating an
+    // event now happens from the Arrangørpanel.
+    await expect(page.locator('[data-testid="calendar-create-link"]')).toHaveCount(0);
+    // The Arrangørpanel button reaches the dashboard.
     await mine.click();
     await expect(page).toHaveURL(/\/begivenheder\/arrangoerpanel/);
   });

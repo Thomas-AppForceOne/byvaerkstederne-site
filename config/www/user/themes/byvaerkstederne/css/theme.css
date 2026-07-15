@@ -1122,6 +1122,11 @@ a { color: inherit; text-decoration: none; }
 .bv-filter-dot--kulturhus { background: var(--kulturhus); }
 .bv-filter-dot--all { background: var(--on-surface-variant); }
 
+/* "Mine aktiviteter" uses a star glyph rather than a workshop-colour dot — it
+   is a personal filter, not a category. Sized to sit like the dots; inherits
+   the button text colour (→ on-primary when the button is active). */
+.bv-filter-btn__icon { font-size: 1.05rem; line-height: 1; }
+
 /* Event list — v2 handoff canonical layout. The <ul> wrapper is just a
    semantic container for the .bv-event-item entries; reset its default
    chrome (bullets, padding, margin) so the canonical card layout owns

@@ -3,21 +3,16 @@
     <div class="bv-container">
         <div class="bv-event-list__head">
             <h2 class="bv-headline" style="font-size: 1.75rem;">{{ h.section_title|default('Kommende Aktiviteter') }}</h2>
-            {# Contextual arrangør affordances — UX only (the handler contract is
+            {# Contextual arrangør affordance — UX only (the handler contract is
                the boundary); hidden from anonymous and from members without the
-               events capability. "Arrangørpanel" gates on read (same as the
-               footer entry), "Opret begivenhed" on create; both sit on one line,
-               Mine to the left of Opret. #}
+               events capability. Only "Arrangørpanel" lives here (gates on
+               read, same as the footer entry); creating an event happens from
+               the Arrangørpanel itself, so the calendar no longer carries an
+               "Opret begivenhed" button. #}
             {% set _can_read = feature_enabled('event_management') and (grav.user.authorize('admin.events.read') or grav.user.authorize('admin.super')) %}
-            {% set _can_create = feature_enabled('event_management') and (grav.user.authorize('admin.events.create') or grav.user.authorize('admin.super')) %}
-            {% if _can_read or _can_create %}
+            {% if _can_read %}
                 <div class="bv-event-list__head-actions">
-                    {% if _can_read %}
-                        <a class="bv-btn bv-btn--outlined" href="/begivenheder/arrangoerpanel" data-testid="calendar-mine-link">Arrangørpanel</a>
-                    {% endif %}
-                    {% if _can_create %}
-                        <a class="bv-btn bv-btn--primary" href="/begivenheder/opret" data-testid="calendar-create-link">Opret begivenhed</a>
-                    {% endif %}
+                    <a class="bv-btn bv-btn--outlined" href="/begivenheder/arrangoerpanel" data-testid="calendar-mine-link">Arrangørpanel</a>
                 </div>
             {% endif %}
         </div>
@@ -123,5 +118,11 @@
                 {% include 'partials/event_card.html.twig' with { event: event, inList: true } %}
             {% endfor %}
         </ul>
+        {# Shown by the filter JS only when "Mine aktiviteter" is active and the
+           viewer is signed up to nothing — otherwise an empty calendar reads as
+           broken. #}
+        {% if grav.user.authenticated and feature_enabled('event_rsvp') %}
+        <p class="bv-event-list__empty-mine" data-empty-mine hidden>Du er endnu ikke tilmeldt nogen aktiviteter. Vælg &laquo;Alle aktiviteter&raquo; for at se, hvad der sker.</p>
+        {% endif %}
     </div>
 </section>

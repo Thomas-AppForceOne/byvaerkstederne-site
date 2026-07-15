@@ -672,7 +672,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Calendar filter buttons (exclusive: one active at a time, no deselect)
+    // Calendar filter buttons (exclusive: one active at a time, no deselect).
+    // 'all' shows everything; 'mine' shows only the events the viewer is
+    // tilmeldt/interesseret i (cards carrying .bv-event-row--attending); any
+    // other value is a workshop group matched against the card's data-group.
     document.querySelectorAll('.bv-filter-btn[data-filter]').forEach(function(btn) {
         btn.addEventListener('click', function() {
             var group = this.dataset.filter;
@@ -683,13 +686,23 @@ document.addEventListener('DOMContentLoaded', function() {
             this.classList.add('is-active');
 
             // Show matching rows
+            var shown = 0;
             rows.forEach(function(row) {
-                if (group === 'all' || row.dataset.group === group) {
-                    row.style.display = '';
+                var show;
+                if (group === 'all') {
+                    show = true;
+                } else if (group === 'mine') {
+                    show = row.classList.contains('bv-event-row--attending');
                 } else {
-                    row.style.display = 'none';
+                    show = row.dataset.group === group;
                 }
+                row.style.display = show ? '' : 'none';
+                if (show) { shown++; }
             });
+
+            // "Mine aktiviteter" with nothing signed up → show the empty note.
+            var emptyMine = document.querySelector('[data-empty-mine]');
+            if (emptyMine) { emptyMine.hidden = !(group === 'mine' && shown === 0); }
         });
     });
 

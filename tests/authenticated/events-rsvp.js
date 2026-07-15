@@ -68,6 +68,36 @@ test.describe('Event RSVP — signup from the card button', () => {
     expect(eventAuditContains(`"action":"withdraw".*"key":"${RSVP_EVENT_ID}"`)).toBe(true);
   });
 
+  test('the "Mine aktiviteter" filter narrows the calendar to signed-up events', async ({ page }) => {
+    await login(page);
+    await page.goto('/vaerkstedskalenderen');
+
+    const cardByTitle = (t) => page.locator('.bv-event-item', { has: page.locator('.bv-event-row__title', { hasText: t }) });
+    const mineCard = cardByTitle('[FIXTURE] RSVP Tilmeld');
+    const otherCard = cardByTitle('[FIXTURE] Interesseret event');
+    const mineFilter = page.locator('.bv-filter-btn[data-filter="mine"]');
+
+    // The personal filter is offered to signed-in members; both fixtures are
+    // visible under the default "Alle" filter.
+    await expect(mineFilter).toBeVisible();
+    await expect(mineCard.locator('.bv-event-row')).toBeVisible();
+    await expect(otherCard.locator('.bv-event-row')).toBeVisible();
+
+    // Sign up to the RSVP fixture (AJAX toggles the attending class on the card).
+    await mineCard.locator(`[data-rsvp-key="${RSVP_EVENT_ID}"]`).click();
+    await expect(mineCard.locator('.bv-event-row')).toHaveClass(/bv-event-row--attending/, { timeout: 10_000 });
+
+    // "Mine aktiviteter" → only the signed-up event remains; the empty note stays hidden.
+    await mineFilter.click();
+    await expect(mineCard.locator('.bv-event-row')).toBeVisible();
+    await expect(otherCard.locator('.bv-event-row')).toBeHidden();
+    await expect(page.locator('[data-empty-mine]')).toBeHidden();
+
+    // Back to "Alle" → everything is shown again.
+    await page.locator('.bv-filter-btn[data-filter="all"]').click();
+    await expect(otherCard.locator('.bv-event-row')).toBeVisible();
+  });
+
   test('an expired session mid-signup opens the login overlay, not a dead error note', async ({ page }) => {
     await login(page);
     await page.goto(`/begivenheder/${RSVP_EVENT_ID}`);

@@ -207,4 +207,12 @@ test.describe('Events — anonymous management gating (M2 negatives)', () => {
     await expect(page.locator('[data-testid="calendar-create-link"]')).toHaveCount(0);
     await expect(page.locator('[data-testid="calendar-mine-link"]')).toHaveCount(0);
   });
+
+  test('the "Mine aktiviteter" filter is hidden from anonymous visitors; "Alle" stays default', async ({ page }) => {
+    await page.goto('/vaerkstedskalenderen');
+    // Anonymous visitors have no signups, so the personal filter is not shown.
+    await expect(page.locator('.bv-filter-btn[data-filter="mine"]')).toHaveCount(0);
+    // "Alle aktiviteter" remains the default active filter.
+    await expect(page.locator('.bv-filter-btn[data-filter="all"]')).toHaveClass(/is-active/);
+  });
 });
