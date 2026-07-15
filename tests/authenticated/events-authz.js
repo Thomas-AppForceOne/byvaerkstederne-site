@@ -38,7 +38,7 @@ test.describe('Events — member without the organizer role', () => {
 
   test('GET dashboard and create form are 403', async ({ page }) => {
     await login(page); // pw-test-user: site.login only, no admin.events.*
-    for (const route of ['/begivenheder/mine', '/begivenheder/opret']) {
+    for (const route of ['/begivenheder/arrangoerpanel', '/begivenheder/opret']) {
       const response = await page.goto(route);
       expect(response?.status(), route).toBe(403);
     }
@@ -66,7 +66,7 @@ test.describe('Events — member without the organizer role', () => {
   test('member footer has no event-management entry', async ({ page }) => {
     await login(page);
     await page.goto('/');
-    await expect(page.locator('.bv-footer')).not.toContainText('Mine begivenheder');
+    await expect(page.locator('.bv-footer')).not.toContainText('Arrangørpanel');
   });
 
   test('member sees no create button on the calendar page', async ({ page }) => {

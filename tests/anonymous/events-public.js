@@ -157,7 +157,7 @@ test.describe('Events — public read (M1)', () => {
 });
 
 test.describe('Events — anonymous management gating (M2 negatives)', () => {
-  for (const route of ['/begivenheder/mine', '/begivenheder/opret']) {
+  for (const route of ['/begivenheder/arrangoerpanel', '/begivenheder/opret']) {
     test(`anonymous GET ${route} lands on the login flow`, async ({ page }) => {
       await page.goto(route);
       // login plugin redirects (redirect_to_login: true) to /login.
@@ -188,7 +188,7 @@ test.describe('Events — anonymous management gating (M2 negatives)', () => {
     });
     try {
       const req = context.request;
-      for (const route of ['/begivenheder/opret', '/begivenheder/mine', '/begivenheder/event001']) {
+      for (const route of ['/begivenheder/opret', '/begivenheder/arrangoerpanel', '/begivenheder/event001']) {
         const response = await req.get(route, { maxRedirects: 0 });
         expect(response.status(), `${route} with flag off`).toBe(404);
       }
@@ -199,10 +199,10 @@ test.describe('Events — anonymous management gating (M2 negatives)', () => {
 
   test('footer shows no event-management entry to anonymous visitors', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('.bv-footer')).not.toContainText('Mine begivenheder');
+    await expect(page.locator('.bv-footer')).not.toContainText('Arrangørpanel');
   });
 
-  test('calendar shows no arrangør buttons (create / Mine begivenheder) to anonymous visitors', async ({ page }) => {
+  test('calendar shows no arrangør buttons (create / Arrangørpanel) to anonymous visitors', async ({ page }) => {
     await page.goto('/vaerkstedskalenderen');
     await expect(page.locator('[data-testid="calendar-create-link"]')).toHaveCount(0);
     await expect(page.locator('[data-testid="calendar-mine-link"]')).toHaveCount(0);

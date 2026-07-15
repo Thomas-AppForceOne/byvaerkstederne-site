@@ -1013,7 +1013,7 @@ document.addEventListener('DOMContentLoaded', function () {
 }());
 
 // ============================================================================
-// Dashboard "Slet"/"Slet helt" confirmation popovers ("Mine begivenheder").
+// Dashboard "Slet"/"Slet helt" confirmation popovers ("Arrangørpanel").
 // The popover is a native <details> (so it opens and the form submits without
 // JS); this progressive enhancement adds the Annullér button, click-outside
 // and Esc to close, and a single-open-at-a-time behaviour.

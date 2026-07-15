@@ -233,7 +233,7 @@ test.describe('Event RSVP — attendee visibility', () => {
       // says whether these are tilmeldte or interesserede).
       const pageO = await ctxO.newPage();
       await loginAsOrganizer(pageO);
-      await pageO.goto('/begivenheder/mine');
+      await pageO.goto('/begivenheder/arrangoerpanel');
       const row = pageO.locator(`.bv-event-dashboard__item[data-event-key="${RSVP_EVENT_ID}"]`);
       await expect(row.locator('.bv-event-dashboard__attendees')).toHaveCount(1);
       // The email is shown so the organizer can make contact.
@@ -276,7 +276,7 @@ test.describe('Event auto-archive — events that ran more than a day ago', () =
     // event001 is a legacy 2026 seed (ran long ago) → must be swept to archived.
     // ev_fixture_rsvp is dated 2030 (future) → must stay active.
     await loginAsOrganizer(page);
-    await page.goto('/begivenheder/mine');
+    await page.goto('/begivenheder/arrangoerpanel');
     // The sweep runs server-side during the GET; the flag is on disk by the
     // time the response lands. Poll to be robust against fs flush timing.
     await expect.poll(() => eventArchived('event001'), { timeout: 10_000 }).toBe(true);

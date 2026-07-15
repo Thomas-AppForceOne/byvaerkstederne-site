@@ -5,7 +5,7 @@
             <h2 class="bv-headline" style="font-size: 1.75rem;">{{ h.section_title|default('Kommende Aktiviteter') }}</h2>
             {# Contextual arrangør affordances — UX only (the handler contract is
                the boundary); hidden from anonymous and from members without the
-               events capability. "Mine begivenheder" gates on read (same as the
+               events capability. "Arrangørpanel" gates on read (same as the
                footer entry), "Opret begivenhed" on create; both sit on one line,
                Mine to the left of Opret. #}
             {% set _can_read = feature_enabled('event_management') and (grav.user.authorize('admin.events.read') or grav.user.authorize('admin.super')) %}
@@ -13,7 +13,7 @@
             {% if _can_read or _can_create %}
                 <div class="bv-event-list__head-actions">
                     {% if _can_read %}
-                        <a class="bv-btn bv-btn--outlined" href="/begivenheder/mine" data-testid="calendar-mine-link">Mine begivenheder</a>
+                        <a class="bv-btn bv-btn--outlined" href="/begivenheder/arrangoerpanel" data-testid="calendar-mine-link">Arrangørpanel</a>
                     {% endif %}
                     {% if _can_create %}
                         <a class="bv-btn bv-btn--primary" href="/begivenheder/opret" data-testid="calendar-create-link">Opret begivenhed</a>

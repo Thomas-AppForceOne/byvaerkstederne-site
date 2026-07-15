@@ -9,7 +9,7 @@
  *
  * Handles:
  *  - Public event detail route            /begivenheder/<key>
- *  - Management dashboard                 /begivenheder/mine
+ *  - Management dashboard (Arrangørpanel) /begivenheder/arrangoerpanel
  *  - Create / edit / delete form pages    /begivenheder/{opret,rediger,slet}
  *  - The mutating POST contract (§8.1): feature flag → method → authn →
  *    CSRF → capability → validation → per-object ownership → Flex mutation →
@@ -57,7 +57,10 @@ class EventManagerPlugin extends Plugin
     private const ROUTE_BASE = '/begivenheder';
 
     /** Fixed management slugs under /begivenheder — never treated as object keys. */
-    private const RESERVED_SLUGS = ['mine', 'opret', 'rediger', 'slet', 'tilmeld', 'upload', 'billede'];
+    // 'mine' is the RETIRED dashboard slug (renamed to 'arrangoerpanel'); it
+    // stays reserved so onPagesInitialized can forward it to the new URL
+    // instead of treating it as an event-detail key.
+    private const RESERVED_SLUGS = ['arrangoerpanel', 'mine', 'opret', 'rediger', 'slet', 'tilmeld', 'upload', 'billede'];
 
     /** Object keys: legacy `event0NN` and new `ev_<hex>` both match. */
     private const KEY_PATTERN = '/^[A-Za-z0-9_-]{1,64}$/';
@@ -167,13 +170,19 @@ class EventManagerPlugin extends Plugin
                 $this->resolveDetailRoute($slug);
                 return;
             }
-            if ($slug === 'mine') {
+            if ($slug === 'arrangoerpanel') {
                 $this->enforceManagementAccess('read');
                 // Opportunistic auto-archive: an organizer opening the dashboard
                 // persists archived=true on every event that ran more than a day
                 // ago (behaviour-neutral — reads already treat them as archived).
                 $this->archiveStaleEvents();
                 return;
+            }
+            // Legacy dashboard route: /begivenheder/mine was renamed to
+            // /begivenheder/arrangoerpanel (Arrangørpanel). Forward old
+            // bookmarks/links to the new canonical URL.
+            if ($slug === 'mine') {
+                $this->grav->redirect(self::ROUTE_BASE . '/arrangoerpanel', 302);
             }
             if ($slug === 'opret') {
                 $this->enforceManagementAccess('create');
@@ -195,7 +204,7 @@ class EventManagerPlugin extends Plugin
             // visitor to the dashboard. POSTs pass through to the contract
             // handler (the form actions post here with a hidden key field).
             if (in_array($slug, ['rediger', 'slet'], true) && $method !== 'POST') {
-                $this->grav->redirect(self::ROUTE_BASE . '/mine', 302);
+                $this->grav->redirect(self::ROUTE_BASE . '/arrangoerpanel', 302);
             }
             return;
         }
@@ -785,7 +794,7 @@ class EventManagerPlugin extends Plugin
      */
     private function redirectToDashboard(): never
     {
-        $this->grav->redirect(self::ROUTE_BASE . '/mine', 303);
+        $this->grav->redirect(self::ROUTE_BASE . '/arrangoerpanel', 303);
         exit; // @phpstan-ignore-line — redirect() exits; belt for static analysis
     }
 

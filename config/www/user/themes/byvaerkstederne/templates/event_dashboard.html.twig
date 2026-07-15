@@ -1,7 +1,7 @@
 {% extends 'partials/base.html.twig' %}
 
 {# ============================================================================
-   "Mine begivenheder" — the arrangør dashboard (/begivenheder/mine).
+   "Arrangørpanel" — the arrangør dashboard (/begivenheder/arrangoerpanel).
    `em_events` is injected by the event-manager plugin: the viewer's own
    events (super sees all, incl. soft-deleted), each row carrying `key` and a
    derived `status` (kladde / publiceret / arkiveret / slettet). Buttons are
@@ -18,11 +18,11 @@
 {% set is_super = grav.user.authorize('admin.super') %}
 
 {% block body %}
-<section class="bv-section--sm" aria-label="Mine begivenheder">
+<section class="bv-section--sm" aria-label="Arrangørpanel">
     <div class="bv-container">
 
         <div class="bv-event-dashboard__head">
-            <h1 class="bv-headline">Mine begivenheder</h1>
+            <h1 class="bv-headline">Arrangørpanel</h1>
             {% if grav.user.authorize('admin.events.create') or is_super %}
                 <a class="bv-btn bv-btn--primary" href="/begivenheder/opret" data-testid="event-create-link">Opret begivenhed</a>
             {% endif %}

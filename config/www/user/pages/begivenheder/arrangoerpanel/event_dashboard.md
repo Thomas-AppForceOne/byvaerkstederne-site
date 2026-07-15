@@ -1,8 +1,8 @@
 ---
-title: Mine begivenheder
+title: Arrangørpanel
 template: event_dashboard
 feature: event_management
-slug: mine
+slug: arrangoerpanel
 access:
     site.login: true
 cache_enable: false

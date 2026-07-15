@@ -72,7 +72,7 @@ test.describe('Event create — inline card editor', () => {
     await expect(save).toBeEnabled();
 
     // submit → PRG to the dashboard, event present and published
-    await Promise.all([page.waitForURL(/\/begivenheder\/mine/), save.click()]);
+    await Promise.all([page.waitForURL(/\/begivenheder\/arrangoerpanel/), save.click()]);
     created.push(key);
     const row = page.locator(`[data-event-key="${key}"]`);
     await expect(row).toContainText('Inline Editor Test');

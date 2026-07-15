@@ -71,7 +71,7 @@ async function createEvent(page, { title, published }) {
     maxRedirects: 0,
   });
   expect(response.status()).toBe(303);
-  expect(response.headers()['location']).toContain('/begivenheder/mine');
+  expect(response.headers()['location']).toContain('/begivenheder/arrangoerpanel');
   const match = readEventsFile().match(new RegExp(`^(ev_[0-9a-f]+):\\n(?:[ ].*\\n)*?[ ]{2}title: '?${title}'?\\n`, 'm'));
   expect(match, `event '${title}' persisted with an ev_ key`).toBeTruthy();
   return /** @type {RegExpMatchArray} */ (match)[1];
@@ -122,7 +122,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     expect(record).toMatchObject({ actor: 'pw-test-org', action: 'create', key });
 
     // Dashboard shows it with a success flash and 'publiceret' chip.
-    await page.goto('/begivenheder/mine');
+    await page.goto('/begivenheder/arrangoerpanel');
     const item = page.locator(`[data-event-key="${key}"]`);
     await expect(item).toHaveAttribute('data-event-status', 'publiceret');
 
@@ -144,7 +144,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     createdKeys.push(key);
 
     // Owner sees the draft on the dashboard with a 'kladde' chip.
-    await page.goto('/begivenheder/mine');
+    await page.goto('/begivenheder/arrangoerpanel');
     await expect(page.locator(`[data-event-key="${key}"]`)).toHaveAttribute('data-event-status', 'kladde');
 
     const anon = await browser.newContext();
@@ -176,7 +176,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     const newTitle = `${title} (opdateret)`;
     await page.fill('input[name="data[title]"]', newTitle);
     await page.click('form [type="submit"]');
-    await page.waitForURL(/\/begivenheder\/mine/);
+    await page.waitForURL(/\/begivenheder\/arrangoerpanel/);
 
     const block = eventBlock(key) || '';
     expect(block).toContain(`title: '${newTitle}'`);
@@ -224,7 +224,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     const auditBefore = readAuditLog();
 
     // Owner soft-deletes from the dashboard (mode=delete).
-    await page.goto('/begivenheder/mine');
+    await page.goto('/begivenheder/arrangoerpanel');
     const nonce = await getFormNonce(page);
     const res = await page.request.post('/begivenheder/slet', {
       form: { 'data[key]': key, 'data[mode]': 'delete', 'form-nonce': nonce },
@@ -239,7 +239,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     expect(readAuditLog().slice(auditBefore.length)).toContain('"action":"delete"');
 
     // Gone from the OWNER's own dashboard.
-    await page.goto('/begivenheder/mine');
+    await page.goto('/begivenheder/arrangoerpanel');
     await expect(page.locator(`[data-event-key="${key}"]`)).toHaveCount(0);
 
     // Gone from the public surface + not signup-able (detail route redirects).
@@ -259,7 +259,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     try {
       const adminPage = await adminCtx.newPage();
       await loginAsSiteAdmin(adminPage);
-      await adminPage.goto('/begivenheder/mine');
+      await adminPage.goto('/begivenheder/arrangoerpanel');
       const item = adminPage.locator(`[data-event-key="${key}"]`);
       await expect(item).toHaveAttribute('data-event-status', 'slettet');
       // Super's actions on a deleted event are Gendan + Slet helt (the
@@ -287,7 +287,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     createdKeys.push(key);
 
     // Owner archives (mode=archive).
-    await page.goto('/begivenheder/mine');
+    await page.goto('/begivenheder/arrangoerpanel');
     const nonce = await getFormNonce(page);
     const res = await page.request.post('/begivenheder/slet', {
       form: { 'data[key]': key, 'data[mode]': 'archive', 'form-nonce': nonce },
@@ -297,7 +297,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     expect(eventBlock(key) || '').toContain('archived: true');
 
     // Still on the owner's dashboard (arkiveret), with Arkiver disabled.
-    await page.goto('/begivenheder/mine');
+    await page.goto('/begivenheder/arrangoerpanel');
     const item = page.locator(`[data-event-key="${key}"]`);
     await expect(item).toHaveAttribute('data-event-status', 'arkiveret');
     await expect(item.locator('.bv-event-dashboard__actions .bv-btn', { hasText: 'Arkiver' })).toBeDisabled();
@@ -475,7 +475,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
       maxRedirects: 0,
     });
     expect(res.status()).toBe(303);
-    expect(res.headers()['location']).toContain('/begivenheder/mine');
+    expect(res.headers()['location']).toContain('/begivenheder/arrangoerpanel');
     createdKeys.push(key);
     const block = eventBlock(key) || '';
     expect(block).toContain('published: false');
@@ -523,7 +523,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
       await loginAsSiteAdmin(adminPage);
 
       // Super's dashboard lists other owners' events too.
-      await adminPage.goto('/begivenheder/mine');
+      await adminPage.goto('/begivenheder/arrangoerpanel');
       await expect(adminPage.locator(`[data-event-key="${key}"]`)).toBeVisible();
 
       // Super escalates to a permanent hard delete (mode=hard).
@@ -541,7 +541,7 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     }
   });
 
-  test('organizer sees the create + Mine begivenheder buttons on the calendar page', async ({ page }) => {
+  test('organizer sees the create + Arrangørpanel buttons on the calendar page', async ({ page }) => {
     await loginAsOrganizer(page);
     await page.goto('/vaerkstedskalenderen');
     const create = page.locator('[data-testid="calendar-create-link"]');
@@ -555,16 +555,25 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     expect(Math.abs(mineBox.y - createBox.y)).toBeLessThan(5);
     // The Mine button reaches the dashboard.
     await mine.click();
-    await expect(page).toHaveURL(/\/begivenheder\/mine/);
+    await expect(page).toHaveURL(/\/begivenheder\/arrangoerpanel/);
   });
 
   test('organizer sees the footer entry and reaches the dashboard from it', async ({ page }) => {
     await loginAsOrganizer(page);
     await page.goto('/');
-    const link = page.locator('.bv-footer a[href="/begivenheder/mine"]');
+    const link = page.locator('.bv-footer a[href="/begivenheder/arrangoerpanel"]');
     await expect(link).toBeVisible();
     await link.click();
-    await expect(page).toHaveURL(/\/begivenheder\/mine/);
-    await expect(page.locator('h1')).toContainText('Mine begivenheder');
+    await expect(page).toHaveURL(/\/begivenheder\/arrangoerpanel/);
+    await expect(page.locator('h1')).toContainText('Arrangørpanel');
+  });
+
+  test('the old /begivenheder/mine route redirects to Arrangørpanel', async ({ page }) => {
+    await loginAsOrganizer(page);
+    // Renamed route: the old URL forwards to the new canonical one so existing
+    // bookmarks/links keep working.
+    await page.goto('/begivenheder/mine');
+    await expect(page).toHaveURL(/\/begivenheder\/arrangoerpanel$/);
+    await expect(page.locator('h1')).toContainText('Arrangørpanel');
   });
 });
