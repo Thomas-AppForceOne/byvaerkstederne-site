@@ -77,7 +77,7 @@
                         href: '/begivenheder/' ~ key,
                         key: key,
                         location: ev.location|default(''),
-                        organizer: event_organizer_name(ev.owner|default('')),
+                        organizer: ev.owner|default(''),
                         details_html: ev.details_html|default(''),
                         sort_key: event_sort_key(ev.event_date, ev.event_time, ev.group) ~ '|' ~ '%03d'|format(loop.index)
                     }]) %}

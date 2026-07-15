@@ -133,14 +133,17 @@ test.describe('Events — public read (M1)', () => {
     has: page.locator('.bv-event-row__title', { hasText: title }),
   });
 
-  test('an event with an owner shows the arrangør name on its card', async ({ page }) => {
+  test('an event with an owner shows the arrangør (owner username) on its card', async ({ page }) => {
     test.skip(!readEvents().some((e) => e.key === 'ev_fixture_rsvp'),
       'ev_fixture_rsvp not seeded (TEST_ORGANIZER_PASSWORD absent)');
     await page.goto('/vaerkstedskalenderen');
     const card = cardFor(page, '[FIXTURE] RSVP Tilmeld');
     await expect(card).toHaveCount(1);
-    await expect(card.locator('.bv-event-row__organizer'))
-      .toContainText('Arrangør: Playwright Test Organizer');
+    // The public arrangør line shows the owner USERNAME (a pseudonymous
+    // handle), never the account's real name — no member PII on a public page.
+    const organizer = card.locator('.bv-event-row__organizer');
+    await expect(organizer).toContainText('Arrangør: pw-test-org');
+    await expect(organizer).not.toContainText('Playwright Test Organizer');
   });
 
   test('an event without an owner shows no arrangør line', async ({ page }) => {
