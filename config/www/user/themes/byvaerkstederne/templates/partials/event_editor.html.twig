@@ -144,6 +144,13 @@
             </div>
           </div>
 
+          {# arrangør — read-only preview of who owns the event (the current
+             user on opret, the stored owner on rediger). Owner is stamped
+             server-side and is never client-settable, so there is no popover. #}
+          {% if st.organizerName %}
+            <p class="bv-event-row__organizer bv-ee-organizer"><span class="material-symbols-outlined" aria-hidden="true">person</span>Arrangør: {{ st.organizerName }}</p>
+          {% endif %}
+
           {# description #}
           <textarea name="data[description]" id="ee-desc" class="bv-ee-desc" rows="2" placeholder="Et par linjer om hvad der sker, hvem det er for, og om man skal medbringe noget…" title="Kort beskrivelse" maxlength="2000">{{ st.description|default('') }}</textarea>
         </div>

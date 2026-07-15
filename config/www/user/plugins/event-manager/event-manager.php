@@ -839,6 +839,31 @@ class EventManagerPlugin extends Plugin
             'event_is_stale',
             fn ($date): bool => $this->eventDateIsStale((string)$date)
         ));
+        // Organizer (arrangør) display name for an event's owner. Public,
+        // non-sensitive — the name is shown on every event card and in the
+        // editor preview; unlike the attendee list it carries no email and is
+        // not ownership-gated. Empty string when the event has no owner (legacy
+        // data) so the template can omit the line entirely.
+        $twig->addFunction(new \Twig\TwigFunction(
+            'event_organizer_name',
+            fn (?string $username): string => $this->organizerName((string)$username)
+        ));
+    }
+
+    /**
+     * Public display name for an organizer username: their account fullname,
+     * falling back to the raw username when the account has none, and '' when
+     * the username is empty (an ownerless legacy event). Non-sensitive — only
+     * the name is exposed here, never the email.
+     */
+    private function organizerName(string $username): string
+    {
+        $username = trim($username);
+        if ($username === '') {
+            return '';
+        }
+        $fullname = $this->resolveAccountField($username, 'fullname');
+        return $fullname !== '' ? $fullname : $username;
     }
 
     /**
@@ -977,10 +1002,20 @@ class EventManagerPlugin extends Plugin
         // pre-generated key (adopted by handleCreate so pre-save image uploads
         // land in the right folder).
         if ($template === 'event_create') {
+            // The organizer of a not-yet-created event is always the current
+            // user — owner is stamped to them on save (never client-settable),
+            // so the editor previews their own name.
+            $user = $this->grav['user'] ?? null;
+            $state = FormDataProvider::editorState(null, FormDataProvider::allOldInput());
+            $state['organizerName'] = $this->organizerName((string)($user->username ?? ''));
             $twig->twig_vars['em_new_key'] = FormDataProvider::newEventKey();
-            $twig->twig_vars['em_editor_state'] = FormDataProvider::editorState(null, FormDataProvider::allOldInput());
+            $twig->twig_vars['em_editor_state'] = $state;
         } elseif ($template === 'event_edit' && $this->currentEvent !== null) {
-            $twig->twig_vars['em_editor_state'] = FormDataProvider::editorState($this->currentEvent, FormDataProvider::allOldInput());
+            // Edit previews the STORED owner's name (a super editing someone
+            // else's event still sees the real arrangør, not themselves).
+            $state = FormDataProvider::editorState($this->currentEvent, FormDataProvider::allOldInput());
+            $state['organizerName'] = $this->organizerName((string)($this->currentEvent['owner'] ?? ''));
+            $twig->twig_vars['em_editor_state'] = $state;
         }
 
         if ($template === 'event_dashboard') {

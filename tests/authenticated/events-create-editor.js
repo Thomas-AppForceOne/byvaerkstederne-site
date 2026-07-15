@@ -11,7 +11,7 @@
 
 const { test, expect } = require('@playwright/test');
 const { loginAsOrganizer, hasOrganizerPassword } = require('../helpers/auth');
-const { removeEventByKey } = require('../helpers/fixtures');
+const { removeEventByKey, ensureRsvpEvent, RSVP_EVENT_ID } = require('../helpers/fixtures');
 
 test.describe('Event create — inline card editor', () => {
   test.skip(!hasOrganizerPassword, 'TEST_ORGANIZER_PASSWORD required');
@@ -68,6 +68,27 @@ test.describe('Event create — inline card editor', () => {
     const row = page.locator(`[data-event-key="${key}"]`);
     await expect(row).toContainText('Inline Editor Test');
     await expect(row).toHaveAttribute('data-event-status', 'publiceret');
+  });
+
+  test('opret previews the organizer (current user) as arrangør', async ({ page }) => {
+    await loginAsOrganizer(page);
+    await page.goto('/begivenheder/opret');
+    // The creator IS the arrangør — owner is stamped to them on save, so the
+    // editor card shows their name (read-only; no popover on the line).
+    const organizer = page.locator('#ee-card .bv-event-row__organizer');
+    await expect(organizer).toBeVisible();
+    await expect(organizer).toContainText('Arrangør: Playwright Test Organizer');
+    // It is a preview, not an input — no data[owner] is ever posted.
+    await expect(page.locator('[name="data[owner]"]')).toHaveCount(0);
+  });
+
+  test('rediger previews the stored owner as arrangør', async ({ page }) => {
+    ensureRsvpEvent(); // owned by pw-test-org
+    await loginAsOrganizer(page);
+    await page.goto(`/begivenheder/rediger/${RSVP_EVENT_ID}`);
+    const organizer = page.locator('#ee-card .bv-event-row__organizer');
+    await expect(organizer).toBeVisible();
+    await expect(organizer).toContainText('Arrangør: Playwright Test Organizer');
   });
 
   test('the CTA is locked and follows the event type (Drop-in ⇒ Interesseret, else ⇒ Tilmeld)', async ({ page }) => {

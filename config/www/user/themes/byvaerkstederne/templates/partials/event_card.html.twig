@@ -91,6 +91,9 @@
       <h3 class="bv-event-row__title">{{ event.title }}</h3>
       {% if event.location %}<p class="bv-event-row__location"><span class="material-symbols-outlined" aria-hidden="true">location_on</span>{{ event.location }}</p>{% endif %}
       {% if event.time %}<p class="bv-event-row__time">{{ event.time }}</p>{% endif %}
+      {# Arrangør (organizer) — shown on every event that carries an owner
+         (event_list feeds event.organizer = the owner's resolved name). #}
+      {% if event.organizer %}<p class="bv-event-row__organizer"><span class="material-symbols-outlined" aria-hidden="true">person</span>Arrangør: {{ event.organizer }}</p>{% endif %}
       {% if event.description %}<p class="bv-event-row__desc">{{ event.description|e|regex_replace('/([\\w.%+-]+@[\\w.-]+\\.[A-Za-z]{2,})/', '<a href="mailto:$1">$1</a>')|raw }}</p>{% endif %}
     </div>
 

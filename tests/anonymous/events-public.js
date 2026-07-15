@@ -126,6 +126,31 @@ test.describe('Events — public read (M1)', () => {
     await page.goto('/begivenheder');
     await expect(page).toHaveURL(/\/vaerkstedskalenderen$/);
   });
+
+  // Locate the calendar card whose title matches — the arrangør line lives
+  // inside that card's body, so the assertions are scoped to one event.
+  const cardFor = (page, title) => page.locator('.bv-event-list .bv-event-item', {
+    has: page.locator('.bv-event-row__title', { hasText: title }),
+  });
+
+  test('an event with an owner shows the arrangør name on its card', async ({ page }) => {
+    test.skip(!readEvents().some((e) => e.key === 'ev_fixture_rsvp'),
+      'ev_fixture_rsvp not seeded (TEST_ORGANIZER_PASSWORD absent)');
+    await page.goto('/vaerkstedskalenderen');
+    const card = cardFor(page, '[FIXTURE] RSVP Tilmeld');
+    await expect(card).toHaveCount(1);
+    await expect(card.locator('.bv-event-row__organizer'))
+      .toContainText('Arrangør: Playwright Test Organizer');
+  });
+
+  test('an event without an owner shows no arrangør line', async ({ page }) => {
+    // The public demo events (ensurePublicDemoEvents) are seeded unconditionally
+    // and carry no owner, so their cards must omit the organizer line entirely.
+    await page.goto('/vaerkstedskalenderen');
+    const demo = cardFor(page, '[DEMO] Åbent makerspace');
+    await expect(demo).toHaveCount(1);
+    await expect(demo.locator('.bv-event-row__organizer')).toHaveCount(0);
+  });
 });
 
 test.describe('Events — anonymous management gating (M2 negatives)', () => {

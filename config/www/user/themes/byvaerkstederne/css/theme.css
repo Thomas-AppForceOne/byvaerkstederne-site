@@ -1231,7 +1231,8 @@ a { color: inherit; text-decoration: none; }
     font-size: 1.25rem;
     line-height: 1.15;
 }
-.bv-event-row__location {
+.bv-event-row__location,
+.bv-event-row__organizer {
     margin: 0;
     display: inline-flex;
     align-items: center;
@@ -1239,7 +1240,8 @@ a { color: inherit; text-decoration: none; }
     font-size: 0.85rem;
     color: var(--on-surface-variant);
 }
-.bv-event-row__location .material-symbols-outlined { font-size: 1rem; }
+.bv-event-row__location .material-symbols-outlined,
+.bv-event-row__organizer .material-symbols-outlined { font-size: 1rem; }
 .bv-event-row__time {
     margin: 0;
     font-family: var(--font-headline);
