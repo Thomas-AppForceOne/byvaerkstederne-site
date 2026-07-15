@@ -58,12 +58,25 @@ class TokenStorage implements StorageInterface
         $file = $this->getFile($credential);
         $tokens = (array)$file->content();
 
-        if (!isset($tokens[$persistentToken]) || $tokens[$persistentToken] < time() + $this->timeout) {
+        // BV-PATCH: the old guard compared the whole entry ARRAY to an int
+        // (`$tokens[$persistentToken] < time() + $this->timeout`); in PHP an
+        // array is always greater than an int, so that half was always false and
+        // triplets never expired. Each entry has the shape
+        // [sha1(token) => storedAtUnixTs]; validate the shape, honour the
+        // timeout, and compare the token in constant time.
+        $data = $tokens[$persistentToken] ?? null;
+        if (!is_array($data) || $data === []) {
             return self::TRIPLET_NOT_FOUND;
         }
 
-        $stored = key($tokens[$persistentToken]);
-        if ($stored !== $token) {
+        $storedToken = (string)key($data);
+        $storedTime = (int)reset($data);
+
+        if ($storedTime + $this->timeout < time()) {
+            return self::TRIPLET_NOT_FOUND;
+        }
+
+        if (!hash_equals($storedToken, $token)) {
             return self::TRIPLET_INVALID;
         }
 
