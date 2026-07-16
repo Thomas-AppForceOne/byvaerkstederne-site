@@ -508,6 +508,38 @@ test.describe('Events — organizer CRUD (M2–M4)', () => {
     expect(readEventsFile()).toBe(before); // byte-identical — nothing persisted
   });
 
+  test('editing an event to an empty title as a draft saves (no blueprint 500)', async ({ page }) => {
+    await loginAsOrganizer(page);
+    // Start from a valid published event...
+    const title = `PW tom-titel ${Date.now()}`;
+    const key = await createEvent(page, { title, published: '1' });
+    createdKeys.push(key);
+    // ...then edit it to a DRAFT with the title (and group/date) cleared — the
+    // exact flow that used to 500 because Grav Flex re-validates the blueprint
+    // on update() and `title` was `required`. It must now PRG (303), not error.
+    await page.goto(`/begivenheder/rediger/${key}`);
+    const nonce = await getFormNonce(page);
+    const res = await page.request.post('/begivenheder/rediger', {
+      form: {
+        'data[key]': key,
+        'data[title]': '',
+        'data[group]': '',
+        'data[event_date]': '',
+        'data[published]': '0',
+        'form-nonce': nonce,
+      },
+      maxRedirects: 0,
+    });
+    expect(res.status()).toBe(303);
+    expect(res.headers()['location']).toContain('/begivenheder/arrangoerpanel');
+    const block = eventBlock(key) || '';
+    expect(block).toContain('published: false');
+    // Empty title → Grav drops the empty scalar, so the stored draft carries no
+    // (non-empty) title and the original title is gone.
+    expect(block).not.toContain(title);
+    expect(block).not.toMatch(/^ {2}title: \S/m);
+  });
+
   test('super: sees all events in the dashboard and can hard-delete permanently', async ({ page, browser }) => {
     test.skip(!hasAdminPassword, 'TEST_ADMIN_PASSWORD not set');
 

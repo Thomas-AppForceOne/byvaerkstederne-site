@@ -62,11 +62,14 @@ form:
       validate:
         type: bool
 
+    # title / group / event_date are deliberately NOT `required` here. Grav Flex
+    # runs this blueprint's validation inside FlexObject::update(), so a
+    # `required: true` 500s a legitimate DRAFT save that leaves them empty (an
+    # in-progress event may be saved with nothing filled in). EventValidator is
+    # the server authority and enforces these only when PUBLISHING.
     title:
       type: text
       label: Titel
-      validate:
-        required: true
 
     description:
       type: textarea
@@ -76,8 +79,6 @@ form:
     group:
       type: select
       label: Værkstedsgruppe
-      validate:
-        required: true
       options:
         alle: Alle grupper (fælles)
         makerspace: Makerspace & Reparation
@@ -94,8 +95,6 @@ form:
       type: text
       label: Dato
       help: "Format: 2026-05-02"
-      validate:
-        required: true
 
     event_time:
       type: text
