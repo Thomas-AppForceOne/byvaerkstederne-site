@@ -1,0 +1,17 @@
+# TEST FIXTURE — not a deployed tier.
+#
+# The browser test suites switch their Host header to `flags-off.invalid`
+# (RFC 2606 reserved TLD — can never resolve publicly) whenever they need a
+# profile with EVERY feature flag off. Keeping the all-off fixture on a
+# host of its own means the real tier profiles (dev/test/staging/prod) are
+# operational state: flags there can be flipped to preview unreleased or
+# temporary features WITHOUT touching any test code.
+#
+# DO NOT add flags here — an empty map is this file's entire purpose
+# (every catalogue flag resolves to false via the FlagStore missing-key
+# rule). DO NOT deploy this directory anywhere; it is inert on a live tier
+# but has no business there.
+#
+# The file contains flag metadata only. No credentials, tokens, API keys,
+# or secrets of any kind may appear in this file.
+enabled: {}

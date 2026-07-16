@@ -6,12 +6,14 @@
  *
  *   1. Every flag named in the rollout catalogue is a declared FeatureFlag
  *      enum case.
- *   2. The `staging.hackersbychoice.dk` profile's features.yaml resolves to N/N
- *      catalogue flags enabled; the `test.hackersbychoice.dk` profile's
- *      features.yaml resolves to 0/N catalogue flags enabled (where N is
- *      count(self::CATALOGUE) — the count is no longer a stable 17 after
- *      post-Sprint-1 additions like privacy_policy and placeholder-CTA
- *      gates).
+ *   2. The `dev.hackersbychoice.dk` profile enables every catalogue flag
+ *      (the all-on tier; also catches "new enum case forgot the dev
+ *      profile line"). The other tier profiles (test/staging/prod) are
+ *      OPERATIONAL state — flags there are flipped to preview unreleased
+ *      or temporary features and are deliberately NOT pinned by tests;
+ *      only their payload SHAPE (declared flags, strict strings, no
+ *      secrets) is enforced. The always-off profile the browser suites
+ *      rely on is the dedicated `flags-off.invalid` fixture.
  *   3. The strict-string `"true"`/`"false"` rule still holds for the newly
  *      added flags (typos fail closed with a warning), and a missing
  *      features.yaml does not crash — it just resolves everything false
@@ -142,10 +144,12 @@ final class FeatureFlagCatalogueTest extends TestCase
 
     public function testDevProfileEnablesAllCatalogueFlags(): void
     {
-        // dev is the SOLE all-on tier (the "internal" profile). test, staging
-        // and prod are always all-off — see the disables-all tests below. An
-        // earlier version of this test read the staging tier and asserted
-        // all-on, which is backwards: staging ships every flag "false".
+        // dev is the all-on tier (the "internal" profile) — this test also
+        // catches "new enum case forgot its dev profile line". The other
+        // tier profiles (test/staging/prod) are operational state and are
+        // deliberately NOT pinned: flags there flip to preview unreleased
+        // features without code changes. Only their payload shape is
+        // enforced (the metadata-only tests below).
         $enabled = self::loadProfileYaml('dev.hackersbychoice.dk');
         $this->assertIsArray($enabled, 'dev.hackersbychoice.dk features.yaml must parse to an array.');
 
@@ -173,68 +177,32 @@ final class FeatureFlagCatalogueTest extends TestCase
         );
     }
 
-    public function testStagingAndProdProfilesDisableAllCatalogueFlags(): void
+    /**
+     * The all-off FIXTURE profile the browser suites rely on must actually
+     * be all-off — this is the only profile with a pinned flag state
+     * besides dev, and it is never deployed.
+     */
+    public function testFlagsOffFixtureProfileDisablesEverything(): void
     {
-        // Policy: test, staging and prod are ALWAYS all-off. staging and prod
-        // spell this out with explicit `"false"` values (each flag is
-        // configured-but-disabled); the public-demo/test tier uses an empty
-        // map, covered by testPublicDemoProfileDisablesAllCatalogueFlags.
-        foreach (['staging.hackersbychoice.dk', 'www.byvaerkstederne.dk'] as $host) {
-            $enabled = self::loadProfileYaml($host);
-            $this->assertIsArray($enabled, "{$host} features.yaml must parse to an array.");
-
-            $logger = new ArrayLogger();
-            $store = new FlagStore($enabled, $logger, $host);
-
-            foreach (self::CATALOGUE as $flagValue) {
-                $case = FeatureFlag::from($flagValue);
-                $this->assertFalse(
-                    $store->isEnabled($case),
-                    "{$host} must disable `{$flagValue}` (non-dev tiers are always off)."
-                );
-            }
-
-            $this->assertSame(
-                [],
-                $logger->warnings(),
-                "{$host} profile must load cleanly with zero FlagStore warnings."
-            );
-        }
-    }
-
-    public function testPublicDemoProfileDisablesAllCatalogueFlags(): void
-    {
-        $enabled = self::loadProfileYaml('test.hackersbychoice.dk');
-        // `enabled: {}` parses to an empty array, which FlagStore treats
-        // identically to "no overrides" (no warnings).
+        $enabled = self::loadProfileYaml('flags-off.invalid');
         $this->assertTrue(
             $enabled === null || $enabled === [],
-            'test.hackersbychoice.dk features.yaml must declare an empty enabled map.'
+            'flags-off.invalid features.yaml must declare an empty enabled map — its entire purpose.'
         );
 
         $logger = new ArrayLogger();
-        $store = new FlagStore($enabled, $logger, 'test.hackersbychoice.dk');
+        $store = new FlagStore($enabled, $logger, 'flags-off.invalid');
 
         foreach (self::CATALOGUE as $flagValue) {
             $case = FeatureFlag::from($flagValue);
-            $this->assertFalse(
-                $store->isEnabled($case),
-                "Public-demo profile must disable `{$flagValue}` (0/N rule)."
-            );
-            $this->assertFalse(
-                $store->isConfigured($case),
-                "Public-demo profile must leave `{$flagValue}` unconfigured (missing-key rule)."
-            );
+            $this->assertFalse($store->isEnabled($case));
+            $this->assertFalse($store->isConfigured($case));
         }
 
-        $this->assertSame(
-            [],
-            $logger->warnings(),
-            'Empty enabled map must not warn.'
-        );
+        $this->assertSame([], $logger->warnings(), 'Empty enabled map must not warn.');
     }
 
-    public function testPublicDemoYamlPayloadIsFlagMetadataOnly(): void
+    public function testTestTierYamlPayloadIsFlagMetadataOnly(): void
     {
         $this->assertFlagPayloadIsMetadataOnly('test.hackersbychoice.dk');
     }
@@ -242,6 +210,11 @@ final class FeatureFlagCatalogueTest extends TestCase
     public function testStagingYamlPayloadIsFlagMetadataOnly(): void
     {
         $this->assertFlagPayloadIsMetadataOnly('staging.hackersbychoice.dk');
+    }
+
+    public function testProdYamlPayloadIsFlagMetadataOnly(): void
+    {
+        $this->assertFlagPayloadIsMetadataOnly('www.byvaerkstederne.dk');
     }
 
     /**

@@ -16,7 +16,7 @@
  * no edits to playwright.config.js):
  *
  *   Host 'dev.hackersbychoice.dk'       -> PROFILE=internal   (all 17 flags "true")
- *   Host 'test.hackersbychoice.dk'   -> PROFILE=public_demo (0 flags enabled)
+ *   Host 'flags-off.invalid'   -> PROFILE=public_demo (0 flags enabled)
  *
  * Chromium forbids setting Host via page.goto() / setExtraHTTPHeaders, so
  * we use APIRequestContext (Node-level) throughout. The same context is
@@ -193,7 +193,7 @@ test.describe('Sprint-3: Twig gates hide flagged affordances under public-demo',
   test.beforeAll(async () => {
     seedAdminIfPossible();
     clearGravCache();
-    ctx = await profileContext('test.hackersbychoice.dk');
+    ctx = await profileContext('flags-off.invalid');
   });
 
   test.afterAll(async () => {
@@ -355,7 +355,7 @@ test.describe('Sprint-3: Twig gates render flagged affordances under internal (a
     // This is the "count strictly greater" escape hatch from the
     // contract's html_presence_under_internal_profile criterion — a
     // direct A/B delta check that does not depend on authentication.
-    const pd = await profileContext('test.hackersbychoice.dk');
+    const pd = await profileContext('flags-off.invalid');
     try {
       const [internalResp, pdResp] = await Promise.all([
         ctx.get('/'),
@@ -596,7 +596,7 @@ test.describe('Sprint-3: overlays + Fællesskab column — authenticated', () =>
     ensureLocalAccountSafe('pw-test-user', password, { admin: false });
     clearGravCache();
     internalAuthed = await authedRawContext('dev.hackersbychoice.dk', 'pw-test-user', password);
-    pdAuthed = await authedRawContext('test.hackersbychoice.dk', 'pw-test-user', password);
+    pdAuthed = await authedRawContext('flags-off.invalid', 'pw-test-user', password);
   });
 
   test.afterAll(async () => {
