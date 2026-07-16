@@ -17,6 +17,8 @@ require('./authenticated/bug-report');
 require('./authenticated/feature-suggestion');
 // WI-6 — login success/failure + rate-limit coverage.
 require('./authenticated/login');
+// Remember-me ("Husk mig") resilience — race/UA-swap/tamper regression coverage.
+require('./authenticated/remember-me');
 // Frontend event CRUD — organizer success paths + forced-browsing authz.
 require('./authenticated/events-crud');
 require('./authenticated/events-authz');
