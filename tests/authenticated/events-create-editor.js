@@ -217,4 +217,20 @@ test.describe('Event create — inline card editor', () => {
     expect(boxes[0].top).toBeLessThan(boxes[1].top);
     expect(boxes[1].top).toBeLessThan(boxes[2].top);
   });
+
+  test('on mobile the "antal pladser" popover opens fully on screen', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginAsOrganizer(page);
+    await page.goto('/begivenheder/opret');
+    await page.locator('[data-ee-open="capacity"]').click();
+    const pop = page.locator('.bv-ee-pop[data-ee-pop="capacity"]');
+    await expect(pop).toBeVisible();
+    const box = await pop.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return { left: r.left, right: r.right };
+    });
+    // Neither edge may spill past the viewport (390px).
+    expect(box.left).toBeGreaterThanOrEqual(0);
+    expect(box.right).toBeLessThanOrEqual(390);
+  });
 });

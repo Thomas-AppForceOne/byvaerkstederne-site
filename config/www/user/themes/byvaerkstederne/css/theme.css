@@ -4790,10 +4790,12 @@ button.bv-event-row__signup {
     }
     /* Meta-row popovers open upward to stay on screen. */
     .bv-ee-meta .bv-ee-pop { top: auto; bottom: 100%; margin-top: 0; margin-bottom: 12px; }
-    /* The begivenhedstype field sits at the left of the meta row, so its
-       right-aligned popover spilled off the left edge — anchor it to the left
-       here (and clamp width) so it stays fully on screen. */
-    .bv-ee-meta [data-ee-pop="event-type"] { left: 0; right: auto; max-width: calc(100vw - var(--space-8)); }
+    /* The meta fields sit at the left of the (stacked) meta column, so their
+       right-anchored popovers (begivenhedstype, antal pladser) spilled off the
+       left edge — anchor them to the left here and clamp width so they stay
+       fully on screen. */
+    .bv-ee-meta [data-ee-pop="event-type"],
+    .bv-ee-meta [data-ee-pop="capacity"] { left: 0; right: auto; max-width: calc(100vw - var(--space-8)); }
     .bv-ee-details { padding: var(--space-6) var(--space-4); }
 }
 
