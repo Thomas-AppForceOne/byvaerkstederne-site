@@ -200,4 +200,21 @@ test.describe('Event create — inline card editor', () => {
     await page.locator('.bv-ee-typeopt[data-event-type="Drop-in"]').click();
     await expect(publish).toBeEnabled();
   });
+
+  test('on mobile the editor meta fields (event type / Deltag / antal) stack vertically', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginAsOrganizer(page);
+    await page.goto('/begivenheder/opret');
+    const fields = page.locator('.bv-ee-meta > .bv-ee-field');
+    await expect(fields).toHaveCount(3);
+    const boxes = await fields.evaluateAll((els) => els.map((e) => {
+      const r = e.getBoundingClientRect();
+      return { left: Math.round(r.left), top: Math.round(r.top) };
+    }));
+    // Stacked "over hinanden" = a shared left edge with strictly increasing tops
+    // (a side-by-side row would spread them across different left offsets).
+    expect(new Set(boxes.map((b) => b.left)).size).toBe(1);
+    expect(boxes[0].top).toBeLessThan(boxes[1].top);
+    expect(boxes[1].top).toBeLessThan(boxes[2].top);
+  });
 });
