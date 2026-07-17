@@ -38,7 +38,7 @@ test.describe('Events — member without the organizer role', () => {
 
   test('GET dashboard and create form are 403', async ({ page }) => {
     await login(page); // pw-test-user: site.login only, no admin.events.*
-    for (const route of ['/begivenheder/mine', '/begivenheder/opret']) {
+    for (const route of ['/begivenheder/arrangoerpanel', '/begivenheder/opret']) {
       const response = await page.goto(route);
       expect(response?.status(), route).toBe(403);
     }
@@ -66,7 +66,7 @@ test.describe('Events — member without the organizer role', () => {
   test('member footer has no event-management entry', async ({ page }) => {
     await login(page);
     await page.goto('/');
-    await expect(page.locator('.bv-footer')).not.toContainText('Mine begivenheder');
+    await expect(page.locator('.bv-footer')).not.toContainText('Arrangørpanel');
   });
 
   test('member sees no create button on the calendar page', async ({ page }) => {
@@ -75,10 +75,14 @@ test.describe('Events — member without the organizer role', () => {
     await expect(page.locator('[data-testid="calendar-create-link"]')).toHaveCount(0);
   });
 
-  test('member cannot read another owner\'s draft (404, no existence leak)', async ({ page }) => {
+  test('member cannot read another owner\'s draft — it redirects to the calendar (no leak)', async ({ page }) => {
     await login(page);
-    const response = await page.goto('/begivenheder/ev_fixture_draft');
-    expect(response?.status()).toBe(404);
+    // The detail page is retired; every /begivenheder/<key> redirects to the
+    // calendar, so a draft is indistinguishable from any other key and its
+    // content is never shown.
+    await page.goto('/begivenheder/ev_fixture_draft');
+    await expect(page).toHaveURL(/\/vaerkstedskalenderen$/);
+    await expect(page.locator('body')).not.toContainText('[FIXTURE] Draft event');
   });
 });
 
@@ -139,17 +143,20 @@ test.describe('Events — organizer forced browsing (per-object authz)', () => {
         'data[time_end]': '10:00', // ends before it starts
         'data[capacity_unlimited]': '0',
         'data[capacity_count]': 'mange', // must be a number
-        'data[price]': '1000 kr. kontant', // price is a closed choice
-        'data[button_text]': 'Køb nu', // only Tilmeld/Interesseret
+        'data[event_type]': '1000 kr. kontant', // event_type is a closed choice
+        'data[button_text]': 'Køb nu', // ignored — button_text is derived from the type
         'form-nonce': nonce,
       },
       maxRedirects: 0,
     });
     expect(response.status()).toBe(400);
     const body = await response.json();
+    // button_text is no longer validated (it is derived from the event type),
+    // so it never appears in the field errors.
     expect(Object.keys(body.errors)).toEqual(
-      expect.arrayContaining(['title', 'group', 'event_date', 'time_end', 'capacity_count', 'price', 'button_text'])
+      expect.arrayContaining(['title', 'group', 'event_date', 'time_end', 'capacity_count', 'event_type'])
     );
+    expect(Object.keys(body.errors)).not.toContain('button_text');
     expect(readEventsFile()).toBe(before);
   });
 
@@ -207,6 +214,7 @@ test.describe('Events — organizer forced browsing (per-object authz)', () => {
         'data[event_date]': '2030-01-15',
         'data[time_start]': '10:00',
         'data[time_end]': '12:00',
+        'data[event_type]': 'Gratis',
         'data[published]': '0',
         'data[owner]': 'attacker',
         'data[created_by]': 'attacker',
@@ -250,6 +258,20 @@ test.describe('Events — organizer forced browsing (per-object authz)', () => {
     expect(readEventsFile()).toContain('ev_fixture_draft:');
   });
 
+  test('organizer cannot restore (mode=restore is super-only, 403)', async ({ page }) => {
+    // Restore is the super's "Gendan"; organizers reactivate their own events
+    // by editing them, never via mode=restore.
+    await loginAsOrganizer(page);
+    const nonce = await organizerNonce(page);
+    const response = await page.request.post('/begivenheder/slet', {
+      form: { 'data[key]': 'ev_fixture_archived', 'data[mode]': 'restore', 'form-nonce': nonce },
+      maxRedirects: 0,
+    });
+    expect(response.status()).toBe(403);
+    // The archived fixture is untouched (still archived).
+    expect(readEventsFile()).toContain('ev_fixture_archived:');
+  });
+
   test('audit log is append-only across mutations', async ({ page }) => {
     await loginAsOrganizer(page);
     const nonce = await organizerNonce(page);
@@ -262,6 +284,7 @@ test.describe('Events — organizer forced browsing (per-object authz)', () => {
         'data[event_date]': '2030-01-15',
         'data[time_start]': '10:00',
         'data[time_end]': '12:00',
+        'data[event_type]': 'Gratis',
         'data[published]': published,
         'form-nonce': nonce,
       },

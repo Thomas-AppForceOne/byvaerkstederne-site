@@ -61,6 +61,15 @@ function bvOpenOverlay(id){['bv-login-overlay','bv-forgot-overlay','bv-register-
     {% include 'partials/feature_suggestion_overlay.html.twig' %}
     {% endif %}
 
+    {# One rotating CSRF nonce for the RSVP signup button, rendered once per
+       page for authenticated members only (mirrors roadmap's #bv-rm-vote-nonces).
+       The button flips signup state via AJAX without navigating, so it needs
+       its own 'event-rsvp' nonce rather than the Form plugin's page 'form'
+       nonce; site.js reads and rotates it. #}
+    {% if feature_enabled('event_rsvp') and grav.user.authenticated and grav.user.authorized %}
+    <div id="bv-em-rsvp-nonce" hidden>{{ nonce_field('event-rsvp', 'rsvp_nonce')|raw }}</div>
+    {% endif %}
+
     <script src="{{ url('theme://js/site.js') }}?v={{ 'now'|date('U') }}"></script>
 
     {% block bottom %}{% endblock %}

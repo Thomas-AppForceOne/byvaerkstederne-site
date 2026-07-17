@@ -35,16 +35,16 @@ final class FormDataProvider
     }
 
     /**
-     * Price choices for the form select — keys are the stored/displayed
-     * values (EventValidator::PRICE_OPTIONS is the single source).
+     * Event-type choices for the form select — keys are the stored/displayed
+     * values (EventValidator::EVENT_TYPE_OPTIONS is the single source).
      *
      * @return array<string,string>
      */
-    public static function priceOptions(): array
+    public static function eventTypeOptions(): array
     {
         $options = [];
-        foreach (EventValidator::PRICE_OPTIONS as $value) {
-            $options[$value] = $value === '' ? 'Ingen prisvisning' : $value;
+        foreach (EventValidator::EVENT_TYPE_OPTIONS as $value) {
+            $options[$value] = $value === '' ? 'Ingen visning' : $value;
         }
         return $options;
     }
@@ -97,6 +97,104 @@ final class FormDataProvider
         return $old !== null && array_key_exists($field, $old) ? $old[$field] : null;
     }
 
+    /**
+     * The full stashed old input from a rejected submission, consumed
+     * read-once, or null. Used by the inline card editor to repopulate its
+     * client state after a server-side validation redirect.
+     *
+     * @return array<string,mixed>|null
+     */
+    public static function allOldInput(): ?array
+    {
+        return self::consumeOldInput();
+    }
+
+    /**
+     * Build the inline card editor's initial client state (event_editor.html.twig)
+     * from an optional stored event and optional rejected-submission old input.
+     * Precedence: old input (a validation redirect) → stored event (edit) →
+     * empty (create). Maps the stored shape onto the editor's shape: event_time
+     * → timeStart/timeEnd, capacity → capacityUnlimited/capacityCount,
+     * details_html → details.
+     *
+     * @param array<string,mixed>|null $event    stored event (edit) or null (create)
+     * @param array<string,mixed>|null $oldInput rejected submission stash or null
+     * @return array<string,mixed>
+     */
+    public static function editorState(?array $event, ?array $oldInput): array
+    {
+        $oi = is_array($oldInput) ? $oldInput : [];
+        $ev = is_array($event) ? $event : [];
+
+        // time: old input time_start/end wins; else parse the stored
+        // "HH:MM - HH:MM" event_time (legacy strings tolerated).
+        $timeStart = isset($oi['time_start']) ? (string)$oi['time_start'] : '';
+        $timeEnd = isset($oi['time_end']) ? (string)$oi['time_end'] : '';
+        if ($timeStart === '' && $timeEnd === '' && isset($ev['event_time'])
+            && preg_match('/(\d{1,2}[:.]\d{2}).*?(\d{1,2}[:.]\d{2})/u', (string)$ev['event_time'], $m)) {
+            $timeStart = str_pad(str_replace('.', ':', $m[1]), 5, '0', STR_PAD_LEFT);
+            $timeEnd = str_pad(str_replace('.', ':', $m[2]), 5, '0', STR_PAD_LEFT);
+        }
+
+        // capacity: old input wins; else derive from the stored capacity
+        // (numeric ⇒ limited with that count; empty/non-numeric ⇒ unlimited).
+        // Create default (neither present): limited (Nej), so a count is asked for.
+        $capacityUnlimited = false;
+        $capacityCount = '';
+        if (array_key_exists('capacity_unlimited', $oi)) {
+            $capacityUnlimited = in_array((string)$oi['capacity_unlimited'], ['1', 'true', 'on'], true);
+            $capacityCount = (string)($oi['capacity_count'] ?? '');
+        } elseif (array_key_exists('capacity', $ev)) {
+            $cap = trim((string)$ev['capacity']);
+            if (preg_match('/^\d+$/', $cap)) {
+                $capacityUnlimited = false;
+                $capacityCount = $cap;
+            } else {
+                $capacityUnlimited = true;
+            }
+        }
+
+        $published = false;
+        if (array_key_exists('published', $oi)) {
+            $published = in_array((string)$oi['published'], ['1', 'true', 'on'], true);
+        } elseif (array_key_exists('published', $ev)) {
+            $published = !empty($ev['published']);
+        }
+
+        $pick = static fn (string $oiKey, string $evKey, string $default = ''): string
+            => (string)($oi[$oiKey] ?? $ev[$evKey] ?? $default);
+
+        // Date prefill: a stored date in the past is no longer selectable
+        // (events must be today or later), so default the field to today so a
+        // reactivating edit lands on a valid date. Old input (after a
+        // validation bounce) always wins, so the user's own entry is kept.
+        $eventDate = (string)($oi['event_date'] ?? $ev['event_date'] ?? '');
+        if (!array_key_exists('event_date', $oi) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $eventDate)) {
+            $today = (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Copenhagen')))->format('Y-m-d');
+            if ($eventDate < $today) {
+                $eventDate = $today;
+            }
+        }
+
+        return [
+            'title' => $pick('title', 'title'),
+            'group' => $pick('group', 'group'),
+            'description' => $pick('description', 'description'),
+            'location' => $pick('location', 'location'),
+            'eventDate' => $eventDate,
+            'timeStart' => $timeStart,
+            'timeEnd' => $timeEnd,
+            'capacityUnlimited' => $capacityUnlimited,
+            'capacityCount' => $capacityCount,
+            'eventType' => $pick('event_type', 'event_type'),
+            'buttonText' => $pick('button_text', 'button_text', 'Tilmeld'),
+            'published' => $published,
+            // The details textarea is prefilled from the sanitized stored HTML
+            // (round-trip stable, §5.4); old input wins after a redirect.
+            'details' => $pick('details', 'details_html'),
+        ];
+    }
+
     /** @return array<string,mixed>|null */
     private static function consumeOldInput(): ?array
     {
@@ -128,6 +226,38 @@ final class FormDataProvider
             $options['hard'] = 'Slet permanent (kan IKKE fortrydes)';
         }
         return $options;
+    }
+
+    private const NEW_KEY_SESSION_KEY = 'em_new_event_key';
+
+    /**
+     * A pre-generated `ev_<hex>` key for the create form, stable across the
+     * form's lifetime (stored in the session) so images uploaded before first
+     * save (§5.2/§6) go to the folder the finished event will use. handleCreate
+     * adopts this key when it is still unused, then clears it.
+     */
+    public static function newEventKey(): string
+    {
+        $session = Grav::instance()['session'] ?? null;
+        if ($session !== null
+            && isset($session->{self::NEW_KEY_SESSION_KEY})
+            && preg_match('/^ev_[a-f0-9]{16}$/', (string)$session->{self::NEW_KEY_SESSION_KEY})) {
+            return (string)$session->{self::NEW_KEY_SESSION_KEY};
+        }
+        $key = 'ev_' . bin2hex(random_bytes(8));
+        if ($session !== null) {
+            $session->{self::NEW_KEY_SESSION_KEY} = $key;
+        }
+        return $key;
+    }
+
+    /** Clear the create-form key once an event has adopted it. */
+    public static function clearNewEventKey($grav): void
+    {
+        $session = $grav['session'] ?? null;
+        if ($session !== null) {
+            unset($session->{self::NEW_KEY_SESSION_KEY});
+        }
     }
 
     /** The <key> segment of /begivenheder/{rediger,slet}/<key>, or ''. */
@@ -180,6 +310,12 @@ final class FormDataProvider
         if ($field === 'capacity_count') {
             $capacity = trim((string)($event['capacity'] ?? ''));
             return preg_match('/^\d+$/', $capacity) ? $capacity : null;
+        }
+        if ($field === 'details') {
+            // The raw form field is `details`; the stored (sanitized) value
+            // lives under details_html. Feed it back for a round-trip-stable
+            // edit (§5.4). It is sanitizer output, safe to re-edit.
+            return (string)($event['details_html'] ?? '');
         }
 
         if (!array_key_exists($field, $event)) {

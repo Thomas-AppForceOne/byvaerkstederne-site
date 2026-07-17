@@ -9,7 +9,7 @@
  *
  * Handles:
  *  - Public event detail route            /begivenheder/<key>
- *  - Management dashboard                 /begivenheder/mine
+ *  - Management dashboard (Arrangørpanel) /begivenheder/arrangoerpanel
  *  - Create / edit / delete form pages    /begivenheder/{opret,rediger,slet}
  *  - The mutating POST contract (§8.1): feature flag → method → authn →
  *    CSRF → capability → validation → per-object ownership → Flex mutation →
@@ -47,6 +47,8 @@ use Grav\Plugin\EventManager\EventAuthorizer;
 use Grav\Plugin\EventManager\EventRepository;
 use Grav\Plugin\EventManager\EventValidator;
 use Grav\Plugin\EventManager\FormDataProvider;
+use Grav\Plugin\EventManager\ImageStore;
+use Grav\Plugin\EventManager\SignupRepository;
 use Grav\Plugin\FeatureFlags\FeatureFlag;
 use Grav\Plugin\FeatureFlags\FlagStoreInterface;
 
@@ -55,7 +57,10 @@ class EventManagerPlugin extends Plugin
     private const ROUTE_BASE = '/begivenheder';
 
     /** Fixed management slugs under /begivenheder — never treated as object keys. */
-    private const RESERVED_SLUGS = ['mine', 'opret', 'rediger', 'slet'];
+    // 'mine' is the RETIRED dashboard slug (renamed to 'arrangoerpanel'); it
+    // stays reserved so onPagesInitialized can forward it to the new URL
+    // instead of treating it as an event-detail key.
+    private const RESERVED_SLUGS = ['arrangoerpanel', 'mine', 'opret', 'rediger', 'slet', 'tilmeld', 'upload', 'billede'];
 
     /** Object keys: legacy `event0NN` and new `ev_<hex>` both match. */
     private const KEY_PATTERN = '/^[A-Za-z0-9_-]{1,64}$/';
@@ -146,6 +151,13 @@ class EventManagerPlugin extends Plugin
         $segments = array_values(array_filter(explode('/', $path), 'strlen'));
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
+        // Public image serving GET /begivenheder/billede/<key>/<file> (§5.3) —
+        // streamed directly and terminated here.
+        if (count($segments) === 4 && $segments[1] === 'billede') {
+            $this->serveEventImage($segments[2], $segments[3]);
+            return;
+        }
+
         // /begivenheder itself has no page; the public event list lives on
         // the calendar page.
         if (count($segments) === 1) {
@@ -158,19 +170,41 @@ class EventManagerPlugin extends Plugin
                 $this->resolveDetailRoute($slug);
                 return;
             }
-            if ($slug === 'mine') {
+            if ($slug === 'arrangoerpanel') {
                 $this->enforceManagementAccess('read');
+                // Opportunistic auto-archive: an organizer opening the dashboard
+                // persists archived=true on every event that ran more than a day
+                // ago (behaviour-neutral — reads already treat them as archived).
+                $this->archiveStaleEvents();
                 return;
+            }
+            // Legacy dashboard route: /begivenheder/mine was renamed to
+            // /begivenheder/arrangoerpanel (Arrangørpanel). Forward old
+            // bookmarks/links to the new canonical URL.
+            if ($slug === 'mine') {
+                $this->grav->redirect(self::ROUTE_BASE . '/arrangoerpanel', 302);
             }
             if ($slug === 'opret') {
                 $this->enforceManagementAccess('create');
+                return;
+            }
+            if ($slug === 'tilmeld' || $slug === 'upload') {
+                // The RSVP toggle (§3) and image upload (§5.2) are POST-only
+                // and have no page of their own. Mount a virtual page so the
+                // §8.1 contract handler in onPageInitialized reliably fires for
+                // the POST; a bare GET is a dead end → back to the calendar.
+                if ($method === 'POST') {
+                    $this->mountVirtualRoute('event-rsvp.md');
+                } else {
+                    $this->grav->redirect('/vaerkstedskalenderen', 302);
+                }
                 return;
             }
             // A bare GET on the keyed form routes is meaningless — send the
             // visitor to the dashboard. POSTs pass through to the contract
             // handler (the form actions post here with a hidden key field).
             if (in_array($slug, ['rediger', 'slet'], true) && $method !== 'POST') {
-                $this->grav->redirect(self::ROUTE_BASE . '/mine', 302);
+                $this->grav->redirect(self::ROUTE_BASE . '/arrangoerpanel', 302);
             }
             return;
         }
@@ -204,47 +238,19 @@ class EventManagerPlugin extends Plugin
     }
 
     /**
-     * Public detail route /begivenheder/<key> (§8.2).
-     *
-     * Every denial — feature flag off, malformed key, unknown key, or an
-     * unpublished/archived event the viewer may not read — falls through by
-     * simply returning: no page is mounted at the route, so Grav serves its
-     * natural themed 404, indistinguishable from a missing page (no
-     * existence leak).
+     * Route /begivenheder/<key>. The standalone public detail page has been
+     * retired — event details are shown inline on the calendar (card
+     * expansion), so any /begivenheder/<key> URL redirects to the calendar.
+     * Redirecting every key uniformly (published, unpublished, unknown alike)
+     * means no event's existence leaks via a distinct 404 (§8.2). Feature off
+     * still falls through to the natural themed 404.
      */
     private function resolveDetailRoute(string $key): void
     {
         if (!$this->featureEnabled()) {
-            return;
+            return; // feature off → natural themed 404 (the page's `feature:` gate)
         }
-        if (!preg_match(self::KEY_PATTERN, $key)) {
-            return;
-        }
-
-        $event = $this->repository()->findArray($key);
-        if ($event === null) {
-            return;
-        }
-
-        $user = $this->grav['user'] ?? null;
-        if (!EventAuthorizer::canRead($user, $event)) {
-            return;
-        }
-
-        $page = $this->buildVirtualPage('event-detail.md');
-        if ($page === null) {
-            return;
-        }
-        $page->title((string)($event['title'] ?? 'Begivenhed'));
-
-        $this->currentEvent = $event;
-        $this->currentKey = $key;
-
-        $grav = $this->grav;
-        unset($grav['page']);
-        $grav['page'] = static function () use ($page) {
-            return $page;
-        };
+        $this->grav->redirect('/vaerkstedskalenderen', 302);
     }
 
     /**
@@ -311,8 +317,14 @@ class EventManagerPlugin extends Plugin
         }
 
         // 1. Feature-flag gate — before any payload parsing. Belt to the
-        //    page-level gate: a disabled feature never processes a POST.
-        if (!$this->featureEnabled()) {
+        //    page-level gate: a disabled feature never processes a POST. The
+        //    CRUD actions gate on event_management; the RSVP toggle and the
+        //    image upload (part of the details feature, §3/§5/§6) additionally
+        //    require event_rsvp — either off ⇒ the same no-leak 404.
+        $flagOk = in_array($action, ['rsvp', 'upload'], true)
+            ? $this->rsvpFeatureEnabled()
+            : $this->featureEnabled();
+        if (!$flagOk) {
             $this->sendFlagDisabled404();
         }
 
@@ -323,18 +335,38 @@ class EventManagerPlugin extends Plugin
         //    the contract never depends on page frontmatter.
         $user = $this->grav['user'] ?? null;
         if (!$user || !$user->authenticated || !$user->authorized) {
-            $this->sendError(401, 'Ikke autoriseret. Log ind for at administrere begivenheder.');
+            $this->sendError(401, 'Ikke autoriseret. Log ind for at fortsætte.');
         }
 
-        // 4. CSRF — the Form plugin's nonce, injected by forms/form.html.twig.
-        $nonce = (string)($_POST['form-nonce'] ?? '');
-        if ($nonce === '' || !Utils::verifyNonce($nonce, 'form')) {
-            $this->sendError(403, 'Ugyldig sikkerhedstoken. Genindlæs siden og prøv igen.');
+        // 4. CSRF. The full-page CRUD forms use the Form plugin's shared
+        //    'form' nonce (injected by forms/form.html.twig). The RSVP button
+        //    flips state without navigation, so it carries its own rotating
+        //    'event-rsvp' nonce (minted fresh into every success response) —
+        //    the roadmap-vote pattern.
+        if ($action === 'rsvp') {
+            $nonce = (string)($_POST['rsvp_nonce'] ?? '');
+            if ($nonce === '' || !Utils::verifyNonce($nonce, 'event-rsvp')) {
+                $this->sendError(403, 'Ugyldig sikkerhedstoken. Genindlæs siden og prøv igen.');
+            }
+        } else {
+            $nonce = (string)($_POST['form-nonce'] ?? '');
+            if ($nonce === '' || !Utils::verifyNonce($nonce, 'form')) {
+                $this->sendError(403, 'Ugyldig sikkerhedstoken. Genindlæs siden og prøv igen.');
+            }
         }
 
         // 5. Capability (admin.super passes explicitly — core authorize()
-        //    has no super override outside the admin plugin).
-        if (!EventAuthorizer::hasCapability($user, $action)) {
+        //    has no super override outside the admin plugin). SKIPPED for
+        //    rsvp: any activated member may sign up — site.login is the bar
+        //    (§3), which step 3 already enforced. For upload, either the
+        //    create or the update capability qualifies (§5.2) — the image may
+        //    be added while composing a new event or editing an existing one.
+        if ($action === 'upload') {
+            if (!EventAuthorizer::hasCapability($user, 'create')
+                && !EventAuthorizer::hasCapability($user, 'update')) {
+                $this->sendError(403, 'Du har ikke rettigheder til at uploade billeder.');
+            }
+        } elseif ($action !== 'rsvp' && !EventAuthorizer::hasCapability($user, $action)) {
             $this->sendError(403, 'Du har ikke rettigheder til at administrere begivenheder.');
         }
 
@@ -353,12 +385,24 @@ class EventManagerPlugin extends Plugin
             case 'delete':
                 $this->handleDelete($user, $data);
                 break;
+            case 'rsvp':
+                $this->handleRsvp($user, $data);
+                break;
+            case 'upload':
+                $this->handleUpload($user, $data);
+                break;
         }
     }
 
     /** Map a request path to the §8.1 action (and capability suffix). */
     private function mutationActionForPath(string $path): ?string
     {
+        if ($path === self::ROUTE_BASE . '/tilmeld') {
+            return 'rsvp';
+        }
+        if ($path === self::ROUTE_BASE . '/upload') {
+            return 'upload';
+        }
         if ($path === self::ROUTE_BASE . '/opret') {
             return 'create';
         }
@@ -393,9 +437,13 @@ class EventManagerPlugin extends Plugin
         $values['updated_by'] = $user->username;
         $values['updated_at'] = $now;
         $values['archived'] = false;
+        $values['deleted'] = false;
 
-        // Fresh collision-resistant server key (mirrors the br_/rm_ convention).
-        $key = 'ev_' . bin2hex(random_bytes(8));
+        // Adopt the create form's pre-generated key when it is well-formed and
+        // still unused, so images uploaded before first save (§5.2/§6) land in
+        // the folder the finished event actually uses; otherwise mint a fresh
+        // collision-resistant one (mirrors the br_/rm_ convention).
+        $key = $this->adoptOrGenerateKey($data);
 
         try {
             $key = $this->repository()->create($values, $key);
@@ -403,9 +451,13 @@ class EventManagerPlugin extends Plugin
             $this->sendError(500, 'Begivenheden kunne ikke gemmes. Prøv igen.');
         }
 
+        // The create-form key has been consumed — the next new form gets a
+        // fresh one.
+        FormDataProvider::clearNewEventKey($this->grav);
+
         $this->auditLog()->append('create', $key, $user->username, ['after' => $this->auditSnapshot($values)]);
         $this->repository()->bustRenderCache();
-        $this->redirectWithFlash('Begivenheden "' . $values['title'] . '" er oprettet.');
+        $this->redirectToDashboard();
     }
 
     /** @param array<string,mixed> $data */
@@ -420,7 +472,14 @@ class EventManagerPlugin extends Plugin
         $values['owner'] = (string)($stored['owner'] ?? '');
         $values['created_by'] = (string)($stored['created_by'] ?? '');
         $values['created_at'] = (string)($stored['created_at'] ?? '');
-        $values['archived'] = !empty($stored['archived']);
+        // Editing lifts the archive: an organizer reactivates an archived (or
+        // auto-archived) event simply by saving it. The no-past-date rule +
+        // date-bump (FormDataProvider::editorState / EventValidator) guarantees
+        // the saved date is today or later, so it will not be re-archived by the
+        // stale sweep. The soft-delete flag is NOT cleared here — a deleted
+        // event is restored only by a super via the dashboard's "Gendan".
+        $values['archived'] = false;
+        $values['deleted'] = !empty($stored['deleted']);
         $values['updated_by'] = $user->username;
         $values['updated_at'] = gmdate('Y-m-d\TH:i:s\Z');
 
@@ -435,7 +494,7 @@ class EventManagerPlugin extends Plugin
             'after' => $this->auditSnapshot($values),
         ]);
         $this->repository()->bustRenderCache();
-        $this->redirectWithFlash('Begivenheden "' . $values['title'] . '" er opdateret.');
+        $this->redirectToDashboard();
     }
 
     /** @param array<string,mixed> $data */
@@ -456,17 +515,26 @@ class EventManagerPlugin extends Plugin
             } catch (\Throwable $e) {
                 $this->sendError(500, 'Begivenheden kunne ikke slettes. Prøv igen.');
             }
+            // A permanently removed event leaves no orphaned signups or images.
+            $this->signupRepository()->deleteFor($key);
+            $this->imageStore()->deleteEventImages($key);
             $this->auditLog()->append('hard_delete', $key, $user->username, ['before' => $this->auditSnapshot($stored)]);
             $this->repository()->bustRenderCache();
-            $this->redirectWithFlash('Begivenheden er slettet permanent.');
+            $this->redirectToDashboard();
         }
 
         if ($mode === 'restore') {
-            // Reverse of the soft archive — the owner's self-service undo.
-            // `published` stays false; the event comes back as a draft.
+            // Restore is a super-only action (the dashboard's "Gendan"): it
+            // lifts BOTH the soft-delete and the archive, bringing the event
+            // back as a draft. Organizers reactivate their OWN archived events
+            // by editing them instead — they never see a Gendan button.
+            if (!$user->authorize('admin.super')) {
+                $this->sendError(403, 'Gendannelse kræver administrator-rettigheder.');
+            }
             try {
                 $this->repository()->update($object, [
                     'archived' => false,
+                    'deleted' => false,
                     'updated_by' => $user->username,
                     'updated_at' => $now,
                 ]);
@@ -475,11 +543,31 @@ class EventManagerPlugin extends Plugin
             }
             $this->auditLog()->append('restore', $key, $user->username, []);
             $this->repository()->bustRenderCache();
-            $this->redirectWithFlash('Begivenheden er gendannet som kladde.');
+            $this->redirectToDashboard();
         }
 
-        // Default: soft archive — retain the object, unpublish, hide from
-        // all public views; reversible by the owner from the dashboard.
+        if ($mode === 'delete') {
+            // Soft delete (the arrangør's "Slet"): retain the object but hide it
+            // from the owner's dashboard and every public surface. Reversible
+            // only by a super ("Gendan") or a future cleanup job — never a hard
+            // delete here, so an accidental click is fully recoverable.
+            try {
+                $this->repository()->update($object, [
+                    'deleted' => true,
+                    'published' => false,
+                    'updated_by' => $user->username,
+                    'updated_at' => $now,
+                ]);
+            } catch (\Throwable $e) {
+                $this->sendError(500, 'Begivenheden kunne ikke slettes. Prøv igen.');
+            }
+            $this->auditLog()->append('delete', $key, $user->username, ['before' => $this->auditSnapshot($stored)]);
+            $this->repository()->bustRenderCache();
+            $this->redirectToDashboard();
+        }
+
+        // Default: soft archive — retain the object, unpublish, hide from all
+        // public views; still shown on the owner's dashboard as "Arkiveret".
         try {
             $this->repository()->update($object, [
                 'archived' => true,
@@ -492,7 +580,134 @@ class EventManagerPlugin extends Plugin
         }
         $this->auditLog()->append('archive', $key, $user->username, ['before' => $this->auditSnapshot($stored)]);
         $this->repository()->bustRenderCache();
-        $this->redirectWithFlash('Begivenheden er arkiveret.');
+        $this->redirectToDashboard();
+    }
+
+    /**
+     * RSVP toggle (event_rsvp_specification.md §3). The shared gates (flag,
+     * authn, CSRF) have already run; no capability is required. Order here:
+     * event exists → published && !archived → date not past → toggle (with
+     * capacity inside the store's lock for Tilmeld) → audit → respond.
+     *
+     * Every not-signup-able condition returns the same no-leak 404 as the
+     * detail route (existence is not disclosed); a past event is 409; a full
+     * Tilmeld event is 409 "Alle pladser er optaget".
+     *
+     * @param array<string,mixed> $data
+     */
+    private function handleRsvp($user, array $data): void
+    {
+        $key = trim((string)($data['key'] ?? ''));
+        if ($key === '' || !preg_match(self::KEY_PATTERN, $key)) {
+            $this->sendError(404, 'Begivenheden findes ikke.');
+        }
+
+        $event = $this->repository()->findArray($key);
+        if ($event === null || empty($event['published']) || !empty($event['archived']) || !empty($event['deleted'])
+            || $this->eventDateIsStale((string)($event['event_date'] ?? ''))) {
+            // Unknown, unpublished, archived, or auto-archived (ran more than a
+            // day ago) — indistinguishable from missing, same posture as the
+            // detail route (§8.2).
+            $this->sendError(404, 'Begivenheden findes ikke.');
+        }
+
+        if ($this->eventIsPast($event)) {
+            $this->sendError(409, 'Tilmelding er lukket — begivenheden er afholdt.');
+        }
+
+        // Mode is stamped from the event's button_text (lowercased), so a
+        // later organizer flip does not reinterpret existing signups (§2).
+        $mode = strtolower(trim((string)($event['button_text'] ?? 'Tilmeld')));
+        if ($mode !== SignupRepository::MODE_TILMELD && $mode !== 'interesseret') {
+            $mode = SignupRepository::MODE_TILMELD;
+        }
+
+        // Capacity is enforced only for Tilmeld with a numeric capacity;
+        // non-numeric/empty ⇒ unlimited (§0). Interesseret is never bounded.
+        $capacity = null;
+        if ($mode === SignupRepository::MODE_TILMELD) {
+            $rawCap = trim((string)($event['capacity'] ?? ''));
+            if (preg_match('/^\d+$/', $rawCap)) {
+                $capacity = (int)$rawCap;
+            }
+        }
+
+        $signups = $this->signupRepository();
+        $result = $signups->toggle($key, (string)$user->username, $mode, $capacity);
+
+        if ($result === SignupRepository::FULL) {
+            $this->sendError(409, 'Alle pladser er optaget.');
+        }
+
+        $auditAction = $result === SignupRepository::SIGNED_UP ? 'signup' : 'withdraw';
+        $this->auditLog()->append($auditAction, $key, (string)$user->username, ['mode' => $mode]);
+
+        $count = $signups->countFor($key);
+        $remaining = $capacity !== null
+            ? max(0, $capacity - $signups->countFor($key, SignupRepository::MODE_TILMELD))
+            : null;
+
+        // AJAX button (Accept not text/html) gets JSON with a fresh rotating
+        // nonce; a no-JS form submit (Accept: text/html) gets a plain PRG
+        // redirect back to the page it came from — mirrors validateOr400()'s split.
+        if (!str_contains((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'text/html')) {
+            $this->sendJson([
+                'success' => true,
+                'action' => $result,
+                'count' => $count,
+                'remaining' => $remaining,
+                'new_nonce' => Utils::getNonce('event-rsvp'),
+            ]);
+        }
+
+        // No success flash: the reloaded card already reflects the new state
+        // (signed-up checkbox + updated count), matching the AJAX path which
+        // never showed a confirmation bar either. Errors still flash upstream.
+        $this->grav->redirect($this->safeReferer('/vaerkstedskalenderen'), 303);
+        exit; // @phpstan-ignore-line — redirect() exits; belt for static analysis
+    }
+
+    /**
+     * Image upload for the details editor (§5.2). The shared gates (flags,
+     * authn, form-nonce CSRF, create|update capability) have already run.
+     * Per-object rule: if the posted key resolves to an existing event, the
+     * caller must own it (or be super); if it doesn't exist yet, a
+     * capability-holder may upload against the pre-generated create-form key
+     * (bounded by the per-event quota). Responds in TinyMCE's shape:
+     * {location} on success.
+     *
+     * @param array<string,mixed> $data
+     */
+    private function handleUpload($user, array $data): void
+    {
+        $key = trim((string)($data['key'] ?? ''));
+        if ($key === '' || !preg_match(self::KEY_PATTERN, $key)) {
+            $this->sendError(400, 'Ugyldig begivenhedsnøgle.');
+        }
+
+        // Existing event → ownership required; not-yet-created key → allowed
+        // for the capability-holder already verified in the shared gates.
+        $event = $this->repository()->findArray($key);
+        if ($event !== null && !EventAuthorizer::ownsOrSuper($user, $event['owner'] ?? null)) {
+            $this->sendError(403, 'Du kan kun uploade billeder til dine egne begivenheder.');
+        }
+
+        $file = $_FILES['file'] ?? null;
+        if (!is_array($file)) {
+            $this->sendError(400, 'Ingen fil modtaget.');
+        }
+
+        $result = $this->imageStore()->store($key, $file);
+        if (isset($result['error'])) {
+            $this->sendError(400, $result['error']);
+        }
+
+        $this->auditLog()->append('image_upload', $key, (string)$user->username, ['file' => $result['file']]);
+        // The serving URL is extensionless (see ImageStore) so the web server's
+        // static-asset handler doesn't swallow it before Grav.
+        $this->sendJson([
+            'location' => self::ROUTE_BASE . '/billede/' . $key . '/' . ImageStore::hashOf($result['file']),
+        ]);
     }
 
     /**
@@ -570,11 +785,16 @@ class EventManagerPlugin extends Plugin
         ];
     }
 
-    /** §8.1.10 — PRG: flash + 303 redirect to the dashboard. */
-    private function redirectWithFlash(string $message): never
+    /**
+     * §8.1.10 — PRG: 303 redirect back to the dashboard after a mutation.
+     * No success flash: the outcome is self-evident on the reloaded dashboard
+     * (the event moves to its new status / disappears), so the transient
+     * "…er arkiveret/oprettet/…" confirmation bars were removed as noise.
+     * Error feedback still flashes from the error paths above.
+     */
+    private function redirectToDashboard(): never
     {
-        $this->grav['messages']->add($message, 'success');
-        $this->grav->redirect(self::ROUTE_BASE . '/mine', 303);
+        $this->grav->redirect(self::ROUTE_BASE . '/arrangoerpanel', 303);
         exit; // @phpstan-ignore-line — redirect() exits; belt for static analysis
     }
 
@@ -610,6 +830,139 @@ class EventManagerPlugin extends Plugin
                 return sprintf('%s|%s|%d', (string)$date, $start, $rank);
             }
         ));
+
+        // RSVP reads injected straight into the existing card/detail/dashboard
+        // templates — no new read endpoints (§3). Arrow functions bind $this
+        // so the closures reach the private repositories.
+        $twig->addFunction(new \Twig\TwigFunction(
+            'event_signup_info',
+            fn (string $key): ?array => $this->signupInfo($key)
+        ));
+        $twig->addFunction(new \Twig\TwigFunction(
+            'event_attendees',
+            fn (string $key): ?array => $this->attendeeList($key)
+        ));
+        // Calendar guard: an event that ran more than a day ago is stale and
+        // must not render on the (upcoming-activities) calendar.
+        $twig->addFunction(new \Twig\TwigFunction(
+            'event_is_stale',
+            fn ($date): bool => $this->eventDateIsStale((string)$date)
+        ));
+    }
+
+    /**
+     * Public signup state for one event, or null when the event is not
+     * signup-able (unknown, unpublished, archived, or the flag is off). The
+     * data is public — counts and remaining seats are shown to everyone,
+     * including anonymous visitors (§1.3).
+     *
+     * @return array{count:int, remaining:?int, is_full:bool, user_signed_up:bool, mode:string, is_past:bool}|null
+     */
+    private function signupInfo(string $key): ?array
+    {
+        if ($key === '' || !$this->rsvpFeatureEnabled()) {
+            return null;
+        }
+        $event = $this->repository()->findArray($key);
+        if ($event === null || empty($event['published']) || !empty($event['archived']) || !empty($event['deleted'])
+            || $this->eventDateIsStale((string)($event['event_date'] ?? ''))) {
+            return null;
+        }
+
+        $mode = strtolower(trim((string)($event['button_text'] ?? 'Tilmeld')));
+        if ($mode !== SignupRepository::MODE_TILMELD && $mode !== 'interesseret') {
+            $mode = SignupRepository::MODE_TILMELD;
+        }
+
+        $rawCap = trim((string)($event['capacity'] ?? ''));
+        $capacity = preg_match('/^\d+$/', $rawCap) ? (int)$rawCap : null;
+
+        $signups = $this->signupRepository();
+        $count = $signups->countFor($key);
+        $remaining = ($mode === SignupRepository::MODE_TILMELD && $capacity !== null)
+            ? max(0, $capacity - $signups->countFor($key, SignupRepository::MODE_TILMELD))
+            : null;
+
+        $user = $this->grav['user'] ?? null;
+        $userSignedUp = $user && $user->authenticated && $user->authorized
+            && $signups->isSignedUp($key, (string)$user->username);
+
+        return [
+            'count' => $count,
+            'remaining' => $remaining,
+            'is_full' => $remaining !== null && $remaining <= 0,
+            'user_signed_up' => (bool)$userSignedUp,
+            'mode' => $mode,
+            'is_past' => $this->eventIsPast($event),
+        ];
+    }
+
+    /**
+     * Attendee list for the OWNER (or super) only — the ownership check lives
+     * here in PHP so a template can never leak names by accident (§3). Returns
+     * null for anyone else. Full names are resolved from Grav's accounts at
+     * render time, never stored in the signup file (§2).
+     *
+     * @return list<array{username:string, fullname:string, email:string, mode:string, ts:string}>|null
+     */
+    private function attendeeList(string $key): ?array
+    {
+        if ($key === '' || !$this->rsvpFeatureEnabled()) {
+            return null;
+        }
+        $event = $this->repository()->findArray($key);
+        if ($event === null) {
+            return null;
+        }
+        $user = $this->grav['user'] ?? null;
+        if (!EventAuthorizer::ownsOrSuper($user, isset($event['owner']) ? (string)$event['owner'] : null)) {
+            return null;
+        }
+
+        // Email is resolved here (owner/super-gated) so the organizer can
+        // contact attendees; it is never exposed on any public surface.
+        $rows = $this->signupRepository()->attendeesFor($key);
+        foreach ($rows as &$row) {
+            $row['fullname'] = $this->resolveFullName($row['username']);
+            $row['email'] = $this->resolveAccountField($row['username'], 'email');
+        }
+        unset($row);
+        return $rows;
+    }
+
+    /** Best-effort full-name lookup via Grav's accounts; falls back to ''. */
+    private function resolveFullName(string $username): string
+    {
+        return $this->resolveAccountField($username, 'fullname');
+    }
+
+    /**
+     * Read one field off a Grav account, or '' when unavailable. Used to
+     * resolve attendee display data (fullname, email) at render time — the
+     * signup file only stores usernames (§2). Owner/super-gated by the caller.
+     */
+    private function resolveAccountField(string $username, string $field): string
+    {
+        try {
+            $accounts = $this->grav['accounts'] ?? null;
+            if ($accounts === null || !method_exists($accounts, 'load')) {
+                return '';
+            }
+            $account = $accounts->load($username);
+            if (!$account) {
+                return '';
+            }
+            $value = '';
+            if (method_exists($account, 'get')) {
+                $value = (string)($account->get($field) ?? '');
+            }
+            if ($value === '' && isset($account->{$field})) {
+                $value = (string)$account->{$field};
+            }
+            return $value;
+        } catch (\Throwable $e) {
+            return '';
+        }
     }
 
     public function onTwigSiteVariables(): void
@@ -621,9 +974,34 @@ class EventManagerPlugin extends Plugin
         $template = $page->template();
         $twig = $this->grav['twig'];
 
-        if (in_array($template, ['event_detail', 'event_edit', 'event_delete'], true) && $this->currentEvent !== null) {
+        if (in_array($template, ['event_edit', 'event_delete'], true) && $this->currentEvent !== null) {
             $twig->twig_vars['em_event'] = $this->currentEvent;
             $twig->twig_vars['em_event_key'] = $this->currentKey;
+        }
+
+        // The inline card editor (event_create + event_edit) is a custom form,
+        // not a Form-plugin form: inject its initial client state, computed from
+        // the stored event (edit) and/or the stashed old input (repopulation
+        // after a validation redirect). Create additionally gets the
+        // pre-generated key (adopted by handleCreate so pre-save image uploads
+        // land in the right folder).
+        if ($template === 'event_create') {
+            // The organizer of a not-yet-created event is always the current
+            // user — owner is stamped to them on save (never client-settable),
+            // so the editor previews their own username. The username (a
+            // pseudonymous handle), never the account's real name, is what the
+            // arrangør line shows everywhere — no member PII on any surface.
+            $user = $this->grav['user'] ?? null;
+            $state = FormDataProvider::editorState(null, FormDataProvider::allOldInput());
+            $state['organizerName'] = (string)($user->username ?? '');
+            $twig->twig_vars['em_new_key'] = FormDataProvider::newEventKey();
+            $twig->twig_vars['em_editor_state'] = $state;
+        } elseif ($template === 'event_edit' && $this->currentEvent !== null) {
+            // Edit previews the STORED owner's username (a super editing someone
+            // else's event still sees the real arrangør handle, not themselves).
+            $state = FormDataProvider::editorState($this->currentEvent, FormDataProvider::allOldInput());
+            $state['organizerName'] = (string)($this->currentEvent['owner'] ?? '');
+            $twig->twig_vars['em_editor_state'] = $state;
         }
 
         if ($template === 'event_dashboard') {
@@ -680,6 +1058,193 @@ class EventManagerPlugin extends Plugin
             return true;
         }
         return $store->isEnabled(FeatureFlag::EventManagement);
+    }
+
+    /**
+     * RSVP gate: both event_rsvp AND event_management must be on (§3/§6).
+     * Same fail-open-if-missing posture as featureEnabled().
+     */
+    private function rsvpFeatureEnabled(): bool
+    {
+        $store = $this->grav['feature_flags'] ?? null;
+        if (!$store instanceof FlagStoreInterface) {
+            return true;
+        }
+        return $store->isEnabled(FeatureFlag::EventRsvp)
+            && $store->isEnabled(FeatureFlag::EventManagement);
+    }
+
+    /** The signup store, bound to user/data/flex-objects/event-signups.yaml. */
+    private function signupRepository(): SignupRepository
+    {
+        $dir = $this->grav['locator']->findResource('user-data://flex-objects', true, true);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0750, true);
+        }
+        return new SignupRepository($dir . '/event-signups.yaml');
+    }
+
+    /** The image store, bound to user/data/event-images/. */
+    private function imageStore(): ImageStore
+    {
+        $dir = $this->grav['locator']->findResource('user-data://event-images', true, true);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0750, true);
+        }
+        return new ImageStore($dir);
+    }
+
+    /**
+     * Adopt the create form's pre-generated `ev_<hex>` key when it is
+     * well-formed and not already an event (so pre-save image uploads keep
+     * their folder); otherwise mint a fresh one.
+     *
+     * @param array<string,mixed> $data
+     */
+    private function adoptOrGenerateKey(array $data): string
+    {
+        $posted = trim((string)($data['key'] ?? ''));
+        if ($posted !== ''
+            && preg_match('/^ev_[a-f0-9]{16}$/', $posted)
+            && $this->repository()->find($posted) === null) {
+            return $posted;
+        }
+        return 'ev_' . bin2hex(random_bytes(8));
+    }
+
+    /**
+     * Stream a stored event image (§5.3). Public — event details are public —
+     * so no auth gate, but the feature flag still applies (off ⇒ natural 404)
+     * and the key/filename are strictly validated (no traversal). Content-Type
+     * is derived from magic bytes with X-Content-Type-Options: nosniff.
+     */
+    private function serveEventImage(string $key, string $file): void
+    {
+        if (!$this->rsvpFeatureEnabled()) {
+            return; // natural themed 404 — no existence leak
+        }
+        $store = $this->imageStore();
+        $path = $store->resolvePath($key, $file);
+        if ($path === null) {
+            return; // malformed or missing → natural 404
+        }
+        $mime = $store->detectMimeType($path);
+        if ($mime === null || !in_array($mime, ImageStore::ALLOWED_MIME, true)) {
+            return;
+        }
+
+        $response = new Response(
+            200,
+            [
+                'Content-Type' => $mime,
+                'Content-Length' => (string)filesize($path),
+                'Cache-Control' => 'public, max-age=86400',
+                'X-Content-Type-Options' => 'nosniff',
+            ],
+            (string)file_get_contents($path)
+        );
+        $this->grav->close($response);
+    }
+
+    /** True when the event's date is strictly before today in Europe/Copenhagen. */
+    private function eventIsPast(array $event): bool
+    {
+        $date = trim((string)($event['event_date'] ?? ''));
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return false; // unparseable date → don't block on it
+        }
+        $today = (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Copenhagen')))->format('Y-m-d');
+        return $date < $today;
+    }
+
+    /**
+     * The cutoff date (Europe/Copenhagen) an event must be on or after to still
+     * count as current: today minus one day. An event dated strictly before it
+     * ran "more than a day ago" and is treated as archived (auto-archive rule).
+     */
+    private function staleCutoffDate(): string
+    {
+        return (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Copenhagen')))
+            ->modify('-1 day')->format('Y-m-d');
+    }
+
+    /**
+     * True when an event ran more than a day ago (date strictly before the
+     * stale cutoff). Such events are archived — hidden from the calendar and
+     * no longer signup-able. An unparseable date is never stale.
+     */
+    public function eventDateIsStale(string $date): bool
+    {
+        $date = trim($date);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return false;
+        }
+        return $date < $this->staleCutoffDate();
+    }
+
+    /**
+     * Auto-archive (persist archived=true) every published event that ran more
+     * than a day ago. Runs opportunistically when an organizer opens the
+     * dashboard, so stale events leave both the public calendar and the
+     * dashboard's active list. Idempotent — only writes when something actually
+     * needs archiving. Read-path callers already treat stale events as archived
+     * (see eventDateIsStale usage), so this sweep is behaviour-neutral; it only
+     * makes the stored flag match what the reads already compute.
+     */
+    private function archiveStaleEvents(): void
+    {
+        try {
+            $archived = $this->repository()->archiveStale($this->staleCutoffDate());
+        } catch (\Throwable $e) {
+            return; // housekeeping must never break the dashboard
+        }
+        if ($archived !== []) {
+            $this->repository()->bustRenderCache();
+        }
+    }
+
+    /**
+     * A same-origin local path from the Referer header, or $fallback. Guards
+     * the no-JS PRG redirect against an open-redirect via a spoofed Referer.
+     */
+    private function safeReferer(string $fallback): string
+    {
+        $referer = (string)($_SERVER['HTTP_REFERER'] ?? '');
+        if ($referer === '') {
+            return $fallback;
+        }
+        $parts = parse_url($referer);
+        if ($parts === false) {
+            return $fallback;
+        }
+        $host = $parts['host'] ?? '';
+        $selfHost = (string)($_SERVER['HTTP_HOST'] ?? '');
+        if ($host !== '' && $host !== $selfHost) {
+            return $fallback; // cross-origin referer — never redirect there
+        }
+        $path = $parts['path'] ?? '';
+        if (!is_string($path) || !str_starts_with($path, '/')) {
+            return $fallback;
+        }
+        return $path . (isset($parts['fragment']) ? '#' . $parts['fragment'] : '');
+    }
+
+    /**
+     * Mount a plugin-bundled virtual page at the current route so a POST-only
+     * endpoint (no page of its own) still fires onPageInitialized. The
+     * contract handler terminates before render, so the page is never shown.
+     */
+    private function mountVirtualRoute(string $file): void
+    {
+        $page = $this->buildVirtualPage($file);
+        if ($page === null) {
+            return;
+        }
+        $grav = $this->grav;
+        unset($grav['page']);
+        $grav['page'] = static function () use ($page) {
+            return $page;
+        };
     }
 
     /**

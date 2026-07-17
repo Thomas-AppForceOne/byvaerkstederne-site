@@ -97,6 +97,40 @@ final class EventRepository
         $object->save();
     }
 
+    /**
+     * Auto-archive: set archived=true on every published, non-archived event
+     * whose date is strictly before $cutoff (Y-m-d) — i.e. it ran more than a
+     * day ago. Idempotent; unparseable dates are left untouched. Returns the
+     * storage keys that were archived.
+     *
+     * @return list<string>
+     */
+    public function archiveStale(string $cutoff): array
+    {
+        $archived = [];
+        try {
+            $collection = $this->directory()->getCollection();
+        } catch (\Throwable $e) {
+            return [];
+        }
+        foreach ($collection as $object) {
+            $data = $this->toArray($object);
+            if (empty($data['published']) || !empty($data['archived'])) {
+                continue;
+            }
+            $date = trim((string)($data['event_date'] ?? ''));
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || $date >= $cutoff) {
+                continue;
+            }
+            $this->update($object, ['archived' => true]);
+            $key = method_exists($object, 'getStorageKey') ? (string)$object->getStorageKey() : '';
+            if ($key !== '') {
+                $archived[] = $key;
+            }
+        }
+        return $archived;
+    }
+
     public function hardDelete(object $object): void
     {
         $object->delete();
@@ -142,7 +176,11 @@ final class EventRepository
         foreach ($collection as $object) {
             $data = $this->toArray($object);
             $owner = (string)($data['owner'] ?? '');
-            if (!$isSuper && ($owner === '' || $owner !== $username)) {
+            $isDeleted = !empty($data['deleted']);
+            // Non-supers see only their OWN, non-(soft-)deleted events. A super
+            // sees everything — including soft-deleted events — so they can
+            // restore or permanently remove them.
+            if (!$isSuper && ($owner === '' || $owner !== $username || $isDeleted)) {
                 continue;
             }
             $key = method_exists($object, 'getStorageKey') ? $object->getStorageKey() : null;
@@ -153,9 +191,11 @@ final class EventRepository
                 continue;
             }
             $data['key'] = (string)$key;
-            $data['status'] = !empty($data['archived'])
-                ? 'arkiveret'
-                : (!empty($data['published']) ? 'publiceret' : 'kladde');
+            $data['status'] = $isDeleted
+                ? 'slettet'
+                : (!empty($data['archived'])
+                    ? 'arkiveret'
+                    : (!empty($data['published']) ? 'publiceret' : 'kladde'));
             $rows[] = $data;
         }
 

@@ -1,0 +1,59 @@
+{#
+   Shared TinyMCE loader + init for the event `details` field, used by both the
+   edit form (partials/event_form.html.twig) and the inline card editor
+   (event_create.html.twig). TinyMCE (GPL) is self-hosted under
+   theme://js/vendor/tinymce, NO CDN. Progressive enhancement: without JS, or
+   if TinyMCE fails to load, the plain <textarea class="bv-rich-editor"> still
+   posts text that the server sanitizes (DetailsSanitizer is the boundary).
+#}
+<script src="{{ url('theme://js/vendor/tinymce/tinymce.min.js') }}?v={{ 'now'|date('U') }}"></script>
+<script>
+(function () {
+    if (!window.tinymce) { return; } // graceful fallback to the plain textarea
+    tinymce.init({
+        selector: 'textarea.bv-rich-editor',
+        license_key: 'gpl',
+        base_url: '{{ url('theme://js/vendor/tinymce') }}',
+        suffix: '.min',
+        promotion: false,
+        branding: false,
+        menubar: false,
+        elementpath: false,
+        plugins: 'lists advlist autolink link image table code wordcount quickbars',
+        toolbar: 'undo redo | blocks | bold italic underline | bullist numlist | link image table | removeformat code',
+        block_formats: 'Afsnit=p; Overskrift=h2; Underoverskrift=h3; Lille overskrift=h4',
+        height: 340,
+        skin: 'oxide',
+        content_css: 'default',
+        convert_urls: false,
+        automatic_uploads: true,
+        // Image insertion POSTs to the event-manager upload endpoint with the
+        // owning form's CSRF nonce and event key; the server stores the file
+        // under the allowlisted /begivenheder/billede/ serving path — the only
+        // img src the sanitizer keeps.
+        images_upload_handler: function (blobInfo) {
+            return new Promise(function (resolve, reject) {
+                var ta = document.querySelector('textarea.bv-rich-editor');
+                var f = ta ? ta.form : document.querySelector('form');
+                var fd = new FormData();
+                fd.append('file', blobInfo.blob(), blobInfo.filename());
+                var nonce = f && f.querySelector('[name="form-nonce"]');
+                var keyEl = f && f.querySelector('[name="data[key]"]');
+                fd.append('form-nonce', nonce ? nonce.value : '');
+                fd.append('data[key]', keyEl ? keyEl.value : '');
+                fetch('/begivenheder/upload', { method: 'POST', body: fd, credentials: 'same-origin' })
+                    .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
+                    .then(function (res) {
+                        if (res.status === 200 && res.data && res.data.location) {
+                            resolve(res.data.location);
+                        } else {
+                            var msg = (res.data && res.data.data && res.data.data.error) || 'Upload fejlede.';
+                            reject({ message: msg, remove: true });
+                        }
+                    })
+                    .catch(function () { reject({ message: 'Netværksfejl ved upload.', remove: true }); });
+            });
+        }
+    });
+})();
+</script>

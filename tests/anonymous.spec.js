@@ -41,6 +41,10 @@ require('./anonymous/password-reset');
 require('./anonymous/auth-surface');
 // Frontend event CRUD — public read (M1) + anonymous management gating.
 require('./anonymous/events-public');
+// Event RSVP — anonymous availability, login offer, forced-browsing negatives,
+// and the inline card expansion (no login needed).
+require('./anonymous/events-rsvp-public');
+require('./anonymous/events-card-expand');
 // Account self-service — /konto access control + flag-off endpoint gating.
 require('./anonymous/account-access');
 

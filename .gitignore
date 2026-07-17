@@ -149,6 +149,12 @@ deploy/promotion-log.jsonl
 # Event-manager audit trail — live state written by the plugin, per-tier, never committed
 config/www/user/data/flex-objects/events-audit.jsonl
 
+# Event RSVP signups — live per-tier state written by the plugin, never committed
+config/www/user/data/flex-objects/event-signups.yaml
+
+# Event-details uploaded images — runtime user uploads (the RSVP tests also
+# create these), per-event subfolders with random filenames; never track them.
+config/www/user/data/event-images/
 # Account-manager runtime state (audit trail + write lock) — live per-tier
 # state written by the plugin, never committed
 config/www/user/data/account-manager/

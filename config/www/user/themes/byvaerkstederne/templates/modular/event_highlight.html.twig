@@ -18,12 +18,14 @@
                 {% set ev_collection = ev_dir ? ev_dir.collection : null %}
                 {% set today = 'now'|date('Y-m-d') %}
                 {% set next_event = null %}
+                {% set next_event_key = null %}
 
                 {% if ev_collection %}
-                    {% for ev in ev_collection %}
+                    {% for key, ev in ev_collection %}
                         {% if ev.published and not ev.archived and ev.event_date >= today %}
                             {% if next_event is null or ev.event_date < next_event.event_date %}
                                 {% set next_event = ev %}
+                                {% set next_event_key = key %}
                             {% endif %}
                         {% endif %}
                     {% endfor %}
@@ -55,12 +57,11 @@
                     {% set filter_map = {makerspace: 'makerspace', krea: 'krea', groent: 'groent', kulturhus: 'kulturhus', alle: 'all'} %}
                     {% set ev_group = next_event.group|default('alle') %}
                     {% set ev_accent = accent_map[ev_group]|default('primary') %}
-                    {# CTA only when the RSVP flag is on AND a real URL exists —
-                       per the partial's contract a missing href drops the CTA
-                       silently (no href="#" fallback). #}
-                    {% set ev_cta = (feature_enabled('event_rsvp') and next_event.button_url)
-                        ? { label: h.event_cta|default('Jeg kommer'), href: next_event.button_url, variant: ev_accent }
-                        : null %}
+                    {# Aligned with the calendar/detail cards (§6): passing the
+                       event key makes the shared partial render the live RSVP
+                       signup button + availability line when event_rsvp is on.
+                       The retired button_url CTA is gone; flag-off simply drops
+                       the button. #}
                     {% set _event = {
                         day: next_event.event_date|date('j'),
                         month: next_event.event_date|date('M'),
@@ -70,10 +71,14 @@
                         description: next_event.description|default(null),
                         accent: ev_accent,
                         filter: filter_map[ev_group]|default(ev_group),
-                        price: next_event.price|default(null),
-                        cta: ev_cta,
+                        event_type: next_event.event_type|default(null),
+                        cta: null,
                         capacity: next_event.capacity|default(null),
-                        featured: true
+                        featured: true,
+                        key: next_event_key,
+                        href: '/begivenheder/' ~ next_event_key,
+                        location: next_event.location|default(''),
+                        details_html: next_event.details_html|default('')
                     } %}
                     {% include 'partials/event_card.html.twig' with { event: _event, inList: false } %}
                 {% endif %}

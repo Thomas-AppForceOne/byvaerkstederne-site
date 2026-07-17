@@ -32,9 +32,16 @@ const UNPROMOTED_BUG_REPORT_ID = 'br_fixture_unpromoted';
 const DRAFT_EVENT_ID = 'ev_fixture_draft';
 const ARCHIVED_EVENT_ID = 'ev_fixture_archived';
 const FOREIGN_EVENT_ID = 'ev_fixture_foreign';
+// Event RSVP fixtures (future-dated so the past-event guard never trips).
+const RSVP_EVENT_ID = 'ev_fixture_rsvp';
+const CAPACITY_EVENT_ID = 'ev_fixture_capacity';
+const INTEREST_EVENT_ID = 'ev_fixture_interest';
 const LOCKED_ROADMAP_YAML_PATH = '/config/www/user/data/flex-objects/roadmap-items.yaml';
 const BUG_REPORTS_YAML_PATH = '/config/www/user/data/flex-objects/bug-reports.yaml';
 const EVENTS_YAML_PATH = '/config/www/user/data/flex-objects/begivenheder.yaml';
+const SIGNUPS_YAML_PATH = '/config/www/user/data/flex-objects/event-signups.yaml';
+const EVENT_AUDIT_PATH = '/config/www/user/data/flex-objects/events-audit.jsonl';
+const EVENT_IMAGES_DIR = '/config/www/user/data/event-images';
 
 // Leading newline is intentionally omitted: the target files already end in
 // a newline, so `cat >>` produces a clean break. Leaving a blank line in
@@ -113,7 +120,7 @@ const DRAFT_EVENT_YAML = `${DRAFT_EVENT_ID}:
   event_time: '10:00 - 12:00'
   location: 'Makerspace lokalet'
   capacity: ''
-  price: ''
+  event_type: ''
   button_text: ''
   button_url: ''
   button_style: primary
@@ -131,13 +138,13 @@ const ARCHIVED_EVENT_YAML = `${ARCHIVED_EVENT_ID}:
   published: false
   title: '[FIXTURE] Archived event for Playwright tests'
   description: 'Seeded by tests/helpers/fixtures.js; do not edit.'
-  group: kreativ
+  group: krea
   badge: 'Krea Café'
   event_date: '2030-02-15'
   event_time: '10:00 - 12:00'
   location: 'Krea lokalet'
   capacity: ''
-  price: ''
+  event_type: ''
   button_text: ''
   button_url: ''
   button_style: secondary
@@ -161,7 +168,7 @@ const FOREIGN_EVENT_YAML = `${FOREIGN_EVENT_ID}:
   event_time: '10:00 - 12:00'
   location: 'Eventværkstedet'
   capacity: ''
-  price: ''
+  event_type: ''
   button_text: ''
   button_url: ''
   button_style: tertiary
@@ -174,6 +181,202 @@ const FOREIGN_EVENT_YAML = `${FOREIGN_EVENT_ID}:
   updated_at: '2026-06-01T00:00:00Z'
   archived: false
 `;
+
+// Event RSVP fixtures. All future-dated (past-event guard never trips), owned
+// by pw-test-org so the attendee-list authz tests have an owner. The Tilmeld
+// events drive signup/withdraw + capacity; the Interesseret event drives the
+// never-capacity-blocked path.
+const RSVP_EVENT_YAML = `${RSVP_EVENT_ID}:
+  published: true
+  title: '[FIXTURE] RSVP Tilmeld event for Playwright tests'
+  description: 'Seeded by tests/helpers/fixtures.js; do not edit.'
+  group: makerspace
+  badge: 'Makerspace & Reparation'
+  event_date: '2030-05-15'
+  event_time: '10:00 - 12:00'
+  location: 'Makerspace lokalet'
+  capacity: ''
+  event_type: ''
+  button_text: 'Tilmeld'
+  button_url: ''
+  button_style: primary
+  featured: false
+  featured_tag: ''
+  owner: pw-test-org
+  created_by: pw-test-org
+  created_at: '2026-06-01T00:00:00Z'
+  updated_by: pw-test-org
+  updated_at: '2026-06-01T00:00:00Z'
+  archived: false
+  details_html: '<p>Medbring dit eget projekt — vi har værktøj og loddekolber klar.</p>'
+`;
+
+const CAPACITY_EVENT_YAML = `${CAPACITY_EVENT_ID}:
+  published: true
+  title: '[FIXTURE] Capacity-1 Tilmeld event for Playwright tests'
+  description: 'Seeded by tests/helpers/fixtures.js; do not edit.'
+  group: makerspace
+  badge: 'Makerspace & Reparation'
+  event_date: '2030-05-16'
+  event_time: '10:00 - 12:00'
+  location: 'Makerspace lokalet'
+  capacity: '1'
+  event_type: ''
+  button_text: 'Tilmeld'
+  button_url: ''
+  button_style: primary
+  featured: false
+  featured_tag: ''
+  owner: pw-test-org
+  created_by: pw-test-org
+  created_at: '2026-06-01T00:00:00Z'
+  updated_by: pw-test-org
+  updated_at: '2026-06-01T00:00:00Z'
+  archived: false
+  details_html: ''
+`;
+
+const INTEREST_EVENT_YAML = `${INTEREST_EVENT_ID}:
+  published: true
+  title: '[FIXTURE] Interesseret event for Playwright tests'
+  description: 'Seeded by tests/helpers/fixtures.js; do not edit.'
+  group: krea
+  badge: 'Krea Café'
+  event_date: '2030-05-17'
+  event_time: '10:00 - 12:00'
+  location: 'Krea lokalet'
+  capacity: '1'
+  event_type: ''
+  button_text: 'Interesseret'
+  button_url: ''
+  button_style: tertiary
+  featured: false
+  featured_tag: ''
+  owner: pw-test-org
+  created_by: pw-test-org
+  created_at: '2026-06-01T00:00:00Z'
+  updated_by: pw-test-org
+  updated_at: '2026-06-01T00:00:00Z'
+  archived: false
+  details_html: '<p>Kom og vær kreativ i Krea Café — kaffe på kanden.</p>'
+`;
+
+function ensureRsvpEvent() {
+  return appendIfMissing(EVENTS_YAML_PATH, RSVP_EVENT_ID, RSVP_EVENT_YAML);
+}
+
+function ensureCapacityEvent() {
+  return appendIfMissing(EVENTS_YAML_PATH, CAPACITY_EVENT_ID, CAPACITY_EVENT_YAML);
+}
+
+function ensureInterestEvent() {
+  return appendIfMissing(EVENTS_YAML_PATH, INTEREST_EVENT_ID, INTEREST_EVENT_YAML);
+}
+
+function removeRsvpEvent() {
+  return removeFixture(EVENTS_YAML_PATH, RSVP_EVENT_ID);
+}
+
+function removeCapacityEvent() {
+  return removeFixture(EVENTS_YAML_PATH, CAPACITY_EVENT_ID);
+}
+
+function removeInterestEvent() {
+  return removeFixture(EVENTS_YAML_PATH, INTEREST_EVENT_ID);
+}
+
+// Public demo events — seeded UNCONDITIONALLY (no credentials needed) so the
+// calendar always carries forward-looking, detail-bearing content. Without
+// them, the auto-archive rule (events that ran >1 day ago are hidden) plus
+// details-gated card expansion would leave the anonymous/mobile calendar
+// suites with nothing to assert on a credential-less machine. Dates are
+// computed at seed time so they never age into staleness. Groups span
+// makerspace + krea + kulturhus to cover the calendar filter tests; groent is
+// intentionally left empty (the green filter's "no events" assumption).
+const DEMO_EVENTS = [
+  { key: 'ev_demo_makerspace', group: 'makerspace', style: 'secondary', badge: 'Makerspace & Reparation', title: '[DEMO] Åbent makerspace', days: 30 },
+  { key: 'ev_demo_krea', group: 'krea', style: 'tertiary', badge: 'Krea Café', title: '[DEMO] Krea Café', days: 33 },
+  { key: 'ev_demo_kulturhus', group: 'kulturhus', style: 'kulturhus', badge: 'Eventværkstedet', title: '[DEMO] Eventværkstedet', days: 37 },
+];
+
+function futureDateString(daysAhead) {
+  const d = new Date();
+  d.setDate(d.getDate() + daysAhead);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function demoEventYaml(e) {
+  return `${e.key}:
+  published: true
+  title: '${e.title}'
+  description: 'Seeded by tests/helpers/fixtures.js; do not edit.'
+  group: ${e.group}
+  badge: '${e.badge}'
+  event_date: '${futureDateString(e.days)}'
+  event_time: '10:00 - 12:00'
+  location: 'Store Rum'
+  button_style: ${e.style}
+  button_text: 'Tilmeld'
+  featured: false
+  archived: false
+  details_html: '<p>Kom forbi og vær med — alle er velkomne.</p>'
+`;
+}
+
+function ensurePublicDemoEvents() {
+  let seeded = false;
+  for (const e of DEMO_EVENTS) {
+    seeded = appendIfMissing(EVENTS_YAML_PATH, e.key, demoEventYaml(e)).seeded || seeded;
+  }
+  return { seeded };
+}
+
+function removePublicDemoEvents() {
+  for (const e of DEMO_EVENTS) {
+    removeFixture(EVENTS_YAML_PATH, e.key);
+  }
+}
+
+/**
+ * Remove the whole event-signups store (runtime, gitignored). Resets every
+ * RSVP test to zero signups; safe if the file is already absent.
+ */
+function clearEventSignups() {
+  try {
+    execFileSync('docker', ['exec', '-u', 'abc', gravContainer(), 'sh', '-c', `rm -f ${SIGNUPS_YAML_PATH}`], {
+      stdio: ['ignore', 'ignore', 'ignore'],
+      timeout: 10_000,
+    });
+  } catch (_) { /* non-fatal */ }
+}
+
+/**
+ * Remove all uploaded event images (runtime, gitignored). Uses find -delete
+ * (not rm -rf) so it degrades safely if the directory is missing.
+ */
+function clearEventImages() {
+  try {
+    execFileSync('docker', ['exec', '-u', 'abc', gravContainer(), 'sh', '-c',
+      `find ${EVENT_IMAGES_DIR} -mindepth 1 -delete 2>/dev/null || true`], {
+      stdio: ['ignore', 'ignore', 'ignore'],
+      timeout: 10_000,
+    });
+  } catch (_) { /* non-fatal */ }
+}
+
+/** True when the event-manager audit log contains a line matching the pattern. */
+function eventAuditContains(pattern) {
+  try {
+    execFileSync('docker', ['exec', gravContainer(), 'grep', '-qE', pattern, EVENT_AUDIT_PATH], {
+      stdio: ['ignore', 'ignore', 'ignore'],
+      timeout: 10_000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function ensureDraftEvent() {
   return appendIfMissing(EVENTS_YAML_PATH, DRAFT_EVENT_ID, DRAFT_EVENT_YAML);
@@ -314,18 +517,32 @@ module.exports = {
   DRAFT_EVENT_ID,
   ARCHIVED_EVENT_ID,
   FOREIGN_EVENT_ID,
+  RSVP_EVENT_ID,
+  CAPACITY_EVENT_ID,
+  INTEREST_EVENT_ID,
   ensureLockedRoadmapItem,
   ensureReleasableRoadmapItem,
   ensureUnpromotedBugReport,
   ensureDraftEvent,
   ensureArchivedEvent,
   ensureForeignEvent,
+  ensureRsvpEvent,
+  ensureCapacityEvent,
+  ensureInterestEvent,
+  ensurePublicDemoEvents,
+  removePublicDemoEvents,
   removeLockedRoadmapItem,
   removeReleasableRoadmapItem,
   removeUnpromotedBugReport,
   removeDraftEvent,
   removeArchivedEvent,
   removeForeignEvent,
+  removeRsvpEvent,
+  removeCapacityEvent,
+  removeInterestEvent,
   removeEventByKey,
+  clearEventSignups,
+  clearEventImages,
+  eventAuditContains,
   clearGravCache,
 };

@@ -8,7 +8,7 @@
        badge, time, description             (optional body content)
        accent                               (visual; closed-set token)
        filter                               (behaviour; data-group filter ID)
-       price, cta { label, href, variant? } (optional meta slots)
+       event_type, cta { label, href, variant? } (optional meta slots)
        capacity, featured                   (optional)
 
    The accent value is validated against a closed set before being
@@ -47,42 +47,119 @@
                           ? event.cta.variant : _accent %}
 {% set _cta_variant = _cta_variant_raw in _allowed_accents ? _cta_variant_raw : 'primary' %}
 
-{% if _in_list %}<li class="bv-event-item">{% else %}<div class="bv-event-item">{% endif %}
-  <article class="bv-event-row{% if event.featured %} bv-event-row--featured{% endif %}"
+{# Live RSVP (event_rsvp): when the flag is on and this card carries a flex
+   key, the CTA becomes the signup button and an availability line renders
+   under the meta column. event_signup_info() enforces its own read policy
+   (public data; null for unknown/unpublished/archived). Keyless callers
+   (page-header events, atelier sessions) get null → today's link behaviour,
+   untouched. #}
+{% set _rsvp_key = event.key is defined ? event.key : null %}
+{% set _rsvp_on = feature_enabled('event_rsvp') and _rsvp_key %}
+{% set _info = _rsvp_on ? event_signup_info(_rsvp_key) : null %}
+
+{# Inline card expansion (§4): clicking anywhere on the card that isn't the
+   signup button expands it in place — the rich details unfold below the card
+   and push the other events down (accordion), NOT a modal. The accent is set
+   on the .bv-event-item wrapper too so the sibling details panel inherits it.
+   Only events that actually carry rich details are expandable — a card with
+   an empty details_html has nothing to unfold, so it stays inert (no chevron,
+   no click target, no panel). #}
+{% set _has_details = (event.details_html|default('')|trim) is not empty %}
+{% set _expandable = (expandable ?? true) and _rsvp_on and _has_details %}
+
+{% if _in_list %}<li class="bv-event-item"{% if _expandable %} style="--bv-accent: var(--{{ _accent }});"{% endif %}>{% else %}<div class="bv-event-item"{% if _expandable %} style="--bv-accent: var(--{{ _accent }});"{% endif %}>{% endif %}
+  <article class="bv-event-row{% if event.featured %} bv-event-row--featured{% endif %}{% if _expandable %} bv-event-row--expandable{% endif %}{% if _info and _info.user_signed_up %} bv-event-row--attending{% endif %}"
            {% if event.filter %}data-group="{{ event.filter }}"{% endif %}
+           {% if _expandable %}data-event-key="{{ event.key }}" tabindex="0" aria-expanded="false" aria-controls="bv-ev-details-{{ event.key }}"{% endif %}
            style="--bv-accent: var(--{{ _accent }});">
 
     <div class="bv-event-row__date">
       <span class="bv-event-row__date-month">{{ event.month }}</span>
       <span class="bv-event-row__date-day">{{ event.day }}</span>
+      {# Expand affordance — a large chevron pinned to the bottom of the date
+         column (down collapsed, up expanded). Rendered only for events that
+         carry rich details (see _expandable). #}
+      {% if _expandable %}<span class="material-symbols-outlined bv-event-row__chevron" aria-hidden="true">expand_more</span>{% endif %}
     </div>
 
     <div class="bv-event-row__body">
       {% if event.badge %}
         <span class="bv-badge bv-badge--{{ _accent }} bv-event-row__badge">{{ event.badge }}</span>
       {% endif %}
-      {# Optional event.href (net-new, only passed by flex-backed callers):
-         the title links to the event's detail view. Callers without keys
-         (page-header events, atelier sessions) render unchanged. #}
-      {% if event.href %}
-        <h3 class="bv-event-row__title"><a class="bv-event-row__title-link" href="{{ event.href }}">{{ event.title }}</a></h3>
-      {% else %}
-        <h3 class="bv-event-row__title">{{ event.title }}</h3>
-      {% endif %}
+      {# The title is plain text — never a link. Event cards expand inline on
+         click; the (separate) detail page is not linked from the card. #}
+      <h3 class="bv-event-row__title">{{ event.title }}</h3>
+      {% if event.location %}<p class="bv-event-row__location"><span class="material-symbols-outlined" aria-hidden="true">location_on</span>{{ event.location }}</p>{% endif %}
       {% if event.time %}<p class="bv-event-row__time">{{ event.time }}</p>{% endif %}
+      {# Arrangør (organizer) — shown on every event that carries an owner.
+         event_list feeds event.organizer = the owner's USERNAME (a public,
+         pseudonymous handle), never the account's real name: this line is
+         public, so it must not resolve or expose member PII (§3). The
+         organizer's private dashboard is where real names/emails appear. #}
+      {% if event.organizer %}<p class="bv-event-row__organizer"><span class="material-symbols-outlined" aria-hidden="true">person</span>Arrangør: {{ event.organizer }}</p>{% endif %}
       {% if event.description %}<p class="bv-event-row__desc">{{ event.description|e|regex_replace('/([\\w.%+-]+@[\\w.-]+\\.[A-Za-z]{2,})/', '<a href="mailto:$1">$1</a>')|raw }}</p>{% endif %}
     </div>
 
-    {% if event.price or (event.cta and event.cta.label and event.cta.href) or event.capacity %}
+    {% if _info or event.event_type or (event.cta and event.cta.label and event.cta.href) or event.capacity %}
       <div class="bv-event-row__meta">
-        {% if event.price %}
-          <span class="bv-event-row__price">{{ event.price }}</span>
+        {% if event.event_type %}
+          <span class="bv-event-row__price">{{ event.event_type }}</span>
         {% endif %}
-        {% if event.cta and event.cta.label and event.cta.href %}
+
+        {% if _info %}
+          {# The card button IS the signup action (§4): it toggles via AJAX
+             and never navigates. State-aware label; disabled when full (and
+             not already signed up) or past. Interesseret is never capacity-
+             disabled. site.js delegates clicks on [data-rsvp-key]. #}
+          {% set _signed = _info.user_signed_up %}
+          {% set _full = _info.is_full and not _signed %}
+          {% set _disabled = _info.is_past or _full %}
+          {# The label is a fixed word per mode ('Deltag' / 'Interesseret'); a
+             checkbox before it (CSS ::before, driven by .is-signed-up) shows
+             whether you've joined/marked. Clicking toggles it — no verbose
+             "klik for at fjerne". A full event keeps the 'Deltag' label but the
+             button is disabled; the availability line says "Alle pladser er
+             optaget". #}
+          {% if _info.mode == 'interesseret' %}
+            {% set _label = 'Interesseret' %}
+            {% set _state = _signed ? 'marked' : 'open' %}
+          {% elseif _full %}
+            {% set _label = 'Deltag' %}{% set _state = 'full' %}
+          {% else %}
+            {% set _label = 'Deltag' %}
+            {% set _state = _signed ? 'signed_up' : 'open' %}
+          {% endif %}
+          {# The signup button uses ONE colour on every card (the brand primary,
+             same as the site's other primary CTAs) — not the workshop accent —
+             so the calendar reads quietly; the workshop identity stays on the
+             badge and the accent line. #}
+          <button type="button"
+                  class="bv-btn bv-btn--primary bv-btn--sm bv-event-row__signup{{ _signed ? ' is-signed-up' : '' }}"
+                  data-rsvp-key="{{ event.key }}"
+                  data-rsvp-mode="{{ _info.mode }}"
+                  data-rsvp-state="{{ _state }}"
+                  {{ _disabled ? 'disabled' : '' }}>{{ _label }}</button>
+        {% elseif event.cta and event.cta.label and event.cta.href %}
           <a class="bv-btn bv-btn--{{ _cta_variant }} bv-btn--sm"
              href="{{ event.cta.href }}">{{ event.cta.label }}</a>
         {% endif %}
-        {% if event.capacity %}
+
+        {% if _info %}
+          {# Availability line (§1.3): capacity-limited → seats remaining;
+             unlimited → the running count. Visible to everyone, anonymous
+             included. data-rsvp-availability lets site.js live-update every
+             card sharing this key. #}
+          <span class="bv-event-row__availability" data-rsvp-availability="{{ event.key }}">
+            {%- if _info.remaining is not null -%}
+              {%- if _info.remaining > 0 -%}{{ _info.remaining }} plads{{ _info.remaining == 1 ? '' : 'er' }} tilbage
+              {%- else -%}Alle pladser er optaget{%- endif -%}
+            {%- elseif _info.mode == 'interesseret' -%}
+              {{ _info.count }} {{ _info.count == 1 ? 'interesseret' : 'interesserede' }}
+            {%- else -%}
+              {{ _info.count }} tilmeldt{{ _info.count == 1 ? '' : 'e' }}
+            {%- endif -%}
+          </span>
+        {% elseif event.capacity %}
           <span class="bv-event-row__capacity">
             <span class="material-symbols-outlined" aria-hidden="true">group</span>
             {{ event.capacity }}
@@ -90,5 +167,16 @@
         {% endif %}
       </div>
     {% endif %}
+
   </article>
+
+  {% if _expandable %}
+    {# Inline accordion panel (§4): site.js clones this <template> into the
+       panel below the card on expand — pushing the other events down instead
+       of opening a modal. Only the rich details_html body goes here (location
+       is shown on the card itself); details_html is sanitizer output (§5), so
+       |raw is safe. #}
+    <template data-event-details="{{ event.key }}">{{ (event.details_html|default(''))|raw }}</template>
+    <div class="bv-event-details-panel" id="bv-ev-details-{{ event.key }}" hidden></div>
+  {% endif %}
 {% if _in_list %}</li>{% else %}</div>{% endif %}

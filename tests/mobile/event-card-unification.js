@@ -6,19 +6,21 @@
  *
  * Locks down the F1/F2/F3 + a11y guards on the migrated routes:
  *   /vaerkstedskalenderen                        — event_list
- *   /vaerksteder/krea-cafe/syvaerkstedet         — atelier_sessions
- *   /vaerksteder/krea-cafe/billedkunst           — atelier_sessions (Lene Pels)
  *   /                                            — event_highlight (home,
  *                                                  primary featured card)
  *
  * calendar_featured.html.twig is migrated too, but NO route renders it:
  * its page (02.vaerkstedskalenderen/_03.featured) was removed in the
- * opening-day cleanup (980eb9c) and only the template remains. The
- * route-discovery grep the spec mandates therefore yields zero routes
- * for it — its single-card/featured rendering path is identical to the
- * event_highlight primary card covered below (same inList: false +
- * featured: true include), and its template-level contract is locked by
- * the grep criteria (#4, #6).
+ * opening-day cleanup (980eb9c) and only the template remains.
+ * atelier_sessions.html.twig is now in the same position: the workshop
+ * calendar superseded the hardcoded per-workshop event sections
+ * (/vaerksteder/krea-cafe/syvaerkstedet, .../billedkunst,
+ * eventvaerkstedet/_04.events), which were removed, so no route renders
+ * atelier_sessions any more. For both, the route-discovery grep the spec
+ * mandates yields zero routes — their single-card/featured and list
+ * rendering paths are identical to the surfaces covered below (same
+ * canonical partial, same include variables), and their template-level
+ * contract is locked by the grep criteria (#4, #6).
  *
  * Viewport is the mobile-chromium project default (390 × 844). Each
  * route is probed for the four-rule mobile invariant; the calendar
@@ -35,8 +37,6 @@ const { test, expect } = require('@playwright/test');
 const { useDevHost } = require('./_helpers');
 
 const CALENDAR_ROUTE = '/vaerkstedskalenderen';
-const SYVAERKSTEDET_ROUTE = '/vaerksteder/krea-cafe/syvaerkstedet';
-const BILLEDKUNST_ROUTE = '/vaerksteder/krea-cafe/billedkunst';
 // Home renders event_highlight's primary featured card from the
 // begivenheder flex directory (next upcoming event — the seeded data
 // carries events into September 2026; the card disappears, and these
@@ -50,7 +50,7 @@ const HOME_ROUTE = '/';
  *   (2) Every .bv-event-row__title, .bv-event-row__desc, .bv-event-row__time
  *       respects the body's right padding (lies within body's content-box).
  *   (3) document.documentElement.scrollWidth === window.innerWidth.
- *   (4) Atelier-sessions cards (any route) — flex-direction stacks to column
+ *   (4) Event-card rows (any route) — flex-direction stacks to column
  *       at 390 px because the container query fires on .bv-event-item
  *       (the wrapper is narrower than 540 px in the .bv-container at this
  *       viewport).
@@ -144,14 +144,6 @@ test.describe('mobile-event-card-unification', () => {
     await assertFourRuleMobileInvariant(page, CALENDAR_ROUTE);
   });
 
-  test('four-rule mobile invariant on /vaerksteder/krea-cafe/syvaerkstedet', async ({ page }) => {
-    await assertFourRuleMobileInvariant(page, SYVAERKSTEDET_ROUTE);
-  });
-
-  test('four-rule mobile invariant on /vaerksteder/krea-cafe/billedkunst', async ({ page }) => {
-    await assertFourRuleMobileInvariant(page, BILLEDKUNST_ROUTE);
-  });
-
   test('four-rule mobile invariant on / (event_highlight primary card)', async ({ page }) => {
     // Sprint-2 probe: fails loud if event_highlight.html.twig stops
     // rendering its featured card through the canonical partial (a
@@ -173,17 +165,6 @@ test.describe('mobile-event-card-unification', () => {
     for (let i = 0; i < n; i += 1) {
       const tag = await items.nth(i).evaluate((el) => el.tagName);
       expect(tag, `event_list .bv-event-item[${i}] must be LI (sprint-1 list context)`).toBe('LI');
-    }
-  });
-
-  test('C26 list-context wrappers are <li class="bv-event-item"> on atelier_sessions', async ({ page }) => {
-    await page.goto(SYVAERKSTEDET_ROUTE);
-    const items = page.locator('.bv-event-item');
-    const n = await items.count();
-    expect(n, 'expected at least one .bv-event-item on syvaerkstedet').toBeGreaterThan(0);
-    for (let i = 0; i < n; i += 1) {
-      const tag = await items.nth(i).evaluate((el) => el.tagName);
-      expect(tag, `atelier_sessions .bv-event-item[${i}] must be LI (sprint-1 list context)`).toBe('LI');
     }
   });
 
@@ -375,20 +356,13 @@ test.describe('mobile-event-card-unification', () => {
     expect(text.length, 'badge text should be non-empty for positive-case row').toBeGreaterThan(0);
   });
 
-  test('F2 negative — atelier session without badge renders NO .bv-event-row__badge element', async ({ page }) => {
-    // The seeded syvaerkstedet sessions carry no badge field. The
-    // partial's {% if event.badge %} guard MUST omit the element
-    // entirely; an empty <span> would defeat the guard.
-    await page.goto(SYVAERKSTEDET_ROUTE);
-    const rows = page.locator('.bv-event-row');
-    const n = await rows.count();
-    expect(n).toBeGreaterThan(0);
-    for (let i = 0; i < n; i += 1) {
-      const row = rows.nth(i);
-      const badgeCount = await row.locator('.bv-event-row__badge').count();
-      expect(badgeCount, `syvaerkstedet row ${i} carries no badge YAML → DOM must contain NO .bv-event-row__badge element (not even an empty span)`).toBe(0);
-    }
-  });
+  // F2 negative (badge-less row → NO .bv-event-row__badge element) was
+  // exercised through the seeded, badge-less atelier_sessions rows. Those
+  // sections were removed when the workshop calendar superseded them, and
+  // every remaining live surface (event_list, event_highlight) seeds a
+  // badge on every event, so no route naturally renders the badge-less
+  // case any more. The partial's {% if event.badge %} guard is unchanged;
+  // its positive branch stays covered by "F2 positive" above.
 
   // ------------------------------------------------------------------
   // C15 — F3 three-meta-slots honoured (full, all-empty, partial)
@@ -451,7 +425,7 @@ test.describe('mobile-event-card-unification', () => {
 
   test('F3 all-empty — synthetic row with no meta fields renders NO .bv-event-row__meta element', async ({ page }) => {
     // The partial's outer guard
-    //   {% if event.price or (event.cta and event.cta.label and event.cta.href) or event.capacity %}
+    //   {% if event.event_type or (event.cta and event.cta.label and event.cta.href) or event.capacity %}
     // skips the entire meta <div> when no slot is present. Inject a
     // row with NO meta and assert .bv-event-row__meta count is 0.
     await page.goto(CALENDAR_ROUTE);
@@ -483,17 +457,16 @@ test.describe('mobile-event-card-unification', () => {
     expect(metaCount, 'F3-all-empty: partial outer guard must skip the entire .bv-event-row__meta <div> when no slot is set').toBe(0);
   });
 
-  test('F3 partial — atelier drop-in (price + cta, no capacity) renders __meta with min-width 9rem and NO __capacity', async ({ page }) => {
+  test('F3 partial — drop-in row (price + cta, no capacity) renders __meta with min-width 9rem and NO __capacity', async ({ page }) => {
     // Inject the partial-collapse case: drop-in style row with price +
-    // CTA but no capacity. Use the atelier syvaerkstedet route so a
-    // post-injection DOM walk also sees one real session of this shape
-    // (the contact-name rows render meta with a CTA only, no price).
-    // The injected probe carries price + CTA explicitly so all the
-    // assertions are deterministic.
-    await page.goto(SYVAERKSTEDET_ROUTE);
+    // CTA but no capacity. The probe is self-contained (it carries price +
+    // CTA explicitly) so all assertions are deterministic; it only needs a
+    // host section.bv-container to mount into — the calendar route always
+    // provides one.
+    await page.goto(CALENDAR_ROUTE);
     await page.evaluate(() => {
       const host = document.querySelector('section .bv-container');
-      if (!host) throw new Error('atelier_sessions .bv-container not found');
+      if (!host) throw new Error('event-list section .bv-container not found');
       const ul = document.createElement('ul');
       ul.className = 'bv-event-list';
       const wrapper = document.createElement('li');
@@ -536,7 +509,7 @@ test.describe('mobile-event-card-unification', () => {
   // ------------------------------------------------------------------
 
   test('a11y — every .bv-event-row__title resolves to <h3> across all migrated routes', async ({ page }) => {
-    for (const route of [CALENDAR_ROUTE, SYVAERKSTEDET_ROUTE, BILLEDKUNST_ROUTE, HOME_ROUTE]) {
+    for (const route of [CALENDAR_ROUTE, HOME_ROUTE]) {
       await page.goto(route);
       const titles = page.locator('.bv-event-row__title');
       const n = await titles.count();

@@ -1,17 +1,15 @@
 {% extends 'partials/base.html.twig' %}
 
-{# ============================================================================
-   Create-event form (/begivenheder/opret) — the shared event-form surface
-   (partials/event_form.html.twig): themed, grouped fields with visible help
-   texts and a live event-card preview. Select options come from the
-   begivenheder blueprint (data-options@); the POST is handled by the
-   event-manager plugin's §8.1 contract handler.
-   ============================================================================ #}
+{# Create-event page (/begivenheder/opret) — the inline card editor
+   (partials/event_editor.html.twig). Starts empty (or repopulated from old
+   input after a validation redirect); adopts the pre-generated key. #}
 
 {% block body %}
-    {% include 'partials/event_form.html.twig' with {
-        ef_form_name: 'event-create',
-        ef_heading: 'Opret begivenhed',
-        ef_intro: 'Udfyld felterne — forhåndsvisningen til højre viser, hvordan kortet kommer til at se ud i <a href="/vaerkstedskalenderen">værkstedskalenderen</a>.'
+    {% include 'partials/event_editor.html.twig' with {
+        ee_action: '/begivenheder/opret',
+        ee_heading: 'Opret begivenhed',
+        ee_intro: 'Kortet herunder er din begivenhed, som den kommer til at se ud i <a href="/vaerkstedskalenderen">værkstedskalenderen</a>. Klik direkte på kortet for at udfylde det.',
+        ee_key: em_new_key,
+        ee_submit_label: 'Gem'
     } %}
 {% endblock %}

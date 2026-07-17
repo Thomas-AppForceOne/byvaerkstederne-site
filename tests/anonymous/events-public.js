@@ -47,15 +47,31 @@ function readEvents() {
   return events;
 }
 
+/**
+ * Mirrors the plugin's auto-archive cutoff: an event that ran more than a day
+ * ago (event_date strictly before today − 1 day) is stale and never renders on
+ * the calendar. Unparseable dates are never stale (same as the plugin). The
+ * seed/fixture dates sit years either side of today, so the exact timezone of
+ * the boundary is immaterial here.
+ */
+function notStale(e) {
+  const d = String(e.event_date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return true;
+  const c = new Date();
+  c.setDate(c.getDate() - 1);
+  const p = (n) => String(n).padStart(2, '0');
+  const cutoff = `${c.getFullYear()}-${p(c.getMonth() + 1)}-${p(c.getDate())}`;
+  return d >= cutoff;
+}
+
 test.describe('Events — public read (M1)', () => {
-  test('calendar lists every published, non-archived event (legacy seeds intact)', async ({ page }) => {
+  test('calendar lists every published, non-archived, non-stale event', async ({ page }) => {
     const events = readEvents();
     // Featured events are part of the list too (they only get a styling
-    // boost) — the only exclusions are unpublished and archived.
-    const visible = events.filter((e) => e.published && !e.archived);
-    // Regression guard for the legacy seeds: the repo ships 16 events and
-    // all of them must still render. Assert against the file, not a literal.
-    expect(visible.length).toBeGreaterThanOrEqual(16);
+    // boost) — the exclusions are unpublished, archived, and stale (ran more
+    // than a day ago; the auto-archive rule keeps the upcoming-activities
+    // calendar forward-looking). Assert against the file, not a literal.
+    const visible = events.filter((e) => e.published && !e.archived && notStale(e));
 
     await page.goto('/vaerkstedskalenderen');
     const items = page.locator('.bv-event-list .bv-event-item');
@@ -72,7 +88,7 @@ test.describe('Events — public read (M1)', () => {
       return m ? `${m[1].padStart(2, '0')}:${m[2] || '00'}` : '99:99';
     };
     const expected = readEvents()
-      .filter((e) => e.published && !e.archived)
+      .filter((e) => e.published && !e.archived && notStale(e))
       .map((e, i) => ({ ...e, sortKey: `${e.event_date}|${startOf(e.event_time)}|${RANK[e.group] || 6}|${String(i).padStart(3, '0')}` }))
       .sort((a, b) => (a.sortKey < b.sortKey ? -1 : 1))
       .map((e) => e.title);
@@ -82,33 +98,26 @@ test.describe('Events — public read (M1)', () => {
     expect(rendered.map((t) => t.trim())).toEqual(expected);
   });
 
-  test('detail view renders a published event', async ({ page }) => {
-    const first = readEvents().find((e) => e.published && !e.archived);
-    if (!first) test.skip(true, 'no published event in the data file');
-    const response = await page.goto(`/begivenheder/${first.key}`);
-    expect(response?.status()).toBe(200);
-    await expect(page.locator('.bv-event-row__title')).toContainText(first.title.slice(0, 30));
-    await expect(page.locator('.bv-event-detail')).toBeVisible();
+  test('the detail route redirects to the calendar for every key (page retired, no existence leak)', async ({ page }) => {
+    // The standalone detail page is retired — details are shown inline on the
+    // calendar. Every /begivenheder/<key> redirects to the calendar, whether
+    // the key is published, unknown, or a draft/archived fixture, so no event's
+    // existence leaks via a distinct 404.
+    const events = readEvents();
+    const keys = ['ev_does_not_exist'];
+    const first = events.find((e) => e.published && !e.archived);
+    if (first) keys.push(first.key);
+    if (events.some((e) => e.key === 'ev_fixture_draft')) keys.push('ev_fixture_draft');
+    if (events.some((e) => e.key === 'ev_fixture_archived')) keys.push('ev_fixture_archived');
+    for (const key of keys) {
+      await page.goto(`/begivenheder/${key}`);
+      await expect(page, `${key} should land on the calendar`).toHaveURL(/\/vaerkstedskalenderen$/);
+      await expect(page.locator('.bv-event-detail')).toHaveCount(0);
+    }
   });
 
-  test('unknown event key returns 404', async ({ page }) => {
-    const response = await page.goto('/begivenheder/ev_does_not_exist');
-    expect(response?.status()).toBe(404);
-  });
-
-  test('unpublished event returns 404 for anonymous (no existence leak)', async ({ page }) => {
-    const hasFixture = readEvents().some((e) => e.key === 'ev_fixture_draft');
-    test.skip(!hasFixture, 'ev_fixture_draft not seeded (TEST_ORGANIZER_PASSWORD unset)');
-    const response = await page.goto('/begivenheder/ev_fixture_draft');
-    expect(response?.status()).toBe(404);
-  });
-
-  test('archived event returns 404 for anonymous and is absent from the calendar', async ({ page }) => {
-    const hasFixture = readEvents().some((e) => e.key === 'ev_fixture_archived');
-    test.skip(!hasFixture, 'ev_fixture_archived not seeded (TEST_ORGANIZER_PASSWORD unset)');
-    const response = await page.goto('/begivenheder/ev_fixture_archived');
-    expect(response?.status()).toBe(404);
-
+  test('an archived event is absent from the calendar', async ({ page }) => {
+    test.skip(!readEvents().some((e) => e.key === 'ev_fixture_archived'), 'ev_fixture_archived not seeded');
     await page.goto('/vaerkstedskalenderen');
     await expect(page.locator('body')).not.toContainText('[FIXTURE] Archived event');
   });
@@ -117,10 +126,38 @@ test.describe('Events — public read (M1)', () => {
     await page.goto('/begivenheder');
     await expect(page).toHaveURL(/\/vaerkstedskalenderen$/);
   });
+
+  // Locate the calendar card whose title matches — the arrangør line lives
+  // inside that card's body, so the assertions are scoped to one event.
+  const cardFor = (page, title) => page.locator('.bv-event-list .bv-event-item', {
+    has: page.locator('.bv-event-row__title', { hasText: title }),
+  });
+
+  test('an event with an owner shows the arrangør (owner username) on its card', async ({ page }) => {
+    test.skip(!readEvents().some((e) => e.key === 'ev_fixture_rsvp'),
+      'ev_fixture_rsvp not seeded (TEST_ORGANIZER_PASSWORD absent)');
+    await page.goto('/vaerkstedskalenderen');
+    const card = cardFor(page, '[FIXTURE] RSVP Tilmeld');
+    await expect(card).toHaveCount(1);
+    // The public arrangør line shows the owner USERNAME (a pseudonymous
+    // handle), never the account's real name — no member PII on a public page.
+    const organizer = card.locator('.bv-event-row__organizer');
+    await expect(organizer).toContainText('Arrangør: pw-test-org');
+    await expect(organizer).not.toContainText('Playwright Test Organizer');
+  });
+
+  test('an event without an owner shows no arrangør line', async ({ page }) => {
+    // The public demo events (ensurePublicDemoEvents) are seeded unconditionally
+    // and carry no owner, so their cards must omit the organizer line entirely.
+    await page.goto('/vaerkstedskalenderen');
+    const demo = cardFor(page, '[DEMO] Åbent makerspace');
+    await expect(demo).toHaveCount(1);
+    await expect(demo.locator('.bv-event-row__organizer')).toHaveCount(0);
+  });
 });
 
 test.describe('Events — anonymous management gating (M2 negatives)', () => {
-  for (const route of ['/begivenheder/mine', '/begivenheder/opret']) {
+  for (const route of ['/begivenheder/arrangoerpanel', '/begivenheder/opret']) {
     test(`anonymous GET ${route} lands on the login flow`, async ({ page }) => {
       await page.goto(route);
       // login plugin redirects (redirect_to_login: true) to /login.
@@ -151,7 +188,7 @@ test.describe('Events — anonymous management gating (M2 negatives)', () => {
     });
     try {
       const req = context.request;
-      for (const route of ['/begivenheder/opret', '/begivenheder/mine', '/begivenheder/event001']) {
+      for (const route of ['/begivenheder/opret', '/begivenheder/arrangoerpanel', '/begivenheder/event001']) {
         const response = await req.get(route, { maxRedirects: 0 });
         expect(response.status(), `${route} with flag off`).toBe(404);
       }
@@ -162,11 +199,29 @@ test.describe('Events — anonymous management gating (M2 negatives)', () => {
 
   test('footer shows no event-management entry to anonymous visitors', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('.bv-footer')).not.toContainText('Mine begivenheder');
+    await expect(page.locator('.bv-footer')).not.toContainText('Arrangørpanel');
   });
 
-  test('calendar shows no create button to anonymous visitors', async ({ page }) => {
+  test('calendar shows no arrangør buttons (create / Arrangørpanel) to anonymous visitors', async ({ page }) => {
     await page.goto('/vaerkstedskalenderen');
     await expect(page.locator('[data-testid="calendar-create-link"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="calendar-mine-link"]')).toHaveCount(0);
+  });
+
+  test('the "Mine aktiviteter" filter is hidden from anonymous visitors; "Alle" stays default', async ({ page }) => {
+    await page.goto('/vaerkstedskalenderen');
+    // Anonymous visitors have no signups, so the personal filter is not shown.
+    await expect(page.locator('.bv-filter-btn[data-filter="mine"]')).toHaveCount(0);
+    // "Alle aktiviteter" remains the default active filter.
+    await expect(page.locator('.bv-filter-btn[data-filter="all"]')).toHaveClass(/is-active/);
+  });
+
+  test('all calendar filters sit on one line on desktop', async ({ page }) => {
+    await page.goto('/vaerkstedskalenderen');
+    const btns = page.locator('.bv-filter-btn');
+    expect(await btns.count()).toBeGreaterThan(1);
+    const tops = await btns.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+    // A single shared top offset → one row (mobile stacks them, tested in tests/mobile).
+    expect(new Set(tops).size).toBe(1);
   });
 });

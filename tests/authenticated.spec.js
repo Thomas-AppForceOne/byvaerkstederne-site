@@ -22,6 +22,12 @@ require('./authenticated/remember-me');
 // Frontend event CRUD — organizer success paths + forced-browsing authz.
 require('./authenticated/events-crud');
 require('./authenticated/events-authz');
+// Inline card editor for /begivenheder/opret (the redesigned create page).
+require('./authenticated/events-create-editor');
+// Event RSVP — signup/withdraw, capacity, forced-browsing negatives, attendee
+// visibility; rich details sanitisation + image upload.
+require('./authenticated/events-rsvp');
+require('./authenticated/events-details');
 // Account self-service (/konto) — one file per operation; destructive flows
 // run on disposable accounts only.
 require('./authenticated/account-access-request');

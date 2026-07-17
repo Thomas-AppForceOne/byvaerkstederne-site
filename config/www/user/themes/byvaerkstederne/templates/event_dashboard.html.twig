@@ -1,20 +1,29 @@
 {% extends 'partials/base.html.twig' %}
 
 {# ============================================================================
-   "Mine begivenheder" — the arrangør dashboard (/begivenheder/mine).
+   "Arrangørpanel" — the arrangør dashboard (/begivenheder/arrangoerpanel).
    `em_events` is injected by the event-manager plugin: the viewer's own
-   events in every state (super sees all), each row carrying `key` and a
-   derived `status` (kladde / publiceret / arkiveret). Buttons are UX only —
-   every mutation re-runs the full server-side contract.
+   events (super sees all, incl. soft-deleted), each row carrying `key` and a
+   derived `status` (kladde / publiceret / arkiveret / slettet). Buttons are
+   UX only — every mutation re-runs the full server-side contract.
+
+   Layout is a compact grid: [status] [title+date] [actions], columns aligned
+   vertically across every row. Actions order: Slet · Arkiver · Rediger. Slet
+   is a soft-hide gated behind a floating confirm popover (native <details> so
+   it works without JS); Arkiver is disabled once archived; editing lifts the
+   archive. Super additionally gets Gendan (restore) + Slet permanent on
+   soft-deleted events.
    ============================================================================ #}
 
+{% set is_super = grav.user.authorize('admin.super') %}
+
 {% block body %}
-<section class="bv-section--sm" aria-label="Mine begivenheder">
+<section class="bv-section--sm" aria-label="Arrangørpanel">
     <div class="bv-container">
 
         <div class="bv-event-dashboard__head">
-            <h1 class="bv-headline">Mine begivenheder</h1>
-            {% if grav.user.authorize('admin.events.create') or grav.user.authorize('admin.super') %}
+            <h1 class="bv-headline">Arrangørpanel</h1>
+            {% if grav.user.authorize('admin.events.create') or is_super %}
                 <a class="bv-btn bv-btn--primary" href="/begivenheder/opret" data-testid="event-create-link">Opret begivenhed</a>
             {% endif %}
         </div>
@@ -25,32 +34,113 @@
         {% else %}
         <ul class="bv-event-dashboard__list">
             {% for ev in events %}
+            {% set _deleted = ev.status == 'slettet' %}
+            {% set _archived = ev.status == 'arkiveret' %}
             <li class="bv-event-dashboard__item" data-event-key="{{ ev.key }}" data-event-status="{{ ev.status }}">
-                <div class="bv-event-dashboard__main">
-                    <span class="bv-badge bv-badge--{{ ev.status == 'publiceret' ? 'primary' : (ev.status == 'arkiveret' ? 'tertiary' : 'secondary') }}">
-                        {{ ev.status|capitalize }}
-                    </span>
-                    <a class="bv-event-dashboard__title" href="/begivenheder/{{ ev.key }}">{{ ev.title }}</a>
+
+                <span class="bv-badge bv-event-dashboard__status bv-event-dashboard__status--{{ ev.status }}">{{ ev.status|capitalize }}</span>
+
+                <div class="bv-event-dashboard__body">
+                    {# Plain text, not a link — editing happens via the Rediger
+                       button in the actions column, so the title no longer
+                       navigates to the edit page. #}
+                    <span class="bv-event-dashboard__title">{{ ev.title }}</span>
                     <span class="bv-event-dashboard__date">{{ ev.event_date }}</span>
-                    {% if ev.owner and grav.user.authorize('admin.super') %}
+                    {% if ev.owner and is_super %}
                         <span class="bv-event-dashboard__owner">({{ ev.owner }})</span>
                     {% endif %}
                 </div>
+
                 <div class="bv-event-dashboard__actions">
-                    <a class="bv-btn bv-btn--secondary bv-btn--sm" href="/begivenheder/rediger/{{ ev.key }}">Rediger</a>
-                    {% if ev.status == 'arkiveret' %}
-                        {# Restore: reversible undo of the soft archive. Minimal
-                           inline form — same Form-plugin nonce, same contract. #}
+                    {% if _deleted %}
+                        {# Soft-deleted → super-only management: restore, or purge. #}
                         <form method="post" action="/begivenheder/slet" class="bv-event-dashboard__inline-form">
                             {{ nonce_field('form', 'form-nonce')|raw }}
                             <input type="hidden" name="data[key]" value="{{ ev.key }}">
                             <input type="hidden" name="data[mode]" value="restore">
-                            <button type="submit" class="bv-btn bv-btn--primary bv-btn--sm">Gendan</button>
+                            <button type="submit" class="bv-btn bv-btn--primary bv-btn--sm bv-event-dashboard__btn">Gendan</button>
                         </form>
+                        <details class="bv-event-dashboard__confirm">
+                            <summary class="bv-btn bv-btn--tertiary bv-btn--sm bv-event-dashboard__btn">Slet helt</summary>
+                            <div class="bv-event-dashboard__confirm-pop" role="dialog" aria-label="Bekræft permanent sletning">
+                                <p class="bv-event-dashboard__confirm-text">Slet <strong>{{ ev.title }}</strong> permanent? Dette kan <strong>ikke</strong> fortrydes.</p>
+                                <form method="post" action="/begivenheder/slet" class="bv-event-dashboard__confirm-actions">
+                                    {{ nonce_field('form', 'form-nonce')|raw }}
+                                    <input type="hidden" name="data[key]" value="{{ ev.key }}">
+                                    <input type="hidden" name="data[mode]" value="hard">
+                                    <button type="button" class="bv-btn bv-btn--outlined bv-btn--sm" data-confirm-cancel>Annullér</button>
+                                    <button type="submit" class="bv-btn bv-btn--tertiary bv-btn--sm">Ja, slet permanent</button>
+                                </form>
+                            </div>
+                        </details>
                     {% else %}
-                        <a class="bv-btn bv-btn--tertiary bv-btn--sm" href="/begivenheder/slet/{{ ev.key }}">Fjern</a>
+                        {# Active event — order: Slet · Arkiver · Rediger. #}
+                        <details class="bv-event-dashboard__confirm">
+                            <summary class="bv-btn bv-btn--tertiary bv-btn--sm bv-event-dashboard__btn">Slet</summary>
+                            <div class="bv-event-dashboard__confirm-pop" role="dialog" aria-label="Bekræft sletning">
+                                <p class="bv-event-dashboard__confirm-text">Er du sikker på at du vil slette <strong>{{ ev.title }}</strong>?</p>
+                                <form method="post" action="/begivenheder/slet" class="bv-event-dashboard__confirm-actions">
+                                    {{ nonce_field('form', 'form-nonce')|raw }}
+                                    <input type="hidden" name="data[key]" value="{{ ev.key }}">
+                                    <input type="hidden" name="data[mode]" value="delete">
+                                    <button type="button" class="bv-btn bv-btn--outlined bv-btn--sm" data-confirm-cancel>Annullér</button>
+                                    <button type="submit" class="bv-btn bv-btn--tertiary bv-btn--sm">Ja, slet</button>
+                                </form>
+                            </div>
+                        </details>
+
+                        {% if _archived %}
+                            <button type="button" class="bv-btn bv-btn--outlined bv-btn--sm bv-event-dashboard__btn" disabled title="Begivenheden er allerede arkiveret">Arkiver</button>
+                        {% else %}
+                            <form method="post" action="/begivenheder/slet" class="bv-event-dashboard__inline-form">
+                                {{ nonce_field('form', 'form-nonce')|raw }}
+                                <input type="hidden" name="data[key]" value="{{ ev.key }}">
+                                <input type="hidden" name="data[mode]" value="archive">
+                                <button type="submit" class="bv-btn bv-btn--outlined bv-btn--sm bv-event-dashboard__btn">Arkiver</button>
+                            </form>
+                        {% endif %}
+
+                        <a class="bv-btn bv-btn--secondary bv-btn--sm bv-event-dashboard__btn" href="/begivenheder/rediger/{{ ev.key }}">Rediger</a>
                     {% endif %}
                 </div>
+
+                {# Attendee list for the owner (or super). event_attendees()
+                   enforces ownership in PHP and returns null for anyone else,
+                   so no names/emails can leak through this template (§3/§5).
+                   Columns: tidspunkt · navn · email — no mode chip (the event's
+                   own mode already says whether these are tilmeldte or
+                   interesserede). #}
+                {% set _attendees = feature_enabled('event_rsvp') ? event_attendees(ev.key) : null %}
+                {% if _attendees is not null %}
+                {% set _label = ev.button_text == 'Interesseret' ? 'Interesserede' : 'Tilmeldte' %}
+                <details class="bv-event-dashboard__attendees">
+                    <summary>{{ _label }} ({{ _attendees|length }})</summary>
+                    {% if _attendees is empty %}
+                        <p class="bv-body-sm u-text-muted bv-event-dashboard__attendee-empty">Ingen {{ _label|lower }} endnu.</p>
+                    {% else %}
+                    {# One role=row per attendee. On desktop the rows are
+                       display:contents so the cells flow into the 3-column grid
+                       unchanged; on mobile the row becomes a stacked block with a
+                       divider between attendees. #}
+                    <div class="bv-event-dashboard__attendee-table" role="table">
+                        <div class="bv-event-dashboard__attendee-row bv-event-dashboard__attendee-row--head" role="row">
+                            <span class="bv-event-dashboard__attendee-head" role="columnheader">{{ ev.button_text == 'Interesseret' ? 'Interesseret' : 'Tilmeldt' }}</span>
+                            <span class="bv-event-dashboard__attendee-head" role="columnheader">Navn</span>
+                            <span class="bv-event-dashboard__attendee-head" role="columnheader">Email</span>
+                        </div>
+                        {% for a in _attendees %}
+                        <div class="bv-event-dashboard__attendee-row" role="row">
+                            <span class="bv-event-dashboard__attendee-ts" role="cell">{{ a.ts ? a.ts|date('j. M Y H:i') : '—' }}</span>
+                            <span class="bv-event-dashboard__attendee-name" role="cell">{{ a.fullname ?: a.username }}</span>
+                            <span class="bv-event-dashboard__attendee-email" role="cell">
+                                {%- if a.email -%}<a href="mailto:{{ a.email }}">{{ a.email }}</a>{%- else -%}<span class="u-text-muted">—</span>{%- endif -%}
+                            </span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </details>
+                {% endif %}
             </li>
             {% endfor %}
         </ul>

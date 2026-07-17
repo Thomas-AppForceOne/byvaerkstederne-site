@@ -672,7 +672,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Calendar filter buttons (exclusive: one active at a time, no deselect)
+    // Calendar filter buttons (exclusive: one active at a time, no deselect).
+    // 'all' shows everything; 'mine' shows only the events the viewer is
+    // tilmeldt/interesseret i (cards carrying .bv-event-row--attending); any
+    // other value is a workshop group matched against the card's data-group.
     document.querySelectorAll('.bv-filter-btn[data-filter]').forEach(function(btn) {
         btn.addEventListener('click', function() {
             var group = this.dataset.filter;
@@ -683,13 +686,23 @@ document.addEventListener('DOMContentLoaded', function() {
             this.classList.add('is-active');
 
             // Show matching rows
+            var shown = 0;
             rows.forEach(function(row) {
-                if (group === 'all' || row.dataset.group === group) {
-                    row.style.display = '';
+                var show;
+                if (group === 'all') {
+                    show = true;
+                } else if (group === 'mine') {
+                    show = row.classList.contains('bv-event-row--attending');
                 } else {
-                    row.style.display = 'none';
+                    show = row.dataset.group === group;
                 }
+                row.style.display = show ? '' : 'none';
+                if (show) { shown++; }
             });
+
+            // "Mine aktiviteter" with nothing signed up → show the empty note.
+            var emptyMine = document.querySelector('[data-empty-mine]');
+            if (emptyMine) { emptyMine.hidden = !(group === 'mine' && shown === 0); }
         });
     });
 
@@ -776,6 +789,282 @@ document.addEventListener('DOMContentLoaded', function () {
         }, HOLD_MS);
     });
 });
+
+// ============================================================================
+// Event RSVP — the card button IS the live signup action (event_rsvp).
+// Delegated so it works for cards injected on any surface (calendar, detail,
+// and the Phase-4 modal, which can show the same event twice). Anonymous →
+// login overlay; authenticated → AJAX toggle with optimistic UI, nonce
+// rotation, and rollback on error. Follows the roadmap-vote button pattern.
+// ============================================================================
+(function () {
+    'use strict';
+
+    var ENDPOINT = '/begivenheder/tilmeld';
+
+    function nonceInput() { return document.querySelector('#bv-em-rsvp-nonce [name="rsvp_nonce"]'); }
+    function isAuthenticated() { return !!nonceInput(); }
+    function getNonce() { var el = nonceInput(); return el ? el.value : ''; }
+    function setNonce(value) { var el = nonceInput(); if (el && value) { el.value = value; } }
+
+    function cssEscape(s) {
+        if (window.CSS && CSS.escape) { return CSS.escape(s); }
+        return String(s).replace(/["\\\]]/g, '\\$&');
+    }
+
+    // Danish label/state for a button given mode + signed-up + availability —
+    // must mirror the Twig-rendered initial state in partials/event_card.html.twig.
+    // The label is a fixed word per mode; the joined/marked state is shown by
+    // the checkbox before it (CSS ::before on .is-signed-up), not the text.
+    function labelFor(mode) {
+        if (mode === 'interesseret') { return 'Interesseret'; }
+        // A full event keeps the 'Deltag' label but is disabled (see the button
+        // markup); the availability line carries "Alle pladser er optaget".
+        return 'Deltag';
+    }
+    function stateFor(mode, signedUp, isFull) {
+        if (mode === 'interesseret') { return signedUp ? 'marked' : 'open'; }
+        if (signedUp) { return 'signed_up'; }
+        if (isFull) { return 'full'; }
+        return 'open';
+    }
+    function availabilityText(mode, count, remaining) {
+        if (remaining !== null && remaining !== undefined) {
+            if (remaining > 0) { return remaining + ' plads' + (remaining === 1 ? '' : 'er') + ' tilbage'; }
+            return 'Alle pladser er optaget';
+        }
+        if (mode === 'interesseret') { return count + ' ' + (count === 1 ? 'interesseret' : 'interesserede'); }
+        return count + ' tilmeldt' + (count === 1 ? '' : 'e');
+    }
+
+    // Update every card + availability line sharing this key from a server result.
+    function applyResult(key, signedUp, count, remaining) {
+        var sel = '[data-rsvp-key="' + cssEscape(key) + '"]';
+        var mode = 'tilmeld';
+        var firstBtn = document.querySelector(sel);
+        if (firstBtn) { mode = firstBtn.getAttribute('data-rsvp-mode') || 'tilmeld'; }
+        var isFull = (remaining !== null && remaining !== undefined && remaining <= 0) && !signedUp;
+
+        document.querySelectorAll(sel).forEach(function (btn) {
+            var m = btn.getAttribute('data-rsvp-mode') || 'tilmeld';
+            btn.textContent = labelFor(m);
+            btn.setAttribute('data-rsvp-state', stateFor(m, signedUp, isFull));
+            btn.classList.toggle('is-signed-up', signedUp);
+            btn.disabled = isFull;
+        });
+        document.querySelectorAll('[data-rsvp-availability="' + cssEscape(key) + '"]').forEach(function (line) {
+            line.textContent = availabilityText(mode, count, remaining);
+        });
+        // Highlight the card (light workshop-colour date block) while the user
+        // has joined — SAME treatment whether they are tilmeldt or interesseret.
+        // Resolve the card off the signup button rather than [data-event-key]:
+        // an event without rich details is not expandable and carries no
+        // data-event-key, but can still be joined and must still get the highlight.
+        document.querySelectorAll('[data-rsvp-key="' + cssEscape(key) + '"]').forEach(function (b) {
+            var card = b.closest('.bv-event-row');
+            if (card) { card.classList.toggle('bv-event-row--attending', signedUp); }
+        });
+    }
+
+    // Inline feedback near the button (never a dialog — dialogs block automation).
+    function announce(btn, msg) {
+        var row = btn.closest('.bv-event-row') || btn.parentElement;
+        if (!row) { return; }
+        var note = row.querySelector('.bv-event-row__rsvp-note');
+        if (!note) {
+            note = document.createElement('span');
+            note.className = 'bv-event-row__rsvp-note';
+            note.setAttribute('role', 'status');
+            btn.insertAdjacentElement('afterend', note);
+        }
+        note.textContent = msg;
+    }
+
+    function toggle(btn) {
+        var key = btn.getAttribute('data-rsvp-key');
+        if (!key || btn.disabled || btn.dataset.busy === '1') { return; }
+
+        var prev = {
+            label: btn.textContent,
+            state: btn.getAttribute('data-rsvp-state'),
+            signed: btn.classList.contains('is-signed-up')
+        };
+        btn.dataset.busy = '1';
+        btn.classList.add('is-busy');
+
+        var body = new FormData();
+        body.append('data[key]', key);
+        body.append('rsvp_nonce', getNonce());
+
+        fetch(ENDPOINT, {
+            method: 'POST',
+            body: body,
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        })
+        .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
+        .then(function (res) {
+            btn.dataset.busy = '';
+            btn.classList.remove('is-busy');
+            if (res.status === 200 && res.data && res.data.success) {
+                if (res.data.new_nonce) { setNonce(res.data.new_nonce); }
+                var signedUp = res.data.action === 'signed_up';
+                var remaining = (res.data.remaining === undefined) ? null : res.data.remaining;
+                applyResult(key, signedUp, res.data.count, remaining);
+            } else {
+                // Roll back the optimistic UI first.
+                btn.textContent = prev.label;
+                btn.setAttribute('data-rsvp-state', prev.state);
+                btn.classList.toggle('is-signed-up', prev.signed);
+                if (res.status === 401) {
+                    // The session expired mid-action (typically after a redeploy):
+                    // the stale page still carries the user's nonce input so the
+                    // client thought it was logged in. Send the user to log in
+                    // rather than showing a dead "not authorized" message.
+                    if (typeof bvOpenOverlay === 'function') { bvOpenOverlay('bv-login-overlay'); }
+                    else { window.location.href = '/login'; }
+                } else {
+                    // Surface the server message (409 full/past, 403 stale nonce).
+                    var msg = (res.data && res.data.data && res.data.data.error)
+                        || (res.data && res.data.error)
+                        || 'Handlingen mislykkedes. Prøv igen.';
+                    announce(btn, msg);
+                }
+            }
+        })
+        .catch(function () {
+            btn.dataset.busy = '';
+            btn.classList.remove('is-busy');
+            btn.textContent = prev.label;
+            btn.setAttribute('data-rsvp-state', prev.state);
+            btn.classList.toggle('is-signed-up', prev.signed);
+            announce(btn, 'Netværksfejl. Kontrollér din forbindelse og prøv igen.');
+        });
+    }
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-rsvp-key]');
+        if (!btn) { return; }
+        e.preventDefault();
+        e.stopPropagation(); // never bubble to the card-expand handler (Phase 4)
+        if (!isAuthenticated()) {
+            if (typeof bvOpenOverlay === 'function') { bvOpenOverlay('bv-login-overlay'); }
+            return;
+        }
+        toggle(btn);
+    });
+}());
+
+// ============================================================================
+// Event card inline expansion (event_rsvp §4). Clicking a card anywhere that
+// is NOT the signup button expands it in place: the rich details unfold in a
+// panel below the card and push the other events down (accordion — one open at
+// a time). No modal, no URL change. The title's <a href> still opens the full
+// detail page on cmd/ctrl/middle-click and for no-JS / SEO / crawlers.
+// ============================================================================
+(function () {
+    'use strict';
+
+    function itemOf(card) { return card.closest('.bv-event-item'); }
+    function panelOf(card) { var it = itemOf(card); return it ? it.querySelector('.bv-event-details-panel') : null; }
+    function templateOf(card) { var it = itemOf(card); return it ? it.querySelector('[data-event-details]') : null; }
+
+    function collapse(card) {
+        var panel = panelOf(card);
+        if (panel) { panel.hidden = true; panel.innerHTML = ''; }
+        card.classList.remove('is-expanded');
+        card.setAttribute('aria-expanded', 'false');
+    }
+
+    function expand(card) {
+        // Accordion: only one card open at a time.
+        document.querySelectorAll('.bv-event-row.is-expanded').forEach(function (c) {
+            if (c !== card) { collapse(c); }
+        });
+        var panel = panelOf(card);
+        if (!panel) { return; }
+        var tpl = templateOf(card);
+        // Only cards that carry rich details are expandable (the chevron and
+        // click target render solely for them), so the template is always
+        // non-empty here — no placeholder branch.
+        panel.innerHTML = tpl ? tpl.innerHTML : '';
+        panel.querySelectorAll('img').forEach(function (img) { img.loading = 'lazy'; });
+        panel.hidden = false;
+        card.classList.add('is-expanded');
+        card.setAttribute('aria-expanded', 'true');
+    }
+
+    function toggle(card) {
+        if (card.classList.contains('is-expanded')) { collapse(card); }
+        else { expand(card); }
+    }
+
+    // A click ANYWHERE on the card except the signup button toggles the inline
+    // details. The title is plain text (no link). Any real link inside the card
+    // — e.g. a mailto: the description text was linkified into — still works;
+    // everything else expands the card. Clicks inside the expanded panel are
+    // NOT on the card (it's a sibling), so links there navigate normally.
+    document.addEventListener('click', function (e) {
+        var card = e.target.closest('.bv-event-row[data-event-key]');
+        if (!card) { return; }
+        if (e.target.closest('[data-rsvp-key]')) { return; }              // signup button → RSVP handler
+        if (e.target.closest('a[href], input, select, textarea')) { return; } // real links / form controls
+        e.preventDefault();
+        toggle(card);
+    });
+
+    // Keyboard: Enter/Space on a focused card toggles it; Esc collapses the open one.
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            var card = e.target.closest && e.target.closest('.bv-event-row[data-event-key]');
+            if (card && e.target === card) { e.preventDefault(); toggle(card); }
+        } else if (e.key === 'Escape') {
+            var expanded = document.querySelector('.bv-event-row.is-expanded');
+            if (expanded) { collapse(expanded); try { expanded.focus(); } catch (err) {} }
+        }
+    });
+}());
+
+// ============================================================================
+// Dashboard "Slet"/"Slet helt" confirmation popovers ("Arrangørpanel").
+// The popover is a native <details> (so it opens and the form submits without
+// JS); this progressive enhancement adds the Annullér button, click-outside
+// and Esc to close, and a single-open-at-a-time behaviour.
+// ============================================================================
+(function () {
+    'use strict';
+    var SEL = 'details.bv-event-dashboard__confirm';
+
+    function closeAll(except) {
+        document.querySelectorAll(SEL + '[open]').forEach(function (d) {
+            if (d !== except) { d.removeAttribute('open'); }
+        });
+    }
+
+    document.addEventListener('click', function (e) {
+        // Annullér inside a popover closes it (never submits).
+        var cancel = e.target.closest('[data-confirm-cancel]');
+        if (cancel) {
+            e.preventDefault();
+            var owner = cancel.closest(SEL);
+            if (owner) { owner.removeAttribute('open'); }
+            return;
+        }
+        // Opening one summary collapses the others (after the native toggle).
+        var summary = e.target.closest(SEL + ' > summary');
+        if (summary) {
+            var d = summary.parentNode;
+            setTimeout(function () { if (d.open) { closeAll(d); } }, 0);
+            return;
+        }
+        // A click anywhere else closes any open confirm popover.
+        if (!e.target.closest(SEL)) { closeAll(null); }
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { closeAll(null); }
+    });
+}());
 
 // ============================================================================
 // Header account menu (account_self_service) — accessible dropdown on the

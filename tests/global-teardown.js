@@ -28,6 +28,12 @@ const {
   removeDraftEvent,
   removeArchivedEvent,
   removeForeignEvent,
+  removeRsvpEvent,
+  removeCapacityEvent,
+  removeInterestEvent,
+  removePublicDemoEvents,
+  clearEventSignups,
+  clearEventImages,
 } = require('./helpers/fixtures');
 const { restoreEmailConfig } = require('./helpers/mailer');
 
@@ -64,6 +70,14 @@ module.exports = async function globalTeardown() {
   try { removeDraftEvent(); } catch (_) { /* non-fatal */ }
   try { removeArchivedEvent(); } catch (_) { /* non-fatal */ }
   try { removeForeignEvent(); } catch (_) { /* non-fatal */ }
+  try { removeRsvpEvent(); } catch (_) { /* non-fatal */ }
+  try { removeCapacityEvent(); } catch (_) { /* non-fatal */ }
+  try { removeInterestEvent(); } catch (_) { /* non-fatal */ }
+  try { removePublicDemoEvents(); } catch (_) { /* non-fatal */ }
+  // Signups + uploaded images are gitignored runtime state — `git checkout`
+  // won't restore them, so clear explicitly.
+  try { clearEventSignups(); } catch (_) { /* non-fatal */ }
+  try { clearEventImages(); } catch (_) { /* non-fatal */ }
 
   const repoRoot = path.resolve(__dirname, '..');
   for (const rel of GENERATED_ENV_SECURITY_FILES) {

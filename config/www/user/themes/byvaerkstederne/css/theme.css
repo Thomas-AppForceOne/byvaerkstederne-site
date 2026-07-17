@@ -238,7 +238,13 @@ a { color: inherit; text-decoration: none; }
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     display: none;
-    padding: 6rem var(--space-8) var(--space-8);
+    padding: 6rem var(--space-8) var(--space-10);
+    /* When the menu is taller than the screen (logged-in members get the extra
+       account entries, and short phones have little height), the overflowing
+       items were clipped with no way to reach them. Let the menu scroll. */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
 }
 .menu-open .bv-mobile-menu { display: block; }
 .menu-open .bv-nav { z-index: 51; }
@@ -1077,14 +1083,25 @@ a { color: inherit; text-decoration: none; }
 .bv-workgroup-card--kulturhus { background: var(--kulturhus); }
 
 /* ---------- Calendar ---------- */
-.bv-filters { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+/* Desktop: every filter on a single row. nowrap keeps them on one line;
+   overflow-x:auto is a safety net so a narrow desktop scrolls the row instead
+   of breaking the layout (wide screens fit with no scrollbar). Mobile stacks
+   them one per line — see the max-width:767px override below. */
+.bv-filters { display: flex; flex-wrap: nowrap; gap: var(--space-2); align-items: center; overflow-x: auto; }
+/* Keep the label + each button at natural width so the row scrolls rather than
+   squishing labels (e.g. "Makerspace & Reparation") when it is tight. */
+.bv-filters > * { flex-shrink: 0; }
+@media (max-width: 767px) {
+    /* Mobile: every filter on its own line, with comfortable vertical spacing. */
+    .bv-filters { flex-direction: column; align-items: flex-start; overflow-x: visible; gap: var(--space-3); }
+}
 .bv-filter-btn {
     font-family: var(--font-headline);
     font-weight: 700;
     text-transform: uppercase;
     font-size: 0.8rem;
     letter-spacing: 0.05em;
-    padding: var(--space-2) var(--space-4);
+    padding: var(--space-2) var(--space-3);
     border: 2px solid var(--outline-variant);
     background: transparent;
     cursor: pointer;
@@ -1093,6 +1110,7 @@ a { color: inherit; text-decoration: none; }
     display: flex;
     align-items: center;
     gap: var(--space-2);
+    white-space: nowrap;
 }
 .bv-filter-btn:hover { border-color: var(--on-surface); }
 .bv-filter-btn.is-active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
@@ -1100,6 +1118,10 @@ a { color: inherit; text-decoration: none; }
 .bv-filter-btn--secondary.is-active { background: var(--secondary); border-color: var(--secondary); }
 .bv-filter-btn--tertiary.is-active { background: var(--tertiary); border-color: var(--tertiary); }
 .bv-filter-btn--kulturhus.is-active { background: var(--kulturhus); border-color: var(--kulturhus); }
+/* "Alle aktiviteter" is not a workshop — give it a neutral slate so it reads as
+   distinct from Grønt BYværksted (which owns --primary/green). Must sit after
+   the generic .bv-filter-btn.is-active rule to win the same-specificity fill. */
+.bv-filter-btn--all.is-active { background: var(--on-surface-variant); border-color: var(--on-surface-variant); }
 
 .bv-filter-dot {
     width: 0.5rem;
@@ -1110,6 +1132,12 @@ a { color: inherit; text-decoration: none; }
 .bv-filter-dot--secondary { background: var(--secondary); }
 .bv-filter-dot--tertiary { background: var(--tertiary); }
 .bv-filter-dot--kulturhus { background: var(--kulturhus); }
+.bv-filter-dot--all { background: var(--on-surface-variant); }
+
+/* "Mine aktiviteter" uses a star glyph rather than a workshop-colour dot — it
+   is a personal filter, not a category. Sized to sit like the dots; inherits
+   the button text colour (→ on-primary when the button is active). */
+.bv-filter-btn__icon { font-size: 1.05rem; line-height: 1; }
 
 /* Event list — v2 handoff canonical layout. The <ul> wrapper is just a
    semantic container for the .bv-event-item entries; reset its default
@@ -1135,9 +1163,7 @@ a { color: inherit; text-decoration: none; }
     padding: var(--space-6) var(--space-4);
     background: var(--surface-container-lowest);
     border-left: var(--border-thick) solid var(--bv-accent, var(--primary));
-    transition: transform 0.2s ease;
 }
-.bv-event-row:hover { transform: translateX(0.25rem); }
 /* Legacy-DOM spacing — preserved so synthetic <div class="bv-event-row">
    rows injected by tests/mobile/event-row.js still get the inter-row
    gap when they sit as direct siblings outside a .bv-event-item wrapper. */
@@ -1158,6 +1184,51 @@ a { color: inherit; text-decoration: none; }
 .bv-event-row__date-month { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--on-surface-variant); }
 .bv-event-row__date-day { font-size: 1.5rem; }
 
+/* Expand affordance — a large chevron pinned to the bottom of the date
+   column (under the date, left side). Points down when collapsed, up when
+   expanded (CSS rotation). Rendered (Twig) only for cards that carry rich
+   details. The date column stretches to the card's height and CENTRES the
+   month/day (justify-content), while the chevron is taken out of flow
+   (absolute) and dropped to the column's bottom edge — so the date stays
+   vertically centred exactly as on a detail-less card, and the card gains no
+   empty space. */
+.bv-event-row--expandable .bv-event-row__date { align-self: stretch; justify-content: center; position: relative; }
+.bv-event-row__chevron {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    font-size: 3.75rem;
+    line-height: 0.6;
+    color: var(--bv-accent);
+    transition: transform 0.15s ease;
+    pointer-events: none;
+}
+.bv-event-row.is-expanded .bv-event-row__chevron { transform: translateX(-50%) rotate(180deg); }
+
+/* Attending highlight (event_rsvp): a confirmed Tilmeld participant sees the
+   date block filled with a light tint of the event's workshop colour. The
+   fill bleeds only vertically (into the card's top/bottom padding) so it spans
+   the card height; the date's horizontal box is left untouched, keeping the
+   month/day — and every downstream control — aligned across attending and
+   non-attending cards alike. */
+.bv-event-row--attending .bv-event-row__date {
+    background: color-mix(in srgb, var(--bv-accent) 18%, white);
+    align-self: stretch;
+    justify-content: center;
+    margin-block: calc(-1 * var(--space-6));
+    padding-block: var(--space-6);
+}
+.bv-event-row--featured.bv-event-row--attending .bv-event-row__date {
+    margin-block: calc(-1 * var(--space-8));
+    padding-block: var(--space-8);
+}
+/* The attending state adds vertical padding to the date column, which would
+   drop the absolutely-positioned chevron by that amount. Offset its bottom by
+   the same padding so it stays put whether or not you've joined. */
+.bv-event-row--attending .bv-event-row__chevron { bottom: var(--space-6); }
+.bv-event-row--featured.bv-event-row--attending .bv-event-row__chevron { bottom: var(--space-8); }
+
 /* BODY: badge + h3 + time + description */
 .bv-event-row__body {
     flex: 1;
@@ -1177,6 +1248,17 @@ a { color: inherit; text-decoration: none; }
     font-size: 1.25rem;
     line-height: 1.15;
 }
+.bv-event-row__location,
+.bv-event-row__organizer {
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.85rem;
+    color: var(--on-surface-variant);
+}
+.bv-event-row__location .material-symbols-outlined,
+.bv-event-row__organizer .material-symbols-outlined { font-size: 1rem; }
 .bv-event-row__time {
     margin: 0;
     font-family: var(--font-headline);
@@ -1215,6 +1297,76 @@ a { color: inherit; text-decoration: none; }
 }
 .bv-event-row__capacity .material-symbols-outlined { font-size: 1.1rem; }
 
+/* Live RSVP (event_rsvp): the availability line replaces the static capacity
+   readout, and a small inline note surfaces server errors (full/past/nonce)
+   next to the signup button. */
+.bv-event-row__availability {
+    font-size: 0.875rem;
+    color: var(--on-surface-variant);
+}
+/* Uniform Deltag/Interesseret size. Width: floor every signup button to the
+   wider 'Interesseret' label incl. its checkbox (measured ~185px) so 'Deltag'
+   renders at the exact same size on every surface (the 141px measured for
+   'Deltag' is padded up to the floor). Height: pin the small-button padding —
+   the element+class selector outranks every single-class .bv-btn--<variant>
+   rule regardless of source order, so a tertiary/kulturhus accent button is
+   the same height as a primary/secondary one. */
+button.bv-event-row__signup {
+    min-width: 188px;
+    padding: var(--space-2) var(--space-6);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4em;
+}
+/* Checkbox before the label — empty until you have joined/marked, checked once
+   you have (driven by .is-signed-up; JS just toggles that class). Rendered with
+   the Material Symbols font on a ::before so the label itself stays a plain word
+   ('Deltag' / 'Interesseret'). text-transform/letter-spacing are reset so the
+   uppercase button styling doesn't break the icon ligature. */
+.bv-event-row__signup::before {
+    font-family: 'Material Symbols Outlined';
+    content: 'check_box_outline_blank';
+    text-transform: none;
+    letter-spacing: normal;
+    font-weight: normal;
+    font-feature-settings: 'liga';
+    -webkit-font-feature-settings: 'liga';
+    font-size: 1.35em;
+    line-height: 1;
+    flex: none;
+}
+.bv-event-row__signup.is-signed-up::before { content: 'check_box'; }
+.bv-event-row__signup.is-signed-up { font-weight: 700; }
+.bv-event-row__signup.is-busy { opacity: 0.6; pointer-events: none; }
+/* A full (or past) event keeps the 'Deltag' label but is greyed + not clickable
+   — the availability line carries the "Alle pladser er optaget" message. */
+.bv-event-row__signup:disabled { opacity: 0.5; cursor: not-allowed; }
+.bv-event-row__rsvp-note {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--error);
+    margin-top: var(--space-1);
+    max-width: 14rem;
+}
+
+/* Inline card expansion (event_rsvp §4): a click expands the card in place and
+   the rich details unfold in a panel below it (accordion), pushing the other
+   events down. No modal. The panel is a sibling of the card inside
+   .bv-event-item and inherits --bv-accent from that wrapper. */
+.bv-event-row--expandable { cursor: pointer; }
+.bv-event-row--expandable:focus-visible { outline: 2px solid var(--secondary); outline-offset: 2px; }
+.bv-event-details-panel {
+    padding: var(--space-5) var(--space-6);
+    border-left: var(--border-thick) solid var(--bv-accent, var(--primary));
+    background: var(--surface-container-lowest);
+    border-top: 1px solid var(--surface-container-high);
+}
+.bv-event-details-panel[hidden] { display: none; }
+.bv-event-details-panel > :first-child { margin-top: 0; }
+.bv-event-details-panel > :last-child { margin-bottom: 0; }
+.bv-event-details-panel img { max-width: 100%; height: auto; }
+
 /* Featured modifier — used by calendar_featured.html.twig and the
    primary featured card in event_highlight.html.twig in sprint 2.
    Desktop-only typography bump and tighter spacing; mobile inherits
@@ -1234,6 +1386,32 @@ a { color: inherit; text-decoration: none; }
     .bv-event-row__date { flex-direction: row; align-items: baseline; gap: var(--space-2); min-width: auto; text-align: left; }
     .bv-event-row__date-day { order: -1; font-size: 1.25rem; }
     .bv-event-row__date-month { font-size: 0.8rem; }
+    /* Horizontal date row: the chevron sits inline after the month (static,
+       not the desktop absolute pin), the date content stays left-aligned, and
+       the chevron scales back to fit the row. */
+    /* Chevron: when the card stacks on mobile, drop the expand affordance to
+       the bottom-centre of the CARD — horizontally centred, under the
+       availability ("tilmeldte") line — instead of leaving it inline beside the
+       date. It is positioned against the card (padding-bottom reserves the room)
+       rather than the date column, so the date is no longer its positioning
+       context here. The --expandable qualifier + later source order let this win
+       over the desktop and attending chevron rules on mobile. */
+    .bv-event-row--expandable { position: relative; padding-bottom: var(--space-12); }
+    .bv-event-row--expandable .bv-event-row__date { justify-content: flex-start; position: static; }
+    .bv-event-row--expandable .bv-event-row__chevron {
+        position: absolute; left: 50%; bottom: var(--space-2); transform: translateX(-50%);
+        font-size: 2rem; line-height: 1;
+    }
+    .bv-event-row--expandable.is-expanded .bv-event-row__chevron { transform: translateX(-50%) rotate(180deg); }
+    /* Attending, stacked: keep the date left-aligned (not centred) and stop the
+       date tint bleeding down into the workshop badge — restore air below it.
+       The desktop full-height left-stripe design doesn't translate to the
+       column layout, so neutralise the vertical bleed here. */
+    .bv-event-row--attending .bv-event-row__date {
+        justify-content: flex-start;
+        margin-block: 0;
+        padding-block: var(--space-3);
+    }
     .bv-event-row__body,
     .bv-event-row__meta { width: 100%; }
     .bv-event-row__meta { align-items: flex-start; text-align: left; margin-top: var(--space-2); }
@@ -1703,7 +1881,11 @@ a { color: inherit; text-decoration: none; }
 
 @media (max-width: 767px) {
     /* Fluid typography: scale headings to fill container width on mobile */
-    .bv-display, .bv-display[style*="font-size"] { font-size: clamp(1.75rem, 9vw, 5rem) !important; width: 100%; }
+    /* A single long compound word (e.g. "Værkstedskalenderen") must not spill
+       past the viewport at 9vw — wrap/hyphenate it instead (lang="da" drives
+       the hyphenation; break-word is the guaranteed fallback). Short headlines
+       are unaffected. Mobile-only — desktop typography is untouched. */
+    .bv-display, .bv-display[style*="font-size"] { font-size: clamp(1.75rem, 9vw, 5rem) !important; width: 100%; overflow-wrap: break-word; hyphens: auto; }
     .bv-headline, .bv-headline[style*="font-size"] { font-size: clamp(1.5rem, 7vw, 3rem) !important; width: 100%; }
     .bv-title, .bv-title[style*="font-size"] { font-size: clamp(1rem, 3.5vw, 1.5rem) !important; }
     .bv-hero__title { font-size: clamp(1.75rem, 8.5vw, 7rem) !important; max-width: calc(100vw - var(--space-8)); word-break: break-word; }
@@ -4056,26 +4238,154 @@ a { color: inherit; text-decoration: none; }
     flex-wrap: wrap;
     margin-bottom: var(--space-8);
 }
-.bv-event-dashboard__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); }
+.bv-event-dashboard__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+
+/* Compact row grid: [status] [title+date] [actions]. Fixed status/button
+   widths keep every column vertically aligned across rows, whatever the
+   status. Attendees fold out full-width beneath (row 2). */
 .bv-event-dashboard__item {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 7rem 1fr auto;
     align-items: center;
-    gap: var(--space-4);
-    flex-wrap: wrap;
-    padding: var(--space-4);
+    column-gap: var(--space-4);
+    row-gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
     background: var(--surface);
     border-left: 4px solid var(--primary);
 }
 .bv-event-dashboard__item[data-event-status="kladde"] { border-left-color: var(--secondary); }
-.bv-event-dashboard__item[data-event-status="arkiveret"] { border-left-color: var(--outline); opacity: 0.75; }
-.bv-event-dashboard__main { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
-.bv-event-dashboard__title { font-weight: 700; color: var(--on-surface); text-decoration: none; }
-.bv-event-dashboard__title:hover { text-decoration: underline; text-underline-offset: 4px; }
-.bv-event-dashboard__date { color: var(--outline); font-size: 0.875rem; }
-.bv-event-dashboard__owner { color: var(--outline); font-size: 0.875rem; }
-.bv-event-dashboard__actions { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+.bv-event-dashboard__item[data-event-status="arkiveret"] { border-left-color: var(--outline); }
+.bv-event-dashboard__item[data-event-status="slettet"] { border-left-color: var(--outline); opacity: 0.72; }
+
+/* Status badge — fixed size so the first column lines up on every row. */
+.bv-event-dashboard__status {
+    width: 7rem;
+    text-align: center;
+    box-sizing: border-box;
+    align-self: center;
+}
+.bv-event-dashboard__status--publiceret { background: var(--primary); color: var(--on-primary); }
+.bv-event-dashboard__status--kladde { background: var(--secondary); color: var(--on-secondary); }
+.bv-event-dashboard__status--arkiveret { background: var(--tertiary); color: var(--on-tertiary); }
+.bv-event-dashboard__status--slettet { background: var(--outline); color: #fff; }
+
+.bv-event-dashboard__body { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.bv-event-dashboard__title { font-weight: 700; color: var(--on-surface); }
+.bv-event-dashboard__date { color: var(--on-surface-variant); font-size: 0.875rem; }
+.bv-event-dashboard__owner { color: var(--outline); font-size: 0.8rem; }
+
+/* Actions — right-aligned, Rediger flush with the card's right edge. */
+.bv-event-dashboard__actions { justify-self: end; display: flex; align-items: center; gap: var(--space-2); }
 .bv-event-dashboard__inline-form { display: inline; margin: 0; }
+/* Uniform button size (width + height). The two-class selector outranks every
+   single-class .bv-btn--<variant> so padding stays constant regardless of the
+   cascade order that bit the calendar buttons. */
+.bv-event-dashboard__actions .bv-btn {
+    min-width: 6.5rem;
+    padding: var(--space-2) var(--space-4);
+    text-align: center;
+    box-sizing: border-box;
+}
+.bv-event-dashboard__actions .bv-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+
+/* Slet / Slet-helt confirmation — a floating popover hanging from the button
+   (native <details>, so it also works without JS; JS adds cancel/outside/Esc). */
+.bv-event-dashboard__confirm { position: relative; display: inline-block; }
+.bv-event-dashboard__confirm > summary { cursor: pointer; list-style: none; }
+.bv-event-dashboard__confirm > summary::-webkit-details-marker { display: none; }
+.bv-event-dashboard__confirm > summary::marker { content: ''; }
+.bv-event-dashboard__confirm-pop {
+    position: absolute;
+    top: calc(100% + 0.6rem);
+    right: 0;
+    z-index: 30;
+    width: 17rem;
+    max-width: 82vw;
+    background: var(--surface-container-lowest);
+    border: 1px solid var(--outline);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+    padding: var(--space-4);
+    text-align: left;
+}
+.bv-event-dashboard__confirm-pop::before {
+    content: '';
+    position: absolute;
+    top: -7px;
+    right: 1.75rem;
+    width: 12px;
+    height: 12px;
+    background: inherit;
+    border-left: 1px solid var(--outline);
+    border-top: 1px solid var(--outline);
+    transform: rotate(45deg);
+}
+.bv-event-dashboard__confirm-text { margin: 0 0 var(--space-3); font-size: 0.9rem; line-height: 1.4; }
+.bv-event-dashboard__confirm-actions { display: flex; gap: var(--space-2); justify-content: flex-end; margin: 0; }
+
+/* RSVP attendee list (owner/super only). Native <details>; the summary sits
+   under the actions (right), the table folds out full-width below. */
+.bv-event-dashboard__attendees { grid-column: 1 / -1; margin-top: var(--space-1); }
+.bv-event-dashboard__attendees > summary {
+    cursor: pointer;
+    display: inline-block;
+    font-family: var(--font-headline);
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--secondary);
+}
+.bv-event-dashboard__attendee-empty { margin: var(--space-3) 0 0; }
+.bv-event-dashboard__attendee-table {
+    display: grid;
+    grid-template-columns: max-content minmax(6rem, auto) 1fr;
+    gap: var(--space-1) var(--space-6);
+    margin-top: var(--space-3);
+    font-size: 0.875rem;
+    align-items: baseline;
+}
+/* Row wrappers are transparent on desktop — their cells flow into the grid
+   above exactly as when they were direct children (mobile turns them into
+   stacked blocks; see the @media rule below). */
+.bv-event-dashboard__attendee-row { display: contents; }
+.bv-event-dashboard__attendee-head {
+    font-family: var(--font-headline);
+    font-weight: 700;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--on-surface-variant);
+}
+.bv-event-dashboard__attendee-ts { color: var(--on-surface-variant); white-space: nowrap; }
+.bv-event-dashboard__attendee-name { font-weight: 600; }
+.bv-event-dashboard__attendee-email { word-break: break-word; }
+/* Mobile: stack each attendee's tidspunkt / navn / email under one another,
+   centred, with a horizontal rule (2/3 of the card width, centred) between
+   attendees. The desktop 3-column grid is untouched (rules above). */
+@media (max-width: 767px) {
+    .bv-event-dashboard__attendee-table { display: block; }
+    /* Each attendee's data stays left-aligned; only the divider (below) is
+       centred. */
+    .bv-event-dashboard__attendee-row { display: block; text-align: left; }
+    /* Hide the column header on the stacked layout — must come AFTER the row
+       rule above so it wins the same-specificity tie. */
+    .bv-event-dashboard__attendee-row--head { display: none; }
+    .bv-event-dashboard__attendee-row > span { display: block; }
+    .bv-event-dashboard__attendee-ts { white-space: normal; }
+    .bv-event-dashboard__attendee-row:not(:last-child)::after {
+        content: "";
+        display: block;
+        width: 66.6667%;
+        margin: var(--space-4) auto 0;
+        border-top: 1px solid var(--outline-variant);
+    }
+}
+
+/* Narrow screens: stack the row so nothing overflows. */
+@media (max-width: 640px) {
+    .bv-event-dashboard__item { grid-template-columns: 1fr; }
+    .bv-event-dashboard__actions { justify-self: stretch; flex-wrap: wrap; }
+    .bv-event-dashboard__confirm-pop { right: auto; left: 0; }
+    .bv-event-dashboard__confirm-pop::before { right: auto; left: 1.75rem; }
+}
 
 /* Orange button variant — Eventværkstedet. Completes the accent set the
    event cards use (primary/secondary/tertiary/kulturhus). */
@@ -4097,6 +4407,14 @@ a { color: inherit; text-decoration: none; }
     gap: var(--space-4);
     flex-wrap: wrap;
     margin-bottom: var(--space-8);
+}
+/* Arrangør actions on the calendar header: Arrangørpanel + Opret begivenhed
+   on one line. */
+.bv-event-list__head-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
 }
 
 /* Form pages (create / edit / delete): two-column surface — grouped form in
@@ -4211,6 +4529,274 @@ a { color: inherit; text-decoration: none; }
     margin-top: var(--space-4);
     font-size: 0.9rem;
     color: var(--outline);
+}
+
+/* ============================================================================
+   Inline card editor — /begivenheder/opret (event_create.html.twig).
+   The organizer edits the event directly on the card as it will appear in the
+   calendar; popovers capture each value. "Industrial Brutalism Refined":
+   border-radius 0, hard offset shadows, Space Grotesk structure.
+   ============================================================================ */
+/* Honeypot anti-spam field — off-screen, never shown or focusable. Global so
+   every honeypot (event editor, Form-plugin honeypots) is hidden without an
+   inline <style>. */
+.form-honeybear {
+    position: absolute !important; left: -10000px !important;
+    width: 1px; height: 1px; overflow: hidden;
+}
+
+.bv-event-editor {
+    background-color: #f0f4ff;
+    background-image:
+        linear-gradient(rgba(26, 28, 28, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(26, 28, 28, 0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+    padding: var(--space-16) 0 6rem;
+}
+.bv-event-editor__inner { max-width: 70rem; }
+.bv-event-editor__head { max-width: 46rem; margin-bottom: var(--space-10); }
+.bv-event-editor__title { font-size: 2.75rem; margin-bottom: var(--space-4); }
+.bv-event-editor__head p { color: var(--on-surface-variant); }
+
+/* Invisible click-outside layer for popovers. */
+.bv-ee-backdrop { position: fixed; inset: 0; z-index: 60; }
+
+/* Control line: draft/public + Gem. */
+.bv-ee-controls {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: var(--space-4); margin-bottom: var(--space-4); flex-wrap: wrap;
+}
+.bv-ee-seg { display: inline-flex; }
+.bv-ee-seg__btn {
+    font-family: var(--font-headline); font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; font-size: 0.875rem; padding: 10px 24px;
+    border: 1px solid var(--outline); background: #fff; color: var(--on-surface-variant);
+    cursor: pointer; border-radius: 0; transition: all 0.15s;
+}
+.bv-ee-seg__btn:active { transform: scale(0.97); }
+.bv-ee-seg__btn.is-active { background: var(--primary); color: #fff; border-color: var(--primary); }
+/* The active Kladde toggle matches the dashboard's blue "Kladde" status badge
+   (--secondary); Offentlig stays primary green, matching the "Publiceret" badge. */
+.bv-ee-seg__btn[data-published="0"].is-active { background: var(--secondary); border-color: var(--secondary); color: var(--on-secondary); }
+.bv-ee-seg--sm .bv-ee-seg__btn { padding: 8px 18px; font-size: 0.8rem; }
+/* Locked toggle option (e.g. capacity "Nej" is disabled for Drop-in events). */
+.bv-ee-seg__btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.bv-ee-save {
+    font-family: var(--font-headline); font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; font-size: 0.875rem; padding: 12px 40px;
+    border: none; border-radius: 0; cursor: pointer; transition: all 0.15s;
+    background: var(--primary); color: #fff;
+}
+.bv-ee-save:not(:disabled):hover { background: var(--primary-container, #2e6052); }
+.bv-ee-save:not(:disabled):active { transform: scale(0.97); }
+.bv-ee-save:disabled { background: var(--surface-container-highest); color: var(--outline); cursor: not-allowed; }
+
+/* The editable card — builds on .bv-event-row but heavier chrome, no hover slide. */
+.bv-ee-card {
+    align-items: center; gap: var(--space-6); padding: var(--space-8) var(--space-6);
+    background: #fff; border-left-width: 8px;
+    box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.15);
+    transition: none; margin-bottom: var(--space-12); position: relative;
+}
+.bv-ee-card:hover { transform: none; }
+.bv-ee-field { position: relative; }
+
+/* Editable-element hover affordance (dashed outline). The transparent
+   triggers reset their background/border; the badge + CTA keep their accent
+   background (added by bv-badge--*/bv-btn--*), so they are excluded here. */
+.bv-ee-datebtn, .bv-ee-line, .bv-ee-metaval, .bv-ee-capchip {
+    cursor: pointer; background: none; border: none; font: inherit;
+}
+.bv-ee-badge, .bv-ee-cta { cursor: pointer; }
+.bv-ee-datebtn:hover, .bv-ee-badge:hover, .bv-ee-line:hover,
+.bv-ee-metaval:hover, .bv-ee-cta:hover, .bv-ee-capchip:hover,
+.bv-ee-title:hover, .bv-ee-desc:hover {
+    outline: 2px dashed var(--outline); outline-offset: 2px;
+}
+.bv-ee-title:focus, .bv-ee-desc:focus { outline: 2px dashed var(--secondary); outline-offset: 2px; }
+
+/* Date block button. */
+.bv-ee-datebtn {
+    min-width: 4.5rem; text-align: center; display: flex; flex-direction: column;
+    align-items: center; gap: 2px; padding: 8px; font-family: var(--font-headline); font-weight: 700; line-height: 1;
+}
+.bv-ee-datebtn .bv-event-row__date-day { font-size: 1.75rem; }
+
+/* Group badge (button). Empty = dashed ghost. */
+.bv-ee-badge {
+    display: inline-block; border: none; font-family: var(--font-headline); font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.15em; font-size: 0.75rem;
+    padding: 4px 12px; margin-bottom: var(--space-1); color: #fff;
+}
+.bv-ee-badge--empty {
+    background: transparent !important; color: var(--outline);
+    border: 2px dashed var(--outline); font-style: italic; font-weight: 400; letter-spacing: 0.05em;
+}
+
+/* Title input (transparent, in-card). */
+.bv-ee-title {
+    box-sizing: border-box; width: 100%; border: none; background: transparent;
+    margin: 0; padding: 4px 0; font-family: var(--font-headline); font-weight: 700;
+    text-transform: uppercase; letter-spacing: var(--tracking-tight); font-size: 1.5rem;
+    line-height: 1.15; color: var(--on-surface); cursor: text;
+}
+.bv-ee-title::placeholder { color: var(--outline); font-style: italic; font-weight: 400; }
+
+/* Time / location clickable lines. */
+.bv-ee-line {
+    display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px;
+    font-family: var(--font-headline); font-weight: 700; font-size: 0.875rem; color: var(--on-surface);
+}
+.bv-ee-line .material-symbols-outlined { font-size: 16px; color: var(--on-surface-variant); }
+.bv-ee-line--ghost { color: var(--outline); font-style: italic; font-weight: 400; }
+#ee-loc-line { font-family: 'Work Sans', sans-serif; font-weight: 400; }
+
+/* Description textarea (transparent). */
+.bv-ee-desc {
+    box-sizing: border-box; width: 100%; border: none; background: transparent; margin: 0;
+    padding: 2px 0; font-family: 'Work Sans', sans-serif; font-size: 0.875rem; line-height: 1.5;
+    color: var(--on-surface-variant); resize: none; cursor: text;
+}
+.bv-ee-desc::placeholder { color: var(--outline); font-style: italic; }
+
+/* Meta column. */
+.bv-ee-meta { min-width: 10rem; gap: 10px; }
+.bv-ee-metaval { font-family: var(--font-headline); font-weight: 700; font-size: 0.95rem; line-height: 1.2; padding: 2px 4px; }
+.bv-ee-cta {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.4em;
+    min-width: 188px; /* same fixed size as the live Deltag/Interesseret button */
+    font-family: var(--font-headline); font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; font-size: 0.875rem; padding: 8px 24px; color: #fff; border: none;
+}
+/* Preview the live card's checkbox affordance (always the unmarked default in
+   the editor). */
+.bv-ee-cta::before {
+    font-family: 'Material Symbols Outlined';
+    content: 'check_box_outline_blank';
+    text-transform: none; letter-spacing: normal; font-weight: normal;
+    font-feature-settings: 'liga'; -webkit-font-feature-settings: 'liga';
+    font-size: 1.35em; line-height: 1; flex: none;
+}
+/* Drop-in locks the CTA to "Interesseret": still readable, but clearly not
+   changeable. */
+.bv-ee-cta:disabled { cursor: not-allowed; opacity: 0.9; }
+.bv-ee-capchip { display: inline-flex; align-items: center; gap: 4px; font-size: 0.875rem; padding: 2px 4px; color: var(--on-surface-variant); }
+.bv-ee-capchip .material-symbols-outlined { font-size: 17px; }
+.bv-ee-ghost { color: var(--outline) !important; font-style: italic; font-weight: 400; }
+
+/* Popovers. */
+.bv-ee-pop {
+    position: absolute; top: 100%; margin-top: 12px; z-index: 70; background: #fff;
+    border: 2px solid var(--on-surface); box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.25);
+    padding: 20px; width: max-content; max-width: min(24rem, 90vw); text-align: left;
+}
+.bv-ee-pop--left { left: 0; }
+.bv-ee-pop--right { right: 0; }
+.bv-ee-pop__label {
+    display: block; font-family: var(--font-headline); font-weight: 700; font-size: 0.75rem;
+    text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 4px;
+}
+.bv-ee-pop__help { margin: 0 0 12px; font-size: 0.85rem; line-height: 1.4; color: var(--outline); }
+.bv-ee-popinput {
+    box-sizing: border-box; width: 100%; padding: 12px; border: 1px solid var(--outline);
+    border-radius: 0; background: #fff; color: var(--on-surface); font-size: 1rem;
+}
+.bv-ee-popinput--num { width: 96px; }
+.bv-ee-dateinput { width: 170px; }
+
+/* Option lists (group / type / cta). */
+.bv-ee-optlist { display: flex; flex-direction: column; gap: 8px; }
+.bv-ee-opt {
+    display: block; width: 100%; text-align: left; font-family: var(--font-headline); font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.875rem; padding: 12px 16px;
+    border: 1px solid var(--outline-variant); cursor: pointer; border-radius: 0; background: #fff;
+    color: var(--on-surface); transition: all 0.15s;
+}
+.bv-ee-opt:hover { background: var(--surface-container-high); }
+.bv-ee-groupopt { border-left: 8px solid var(--opt-accent, var(--primary)); }
+.bv-ee-groupopt.is-active { background: var(--surface-container-high); }
+.bv-ee-typeopt.is-active, .bv-ee-ctaopt.is-active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* Location chips. */
+.bv-ee-chips { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.bv-ee-chip {
+    font-family: var(--font-headline); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+    font-size: 0.8rem; padding: 8px 14px; border: 1px solid var(--outline-variant); background: #fff;
+    color: var(--on-surface); cursor: pointer; border-radius: 0; transition: all 0.15s;
+}
+.bv-ee-chip:hover { background: var(--surface-container-high); }
+
+/* Time picker. */
+.bv-ee-timegrid { display: flex; gap: 16px; }
+.bv-ee-timefield { position: relative; width: 128px; }
+.bv-ee-timefield > div:first-child, .bv-ee-timefield { }
+.bv-ee-timefield { display: flex; flex-direction: column; }
+.bv-ee-timeinput {
+    box-sizing: border-box; width: 100%; padding: 12px 4px 12px 12px; border: 1px solid var(--outline);
+    border-right: none; background: #fff; color: var(--on-surface); font-size: 1rem;
+}
+.bv-ee-timefield { border: none; }
+.bv-ee-timefield > .bv-ee-timeinput { border-right: none; }
+.bv-ee-timefield { }
+.bv-ee-timeicon {
+    position: absolute; top: 0; right: 0; height: 100%; display: flex; align-items: center;
+    padding: 0 8px; border: 1px solid var(--outline); border-left: none; background: #fff;
+    cursor: pointer; color: var(--on-surface-variant);
+}
+.bv-ee-timeicon .material-symbols-outlined { font-size: 20px; }
+.bv-ee-timelist {
+    position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px; z-index: 80;
+    background: #fff; border: 2px solid var(--on-surface); box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.25);
+    height: 240px; overflow: hidden;
+}
+.bv-ee-timelist__grid { display: grid; grid-template-columns: 1fr 1fr; height: 100%; }
+.bv-ee-timelist__col { overflow-y: auto; min-height: 0; }
+.bv-ee-timelist__col--hours { border-right: 1px solid var(--outline-variant); }
+.bv-ee-timelist__opt {
+    padding: 10px 16px; text-align: center; font-family: var(--font-headline); font-weight: 700;
+    font-size: 0.95rem; cursor: pointer;
+}
+.bv-ee-timelist__opt:hover { background: var(--primary); color: #fff; }
+.bv-ee-timelist__opt.is-sel { background: var(--primary); color: #fff; }
+
+/* Capacity count field disabled state. */
+.bv-ee-cap-count { margin-top: 16px; }
+.bv-ee-cap-count.is-disabled { opacity: 0.45; }
+
+/* Details panel. */
+.bv-ee-details { background: var(--surface); border-top: 4px solid var(--primary); padding: var(--space-10); }
+.bv-ee-details__title { margin: 0 0 8px; font-family: var(--font-headline); font-weight: 700; font-size: 1.125rem; }
+.bv-ee-details__help { font-size: 0.85rem; line-height: 1.4; color: var(--outline); margin: 2px 0 16px; }
+.bv-ee-details .tox-tinymce { border: 1px solid var(--outline); }
+.bv-ee-foot { margin-top: var(--space-8); }
+
+/* ── Responsive: stacked card, popovers open upward ── */
+@media (max-width: 720px) {
+    .bv-event-editor { padding: var(--space-8) 0 3rem; }
+    .bv-event-editor__title { font-size: 1.875rem; }
+    .bv-ee-card {
+        flex-direction: column; align-items: stretch; gap: 10px;
+        padding: var(--space-5) var(--space-4); box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.15);
+    }
+    .bv-ee-title { font-size: 1.25rem; }
+    /* date + badge on one row */
+    .bv-ee-card > .bv-event-row__date { flex-direction: row; align-items: flex-start; }
+    /* Stack the meta fields vertically on mobile — begivenhedstype, the
+       Deltag/Interesseret CTA preview, and antal pladser sit one above the
+       other (over hinanden) rather than sharing a wrapping row. */
+    .bv-ee-meta {
+        flex-direction: column; align-items: flex-start; min-width: 0;
+        border-top: 1px solid var(--surface-container-highest); padding-top: 10px; text-align: left;
+    }
+    /* Meta-row popovers open upward to stay on screen. */
+    .bv-ee-meta .bv-ee-pop { top: auto; bottom: 100%; margin-top: 0; margin-bottom: 12px; }
+    /* The meta fields sit at the left of the (stacked) meta column, so their
+       right-anchored popovers (begivenhedstype, antal pladser) spilled off the
+       left edge — anchor them to the left here and clamp width so they stay
+       fully on screen. */
+    .bv-ee-meta [data-ee-pop="event-type"],
+    .bv-ee-meta [data-ee-pop="capacity"] { left: 0; right: auto; max-width: calc(100vw - var(--space-8)); }
+    .bv-ee-details { padding: var(--space-6) var(--space-4); }
 }
 
 /* =============================================================================
