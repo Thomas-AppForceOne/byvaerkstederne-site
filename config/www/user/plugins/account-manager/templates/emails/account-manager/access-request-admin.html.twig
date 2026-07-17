@@ -23,10 +23,23 @@
   {{ motivation|e|nl2br }}
 </p>
 {% endif %}
+{% if approve_link and reject_link %}
+<p style="margin-top: 2em; padding-top: 1em; border-top: 1px solid #ccc;">
+  <strong>─── Godkend eller afvis ───</strong>
+</p>
+<p>
+  <a href="{{ approve_link }}" style="display: inline-block; padding: 0.5em 1em; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 4px; margin-right: 1em;">✅ Godkend</a>
+  <a href="{{ reject_link }}" style="display: inline-block; padding: 0.5em 1em; background-color: #f44336; color: white; text-decoration: none; border-radius: 4px;">❌ Afvis</a>
+</p>
+<p style="font-size: 0.9em; color: #666;">
+  Linket udløber i 24 timer.
+</p>
+{% else %}
 <p>
   Tildeling sker manuelt: åbn medlemmets konto i admin-panelet og tilføj
   gruppen under &quot;groups&quot;. Medlemmet ser status som afventende,
   indtil rollen er tildelt.
 </p>
+{% endif %}
 <p>Venlig hilsen<br/>{{ site_name }}</p>
 {%- endblock content -%}

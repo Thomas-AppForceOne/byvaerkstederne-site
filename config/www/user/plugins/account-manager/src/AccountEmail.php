@@ -105,13 +105,22 @@ final class AccountEmail
      * stays a manual super action in the admin panel — this mail is the
      * only automation.
      */
-    public function sendAccessRequestAdmin(UserInterface $account, string $role, string $roleLabel, string $motivation): void
+    public function sendAccessRequestAdmin(UserInterface $account, string $role, string $roleLabel, string $motivation, string $token = ''): void
     {
+        $approve_link = '';
+        $reject_link = '';
+        if ($token !== '') {
+            $approve_link = $this->accessRequestApproveLink((string)$account->username, $token);
+            $reject_link = $this->accessRequestRejectLink((string)$account->username, $token);
+        }
+
         $this->send('access-request-admin', $this->adminRecipient(), [
             'user' => $account,
             'role' => $role,
             'role_label' => $roleLabel,
             'motivation' => $motivation,
+            'approve_link' => $approve_link,
+            'reject_link' => $reject_link,
         ]);
     }
 
@@ -121,6 +130,26 @@ final class AccountEmail
         $sep = (string)$this->grav['config']->get('system.param_sep', ':');
         return (string)Utils::url(
             '/konto/confirm-email-change/token' . $sep . $token . '/user' . $sep . $username,
+            null,
+            true
+        );
+    }
+
+    /** Approval link for admin access request endpoints. */
+    public function accessRequestApproveLink(string $username, string $token): string
+    {
+        return (string)Utils::url(
+            '/admin/access-request/approve?token=' . urlencode($token) . '&username=' . urlencode($username),
+            null,
+            true
+        );
+    }
+
+    /** Rejection link for admin access request endpoints. */
+    public function accessRequestRejectLink(string $username, string $token): string
+    {
+        return (string)Utils::url(
+            '/admin/access-request/reject?token=' . urlencode($token) . '&username=' . urlencode($username),
             null,
             true
         );
