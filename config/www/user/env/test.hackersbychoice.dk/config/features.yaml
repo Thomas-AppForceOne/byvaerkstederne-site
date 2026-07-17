@@ -24,3 +24,6 @@ enabled:
   account_self_service: "true"
   # Event RSVP and calendar enhancements — newly shipped, testing on test tier
   event_rsvp: "true"
+  workshop_calendar: "true"
+  workshop_calendar_filters: "true"
+  workshop_calendar_featured: "true"
