@@ -129,15 +129,23 @@ class AccountManagerPlugin extends Plugin
         if (!$this->config->get('plugins.account-manager.enabled')) {
             return;
         }
+
+        // Always enable onPageInitialized to handle admin access-request endpoints
+        // (which are POST-only and return early); disable other hooks in admin mode.
+        $this->enable([
+            'onPageInitialized' => ['onPageInitialized', 5],
+        ]);
+
+        // Admin mode only gets the access-request endpoint hook; skip the rest.
         if ($this->isAdmin()) {
             return;
         }
 
+        // Member-facing hooks (disabled in admin mode).
         $this->enable([
             // Mutating-POST contract (§4.3). Priority 5: after the login
             // plugin's page-access gate (10) and the feature-flags page gate
             // (100000), before the Form plugin's own processing (0).
-            'onPageInitialized' => ['onPageInitialized', 5],
             'onTwigTemplatePaths' => ['onTwigTemplatePaths', 0],
             'onTwigSiteVariables' => ['onTwigSiteVariables', 0],
             // Reinstatement-on-login (§2.8). Priority 0: after the login
@@ -946,9 +954,9 @@ class AccountManagerPlugin extends Plugin
 
     private function sendGenericAccessRequestResponse(): void
     {
-        $this->grav['page']->setTemplate('error');
-        $this->grav['page']->template = 'error';
-        $this->grav['page']->status_code = 404;
+        header('HTTP/1.1 404 Not Found');
+        header('Content-Type: text/html; charset=utf-8');
+        echo '<!DOCTYPE html><html><head><title>404</title></head><body><h1>Anmodningen blev behandlet</h1></body></html>';
         exit;
     }
 
