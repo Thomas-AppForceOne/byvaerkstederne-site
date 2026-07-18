@@ -134,8 +134,9 @@ while true; do
 </ul>
 
 <hr/>
-<p><strong>Hvad giver mest mening?</strong><br/>
-Hvis noget virker uintuitivt, eller du er usikker på hvad du skal gøre — det er præcis den feedback vi søger.</p>
+<p><strong>Feedback</strong><br/>
+Hvis noget virker uintuitivt, eller du er usikker på hvad du skal gøre — det er præcis den feedback vi søger.<br/>
+Send dine observationer til <a href=\"mailto:thomas@appforceone.dk\">thomas@appforceone.dk</a>.</p>
 <p>Tak fordi du hjælper os!</p>
 <p>Med venlig hilsen<br/>
 Thomas</p>"
