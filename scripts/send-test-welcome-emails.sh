@@ -82,49 +82,52 @@ while true; do
         TIMESTAMP=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
         log "  📧 Sending email to $FULLNAME ($EMAIL)"
 
-        EMAIL_BODY="Hej $FULLNAME,
+        # The email plugin sends as text/html (site config), so the body is HTML.
+        EMAIL_BODY="<p>Hej $FULLNAME,</p>
+<p>Velkommen til Byværkstedernes website test! Vi er glade for at have dig med.</p>
+<p>Vi er ved at forbedre siden og vil gerne høre hvad du tænker. Herunder er nogle konkrete ting du kan prøve — det tager omkring 10-15 minutter:</p>
 
-Velkommen til Byværkstedernes website test! Vi er glade for at have dig med.
+<h3>1. Udforsk din konto</h3>
+<p>Gå til <strong>Min konto</strong> (øverst til højre) og prøv:</p>
+<ul>
+<li>Skift dit fulde navn</li>
+<li>Skift din adgangskode</li>
+<li>Skift din email (du får en bekræftelseslink)</li>
+</ul>
+<p><em>Tip: Når du skifter email, får du en link sendt til den nye adresse. Det skal bekræftes.</em></p>
 
-Vi er ved at forbedre siden og vil gerne høre hvad du tænker. Herunder er nogle konkrete ting du kan prøve — det tager omkring 10-15 minutter:
+<h3>2. Udforsk kalender og tilmeld workshops</h3>
+<p>Gå til <strong>Værkstedskalenderen</strong> og:</p>
+<ul>
+<li>Se hvilke workshops der er planlagt</li>
+<li>Filtrer efter kategori (f.eks. &quot;Makerspace&quot;, &quot;Krea Café&quot;)</li>
+<li>Klik ind på en workshop og se detaljer</li>
+<li>Tilmeld dig en workshop (RSVP)</li>
+<li>Gå tilbage til din konto og bekræft at du er tilmeldt</li>
+</ul>
 
-1. Udforsk din konto
-Gå til Min konto (øverst til højre) og prøv:
-- Skift dit fulde navn
-- Skift din adgangskode
-- Skift din email (du får en bekræftelseslink)
+<h3>3. Anmod om at blive arrangør</h3>
+<p>Gå til <strong>Min konto → Rettigheder</strong>:</p>
+<ul>
+<li>Klik &quot;Anmod om at blive arrangør&quot;</li>
+<li>Skriv kort hvorfor du gerne vil være arrangør</li>
+<li>Din anmodning bliver behandlet af administratorerne</li>
+</ul>
 
-Tip: Når du skifter email, får du en link sendt til den nye adresse. Det skal bekræftes.
+<h3>4. Prøv på din telefon</h3>
+<p>Besøg siden på din mobil og check at:</p>
+<ul>
+<li>Menuer virker</li>
+<li>Du kan læse siden uden at zoome</li>
+<li>Du kan udfylde formularer</li>
+</ul>
 
-2. Udforsk kalender og tilmeld workshops
-Gå til Værkstedskalenderen og:
-- Se hvilke workshops der er planlagt
-- Filtrer efter kategori (f.eks. \"Makerspace\", \"Krea Café\")
-- Klik ind på en workshop og se detaljer
-- Tilmeld dig en workshop (RSVP)
-- Gå tilbage til din konto og bekræft at du er tilmeldt
-
-3. Anmod om at blive arrangør
-Gå til Min konto → Rettigheder:
-- Klik \"Anmod om at blive arrangør\"
-- Skriv kort hvorfor du gerne vil være arrangør
-- Din anmodning bliver behandlet af administratorerne
-
-4. Prøv på din telefon
-Besøg siden på din mobil og check at:
-- Menuer virker
-- Du kan læse siden uden at zoome
-- Du kan udfylde formularer
-
----
-
-Hvad giver mest mening?
-Hvis noget virker uintuitivt, eller du er usikker på hvad du skal gøre — det er præcis den feedback vi søger.
-
-Tak fordi du hjælper os!
-
-Med venlig hilsen
-Thomas"
+<hr/>
+<p><strong>Hvad giver mest mening?</strong><br/>
+Hvis noget virker uintuitivt, eller du er usikker på hvad du skal gøre — det er præcis den feedback vi søger.</p>
+<p>Tak fordi du hjælper os!</p>
+<p>Med venlig hilsen<br/>
+Thomas</p>"
 
         # Base64-encode body so newlines/quotes survive the ssh shell layers
         BODY_B64=$(printf '%s' "$EMAIL_BODY" | base64 | tr -d '\n')
