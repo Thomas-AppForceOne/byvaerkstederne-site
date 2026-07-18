@@ -99,7 +99,7 @@ if ! DEPLOY_PASS="$(bv_resolve_ssh_password)"; then
     exit 1
 fi
 
-TIER_DIR="$PATH_SSH/$TIER"
+TIER_DIR="$(bv_tier_root "$PATH_SSH" "$TIER")"
 ACCOUNTS_DIR="$TIER_DIR/user/accounts"
 FLEX_INDEX="$TIER_DIR/user/data/flex/indexes/accounts.yaml"
 

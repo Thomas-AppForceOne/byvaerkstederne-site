@@ -45,6 +45,10 @@ DEPLOY_HOST=fakehost
 DEPLOY_USER=fakeuser
 DEPLOY_PATH=$SB/remote
 DEPLOY_PORT=22
+DEPLOY_PROD_HOST=fakeprodhost
+DEPLOY_PROD_USER=fakeproduser
+DEPLOY_PROD_PATH=$SB/remote-prod
+DEPLOY_PROD_PORT=22
 EOF
 
 # ── Fake tier tree ───────────────────────────────────────────────────
@@ -191,6 +195,45 @@ if printf '%s' "$out" | grep -q 'No accounts dir on test'; then
     check "missing accounts dir (undeployed tier) is a friendly no-op" ok
 else
     check "missing accounts dir (undeployed tier) is a friendly no-op" bad
+fi
+
+# ─────────────────────────────────────────────────────────────────────
+# prod layout: the Grav root is the docroot itself — no prod/ subdir
+# ─────────────────────────────────────────────────────────────────────
+PACC="$SB/remote-prod/user/accounts"
+mkdir -p "$PACC"
+cat > "$PACC/bob.yaml" <<'EOF'
+state: enabled
+email: bob@example.dk
+access:
+  admin:
+    super: true
+EOF
+cat > "$PACC/carla.yaml" <<'EOF'
+state: enabled
+email: carla@example.dk
+access:
+  site:
+    login: true
+EOF
+
+out="$(run prod --dry-run --i-mean-it)" || true
+if printf '%s' "$out" | grep -q "remote-prod/user/accounts" \
+   && ! printf '%s' "$out" | grep -q "remote-prod/prod" \
+   && printf '%s' "$out" | grep -q 'Would delete 1 member account(s) on prod'; then
+    check "prod resolves the docroot layout (no prod/ subdir) and classifies correctly" ok
+else
+    check "prod resolves the docroot layout (no prod/ subdir) and classifies correctly" bad
+fi
+
+rm -f "$SB/cache-cleared"
+out="$(run prod --yes --i-mean-it)" || true
+if printf '%s' "$out" | grep -q 'Deleted 1 member account(s) from prod' \
+   && [ ! -f "$PACC/carla.yaml" ] && [ -f "$PACC/bob.yaml" ] \
+   && [ -f "$SB/cache-cleared" ]; then
+    check "prod reset deletes the member from the docroot tree and clears cache" ok
+else
+    check "prod reset deletes the member from the docroot tree and clears cache" bad
 fi
 
 # ─────────────────────────────────────────────────────────────────────

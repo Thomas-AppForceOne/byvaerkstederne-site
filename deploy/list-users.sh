@@ -74,7 +74,7 @@ if ! DEPLOY_PASS="$(bv_resolve_ssh_password)"; then
     exit 1
 fi
 
-ACCOUNTS_DIR="$PATH_SSH/$TIER/user/accounts"
+ACCOUNTS_DIR="$(bv_tier_root "$PATH_SSH" "$TIER")/user/accounts"
 
 # ── 3. List on the remote (tab-separated: username, state, email) ────
 out="$(bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" "

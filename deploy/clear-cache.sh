@@ -70,7 +70,7 @@ if ! DEPLOY_PASS="$(bv_resolve_ssh_password)"; then
     exit 1
 fi
 
-TIER_DIR="$PATH_SSH/$TIER"
+TIER_DIR="$(bv_tier_root "$PATH_SSH" "$TIER")"
 
 echo "→ clear-cache: $TIER"
 echo "  target: $USER_SSH@$HOST_SSH:$TIER_DIR"

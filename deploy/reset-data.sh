@@ -95,7 +95,7 @@ fi
 # Same versioned data tree push-data.sh writes into; cache clear runs from
 # the tier's release root, matching push-data.sh.
 DATA_DIR="$PATH_SSH/${TIER}data/v0/user/data/flex-objects"
-TIER_DIR="$PATH_SSH/$TIER"
+TIER_DIR="$(bv_tier_root "$PATH_SSH" "$TIER")"
 
 echo "→ reset-data: $TIER"
 echo "  target: $USER_SSH@$HOST_SSH:$DATA_DIR/"

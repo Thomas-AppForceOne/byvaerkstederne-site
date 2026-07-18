@@ -46,6 +46,10 @@ DEPLOY_HOST=fakehost
 DEPLOY_USER=fakeuser
 DEPLOY_PATH=$SB/remote
 DEPLOY_PORT=22
+DEPLOY_PROD_HOST=fakeprodhost
+DEPLOY_PROD_USER=fakeproduser
+DEPLOY_PROD_PATH=$SB/remote-prod
+DEPLOY_PROD_PORT=22
 EOF
 
 # ── Fake versioned data tree (matches push-data.sh's layout) ─────────
@@ -157,6 +161,23 @@ if printf '%s' "$out" | grep -q 'No flex-objects data dir on test'; then
     check "missing data dir (undeployed tier) is a friendly no-op" ok
 else
     check "missing data dir (undeployed tier) is a friendly no-op" bad
+fi
+
+# ─────────────────────────────────────────────────────────────────────
+# prod layout: data at <docroot>/proddata/v0, cache clear from the docroot
+# ─────────────────────────────────────────────────────────────────────
+PDATA="$SB/remote-prod/proddata/v0/user/data/flex-objects"
+mkdir -p "$PDATA" "$SB/remote-prod"
+printf 'x: 1\n' > "$PDATA/events.yaml"
+
+rm -f "$SB/cache-cleared"
+out="$(run prod --yes --i-mean-it)" || true
+if printf '%s' "$out" | grep -q 'Deleted 1 flex-objects data file(s) from prod' \
+   && [ ! -f "$PDATA/events.yaml" ] \
+   && [ -f "$SB/cache-cleared" ]; then
+    check "prod resolves proddata/v0 under the docroot and clears cache from the docroot" ok
+else
+    check "prod resolves proddata/v0 under the docroot and clears cache from the docroot" bad
 fi
 
 # ─────────────────────────────────────────────────────────────────────

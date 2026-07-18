@@ -128,7 +128,7 @@ fi
 export DEPLOY_PASS
 DEPLOY_PASS="$(bv_resolve_ssh_password)"
 
-TIER_DIR="$PATH_SSH/$TIER"
+TIER_DIR="$(bv_tier_root "$PATH_SSH" "$TIER")"
 ACCT="$TIER_DIR/user/accounts/$USERNAME.yaml"
 FLEX_INDEX="$TIER_DIR/user/data/flex/indexes/accounts.yaml"
 

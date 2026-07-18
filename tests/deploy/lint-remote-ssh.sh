@@ -501,6 +501,35 @@ if [ -f "$CLEAR_CACHE" ]; then
     fi
 fi
 
+# 16. Prod tier-root convention — prod's Grav root is the chosting.dk
+#     docroot ITSELF (promote-to-prod.sh: PROD_DOCROOT="$DEPLOY_PROD_PATH");
+#     there is no prod/ subdirectory. Every user-ops script must resolve its
+#     tier root via bv_tier_root — a hardcoded "$PATH/$TIER" works on the
+#     one.com tiers and silently breaks on prod (found live 2026-07-18:
+#     every user-ops command failed on prod with 'No such file or directory').
+if grep -q '^bv_tier_root() {' "$DEPLOY_DIR/lib/ssh-auth.sh"; then
+    check "bv_tier_root helper defined in lib/ssh-auth.sh" ok
+else
+    check "bv_tier_root helper must be defined in lib/ssh-auth.sh" fail
+fi
+for base in list-users.sh delete-user.sh cleanup-unverified-users.sh \
+            activate-user.sh reset-password.sh manage-groups.sh throttle.sh \
+            push-data.sh reset-users.sh reset-data.sh clear-cache.sh; do
+    if grep -q 'bv_tier_root' "$DEPLOY_DIR/$base"; then
+        check "$base resolves its tier root via bv_tier_root" ok
+    else
+        check "$base must resolve its tier root via bv_tier_root" fail
+    fi
+done
+hard="$(grep -nE '"\$(PATH_SSH|DEPLOY_PATH)/\$TIER"' "$DEPLOY_DIR"/*.sh 2>/dev/null \
+        | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' || true)"
+if [ -z "$hard" ]; then
+    check "no deploy script hardcodes \"\$PATH/\$TIER\" as a tier root" ok
+else
+    check "deploy scripts must not hardcode \"\$PATH/\$TIER\" (use bv_tier_root)" fail
+    printf '%s\n' "$hard" | sed 's/^/      /' >&2
+fi
+
 echo ""
 echo "─────────────────────────────────────"
 echo "  Pass: $PASS    Fail: $FAIL"
