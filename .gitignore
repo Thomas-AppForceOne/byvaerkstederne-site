@@ -158,3 +158,4 @@ config/www/user/data/event-images/
 # Account-manager runtime state (audit trail + write lock) — live per-tier
 # state written by the plugin, never committed
 config/www/user/data/account-manager/
+logs/
