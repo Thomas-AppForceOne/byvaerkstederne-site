@@ -74,11 +74,15 @@ test.describe('Event RSVP — anonymous forced browsing', () => {
     expect(response.status()).toBe(401);
   });
 
-  test('every new endpoint is 404 when event_rsvp is off (test-tier profile)', async ({ browser }) => {
-    // The test-tier host profile resolves every flag false; Grav picks the
-    // profile from the Host header (same technique as events-public.js).
+  test('every new endpoint is 404 when event_rsvp is off (flags-off profile)', async ({ browser }) => {
+    // The dedicated never-deployed all-off profile (env/flags-off.invalid/);
+    // Grav picks the profile from the Host header (same technique as
+    // events-public.js). Deliberately NOT test.hackersbychoice.dk: that tier
+    // is operational preview state whose flags flip freely (its features.yaml
+    // documents that no test code may depend on its contents) — depending on
+    // it made this assertion fail whenever a feature was being previewed.
     const context = await browser.newContext({
-      extraHTTPHeaders: { Host: 'test.hackersbychoice.dk' },
+      extraHTTPHeaders: { Host: 'flags-off.invalid' },
     });
     try {
       const req = context.request;

@@ -9,7 +9,7 @@ content now that flex data is no longer tracked in git (see
 
 | File | Contents |
 |---|---|
-| `begivenheder.yaml` | 10 sample events across all four workshops (Makerspace, Krea Café, Grønt BYværksted, Eventværkstedet + one shared), five with rich `details_html`, two featured. Dates July–September 2026. |
+| `begivenheder.yaml` | 10 sample events across all four workshops (Makerspace, Krea Café, Grønt BYværksted, Eventværkstedet — the cross-workshop open house is filed under Eventværkstedet, since the calendar's filter contract forbids rows outside the four workshop groups), five with rich `details_html`, two featured. Dates July–September 2026. |
 | `roadmap-items.yaml` | Roadmap entries for the community roadmap page. |
 | `teammedlemmer.yaml` | Team-member records (not yet used in production). |
 | `opgaver.yaml` | Task records (not yet used in production). |

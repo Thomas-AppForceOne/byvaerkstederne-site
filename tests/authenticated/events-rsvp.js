@@ -23,6 +23,7 @@ const {
   RSVP_EVENT_ID,
   CAPACITY_EVENT_ID,
   INTEREST_EVENT_ID,
+  STALE_EVENT_ID,
   clearEventSignups,
   eventAuditContains,
 } = require('../helpers/fixtures');
@@ -232,9 +233,9 @@ test.describe('Event RSVP — forced-browsing negatives (after auth+CSRF)', () =
     expect((await post('ev_does_not_exist')).status(), 'unknown key').toBe(404);
     expect((await post('ev_fixture_draft')).status(), 'unpublished').toBe(404);
     expect((await post('ev_fixture_archived')).status(), 'archived').toBe(404);
-    // event001 is a legacy seed that ran long ago → auto-archived (stale) →
-    // 404, indistinguishable from missing (existence not disclosed).
-    expect((await post('event001')).status(), 'stale (auto-archived) event').toBe(404);
+    // The stale (auto-archived) 404 is asserted in the auto-archive describe
+    // below, after the sweep has demonstrably run — the transition itself is
+    // the thing under test there.
   });
 });
 
@@ -303,13 +304,24 @@ test.describe('Event auto-archive — events that ran more than a day ago', () =
   }
 
   test('opening the dashboard persists archived=true on stale events, leaves future ones alone', async ({ page }) => {
-    // event001 is a legacy 2026 seed (ran long ago) → must be swept to archived.
-    // ev_fixture_rsvp is dated 2030 (future) → must stay active.
+    // ev_fixture_stale is seeded past-dated with archived: false each run →
+    // must be swept to archived. ev_fixture_rsvp is dated 2030 (future) →
+    // must stay active.
     await loginAsOrganizer(page);
     await page.goto('/begivenheder/arrangoerpanel');
     // The sweep runs server-side during the GET; the flag is on disk by the
     // time the response lands. Poll to be robust against fs flush timing.
-    await expect.poll(() => eventArchived('event001'), { timeout: 10_000 }).toBe(true);
+    await expect.poll(() => eventArchived(STALE_EVENT_ID), { timeout: 10_000 }).toBe(true);
     expect(eventArchived(RSVP_EVENT_ID), 'a future event is never auto-archived').toBe(false);
+
+    // The swept event now rejects RSVP like any archived event — 404, its
+    // existence not disclosed (moved here from the forced-browsing describe,
+    // which previously relied on the legacy pre-flex-data event001 record).
+    const nonce = await readRsvpNonce(page, RSVP_EVENT_ID);
+    const res = await page.request.post('/begivenheder/tilmeld', {
+      form: { 'data[key]': STALE_EVENT_ID, rsvp_nonce: nonce },
+      headers: { Accept: 'application/json' },
+    });
+    expect(res.status(), 'stale (auto-archived) event rejects RSVP').toBe(404);
   });
 });

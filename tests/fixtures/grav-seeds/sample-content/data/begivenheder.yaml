@@ -212,8 +212,8 @@ event010:
   published: true
   title: "Åbent hus — mød alle værkstederne"
   description: "Kom forbi og se hvad Byværkstederne kan tilbyde: rundvisning i alle fire værksteder, små demoer og mulighed for at melde sig ind. Kaffe og kage til alle. Ingen tilmelding."
-  group: alle
-  badge: "Alle grupper"
+  group: kulturhus
+  badge: "Eventværkstedet"
   event_date: "2026-09-12"
   event_time: "13:00 - 16:00"
   location: "Hele området, Nørregade 21, Hundested"

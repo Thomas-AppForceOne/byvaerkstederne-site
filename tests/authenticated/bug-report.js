@@ -412,7 +412,7 @@ test.describe('Bug report — authenticated', () => {
       // promote_nonce only renders on reports where `promoted == false`.
       // globalSetup seeds br_fixture_unpromoted so we can source a valid nonce
       // regardless of the state of real reports.
-      const { UNPROMOTED_BUG_REPORT_ID } = require('../helpers/fixtures');
+      const { UNPROMOTED_BUG_REPORT_ID, PROMOTED_BUG_REPORT_ID } = require('../helpers/fixtures');
       await page.goto(`/admin/flex-objects/bug-reports/${UNPROMOTED_BUG_REPORT_ID}`);
       const promoteNonce = await page.evaluate(() => {
         const el = document.querySelector('input[name="promote_nonce"]');
@@ -421,7 +421,10 @@ test.describe('Bug report — authenticated', () => {
 
       test.skip(!promoteNonce, 'promote_nonce not rendered on seeded unpromoted fixture edit page');
 
-      const reportId = 'br_promoted_login_mobile';
+      // Seeded already-promoted fixture — the legacy br_promoted_login_mobile
+      // record lived in the git-tracked bug-reports.yaml and no longer exists
+      // on a fresh (empty-store) container since flex data moved out of git.
+      const reportId = PROMOTED_BUG_REPORT_ID;
       const resp = await page.request.post(PROMOTE_ENDPOINT, {
         form: {
           report_id: reportId,
