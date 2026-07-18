@@ -85,7 +85,7 @@ if ! DEPLOY_PASS="$(bv_resolve_ssh_password)"; then
 fi
 
 host="$(tier_host "$TIER")"
-TIER_DIR="$PATH_SSH/$TIER"
+TIER_DIR="$(bv_tier_root "$PATH_SSH" "$TIER")"
 FILE="$TIER_DIR/user/env/$host/config/plugins/registration-throttle.yaml"
 
 echo "→ throttle $STATE on $TIER ($host)"

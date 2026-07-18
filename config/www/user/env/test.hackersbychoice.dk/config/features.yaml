@@ -22,3 +22,11 @@ enabled:
   # Member self-service (/konto) — on for super sign-off before the
   # staging/prod rollout.
   account_self_service: "true"
+  # Event RSVP and calendar enhancements — newly shipped, testing on test tier
+  event_rsvp: "true"
+  workshop_calendar: "true"
+  workshop_calendar_filters: "true"
+  workshop_calendar_featured: "true"
+  # Organizer event CRUD (opret/rediger/slet/arrangørpanel) — on so testers
+  # who are granted the organizer role can exercise event management.
+  event_management: "true"

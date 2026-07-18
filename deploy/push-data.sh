@@ -178,7 +178,7 @@ fi
 export DEPLOY_PASS
 
 REMOTE_DATA_DIR="$DEPLOY_PATH/${TIER}data/v0/user/data/flex-objects"
-REMOTE_TIER_DIR="$DEPLOY_PATH/$TIER"
+REMOTE_TIER_DIR="$(bv_tier_root "$DEPLOY_PATH" "$TIER")"
 
 echo "→ push-data: $TIER"
 echo "  target: $DEPLOY_USER@$DEPLOY_HOST:$REMOTE_DATA_DIR/"

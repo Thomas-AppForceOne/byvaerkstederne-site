@@ -1,256 +1,226 @@
 event001:
   published: true
   title: "Elektronik og 3D-print for nybegyndere"
-  description: "Drop-in værksted. Ingen tilmelding. 12 år og opefter. Tag gerne en ven med."
+  description: "Drop-in værksted. Kom og se vores 3D-printere og elektronik-hjørne — vi hjælper dig i gang med dit første print. Ingen tilmelding. 12 år og opefter. Tag gerne en ven med."
   group: makerspace
   badge: "Makerspace & Reparation"
-  event_date: "2026-06-10"
-  event_time: "18:00 — 20:00"
-  location: "Nørregade 21, Hundested"
+  event_date: "2026-07-23"
+  event_time: "18:00 - 20:00"
+  location: "Makerspace-lokalet, Nørregade 21, Hundested"
   capacity: ""
   event_type: "Drop-in"
-  button_text: "Se Makerspace"
-  button_url: "/vaerksteder/makerspace"
+  button_text: "Interesseret"
+  button_url: "#"
   button_style: secondary
   featured: false
   featured_tag: ""
 event002:
   published: true
-  title: "Elektronik og 3D-print for nybegyndere"
-  description: "Drop-in værksted. Ingen tilmelding. 12 år og opefter. Tag gerne en ven med."
+  title: "Repair Café — tag dine ting med"
+  description: "Har du en lampe der blinker, en cykel der knirker eller bukser med hul? Tag dine ting med, og lad os reparere dem sammen i stedet for at smide dem ud. Kaffen er klar."
   group: makerspace
   badge: "Makerspace & Reparation"
-  event_date: "2026-06-17"
-  event_time: "18:00 — 20:00"
-  location: "Nørregade 21, Hundested"
-  capacity: ""
-  event_type: "Drop-in"
-  button_text: "Se Makerspace"
-  button_url: "/vaerksteder/makerspace"
+  event_date: "2026-08-01"
+  event_time: "10:00 - 13:00"
+  location: "Makerspace-lokalet, Nørregade 21, Hundested"
+  capacity: "12"
+  event_type: "Gratis"
+  button_text: "Tilmeld"
+  button_url: "#"
   button_style: secondary
-  featured: false
-  featured_tag: ""
+  featured: true
+  featured_tag: "Populær"
+  details_html: |
+    <h3>Hvad kan repareres?</h3>
+    <ul>
+    <li><strong>Elektronik</strong> — lamper, radioer, køkkenmaskiner (ikke hvidevarer)</li>
+    <li><strong>Cykler</strong> — lapning, bremser, gear</li>
+    <li><strong>Tøj og tekstiler</strong> — huller, lynlåse, oplægning</li>
+    <li><strong>Møbler</strong> — mindre lim- og samlereparationer</li>
+    </ul>
+    <h3>Sådan foregår det</h3>
+    <p>Du reparerer selv — vores frivillige fiksere hjælper og vejleder undervejs. Regn med 30-60 minutter pr. ting, og tag gerne reservedele med hvis du har dem.</p>
+    <p><em>Vi kan ikke love at alt kan reddes, men det lykkes for ca. 7 ud af 10 ting.</em></p>
 event003:
   published: true
-  title: "Elektronik og 3D-print for nybegyndere"
-  description: "Drop-in værksted. Ingen tilmelding. 12 år og opefter. Tag gerne en ven med."
+  title: "Intro til laserskæreren — sikkerhed og certificering"
+  description: "Obligatorisk intro før du må bruge laserskæreren på egen hånd. Vi gennemgår sikkerhed, materialer og laver et lille projekt sammen. Max 6 deltagere pr. gang."
   group: makerspace
   badge: "Makerspace & Reparation"
-  event_date: "2026-06-24"
-  event_time: "18:00 — 20:00"
-  location: "Nørregade 21, Hundested"
-  capacity: ""
-  event_type: "Drop-in"
-  button_text: "Se Makerspace"
-  button_url: "/vaerksteder/makerspace"
+  event_date: "2026-08-12"
+  event_time: "19:00 - 21:00"
+  location: "Makerspace-lokalet, Nørregade 21, Hundested"
+  capacity: "6"
+  event_type: "Gratis"
+  button_text: "Tilmeld"
+  button_url: "#"
   button_style: secondary
   featured: false
   featured_tag: ""
+  details_html: |
+    <h3>Program</h3>
+    <ul>
+    <li><strong>19:00</strong> — Sikkerhedsgennemgang: materialer, brandfare, udsugning</li>
+    <li><strong>19:30</strong> — Softwaren: fra tegning til skærefil</li>
+    <li><strong>20:00</strong> — Dit første snit: vi laver en nøglering i finér</li>
+    <li><strong>20:45</strong> — Spørgsmål og certificering</li>
+    </ul>
+    <h3>Vigtigt</h3>
+    <p>Certificeringen er <strong>obligatorisk</strong>, før du må bruge laserskæreren på egen hånd. Efter aftenen bliver du skrevet på listen over godkendte brugere.</p>
+    <p>Ingen forudsætninger — alle kan være med.</p>
 event004:
   published: true
-  title: "Billedkunst — photo transfer intro v. Lene Pels"
-  description: "Kom og prøv foto-overførsel i atelieret. Ingen tilmelding. Brugerbetaling til materialer."
-  group: krea
+  title: "Silketryk intro v. Lene Pels"
+  description: "Lær at trykke dine egne motiver på tekstil. Vi arbejder med rammer og farver — medbring gerne en t-shirt eller et stykke stof. Brugerbetaling til materialer (ca. 50 kr.)."
+  group: kreativ
   badge: "Krea Café"
-  event_date: "2026-06-10"
-  event_time: "15:00 — 17:00"
-  location: "Nørregade 21, Hundested"
-  capacity: ""
+  event_date: "2026-08-08"
+  event_time: "11:00 - 14:00"
+  location: "Krea Café, Nørregade 21, Hundested"
+  capacity: "6"
   event_type: "Brugerbetaling"
-  button_text: "Se billedkunst"
-  button_url: "/vaerksteder/krea-cafe/billedkunst"
+  button_text: "Tilmeld"
+  button_url: "#"
   button_style: tertiary
   featured: false
   featured_tag: ""
+  details_html: |
+    <h3>Om workshoppen</h3>
+    <p>Lene Pels har arbejdet med silketryk i over 20 år og guider dig gennem hele processen: motivvalg, klargøring af ramme, farveblanding og selve trykket.</p>
+    <h3>Medbring</h3>
+    <ul>
+    <li>En t-shirt, mulepose eller et stykke stof i bomuld (lyse farver virker bedst)</li>
+    <li>Evt. en skitse af dit motiv — enkle silhuetter fungerer bedst til første tryk</li>
+    <li>Tøj der må få farve på</li>
+    </ul>
+    <h3>Priser</h3>
+    <table>
+    <thead><tr><th>Materiale</th><th>Pris</th></tr></thead>
+    <tbody>
+    <tr><td>Farve og emulsion (obligatorisk)</td><td>50 kr.</td></tr>
+    <tr><td>Ekstra tryk på eget stof</td><td>10 kr. pr. stk.</td></tr>
+    </tbody>
+    </table>
+    <p><em>Betaling med MobilePay på dagen.</em></p>
 event005:
   published: true
-  title: "Billedkunst — silketryk intro v. Lene Pels"
-  description: "Introduktion til silketryk. Max 3 personer kan arbejde med rammer ad gangen — er der flere kan man arbejde to og to. Ingen tilmelding."
-  group: krea
+  title: "Strik & lyt — fællesstrik med kaffe"
+  description: "Tag dit strikketøj (eller hækletøj) med og få et par hyggelige timer i selskab med andre garn-glade. Vi skiftes til at vælge en lydbog eller podcast. Alle niveauer velkomne."
+  group: kreativ
   badge: "Krea Café"
-  event_date: "2026-06-13"
-  event_time: "11:00 — 13:00"
-  location: "Nørregade 21, Hundested"
-  capacity: "Max 3 rammer"
-  event_type: "Brugerbetaling"
-  button_text: "Se billedkunst"
-  button_url: "/vaerksteder/krea-cafe/billedkunst"
+  event_date: "2026-07-28"
+  event_time: "15:00 - 17:00"
+  location: "Krea Café, Nørregade 21, Hundested"
+  capacity: ""
+  event_type: "Drop-in"
+  button_text: "Interesseret"
+  button_url: "#"
   button_style: tertiary
   featured: false
   featured_tag: ""
 event006:
   published: true
-  title: "Syværkstedet — sæsonstart"
-  description: "Vi mødes for første gang i denne sæson. Kom og hils på. Alle erfaringsniveauer velkomne."
-  group: krea
-  badge: "Krea Café"
-  event_date: "2026-06-15"
-  event_time: "18:00 — 20:00"
-  location: "Nørregade 21, Hundested"
-  capacity: ""
-  event_type: "Drop-in"
-  button_text: "Se syværkstedet"
-  button_url: "/vaerksteder/krea-cafe/syvaerkstedet"
-  button_style: tertiary
+  title: "Fælles havedag i det grønne værksted"
+  description: "Vi luger, vander og gør højbedene klar til efterårets afgrøder. Ingen erfaring nødvendig — der er opgaver til alle, og vi slutter af med fælles frokost fra havens overskud."
+  group: groenne
+  badge: "Grønt BYværksted"
+  event_date: "2026-08-15"
+  event_time: "10:00 - 14:00"
+  location: "Det grønne område, Nørregade 21, Hundested"
+  capacity: "20"
+  event_type: "Gratis"
+  button_text: "Tilmeld"
+  button_url: "#"
+  button_style: primary
   featured: false
   featured_tag: ""
 event007:
   published: true
-  title: "Syværkstedet — småbørnstøj af aflagt tøj"
-  description: "Sy det sødeste børnetøj af dit aflagte tøj og rester af stof. Enkle mønstre str. 0-3 år. Tilmelding via SMS til Bitten."
-  group: krea
-  badge: "Krea Café"
-  event_date: "2026-06-27"
-  event_time: "11:00 — 14:00"
-  location: "Nørregade 21, Hundested"
-  capacity: ""
+  title: "Byg dit eget højbed"
+  description: "Byg et højbed i genbrugstræ og tag det med hjem. Vi stiller værktøj, vejledning og kaffe til rådighed — du betaler kun for materialerne (ca. 250 kr.). Begrænset antal pladser."
+  group: groenne
+  badge: "Grønt BYværksted"
+  event_date: "2026-08-23"
+  event_time: "10:00 - 13:00"
+  location: "Det grønne område, Nørregade 21, Hundested"
+  capacity: "8"
   event_type: "Brugerbetaling"
-  button_text: "SMS Bitten 22 39 54 80"
-  button_url: "sms:+4522395480"
-  button_style: tertiary
+  button_text: "Tilmeld"
+  button_url: "#"
+  button_style: primary
   featured: false
   featured_tag: ""
+  details_html: |
+    <h3>Det bygger du</h3>
+    <p>Et højbed på 120 × 80 cm i genbrugstræ fra nedtagne paller — samme model som dem i vores egen have. Det kan skilles ad og samles igen, så det kan være i de fleste biler.</p>
+    <h3>Praktisk</h3>
+    <ul>
+    <li>Alt værktøj stilles til rådighed — medbring gerne arbejdshandsker</li>
+    <li>Materialer koster ca. 250 kr. (MobilePay på dagen)</li>
+    <li>Ingen tømrer-erfaring nødvendig, vi bygger i hold på to</li>
+    <li>Børn er velkomne sammen med en voksen</li>
+    </ul>
+    <blockquote><p>Sidste gang byggede vi 6 højbede på tre timer — og alle kom hjem med et.</p></blockquote>
 event008:
   published: true
-  title: "Syværkstedet — lav din egen scrapbog"
-  description: "En kedelig bog ændres til en personlig smuk bog med et omslag af stofrester. Tilmelding via SMS til Birgit."
-  group: krea
-  badge: "Krea Café"
-  event_date: "2026-06-30"
-  event_time: "18:00 — 21:30"
-  location: "Nørregade 21, Hundested"
-  capacity: ""
-  event_type: "Brugerbetaling"
-  button_text: "SMS Birgit 30 13 42 33"
-  button_url: "sms:+4530134233"
-  button_style: tertiary
-  featured: false
-  featured_tag: ""
+  title: "Sommerkoncert på havnen — frivillige søges"
+  description: "Eventværkstedet arrangerer sommerkoncert på havnen og mangler frivillige til opsætning, bar og nedtagning. Du får fri entré, aftensmad og æren. Tilmeld dig en tjans!"
+  group: kulturhus
+  badge: "Eventværkstedet"
+  event_date: "2026-08-28"
+  event_time: "16:00 - 22:00"
+  location: "Hundested Havn"
+  capacity: "15"
+  event_type: "Gratis"
+  button_text: "Tilmeld"
+  button_url: "#"
+  button_style: kulturhus
+  featured: true
+  featured_tag: "Frivillige søges"
+  details_html: |
+    <h3>Tjanser</h3>
+    <ul>
+    <li><strong>Opsætning (16:00-18:00)</strong> — scene, bænke, lyskæder</li>
+    <li><strong>Bar (18:00-21:30)</strong> — salg af øl, vand og kaffe, to pr. vagt</li>
+    <li><strong>Nedtagning (21:30-22:00)</strong> — alle hjælper, mange hænder gør det hurtigt</li>
+    </ul>
+    <p>Skriv i kommentarfeltet ved tilmelding hvilken tjans du foretrækker — vi fordeler og melder tilbage ugen før.</p>
+    <h3>Det får du</h3>
+    <ul>
+    <li>Fri entré til koncerten</li>
+    <li>Aftensmad fra grillen kl. 18</li>
+    <li>Frivillig-t-shirt (så længe lager haves)</li>
+    </ul>
+    <p><em>Koncerten afholdes i samarbejde med Hundested Havn. Ved regn rykker vi ind i Eventværkstedet.</em></p>
 event009:
   published: true
-  title: "Syværkstedet — små punge, tasker og toilettasker"
-  description: "Lav din egen unikke pung. Medbring lynlås, tråd, vlieseline og stof. Tilmelding via SMS til Birgit."
-  group: krea
-  badge: "Krea Café"
-  event_date: "2026-07-09"
-  event_time: "13:00 — 18:00"
-  location: "Nørregade 21, Hundested"
-  capacity: ""
-  event_type: "Brugerbetaling"
-  button_text: "SMS Birgit 30 13 42 33"
-  button_url: "sms:+4530134233"
-  button_style: tertiary
+  title: "Filmaften i Eventværkstedet"
+  description: "Vi viser en klassiker på storskærm — popcorn og sodavand kan købes. Døren åbner 19:00, filmen starter 19:30. Titlen afsløres på opslagstavlen ugen før."
+  group: kulturhus
+  badge: "Eventværkstedet"
+  event_date: "2026-09-04"
+  event_time: "19:30 - 22:00"
+  location: "Eventværkstedet, Nørregade 21, Hundested"
+  capacity: "40"
+  event_type: "Gratis"
+  button_text: "Tilmeld"
+  button_url: "#"
+  button_style: kulturhus
   featured: false
   featured_tag: ""
 event010:
   published: true
-  title: "Verdenskoncert"
-  description: "Afrikanske sange, ældre danske sange, indiske mantraer, taizé-sange og meget mere. Selvom man ikke forstår alle ordene, mærker man helt sikkert stemningen."
-  group: kulturhus
-  badge: "Eventværkstedet"
-  event_date: "2026-06-11"
-  event_time: "19:00 — 20:30"
-  location: "Nørregade 21, Hundested"
+  title: "Åbent hus — mød alle værkstederne"
+  description: "Kom forbi og se hvad Byværkstederne kan tilbyde: rundvisning i alle fire værksteder, små demoer og mulighed for at melde sig ind. Kaffe og kage til alle. Ingen tilmelding."
+  group: alle
+  badge: "Alle grupper"
+  event_date: "2026-09-12"
+  event_time: "13:00 - 16:00"
+  location: "Hele området, Nørregade 21, Hundested"
   capacity: ""
-  event_type: "Gratis"
-  button_text: "Se Eventværkstedet"
-  button_url: "/vaerksteder/eventvaerkstedet"
+  event_type: "Drop-in"
+  button_text: "Interesseret"
+  button_url: "#"
   button_style: primary
-  featured: false
-  featured_tag: ""
-event011:
-  published: true
-  title: "Syng-med-koncert"
-  description: "Overalt på kloden har mennesker altid sunget sammen — for når vi synger sammen, oplever de fleste af os glæde, nærvær og fællesskab. Du behøver ikke kunne synge. Alle kan være med."
-  group: kulturhus
-  badge: "Eventværkstedet"
-  event_date: "2026-08-06"
-  event_time: "19:00 — 20:30"
-  location: "Nørregade 21, Hundested"
-  capacity: ""
-  event_type: "Gratis"
-  button_text: "Se Eventværkstedet"
-  button_url: "/vaerksteder/eventvaerkstedet"
-  button_style: primary
-  featured: false
-  featured_tag: ""
-event012:
-  published: true
-  title: "Åben scene"
-  description: "En hjertevarm aften med forskellige slags optrædener — ikke af professionelle, men af mennesker ligesom dig. Det handler ikke om at være perfekt, men om at være den, du er. Vil du optræde 5-10 min? Skriv til byvaerkstederne@halsnaes.dk."
-  group: kulturhus
-  badge: "Eventværkstedet"
-  event_date: "2026-09-03"
-  event_time: "19:00 — 20:30"
-  location: "Nørregade 21, Hundested"
-  capacity: ""
-  event_type: "Gratis"
-  button_text: "Skriv om optræden"
-  button_url: "mailto:byvaerkstederne@halsnaes.dk"
-  button_style: primary
-  featured: false
-  featured_tag: ""
-event013:
-  published: true
-  title: "Billedkunst — blindtegning intro v. Elsebeth"
-  description: "Kom og prøv blindtegning. Skørt, skævt og med sin egen charme. Ingen tilmelding. Brugerbetaling til materialer."
-  group: krea
-  badge: "Krea Café"
-  event_date: "2026-06-12"
-  event_time: "Fredag 17 - 20"
-  location: "Nørregade 21, Hundested"
-  capacity: ""
-  event_type: "Brugerbetaling"
-  button_text: "Se billedkunst"
-  button_url: "/vaerksteder/krea-cafe/billedkunst"
-  button_style: tertiary
-  featured: false
-  featured_tag: ""
-event014:
-  published: true
-  title: "Billedkunst — skraldebøger intro v. Elsebeth"
-  description: "Design din egen unikke bog af genbrugsmaterialer. Ingen tilmelding. Brugerbetaling til materialer."
-  group: krea
-  badge: "Krea Café"
-  event_date: "2026-06-18"
-  event_time: "Torsdag 17 - 20"
-  location: "Nørregade 21, Hundested"
-  capacity: ""
-  event_type: "Brugerbetaling"
-  button_text: "Se billedkunst"
-  button_url: "/vaerksteder/krea-cafe/billedkunst"
-  button_style: tertiary
-  featured: false
-  featured_tag: ""
-event015:
-  published: true
-  title: "Billedkunst — gummistempel intro v. Elsebeth"
-  description: "Tegn og snit dit eget stempel. Til kort, signaturer eller mønstre. Ingen tilmelding. Brugerbetaling til materialer."
-  group: krea
-  badge: "Krea Café"
-  event_date: "2026-06-25"
-  event_time: "Torsdag 17 - 20"
-  location: "Nørregade 21, Hundested"
-  capacity: ""
-  event_type: "Brugerbetaling"
-  button_text: "Se billedkunst"
-  button_url: "/vaerksteder/krea-cafe/billedkunst"
-  button_style: tertiary
-  featured: false
-  featured_tag: ""
-event016:
-  published: true
-  title: "Billedkunst — gelli-print intro v. Elsebeth"
-  description: "Mønstrede mono-print med en plade af stivnet gelé — unikke print til collager eller kunstkort. Ingen tilmelding. Brugerbetaling til materialer."
-  group: krea
-  badge: "Krea Café"
-  event_date: "2026-07-02"
-  event_time: "Torsdag 17 - 20"
-  location: "Nørregade 21, Hundested"
-  capacity: ""
-  event_type: "Brugerbetaling"
-  button_text: "Se billedkunst"
-  button_url: "/vaerksteder/krea-cafe/billedkunst"
-  button_style: tertiary
   featured: false
   featured_tag: ""

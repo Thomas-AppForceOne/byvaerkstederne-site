@@ -129,15 +129,23 @@ class AccountManagerPlugin extends Plugin
         if (!$this->config->get('plugins.account-manager.enabled')) {
             return;
         }
+
+        // Always enable onPageInitialized to handle admin access-request endpoints
+        // (which are POST-only and return early); disable other hooks in admin mode.
+        $this->enable([
+            'onPageInitialized' => ['onPageInitialized', 5],
+        ]);
+
+        // Admin mode only gets the access-request endpoint hook; skip the rest.
         if ($this->isAdmin()) {
             return;
         }
 
+        // Member-facing hooks (disabled in admin mode).
         $this->enable([
             // Mutating-POST contract (§4.3). Priority 5: after the login
             // plugin's page-access gate (10) and the feature-flags page gate
             // (100000), before the Form plugin's own processing (0).
-            'onPageInitialized' => ['onPageInitialized', 5],
             'onTwigTemplatePaths' => ['onTwigTemplatePaths', 0],
             'onTwigSiteVariables' => ['onTwigSiteVariables', 0],
             // Reinstatement-on-login (§2.8). Priority 0: after the login
@@ -181,6 +189,13 @@ class AccountManagerPlugin extends Plugin
                 $this->sendFlagDisabled404();
             }
             $this->handleConfirmEmailChange();
+        }
+
+        // Admin approval/rejection of access requests — token in query string,
+        // admin auth required.
+        if ($method === 'POST' && str_starts_with($this->grav['uri']->path(), '/admin/access-request/')) {
+            $this->handleAdminAccessRequest();
+            return;
         }
 
         if ($method !== 'POST') {
@@ -778,10 +793,17 @@ class AccountManagerPlugin extends Plugin
             $this->failWith(429, ['Vent venligst, før du anmoder igen.'], 'roles');
         }
 
+        // Generate approval token (128-bit random, stored as SHA-256 hash)
+        $token = bin2hex(random_bytes(16));
+        $tokenHash = hash('sha256', $token, false);
+        $tokenExpiresAt = gmdate('Y-m-d\TH:i:s\Z', time() + 24 * 3600);
+
         $request = [
             'role' => $role,
             'motivation' => $motivation['value'],
             'requested_at' => gmdate('Y-m-d\TH:i:s\Z'),
+            'token_hash' => $tokenHash,
+            'token_expires_at' => $tokenExpiresAt,
         ];
 
         try {
@@ -796,7 +818,7 @@ class AccountManagerPlugin extends Plugin
 
         try {
             $roleLabel = (string)($this->config->get("groups.{$role}.readableName") ?: $role);
-            $this->accountEmail()->sendAccessRequestAdmin($account, $role, $roleLabel, $motivation['value']);
+            $this->accountEmail()->sendAccessRequestAdmin($account, $role, $roleLabel, $motivation['value'], $token);
         } catch (\Throwable $e) {
             // The request is stored and visible on /konto either way.
             error_log('account-manager access-request admin mail failed: ' . $e->getMessage());
@@ -825,6 +847,117 @@ class AccountManagerPlugin extends Plugin
 
         $this->auditLog()->append('cancel_access_request', $user->username);
         $this->redirectWithFlash('Anmodningen er fortrudt.', 'roles');
+    }
+
+    /**
+     * Admin approval/rejection of access requests via email token links.
+     * Paths: /admin/access-request/approve or /admin/access-request/reject
+     */
+    private function handleAdminAccessRequest(): void
+    {
+        $user = $this->grav['user'] ?? null;
+        if (!$user || !$user->authenticated || !$user->authorized) {
+            $this->sendError(403, 'Ikke autoriseret.');
+        }
+
+        // Superuser check
+        $groups = (array)($user->get('groups') ?? []);
+        if (!in_array('admin', $groups, true)) {
+            $this->sendError(403, 'Administratortilladelse påkrævet.');
+        }
+
+        $path = $this->grav['uri']->path();
+        $token = (string)($_POST['token'] ?? $_GET['token'] ?? '');
+        $username = (string)($_POST['username'] ?? $_GET['username'] ?? '');
+
+        if ($token === '' || $username === '') {
+            $this->sendGenericAccessRequestResponse();
+        }
+
+        $account = $this->store()->read($username);
+        $request = is_array($account->get('access_request')) ? (array)$account->get('access_request') : null;
+
+        if ($request === null || !isset($request['token_hash'])) {
+            $this->sendGenericAccessRequestResponse();
+        }
+
+        // Token validation: hash-compare and expiry check
+        $storedHash = (string)($request['token_hash'] ?? '');
+        $expiresAt = (string)($request['token_expires_at'] ?? '');
+        $tokenHash = hash('sha256', $token, false);
+
+        if (!hash_equals($storedHash, $tokenHash)) {
+            $this->sendGenericAccessRequestResponse();
+        }
+
+        if ($expiresAt !== '' && strtotime($expiresAt) < time()) {
+            $this->sendGenericAccessRequestResponse();
+        }
+
+        // Dispatch to approve or reject
+        if (str_ends_with($path, '/approve')) {
+            $this->approveAccessRequest($username, $request, $user);
+        } elseif (str_ends_with($path, '/reject')) {
+            $this->rejectAccessRequest($username, $user);
+        } else {
+            $this->sendGenericAccessRequestResponse();
+        }
+    }
+
+    private function approveAccessRequest(string $username, array $request, UserInterface $admin): void
+    {
+        $role = (string)($request['role'] ?? '');
+        if ($role === '') {
+            $this->sendGenericAccessRequestResponse();
+        }
+
+        try {
+            $this->store()->mutate($username, static function (UserInterface $acct) use ($role): void {
+                $groups = (array)($acct->get('groups') ?? []);
+                if (!in_array($role, $groups, true)) {
+                    $groups[] = $role;
+                    $acct->set('groups', $groups);
+                }
+                $acct->undef('access_request');
+            });
+        } catch (\Throwable $e) {
+            error_log('account-manager approve_access_request failed: ' . $e->getMessage());
+            $this->sendGenericAccessRequestResponse();
+        }
+
+        $this->auditLog()->append('approve_access_request', (string)$admin->username, [
+            'target_username' => $username,
+            'role' => $role,
+        ]);
+
+        $this->sendGenericAccessRequestResponse();
+    }
+
+    private function rejectAccessRequest(string $username, UserInterface $admin): void
+    {
+        try {
+            $this->store()->mutate($username, static function (UserInterface $acct): void {
+                $acct->undef('access_request');
+                $acct->set('access_request_cleared_at', gmdate('Y-m-d\TH:i:s\Z'));
+            });
+        } catch (\Throwable $e) {
+            error_log('account-manager reject_access_request failed: ' . $e->getMessage());
+            $this->sendGenericAccessRequestResponse();
+        }
+
+        $this->auditLog()->append('reject_access_request', (string)$admin->username, [
+            'target_username' => $username,
+        ]);
+
+        $this->sendGenericAccessRequestResponse();
+    }
+
+    private function sendGenericAccessRequestResponse(): void
+    {
+        header('HTTP/1.1 404 Not Found');
+        header('Content-Type: text/html; charset=utf-8');
+        echo '<!DOCTYPE html><html><head><title>404</title></head><body><h1>Anmodningen blev behandlet</h1></body></html>';
+        exit;
     }
 
     // -------------------------------------------------------------------------

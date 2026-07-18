@@ -8,9 +8,16 @@
 # user/accounts/<username>.yaml with a flex index that rebuilds on
 # cache-clear. While testing registration you create throwaway accounts and
 # must remove them to re-test — the duplicate-username/email guards block
-# re-registration otherwise. This removes the account YAML and the flex
-# index, then clears Grav's cache, on the named tier (through the same SSH
-# machinery as push-data.sh / push-email.sh).
+# re-registration otherwise. This removes the account YAML, the flex
+# index, and the user's remember-me token file (user/data/rememberme/
+# <sha1(username)>.yaml — otherwise the "husk mig" cookie silently logs
+# the ghost user back in), then clears Grav's cache, on the named tier
+# (through the same SSH machinery as push-data.sh / push-email.sh).
+#
+# Live PHP sessions are NOT touched: on shared hosting they live in the
+# host's own session store, out of our reach. An already-open browser
+# session survives until it expires; with the remember-me token gone it
+# cannot re-authenticate after that.
 #
 # DESTRUCTIVE. On prod this deletes a REAL member — gated behind --i-mean-it.
 # The Playwright seed accounts (pw-test-user / pw-test-admin) are likewise
@@ -38,7 +45,7 @@ usage() {
 }
 
 # Accounts the Playwright auth suite depends on — protected from casual delete.
-PROTECTED_USERS="pw-test-user pw-test-admin"
+PROTECTED_USERS="pw-test-user pw-test-admin pw-test-org"
 
 # ── 1. Parse args ────────────────────────────────────────────────────
 POSITIONAL=()
@@ -128,9 +135,20 @@ fi
 export DEPLOY_PASS
 DEPLOY_PASS="$(bv_resolve_ssh_password)"
 
-TIER_DIR="$PATH_SSH/$TIER"
+TIER_DIR="$(bv_tier_root "$PATH_SSH" "$TIER")"
 ACCT="$TIER_DIR/user/accounts/$USERNAME.yaml"
 FLEX_INDEX="$TIER_DIR/user/data/flex/indexes/accounts.yaml"
+
+# Remember-me tokens are keyed by sha1(username) (login plugin TokenStorage).
+# shasum (macOS, perl core) defaults to SHA-1; fall back to sha1sum (Linux).
+bv_sha1() {
+    if command -v shasum >/dev/null 2>&1; then
+        printf '%s' "$1" | shasum | awk '{print $1}'
+    else
+        printf '%s' "$1" | sha1sum | awk '{print $1}'
+    fi
+}
+RM_TOKENS="$TIER_DIR/user/data/rememberme/$(bv_sha1 "$USERNAME").yaml"
 
 echo "→ delete-user: $USERNAME @ $TIER"
 echo "  target: $USER_SSH@$HOST_SSH:$ACCT"
@@ -152,7 +170,7 @@ case "$exists" in
 esac
 
 if [ "$DRY_RUN" = "1" ]; then
-    echo "  dry-run: would remove the account YAML + flex index and clear cache; nothing deleted."
+    echo "  dry-run: would remove the account YAML + flex index + remember-me tokens and clear cache; nothing deleted."
     exit 0
 fi
 
@@ -166,15 +184,20 @@ if [ "$YES" != "1" ]; then
     esac
 fi
 
-# ── 5. Delete the account YAML + flex index, then clear cache ────────
+# ── 5. Delete the account YAML + flex index + remember-me tokens, then
+#       clear cache ─────────────────────────────────────────────────────
 # Removing the flex index is safe — Grav rebuilds it from user/accounts/ on
 # the next cache clear; this drops the deleted user from listings and frees
-# the username/email for re-registration.
+# the username/email for re-registration. Removing the remember-me token
+# file logs the user out of every remembered browser (their "husk mig"
+# cookie can no longer re-authenticate a deleted account).
 if ! bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-        "rm -f \"$ACCT\" \"$FLEX_INDEX\" && cd \"$TIER_DIR\" && php bin/grav clearcache"; then
+        "rm -f \"$ACCT\" \"$FLEX_INDEX\" \"$RM_TOKENS\" && cd \"$TIER_DIR\" && php bin/grav clearcache"; then
     echo "✗ delete failed (the account file may be partly removed — re-run, or check the tier)." >&2
     exit 1
 fi
 
-echo "✓ Deleted '$USERNAME' from $TIER and cleared cache."
+echo "✓ Deleted '$USERNAME' from $TIER (account + remember-me tokens) and cleared cache."
 echo "  The username and email are now free to register again."
+echo "  Note: an already-open browser session lives until it expires; it can"
+echo "  no longer re-authenticate once it does."

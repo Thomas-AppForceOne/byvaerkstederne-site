@@ -22,7 +22,7 @@ help: ## Show this help
 	g "Release & deploy"           $(GRP_SHIP); \
 	g "Tier ops — members & data"  $(GRP_TIER); \
 	g "Backup, restore & keys"     $(GRP_DATA); \
-	g "Local reset (destructive)"  $(GRP_RESET); \
+	g "Reset (destructive; local, or tier=...)"  $(GRP_RESET); \
 	all=$$(grep -oE '^[a-zA-Z][a-zA-Z0-9_-]*:' $(MAKEFILE_LIST) | sed 's/://' | sort -u); \
 	known=" $(GRP_DEV) $(GRP_TEST) $(GRP_SHIP) $(GRP_TIER) $(GRP_DATA) $(GRP_RESET) help "; \
 	other=""; for t in $$all; do case "$$known" in *" $$t "*) ;; *) grep -qE "^$$t:.*## " $(MAKEFILE_LIST) && other="$$other $$t" ;; esac; done; \
@@ -529,6 +529,9 @@ test-deploy: ## Run deploy-script regression tests (lint + unit + atomic-layout 
 	@bash tests/deploy/unit-manage-groups.sh
 	@bash tests/deploy/unit-activate-user.sh
 	@bash tests/deploy/unit-reset-password.sh
+	@bash tests/deploy/unit-reset-users.sh
+	@bash tests/deploy/unit-reset-data.sh
+	@bash tests/deploy/unit-delete-user.sh
 
 test-backup-restore: ## Run backup/restore tooling tests (bats)
 	@command -v bats >/dev/null 2>&1 || { echo "❌  bats not installed. Run: brew install bats-core"; exit 1; }
@@ -549,24 +552,80 @@ test-auth: ## Run authenticated tests (auto-sources ~/.gan-secrets/workshop-site
 
 # ── Reset ──────────────────────────────────────────────
 
-reset-users: ## Delete all user accounts (except admin)
-	@echo "Removing user accounts (keeping thomasadmin)..."
-	@find config/www/user/accounts -name "*.yaml" ! -name "thomasadmin.yaml" -delete 2>/dev/null; true
-	@echo "  ✓ Users reset (only thomasadmin remains)"
+reset-users: ## Delete all member accounts — local when no tier; on a tier keeps admins + seeds (tier=dev|test|staging, dry_run=1, yes=1; prod refused)
+	@t="$(tier)"; \
+	if [ -z "$$t" ]; then \
+	  echo "Removing local user accounts (keeping thomasadmin)..."; \
+	  find config/www/user/accounts -name "*.yaml" ! -name "thomasadmin.yaml" -delete 2>/dev/null || true; \
+	  echo "  ✓ Users reset (only thomasadmin remains)"; \
+	else \
+	  args=""; \
+	  if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
+	  if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
+	  if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
+	  case "$$t" in \
+	    dev|test|staging) ./deploy/reset-users.sh "$$t" $$args ;; \
+	    prod) \
+	      echo "❌  'make reset-users tier=prod' is intentionally refused."; \
+	      echo "    Bulk-deleting prod members is an operator-supervised operation."; \
+	      echo "    Invoke the script directly so the gate is impossible to miss:"; \
+	      echo "        ./deploy/reset-users.sh prod --i-mean-it"; \
+	      exit 1 ;; \
+	    *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging; prod refused)"; exit 1 ;; \
+	  esac; \
+	fi
 
-reset-admin: ## Reset admin account (delete and recreate interactively)
+reset-admin: ## Reset the LOCAL admin account (delete and recreate interactively; local-only)
+	@if [ -n "$(tier)" ]; then \
+	  echo "❌  reset-admin is local-only (got tier='$(tier)')."; \
+	  echo "    For tier accounts use: make reset-password / activate-user / delete-user tier=$(tier) user=..."; \
+	  exit 1; \
+	fi
 	@echo "Removing admin account (thomasadmin)..."
 	@rm -f config/www/user/accounts/thomasadmin.yaml
 	@$(MAKE) create-admin
 
-reset-data: ## Delete all Flex Objects data
-	@echo "Deleting all Flex Objects data..."
-	@rm -f config/www/user/data/flex-objects/*.yaml 2>/dev/null; true
-	@echo "  ✓ All Flex Objects data deleted"
+reset-data: ## Delete all Flex Objects data — local when no tier (tier=dev|test|staging, dry_run=1, yes=1; prod refused)
+	@t="$(tier)"; \
+	if [ -z "$$t" ]; then \
+	  echo "Deleting all Flex Objects data..."; \
+	  rm -f config/www/user/data/flex-objects/*.yaml 2>/dev/null || true; \
+	  echo "  ✓ All Flex Objects data deleted"; \
+	else \
+	  args=""; \
+	  if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
+	  if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
+	  if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
+	  case "$$t" in \
+	    dev|test|staging) ./deploy/reset-data.sh "$$t" $$args ;; \
+	    prod) \
+	      echo "❌  'make reset-data tier=prod' is intentionally refused."; \
+	      echo "    Wiping prod flex data destroys real member activity."; \
+	      echo "    Invoke the script directly so the gate is impossible to miss:"; \
+	      echo "        ./deploy/reset-data.sh prod --i-mean-it"; \
+	      exit 1 ;; \
+	    *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging; prod refused)"; exit 1 ;; \
+	  esac; \
+	fi
 
-reset-cache: cache-clear ## Alias for cache-clear
+reset-cache: ## Clear Grav cache — local container when no tier, or on a tier (tier=dev|test|staging|prod)
+	@t="$(tier)"; \
+	if [ -z "$$t" ]; then \
+	  $(MAKE) cache-clear; \
+	else \
+	  case "$$t" in \
+	    dev|test|staging|prod) ./deploy/clear-cache.sh "$$t" ;; \
+	    *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	  esac; \
+	fi
 
-reset-all: reset-users reset-data ## Full reset: users + data + cache + restart
+reset-all: ## Full LOCAL reset: users + data + cache + restart (local-only)
+	@if [ -n "$(tier)" ]; then \
+	  echo "❌  reset-all is local-only (got tier='$(tier)'). For a tier, run the pieces explicitly:"; \
+	  echo "    make reset-users tier=$(tier)  &&  make reset-data tier=$(tier)  &&  make reset-cache tier=$(tier)"; \
+	  exit 1; \
+	fi
+	@$(MAKE) reset-users reset-data
 	@echo "Resetting all content to last commit..."
 	@git checkout -- config/www/user/ 2>/dev/null || true
 	@docker compose restart

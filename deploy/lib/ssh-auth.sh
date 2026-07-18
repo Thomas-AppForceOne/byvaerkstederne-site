@@ -34,6 +34,24 @@
 
 # shellcheck shell=bash
 
+# Resolve the tier's Grav root on the remote. The one.com tiers
+# (dev/test/staging/landing) each live in a per-tier subdirectory under
+# DEPLOY_PATH; prod's Grav root is the chosting.dk docroot
+# (DEPLOY_PROD_PATH) ITSELF — there is no prod/ subdirectory (see
+# promote-to-prod.sh: PROD_DOCROOT="$DEPLOY_PROD_PATH"). Every script
+# that touches a tier's user/ tree must resolve the root through this
+# helper; hardcoding "$base/$tier" silently breaks every command on prod.
+#
+# Usage:  TIER_DIR="$(bv_tier_root "$PATH_SSH" "$TIER")"
+bv_tier_root() {
+    local base="$1" tier="$2"
+    if [ "$tier" = "prod" ]; then
+        printf '%s' "$base"
+    else
+        printf '%s' "$base/$tier"
+    fi
+}
+
 # Resolve the tier-specific SSH password. Returns the empty string if
 # no password is configured for the active tier (caller falls back to
 # key-auth).
@@ -277,7 +295,13 @@ bv_ssh_diagnose() {
         return 0
     fi
 
-    # 3) Auth layer (host is reachable, so the failure is credentials).
+    # 3) Auth layer. Probe with a trivial command instead of assuming —
+    # a remote-command failure (wrong path, missing tool on the tier)
+    # must not be misreported as an auth rejection.
+    if bv_ssh_cmd -p "$port" "$user@$host" true >/dev/null 2>&1; then
+        echo "  • Auth: SSH to ${user}@${host} works ✓ — the failure was in the remote command itself (wrong path or missing tool on the tier), not the connection." >&2
+        return 0
+    fi
     local pw rc
     pw="$(bv_resolve_ssh_password 2>/dev/null)"; rc=$?
     if [ "$rc" -ne 0 ]; then
