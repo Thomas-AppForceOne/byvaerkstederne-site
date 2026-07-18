@@ -531,6 +531,7 @@ test-deploy: ## Run deploy-script regression tests (lint + unit + atomic-layout 
 	@bash tests/deploy/unit-reset-password.sh
 	@bash tests/deploy/unit-reset-users.sh
 	@bash tests/deploy/unit-reset-data.sh
+	@bash tests/deploy/unit-delete-user.sh
 
 test-backup-restore: ## Run backup/restore tooling tests (bats)
 	@command -v bats >/dev/null 2>&1 || { echo "❌  bats not installed. Run: brew install bats-core"; exit 1; }
