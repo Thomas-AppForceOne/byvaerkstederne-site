@@ -295,7 +295,7 @@ Run `make help` to see all available commands:
 | `make list-backups [tier=<env>]` | List available backup ids |
 | `make restore tier=<env> from=<id>` | Restore a tier (add `RESTORE_TO_TIER_ENABLED=1` to actually wipe; prod refused) |
 | `make rollback tier=<env>` | Roll back a tier to its previous release |
-| `make push-data tier=<env>` | Push local Flex Objects YAML to a tier's data tree (dev/test/staging; prod refused without `i_mean_it=1`). Defaults to `files=begivenheder.yaml`; pass `files=a.yaml,b.yaml` for multiple, `dry_run=1` for diff-only, `yes=1` to skip the confirmation prompt. |
+| `make push-data tier=<env>` | Push local Flex Objects YAML to a tier's data tree (dev/test/staging; prod refused without `i_mean_it=1`). `files=a.yaml,b.yaml` is **required** — flex data is live user state on the tiers (organizer events, RSVP signups, votes), so every push names its payload explicitly. `dry_run=1` for diff-only, `yes=1` to skip the confirmation prompt. |
 | `make migrate-atomic tier=<env>` | One-time migration to atomic-release layout (prod refused) |
 | `make cache-clear` | Clear Grav cache |
 | `make reset-users` | Delete all user accounts (except admin) |
@@ -372,7 +372,9 @@ Content that non-technical admins need to manage is stored in Flex Objects (flat
 
 Data files live in `config/www/user/data/flex-objects/`. Templates pull from Flex Objects automatically, with fallback to page YAML if Flex Objects is unavailable.
 
-`make deploy` deliberately excludes the live-state tree from its rsync (so a code deploy can't overwrite admin-edited content). To push local Flex Objects YAML to a tier's data tree out-of-band, use `make push-data tier=<env>` (see Commands table). `bug-reports.yaml`, `feature-suggestions.yaml`, and `submission-tokens.yaml` are refused unconditionally — they carry user-generated content or CSRF tokens that local-as-truth would erase.
+`make deploy` deliberately excludes the live-state tree from its rsync (so a code deploy can't overwrite admin-edited content). To push local Flex Objects YAML to a tier's data tree out-of-band, use `make push-data tier=<env> files=<list>` (see Commands table). `bug-reports.yaml`, `feature-suggestions.yaml`, and `submission-tokens.yaml` are refused unconditionally — they carry user-generated content or CSRF tokens that local-as-truth would erase.
+
+Flex Objects data is **not tracked in git** (it is live user state — see `specifications/flex_data_out_of_git_specification.md`). Sample content for local development lives in the `tests/fixtures/grav-seeds/sample-content/` bundle; `make setup` applies it automatically, and `make seed-content` applies it to an already-running instance (idempotent — never overwrites runtime changes).
 
 ### Pages
 

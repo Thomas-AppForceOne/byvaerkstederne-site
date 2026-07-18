@@ -71,6 +71,12 @@ config/www/user/accounts/*
 # Flex Objects indexes (auto-generated)
 config/www/user/data/flex/indexes/
 
+# Flex Objects data — live user state (organizer-created events, RSVP
+# signups, roadmap votes, user submissions, audit log). Never tracked;
+# sample content lives in tests/fixtures/grav-seeds/sample-content/.
+# See specifications/flex_data_out_of_git_specification.md.
+config/www/user/data/flex-objects/
+
 # Scheduler data (runtime)
 config/www/user/data/scheduler/
 
