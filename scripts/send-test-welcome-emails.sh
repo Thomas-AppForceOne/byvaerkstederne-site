@@ -72,15 +72,73 @@ while true; do
             continue
         fi
 
-        # Send welcome email
+        # Send welcome email via Grav
         TIMESTAMP=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
         log "  📧 Sending email to $FULLNAME ($EMAIL)"
 
-        # Update account with test_invitation_sent_at
+        # Email body (embedded)
+        read -r -d '' EMAIL_BODY << EOFBODY || true
+Hej $FULLNAME,
+
+Velkommen til Byværkstedernes website test! Vi er glade for at have dig med.
+
+Vi er ved at forbedre siden og vil gerne høre hvad du tænker. Herunder er nogle konkrete ting du kan prøve — det tager omkring 10-15 minutter:
+
+### 1. Udforsker din konto
+Gå til Min konto (øverst til højre) og prøv:
+- Skift dit fulde navn
+- Skift din adgangskode
+- Skift din email (du får en bekræftelseslink)
+
+Tip: Når du skifter email, får du en link sendt til den nye adresse. Det skal bekræftes.
+
+### 2. Udforsk kalender og tilmeld workshops
+Gå til Værkstedskalenderen og:
+- Se hvilke workshops der er planlagt
+- Filtrer efter kategori (f.eks. "Makerspace", "Krea Café")
+- Klik ind på en workshop og se detaljer
+- Tilmeld dig en workshop (RSVP)
+- Gå tilbage til din konto og bekræft at du er tilmeldt
+
+### 3. Anmod om at blive arrangør
+Gå til Min konto → Rettigheder:
+- Klik "Anmod om at blive arrangør"
+- Skriv kort hvorfor du gerne vil være arrangør
+- Din anmodning bliver behandlet af administratorerne
+
+### 4. Prøv på din telefon
+Besøg siden på din mobil og check at:
+- Menuer virker
+- Du kan læse siden uden at zoome
+- Du kan udfylde formularer
+
+---
+
+Hvad giver mest mening?
+Hvis noget virker uintuitiv, eller du er usikker på hvad du skal gøre — det er præcis den feedback vi søker.
+
+Tak fordi du hjælper os!
+
+Med venlig hilsen
+Thomas
+EOFBODY
+
+        # Send via Grav
+        SEND_CMD="cd /customers/4/e/5/hackersbychoice.dk/httpd.www/test && echo '$EMAIL_BODY' | bin/grav send:email --to='$EMAIL' --subject='Velkommen til Byværkstedernes website test 🎉'"
+
+        if ! SSHPASS="$SSH_PASS" sshpass -e ssh -o StrictHostKeyChecking=no -p 22 hackersbychoice.dk@ssh.hackersbychoice.dk "$SEND_CMD" 2>/dev/null; then
+            log "  ❌ Email send failed for $USERNAME"
+            ((ERRORS++))
+            continue
+        fi
+
+        log "  ✓ Email sent"
+
+        # Update account with test_invitation_sent_at AFTER successful send
         UPDATE_CMD="sed -i.bak 's/^$/test_invitation_sent_at: \"$TIMESTAMP\"/' '$ACCOUNT_PATH'"
         SSHPASS="$SSH_PASS" sshpass -e ssh -o StrictHostKeyChecking=no -p 22 hackersbychoice.dk@ssh.hackersbychoice.dk "$UPDATE_CMD" 2>/dev/null || {
-            log "  ❌ Failed to update $USERNAME"
-            ((ERRORS++))
+            log "  ⚠️  Email sent but failed to mark account"
+            ((SENT++))
             continue
         }
 
