@@ -114,7 +114,18 @@ while true; do
 <li>Din anmodning bliver behandlet af administratorerne</li>
 </ul>
 
-<h3>4. Prøv på din telefon</h3>
+<h3>4. Opret og redigér arrangementer (når du er arrangør)</h3>
+<p>Når din arrangør-anmodning er godkendt, får du en ekstra knap i kalenderen:</p>
+<ul>
+<li>Gå til <strong>Værkstedskalenderen</strong> og klik <strong>&quot;Arrangørpanel&quot;</strong> (øverst)</li>
+<li>Opret et nyt arrangement — udfyld titel, dato, tid, sted, beskrivelse og antal pladser</li>
+<li>Find dit arrangement i kalenderen og se hvordan det ser ud for andre</li>
+<li>Redigér arrangementet bagefter — ret f.eks. beskrivelsen eller antal pladser</li>
+<li>Prøv også at slette et test-arrangement igen</li>
+</ul>
+<p><em>Det er en test-side, så du kan trygt oprette prøve-arrangementer.</em></p>
+
+<h3>5. Prøv på din telefon</h3>
 <p>Besøg siden på din mobil og check at:</p>
 <ul>
 <li>Menuer virker</li>
