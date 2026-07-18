@@ -31,12 +31,18 @@ help: ## Show this help
 
 # ── Setup ──────────────────────────────────────────────
 
-setup: check-deps lfs-pull start create-admin ## Full first-time setup (check tools, pull LFS, start site, create admin)
+setup: check-deps lfs-pull start seed-content create-admin ## Full first-time setup (check tools, pull LFS, start site, seed sample content, create admin)
 	@echo ""
 	@echo "  ✅  Setup complete!"
 	@echo "  🌐  Site:  http://localhost:8080"
 	@echo "  ⚙️   Admin: http://localhost:8080/admin"
 	@echo ""
+
+seed-content: ## Seed the local Grav with sample flex content (idempotent; see grav-seeds/sample-content)
+	@CONTAINER=$$(node -e 'try { process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container) } catch (e) { process.exit(1) }' 2>/dev/null) || { \
+		echo "❌  No Grav container for this worktree. Run: scripts/grav-up.sh . [port]"; exit 1; \
+	}; \
+	tests/fixtures/grav-seeds/sample-content/apply.sh "$$CONTAINER"
 
 create-admin: ## Create a super-admin account (interactive)
 	@echo ""; \
@@ -532,6 +538,8 @@ test-deploy: ## Run deploy-script regression tests (lint + unit + atomic-layout 
 	@bash tests/deploy/unit-reset-users.sh
 	@bash tests/deploy/unit-reset-data.sh
 	@bash tests/deploy/unit-delete-user.sh
+	@bash tests/deploy/unit-sample-content-seed.sh
+	@bash tests/deploy/unit-push-data-guard.sh
 
 test-backup-restore: ## Run backup/restore tooling tests (bats)
 	@command -v bats >/dev/null 2>&1 || { echo "❌  bats not installed. Run: brew install bats-core"; exit 1; }

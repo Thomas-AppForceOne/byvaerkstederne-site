@@ -34,9 +34,13 @@
 # Tiers: dev | test | staging | prod
 #
 # Options:
-#   --files=<list>   Comma-separated YAML filenames to push from
-#                    config/www/user/data/flex-objects/.
-#                    Default: begivenheder.yaml.
+#   --files=<list>   REQUIRED. Comma-separated YAML filenames to push from
+#                    config/www/user/data/flex-objects/. There is no default:
+#                    flex data is live user state on the tiers (organizer-
+#                    created events, RSVP signups, votes) and is no longer
+#                    tracked in git, so every push must name its payload
+#                    explicitly. Sample content lives in
+#                    tests/fixtures/grav-seeds/sample-content/.
 #   --yes            Skip the confirmation prompt.
 #   --dry-run        Show the diff and exit; do not push.
 #   --i-mean-it      Required for tier=prod.
@@ -53,7 +57,7 @@ usage() {
 
 # ── 1. Parse args ────────────────────────────────────────────────────
 TIER=""
-FILES_RAW="begivenheder.yaml"
+FILES_RAW=""
 YES=0
 DRY_RUN=0
 I_MEAN_IT=0
@@ -76,6 +80,22 @@ done
 
 if [ -z "$TIER" ]; then
     usage >&2
+    exit 1
+fi
+
+if [ -z "$FILES_RAW" ]; then
+    cat >&2 <<'EOF'
+❌  --files= is required (there is no default payload).
+
+    Flex-objects are live user state on the tiers: organizer-created
+    events, RSVP signups and roadmap votes live in these files. Pushing
+    local YAML OVERWRITES that activity, so every push must name its
+    payload explicitly, e.g.:
+
+        deploy/push-data.sh test --files=begivenheder.yaml
+
+    Sample content lives in tests/fixtures/grav-seeds/sample-content/.
+EOF
     exit 1
 fi
 

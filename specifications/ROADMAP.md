@@ -8,10 +8,7 @@ Lifecycle and folder policy: [CLAUDE.md](../CLAUDE.md#specifications-and-decisio
 
 ## Next
 
-### Event RSVP & rich event details
-**Spec:** [event_rsvp_specification.md](event_rsvp_specification.md)
-
-Members sign up for (Tilmeld) or mark interest in (Interesseret) events directly from the event card, which expands modally over the calendar; everyone sees seat availability (unlimited events show counts only); organizers see their attendee lists; events gain a WYSIWYG-edited details body with image upload (sanitized server-side). Builds on the merged frontend event CRUD; ships behind the reserved `event_rsvp` flag.
+*(nothing queued — next entry lands here when its spec is written)*
 
 ---
 
