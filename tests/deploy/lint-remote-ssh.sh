@@ -453,6 +453,54 @@ if [ -f "$THROTTLE" ]; then
     fi
 fi
 
+# 15. reset-users.sh / reset-data.sh — bulk-destructive tier resets. Lock in:
+#     ssh-auth helpers, the prod --i-mean-it gate, and the Make-layer prod
+#     refusal (bulk prod wipes are operator-supervised, script-direct only).
+for base in reset-users.sh reset-data.sh; do
+    script="$DEPLOY_DIR/$base"
+    [ -f "$script" ] || { check "$base exists" fail; continue; }
+    if grep -q 'lib/ssh-auth.sh' "$script" && grep -q 'bv_ssh_cmd' "$script"; then
+        check "$base uses the ssh-auth helpers (not bare ssh)" ok
+    else
+        check "$base must use the ssh-auth helpers" fail
+    fi
+    if grep -qE 'Refusing to reset (users|data) on prod without --i-mean-it' "$script"; then
+        check "$base gates prod behind --i-mean-it" ok
+    else
+        check "$base must gate prod behind --i-mean-it" fail
+    fi
+    target="${base%.sh}"
+    if grep -qF "'make $target tier=prod' is intentionally refused" "$PROJECT_ROOT/Makefile"; then
+        check "Makefile refuses 'make $target tier=prod'" ok
+    else
+        check "Makefile must refuse 'make $target tier=prod'" fail
+    fi
+done
+
+# 15b. reset-users.sh must never put admins or the pw-test-* Playwright
+#      seeds in its delete set — removing either breaks tier admin access /
+#      the auth suite. Lock in the keep-classification markers.
+RESET_USERS="$DEPLOY_DIR/reset-users.sh"
+if [ -f "$RESET_USERS" ]; then
+    if grep -q 'keep_reason="admin"' "$RESET_USERS" \
+       && grep -q 'keep_reason="playwright-seed"' "$RESET_USERS"; then
+        check "reset-users.sh keeps admins and pw-test-* seeds out of the delete set" ok
+    else
+        check "reset-users.sh must keep admins and pw-test-* seeds" fail
+    fi
+fi
+
+# 15c. clear-cache.sh — remote cache clear; must still go through the
+#      ssh-auth helpers (no bare ssh).
+CLEAR_CACHE="$DEPLOY_DIR/clear-cache.sh"
+if [ -f "$CLEAR_CACHE" ]; then
+    if grep -q 'lib/ssh-auth.sh' "$CLEAR_CACHE" && grep -q 'bv_ssh_cmd' "$CLEAR_CACHE"; then
+        check "clear-cache.sh uses the ssh-auth helpers (not bare ssh)" ok
+    else
+        check "clear-cache.sh must use the ssh-auth helpers" fail
+    fi
+fi
+
 echo ""
 echo "─────────────────────────────────────"
 echo "  Pass: $PASS    Fail: $FAIL"

@@ -38,7 +38,7 @@ usage() {
 }
 
 # Accounts the Playwright auth suite depends on — protected from casual delete.
-PROTECTED_USERS="pw-test-user pw-test-admin"
+PROTECTED_USERS="pw-test-user pw-test-admin pw-test-org"
 
 # ── 1. Parse args ────────────────────────────────────────────────────
 POSITIONAL=()
