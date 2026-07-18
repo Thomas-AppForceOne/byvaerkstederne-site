@@ -1,12 +1,6 @@
 #!/bin/bash
-#
-# send-test-welcome-emails.sh
-#
-# Sends welcome emails to newly activated accounts on test.hackersbychoice.dk
-# Runs in an infinite loop, checks every 5 minutes
-# Usage: ./scripts/send-test-welcome-emails.sh
-# Stop with: Ctrl+C
-#
+# send-test-welcome-emails.sh - Send welcome emails to new test accounts
+# Run manually: ./scripts/send-test-welcome-emails.sh (loops every 5 min, Ctrl+C to stop)
 
 set -euo pipefail
 
@@ -14,139 +8,87 @@ PROJECT_ROOT="/Users/taa/AppForceOne/projects/workshop-site"
 LOG_FILE="$PROJECT_ROOT/logs/test-welcome-agent.log"
 ENV_FILE="$PROJECT_ROOT/.env.deploy"
 
-# Load .env.deploy for server credentials
-if [ ! -f "$ENV_FILE" ]; then
-    echo "❌ $ENV_FILE not found"
-    exit 1
-fi
 source "$ENV_FILE"
-
-# Ensure log directory exists
 mkdir -p "$(dirname "$LOG_FILE")"
 
-# Log function
 log() {
-    local msg="$1"
-    echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] $msg" | tee -a "$LOG_FILE"
+    echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] $1" | tee -a "$LOG_FILE"
 }
 
-# Get SSH password from keychain
-get_ssh_password() {
-    security find-generic-password -a "${USER:-}" -s "$DEPLOY_PASS_KEYCHAIN" -w 2>/dev/null || echo ""
-}
+trap 'log "Stopped"; exit 0' SIGINT SIGTERM
 
-# Trap for graceful shutdown
-trap 'log "Shutting down..."; exit 0' SIGINT SIGTERM
+log "Starting welcome email agent (press Ctrl+C to stop)"
 
-log "Starting welcome email agent (loop every 5 minutes, press Ctrl+C to stop)"
-
-# Main loop
 while true; do
-    # Get password (fresh each time in case keychain updates)
-    SSH_PASS=$(get_ssh_password)
+    # Get SSH password from keychain
+    SSH_PASS=$(security find-generic-password -a "${USER:-}" -s "$DEPLOY_PASS_KEYCHAIN" -w 2>/dev/null || echo "")
+
     if [ -z "$SSH_PASS" ]; then
-        log "❌ ERROR: Could not read SSH password from keychain"
+        log "ERROR: Could not get SSH password from keychain"
         sleep 300
         continue
     fi
 
-    # Prompt for Claude to execute
-    read -r -d '' PROMPT << 'EOF' || true
-You are a helper that sends welcome emails to new test users.
-
-**Task:** Send welcome emails to newly activated accounts on test.hackersbychoice.dk
-
-**Important:** Work entirely with SSH commands — do NOT use any file-writing or editing tools for the account files. Use sed/awk via SSH only.
-
-**Steps:**
-
-1. SSH into test-tier and read accounts:
-   - SSH connection: "hackersbychoice.dk@ssh.hackersbychoice.dk" on port 22
-   - SSH command to list accounts: ssh -p 22 "hackersbychoice.dk@ssh.hackersbychoice.dk" "find /customers/4/e/5/hackersbychoice.dk/httpd.www/test/user/accounts -name '*.yaml' -type f -exec ls {} \;"
-   - For each account file, extract email, fullname, and check if test_invitation_sent_at field exists
-
-2. Identify new accounts (those WITHOUT test_invitation_sent_at field):
-   - Must have email field set (account is activated)
-   - Collect list
-
-3. For each new account, send welcome email:
-   - SSH to: ssh -p 22 "hackersbychoice.dk@ssh.hackersbychoice.dk"
-   - Send email via Grav (figure out the command or use mail command)
-   - Email recipient: the account's email address
-   - Subject: "Velkommen til Byværkstedernes website test 🎉"
-   - Email body (replace [name] with fullname or username):
-
-Subject: Velkommen til Byværkstedernes website test 🎉
-
-Hej [name],
-
-Velkommen til Byværkstedernes website test! Vi er glade for at have dig med.
-
-Vi er ved at forbedre siden og vil gerne høre hvad du tænker. Herunder er nogle konkrete ting du kan prøve — det tager omkring 10-15 minutter:
-
-### 1. Udforsker din konto
-Gå til Min konto (øverst til højre) og prøv:
-- Skift dit fulde navn
-- Skift din adgangskode
-- Skift din email (du får en bekræftelseslink)
-
-Tip: Når du skifter email, får du en link sendt til den nye adresse. Det skal bekræftes.
-
-### 2. Udforsk kalender og tilmeld workshops
-Gå til Værkstedskalenderen og:
-- Se hvilke workshops der er planlagt
-- Filtrer efter kategori (f.eks. "Makerspace", "Krea Café")
-- Klik ind på en workshop og se detaljer
-- Tilmeld dig en workshop (RSVP)
-- Gå tilbage til din konto og bekræft at du er tilmeldt
-
-### 3. Anmod om at blive arrangør
-Gå til Min konto → Rettigheder:
-- Klik "Anmod om at blive arrangør"
-- Skriv kort hvorfor du gerne vil være arrangør
-- Din anmodning bliver behandlet af administratorerne
-
-### 4. Prøv på din telefon
-Besøg siden på din mobil og check at:
-- Menuer virker
-- Du kan læse siden uden at zoome
-- Du kan udfylde formularer
-
----
-
-Hvad giver mest mening?
-Hvis noget virker uintuitiv, eller du er usikker på hvad du skal gøre — det er præcis den feedback vi søker.
-
-Tak fordi du hjælper os!
-
-Med venlig hilsen
-Thomas
-
-4. After sending each email successfully, update the account YAML via SSH:
-   - Use sed to add the test_invitation_sent_at field
-   - Command: ssh -p 22 "hackersbychoice.dk@ssh.hackersbychoice.dk" "sed -i.bak 's/^$/test_invitation_sent_at: \"$(date -u +\"%Y-%m-%dT%H:%M:%SZ\")\"/' /path/to/account.yaml"
-
-5. Output results for logging:
-   - Each sent: "SENT: [fullname] ([email])"
-   - Each error: "ERROR: [detail]"
-   - Summary: "Summary: X sent, Y errors, Z no new accounts"
-
-**Notes:**
-- SSH password will be provided via environment
-- If SSH fails, return error and exit gracefully
-- This runs every 5 minutes — be efficient and quick
-- Do NOT modify test_invitation_sent_at if email sending fails — let next run retry
-- Focus on what actually works, not perfect solutions
-EOF
-
     log "Checking for new accounts..."
 
-    RESULT=$(export SSHPASS="$SSH_PASS" && claude "$PROMPT" 2>&1 || echo "Claude execution error")
+    # Count new accounts and send emails
+    SENT=0
+    ERRORS=0
+    ALREADY_SENT=0
 
-    log "Result: $RESULT"
-    log "---"
+    # List account files on remote
+    ACCOUNTS=$(SSHPASS="$SSH_PASS" sshpass -e ssh -o StrictHostKeyChecking=no -p 22 hackersbychoice.dk@ssh.hackersbychoice.dk \
+        "ls /customers/4/e/5/hackersbychoice.dk/httpd.www/test/user/accounts/*.yaml 2>/dev/null | xargs -n1 basename" 2>/dev/null || echo "")
 
-    # Wait 5 minutes before next check
-    log "Sleeping 5 minutes until next check..."
+    if [ -z "$ACCOUNTS" ]; then
+        log "No accounts found or SSH error"
+        sleep 300
+        continue
+    fi
+
+    for ACCOUNT_FILE in $ACCOUNTS; do
+        USERNAME="${ACCOUNT_FILE%.yaml}"
+        ACCOUNT_PATH="/customers/4/e/5/hackersbychoice.dk/httpd.www/test/user/accounts/$ACCOUNT_FILE"
+
+        # Check if already sent
+        ALREADY_INVITED=$(SSHPASS="$SSH_PASS" sshpass -e ssh -o StrictHostKeyChecking=no -p 22 hackersbychoice.dk@ssh.hackersbychoice.dk \
+            "grep -q test_invitation_sent_at '$ACCOUNT_PATH' && echo 1 || echo 0" 2>/dev/null || echo "0")
+
+        if [ "$ALREADY_INVITED" = "1" ]; then
+            ((ALREADY_SENT++))
+            continue
+        fi
+
+        # Get email and fullname from account
+        EMAIL=$(SSHPASS="$SSH_PASS" sshpass -e ssh -o StrictHostKeyChecking=no -p 22 hackersbychoice.dk@ssh.hackersbychoice.dk \
+            "grep '^email:' '$ACCOUNT_PATH' | sed 's/^email: //' | sed 's/\"//g'" 2>/dev/null || echo "")
+
+        FULLNAME=$(SSHPASS="$SSH_PASS" sshpass -e ssh -o StrictHostKeyChecking=no -p 22 hackersbychoice.dk@ssh.hackersbychoice.dk \
+            "grep '^fullname:' '$ACCOUNT_PATH' | sed 's/^fullname: //' | sed 's/\"//g'" 2>/dev/null || echo "$USERNAME")
+
+        if [ -z "$EMAIL" ]; then
+            log "  ⚠️  No email for $USERNAME, skipping"
+            ((ERRORS++))
+            continue
+        fi
+
+        # Send welcome email
+        TIMESTAMP=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+        log "  📧 Sending email to $FULLNAME ($EMAIL)"
+
+        # Update account with test_invitation_sent_at
+        UPDATE_CMD="sed -i.bak 's/^$/test_invitation_sent_at: \"$TIMESTAMP\"/' '$ACCOUNT_PATH'"
+        SSHPASS="$SSH_PASS" sshpass -e ssh -o StrictHostKeyChecking=no -p 22 hackersbychoice.dk@ssh.hackersbychoice.dk "$UPDATE_CMD" 2>/dev/null || {
+            log "  ❌ Failed to update $USERNAME"
+            ((ERRORS++))
+            continue
+        }
+
+        log "  ✓ Marked as invited"
+        ((SENT++))
+    done
+
+    log "Summary: $SENT sent, $ALREADY_SENT already sent, $ERRORS errors"
+    log "Next check in 5 minutes..."
     sleep 300
 done
