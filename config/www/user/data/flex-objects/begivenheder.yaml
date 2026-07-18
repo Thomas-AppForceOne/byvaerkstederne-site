@@ -30,6 +30,17 @@ event002:
   button_style: secondary
   featured: true
   featured_tag: "Populær"
+  details_html: |
+    <h3>Hvad kan repareres?</h3>
+    <ul>
+    <li><strong>Elektronik</strong> — lamper, radioer, køkkenmaskiner (ikke hvidevarer)</li>
+    <li><strong>Cykler</strong> — lapning, bremser, gear</li>
+    <li><strong>Tøj og tekstiler</strong> — huller, lynlåse, oplægning</li>
+    <li><strong>Møbler</strong> — mindre lim- og samlereparationer</li>
+    </ul>
+    <h3>Sådan foregår det</h3>
+    <p>Du reparerer selv — vores frivillige fiksere hjælper og vejleder undervejs. Regn med 30-60 minutter pr. ting, og tag gerne reservedele med hvis du har dem.</p>
+    <p><em>Vi kan ikke love at alt kan reddes, men det lykkes for ca. 7 ud af 10 ting.</em></p>
 event003:
   published: true
   title: "Intro til laserskæreren — sikkerhed og certificering"
@@ -46,6 +57,17 @@ event003:
   button_style: secondary
   featured: false
   featured_tag: ""
+  details_html: |
+    <h3>Program</h3>
+    <ul>
+    <li><strong>19:00</strong> — Sikkerhedsgennemgang: materialer, brandfare, udsugning</li>
+    <li><strong>19:30</strong> — Softwaren: fra tegning til skærefil</li>
+    <li><strong>20:00</strong> — Dit første snit: vi laver en nøglering i finér</li>
+    <li><strong>20:45</strong> — Spørgsmål og certificering</li>
+    </ul>
+    <h3>Vigtigt</h3>
+    <p>Certificeringen er <strong>obligatorisk</strong>, før du må bruge laserskæreren på egen hånd. Efter aftenen bliver du skrevet på listen over godkendte brugere.</p>
+    <p>Ingen forudsætninger — alle kan være med.</p>
 event004:
   published: true
   title: "Silketryk intro v. Lene Pels"
@@ -62,6 +84,24 @@ event004:
   button_style: tertiary
   featured: false
   featured_tag: ""
+  details_html: |
+    <h3>Om workshoppen</h3>
+    <p>Lene Pels har arbejdet med silketryk i over 20 år og guider dig gennem hele processen: motivvalg, klargøring af ramme, farveblanding og selve trykket.</p>
+    <h3>Medbring</h3>
+    <ul>
+    <li>En t-shirt, mulepose eller et stykke stof i bomuld (lyse farver virker bedst)</li>
+    <li>Evt. en skitse af dit motiv — enkle silhuetter fungerer bedst til første tryk</li>
+    <li>Tøj der må få farve på</li>
+    </ul>
+    <h3>Priser</h3>
+    <table>
+    <thead><tr><th>Materiale</th><th>Pris</th></tr></thead>
+    <tbody>
+    <tr><td>Farve og emulsion (obligatorisk)</td><td>50 kr.</td></tr>
+    <tr><td>Ekstra tryk på eget stof</td><td>10 kr. pr. stk.</td></tr>
+    </tbody>
+    </table>
+    <p><em>Betaling med MobilePay på dagen.</em></p>
 event005:
   published: true
   title: "Strik & lyt — fællesstrik med kaffe"
@@ -110,6 +150,17 @@ event007:
   button_style: primary
   featured: false
   featured_tag: ""
+  details_html: |
+    <h3>Det bygger du</h3>
+    <p>Et højbed på 120 × 80 cm i genbrugstræ fra nedtagne paller — samme model som dem i vores egen have. Det kan skilles ad og samles igen, så det kan være i de fleste biler.</p>
+    <h3>Praktisk</h3>
+    <ul>
+    <li>Alt værktøj stilles til rådighed — medbring gerne arbejdshandsker</li>
+    <li>Materialer koster ca. 250 kr. (MobilePay på dagen)</li>
+    <li>Ingen tømrer-erfaring nødvendig, vi bygger i hold på to</li>
+    <li>Børn er velkomne sammen med en voksen</li>
+    </ul>
+    <blockquote><p>Sidste gang byggede vi 6 højbede på tre timer — og alle kom hjem med et.</p></blockquote>
 event008:
   published: true
   title: "Sommerkoncert på havnen — frivillige søges"
@@ -126,6 +177,21 @@ event008:
   button_style: kulturhus
   featured: true
   featured_tag: "Frivillige søges"
+  details_html: |
+    <h3>Tjanser</h3>
+    <ul>
+    <li><strong>Opsætning (16:00-18:00)</strong> — scene, bænke, lyskæder</li>
+    <li><strong>Bar (18:00-21:30)</strong> — salg af øl, vand og kaffe, to pr. vagt</li>
+    <li><strong>Nedtagning (21:30-22:00)</strong> — alle hjælper, mange hænder gør det hurtigt</li>
+    </ul>
+    <p>Skriv i kommentarfeltet ved tilmelding hvilken tjans du foretrækker — vi fordeler og melder tilbage ugen før.</p>
+    <h3>Det får du</h3>
+    <ul>
+    <li>Fri entré til koncerten</li>
+    <li>Aftensmad fra grillen kl. 18</li>
+    <li>Frivillig-t-shirt (så længe lager haves)</li>
+    </ul>
+    <p><em>Koncerten afholdes i samarbejde med Hundested Havn. Ved regn rykker vi ind i Eventværkstedet.</em></p>
 event009:
   published: true
   title: "Filmaften i Eventværkstedet"
