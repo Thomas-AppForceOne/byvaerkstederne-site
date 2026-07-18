@@ -123,11 +123,16 @@ Med venlig hilsen
 Thomas
 EOFBODY
 
-        # Send via Grav
-        SEND_CMD="cd /customers/4/e/5/hackersbychoice.dk/httpd.www/test && echo '$EMAIL_BODY' | bin/grav send:email --to='$EMAIL' --subject='Velkommen til Byværkstedernes website test 🎉'"
+        # Send via Grav email plugin (PHP script)
+        SUBJECT="Velkommen til Byværkstedernes website test 🎉"
+        # Escape quotes in body for shell
+        BODY_ESCAPED=$(echo "$EMAIL_BODY" | sed "s/'/'\"'\"'/g")
+        SEND_CMD="cd /customers/4/e/5/hackersbychoice.dk/httpd.www/test && php scripts/send-email.php '$EMAIL' '$SUBJECT' '$BODY_ESCAPED'"
 
-        if ! SSHPASS="$SSH_PASS" sshpass -e ssh -o StrictHostKeyChecking=no -p 22 hackersbychoice.dk@ssh.hackersbychoice.dk "$SEND_CMD" 2>/dev/null; then
-            log "  ❌ Email send failed for $USERNAME"
+        RESULT=$(SSHPASS="$SSH_PASS" sshpass -e ssh -o StrictHostKeyChecking=no -p 22 hackersbychoice.dk@ssh.hackersbychoice.dk "$SEND_CMD" 2>&1)
+
+        if [ "$RESULT" != "OK" ]; then
+            log "  ❌ Email send failed for $USERNAME ($RESULT)"
             ((ERRORS++))
             continue
         fi
