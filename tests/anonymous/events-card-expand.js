@@ -81,4 +81,33 @@ test.describe('Event card inline expansion', () => {
     await expect(page.locator('.bv-event-row.is-expanded')).toHaveCount(0);
     await expect(page.locator('#bv-login-overlay.is-open')).toHaveCount(1);
   });
+
+  test('the details panel has padding on every edge and its content stays inside', async ({ page }) => {
+    // Regression: the panel's padding used var(--space-5), which was never
+    // defined — the invalid shorthand collapsed to padding:0 and list bullets
+    // hung outside the panel's left edge.
+    const { card, key } = await firstExpandableCard(page);
+    await card.locator('.bv-event-row__date').click();
+    const panel = page.locator(`#bv-ev-details-${key}`);
+    await expect(panel).toBeVisible();
+
+    const padding = await panel.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return [s.paddingTop, s.paddingRight, s.paddingBottom, s.paddingLeft].map(parseFloat);
+    });
+    for (const edge of padding) { expect(edge).toBeGreaterThan(0); }
+
+    // No child's border box may cross the panel's padding box on either side.
+    const overflow = await panel.evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      const s = getComputedStyle(el);
+      const left = box.left + parseFloat(s.borderLeftWidth) + parseFloat(s.paddingLeft);
+      const right = box.right - parseFloat(s.borderRightWidth) - parseFloat(s.paddingRight);
+      return Array.from(el.querySelectorAll('*'))
+        .map((child) => child.getBoundingClientRect())
+        .filter((r) => r.width > 0 && (r.left < left - 0.5 || r.right > right + 0.5))
+        .length;
+    });
+    expect(overflow).toBe(0);
+  });
 });

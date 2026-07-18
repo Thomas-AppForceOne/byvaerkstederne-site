@@ -67,6 +67,7 @@
     --space-2: 0.5rem;
     --space-3: 0.75rem;
     --space-4: 1rem;
+    --space-5: 1.25rem;
     --space-6: 1.5rem;
     --space-8: 2rem;
     --space-10: 2.5rem;
@@ -1361,11 +1362,43 @@ button.bv-event-row__signup {
     border-left: var(--border-thick) solid var(--bv-accent, var(--primary));
     background: var(--surface-container-lowest);
     border-top: 1px solid var(--surface-container-high);
+    /* Anything wider than the panel (a wide table) scrolls inside it rather
+       than escaping the right edge. */
+    overflow-x: auto;
 }
 .bv-event-details-panel[hidden] { display: none; }
 .bv-event-details-panel > :first-child { margin-top: 0; }
 .bv-event-details-panel > :last-child { margin-bottom: 0; }
 .bv-event-details-panel img { max-width: 100%; height: auto; }
+/* The panel body is DetailsSanitizer output — bare elements, no classes — so
+   the global `* { margin: 0; padding: 0 }` reset must be undone here per
+   element (same pattern as .bv-legal__content). Without the list padding the
+   bullets hang outside the panel's left edge. */
+.bv-event-details-panel h2,
+.bv-event-details-panel h3,
+.bv-event-details-panel h4 {
+    font-family: var(--font-headline);
+    margin: var(--space-4) 0 var(--space-2);
+}
+.bv-event-details-panel p,
+.bv-event-details-panel ul,
+.bv-event-details-panel ol,
+.bv-event-details-panel blockquote,
+.bv-event-details-panel table { margin: 0 0 var(--space-3); }
+.bv-event-details-panel ul,
+.bv-event-details-panel ol { padding-left: 1.5em; }
+.bv-event-details-panel li { margin-bottom: var(--space-1); }
+.bv-event-details-panel blockquote {
+    border-left: 3px solid var(--outline-variant);
+    padding-left: var(--space-3);
+    color: var(--on-surface-variant);
+}
+.bv-event-details-panel th,
+.bv-event-details-panel td {
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--outline-variant);
+    text-align: left;
+}
 
 /* Featured modifier — used by calendar_featured.html.twig and the
    primary featured card in event_highlight.html.twig in sprint 2.
