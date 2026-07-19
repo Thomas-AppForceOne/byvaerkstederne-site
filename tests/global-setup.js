@@ -26,12 +26,15 @@ const {
   ensureLockedRoadmapItem,
   ensureReleasableRoadmapItem,
   ensureUnpromotedBugReport,
+  ensurePromotedBugReport,
   ensureDraftEvent,
   ensureArchivedEvent,
   ensureForeignEvent,
   ensureRsvpEvent,
   ensureCapacityEvent,
   ensureInterestEvent,
+  ensureStaleEvent,
+  removeStaleEvent,
   ensurePublicDemoEvents,
   clearEventSignups,
   clearEventImages,
@@ -93,6 +96,7 @@ module.exports = async function globalSetup() {
   if (hasAdminPassword) {
     try { seeded = ensureReleasableRoadmapItem().seeded || seeded; } catch (_) { /* non-fatal */ }
     try { seeded = ensureUnpromotedBugReport().seeded || seeded; } catch (_) { /* non-fatal */ }
+    try { seeded = ensurePromotedBugReport().seeded || seeded; } catch (_) { /* non-fatal */ }
   }
   if (hasOrganizerPassword) {
     // Event fixtures back the read-visibility, restore, and per-object authz
@@ -106,6 +110,10 @@ module.exports = async function globalSetup() {
     seeded = ensureRsvpEvent().seeded || seeded;
     seeded = ensureCapacityEvent().seeded || seeded;
     seeded = ensureInterestEvent().seeded || seeded;
+    // Auto-archive sweep target: remove any archived leftover from a prior run
+    // first, so the sweep test always sees the archived false→true transition.
+    removeStaleEvent();
+    seeded = ensureStaleEvent().seeded || seeded;
     clearEventSignups();
     clearEventImages();
   }

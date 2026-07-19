@@ -29,6 +29,7 @@ function gravContainer() {
 const LOCKED_ROADMAP_ITEM_ID = 'rm_fixture_locked';
 const RELEASABLE_ROADMAP_ITEM_ID = 'rm_fixture_releasable';
 const UNPROMOTED_BUG_REPORT_ID = 'br_fixture_unpromoted';
+const PROMOTED_BUG_REPORT_ID = 'br_fixture_promoted';
 const DRAFT_EVENT_ID = 'ev_fixture_draft';
 const ARCHIVED_EVENT_ID = 'ev_fixture_archived';
 const FOREIGN_EVENT_ID = 'ev_fixture_foreign';
@@ -36,6 +37,10 @@ const FOREIGN_EVENT_ID = 'ev_fixture_foreign';
 const RSVP_EVENT_ID = 'ev_fixture_rsvp';
 const CAPACITY_EVENT_ID = 'ev_fixture_capacity';
 const INTEREST_EVENT_ID = 'ev_fixture_interest';
+// Stale event (past-dated, archived: false) — the auto-archive sweep's target.
+// Seeded fresh each run (teardown removes it) so the sweep test always
+// exercises the false→true transition rather than finding it pre-archived.
+const STALE_EVENT_ID = 'ev_fixture_stale';
 const LOCKED_ROADMAP_YAML_PATH = '/config/www/user/data/flex-objects/roadmap-items.yaml';
 const BUG_REPORTS_YAML_PATH = '/config/www/user/data/flex-objects/bug-reports.yaml';
 const EVENTS_YAML_PATH = '/config/www/user/data/flex-objects/begivenheder.yaml';
@@ -104,6 +109,23 @@ const UNPROMOTED_BUG_YAML = `${UNPROMOTED_BUG_REPORT_ID}:
   promoted: false
   promoted_item_id: null
   title: '[FIXTURE] Unpromoted for admin smoke'
+`;
+
+// Already-promoted report — the promote endpoint must 409 on it. Replaces the
+// pre-flex-data-out-of-git reliance on the legacy br_promoted_login_mobile
+// record, which no longer exists on a fresh (empty-store) container.
+const PROMOTED_BUG_YAML = `${PROMOTED_BUG_REPORT_ID}:
+  username: pw-test-user
+  timestamp: '2026-04-20T00:00:00Z'
+  page_url: /
+  browser_os: 'Playwright fixture'
+  description: 'Seeded promoted bug-report so the promote endpoint 409 path has a target.'
+  expected: 'Seeded item; do not edit.'
+  steps: []
+  image_path: null
+  promoted: true
+  promoted_item_id: rm_fixture_locked
+  title: '[FIXTURE] Promoted for admin 409 smoke'
 `;
 
 // Event fixtures (frontend event CRUD). The draft and archived events are
@@ -261,8 +283,46 @@ const INTEREST_EVENT_YAML = `${INTEREST_EVENT_ID}:
   details_html: '<p>Kom og vær kreativ i Krea Café — kaffe på kanden.</p>'
 `;
 
+// Published, ran long ago, not yet archived — the dashboard sweep must flip
+// archived to true. The date is static: it only ever needs to stay in the past.
+// group MUST be a blueprint-valid stored value (alle/makerspace/kreativ/
+// groenne/kulturhus — NOT the filter IDs krea/groent): the sweep saves through
+// blueprint validation, and an invalid group makes the save throw, silently
+// aborting the entire sweep.
+const STALE_EVENT_YAML = `${STALE_EVENT_ID}:
+  published: true
+  title: '[FIXTURE] Stale event for auto-archive sweep tests'
+  description: 'Seeded by tests/helpers/fixtures.js; do not edit.'
+  group: groenne
+  badge: 'Grønt BYværksted'
+  event_date: '2026-01-10'
+  event_time: '10:00 - 12:00'
+  location: 'Grønt BYværksted'
+  capacity: ''
+  event_type: ''
+  button_text: 'Tilmeld'
+  button_url: ''
+  button_style: primary
+  featured: false
+  featured_tag: ''
+  owner: pw-test-org
+  created_by: pw-test-org
+  created_at: '2026-01-01T00:00:00Z'
+  updated_by: pw-test-org
+  updated_at: '2026-01-01T00:00:00Z'
+  archived: false
+`;
+
 function ensureRsvpEvent() {
   return appendIfMissing(EVENTS_YAML_PATH, RSVP_EVENT_ID, RSVP_EVENT_YAML);
+}
+
+function ensureStaleEvent() {
+  return appendIfMissing(EVENTS_YAML_PATH, STALE_EVENT_ID, STALE_EVENT_YAML);
+}
+
+function removeStaleEvent() {
+  return removeFixture(EVENTS_YAML_PATH, STALE_EVENT_ID);
 }
 
 function ensureCapacityEvent() {
@@ -432,6 +492,10 @@ function ensureUnpromotedBugReport() {
   return appendIfMissing(BUG_REPORTS_YAML_PATH, UNPROMOTED_BUG_REPORT_ID, UNPROMOTED_BUG_YAML);
 }
 
+function ensurePromotedBugReport() {
+  return appendIfMissing(BUG_REPORTS_YAML_PATH, PROMOTED_BUG_REPORT_ID, PROMOTED_BUG_YAML);
+}
+
 function appendIfMissing(path, key, yaml) {
   if (yamlContains(path, `^${key}:`)) return { seeded: false };
   execFileSync(
@@ -481,6 +545,10 @@ function removeUnpromotedBugReport() {
   return removeFixture(BUG_REPORTS_YAML_PATH, UNPROMOTED_BUG_REPORT_ID);
 }
 
+function removePromotedBugReport() {
+  return removeFixture(BUG_REPORTS_YAML_PATH, PROMOTED_BUG_REPORT_ID);
+}
+
 function removeFixture(path, key) {
   // Delete the fixture block (header line + its indented body). The fixture
   // key is a compile-time constant, so there's no interpolation from
@@ -520,26 +588,32 @@ module.exports = {
   RSVP_EVENT_ID,
   CAPACITY_EVENT_ID,
   INTEREST_EVENT_ID,
+  STALE_EVENT_ID,
+  PROMOTED_BUG_REPORT_ID,
   ensureLockedRoadmapItem,
   ensureReleasableRoadmapItem,
   ensureUnpromotedBugReport,
+  ensurePromotedBugReport,
   ensureDraftEvent,
   ensureArchivedEvent,
   ensureForeignEvent,
   ensureRsvpEvent,
   ensureCapacityEvent,
   ensureInterestEvent,
+  ensureStaleEvent,
   ensurePublicDemoEvents,
   removePublicDemoEvents,
   removeLockedRoadmapItem,
   removeReleasableRoadmapItem,
   removeUnpromotedBugReport,
+  removePromotedBugReport,
   removeDraftEvent,
   removeArchivedEvent,
   removeForeignEvent,
   removeRsvpEvent,
   removeCapacityEvent,
   removeInterestEvent,
+  removeStaleEvent,
   removeEventByKey,
   clearEventSignups,
   clearEventImages,
