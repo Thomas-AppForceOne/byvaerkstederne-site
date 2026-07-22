@@ -13,6 +13,10 @@ set -euo pipefail
 
 PROJECT_ROOT="/Users/taa/AppForceOne/projects/workshop-site"
 LOG_FILE="$PROJECT_ROOT/logs/test-welcome-agent.log"
+# Local record of usernames already invited. This is the primary duplicate
+# gate: unlike the remote YAML-marker probe it needs no SSH connection, so
+# a transient SSH failure can never be misread as "not yet invited".
+SENT_LIST="$PROJECT_ROOT/logs/test-welcome-sent.txt"
 ENV_FILE="$PROJECT_ROOT/.env.deploy"
 
 REMOTE="hackersbychoice.dk@ssh.hackersbychoice.dk"
@@ -23,6 +27,7 @@ SUBJECT="Velkommen til Byværkstedernes website test"
 
 source "$ENV_FILE"
 mkdir -p "$(dirname "$LOG_FILE")"
+touch "$SENT_LIST"
 
 log() {
     echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] $1" | tee -a "$LOG_FILE"
@@ -63,11 +68,29 @@ while true; do
         USERNAME="${ACCOUNT_FILE%.yaml}"
         ACCOUNT_PATH="$ACCOUNTS_DIR/$ACCOUNT_FILE"
 
-        ALREADY_INVITED=$(remote "grep -q '^test_invitation_sent_at:' '$ACCOUNT_PATH' && echo 1 || echo 0" 2>/dev/null || echo "0")
-        if [ "$ALREADY_INVITED" = "1" ]; then
+        if grep -qx "$USERNAME" "$SENT_LIST"; then
             ((ALREADY_SENT++))
             continue
         fi
+
+        # Remote marker probe, fail-CLOSED: "yes"/"no" is the remote grep's
+        # answer; anything else means the SSH probe itself failed, and we
+        # skip this cycle instead of resending. (Treating an SSH failure as
+        # "not invited" is what caused participants to get duplicate mails.)
+        ALREADY_INVITED=$(remote "grep -q '^test_invitation_sent_at:' '$ACCOUNT_PATH' && echo yes || echo no" 2>/dev/null || echo "error")
+        case "$ALREADY_INVITED" in
+            yes)
+                echo "$USERNAME" >> "$SENT_LIST"
+                ((ALREADY_SENT++))
+                continue
+                ;;
+            no) ;;
+            *)
+                log "  ⚠️  Marker check failed for $USERNAME (SSH error) - skipping this cycle"
+                ((ERRORS++))
+                continue
+                ;;
+        esac
 
         EMAIL=$(remote "grep '^email:' '$ACCOUNT_PATH' | head -1 | sed 's/^email:[[:space:]]*//' | tr -d '\"'" 2>/dev/null || echo "")
         FULLNAME=$(remote "grep '^fullname:' '$ACCOUNT_PATH' | head -1 | sed 's/^fullname:[[:space:]]*//' | tr -d '\"'" 2>/dev/null || echo "")
@@ -153,11 +176,14 @@ Thomas</p>"
         fi
 
         log "  ✓ Email sent"
+        # Record locally FIRST - the participant has the mail now, and this
+        # gate must hold even if the remote marker write below fails.
+        echo "$USERNAME" >> "$SENT_LIST"
 
         # Append marker AFTER successful send (append, not sed - account YAML
         # has no guaranteed empty line for sed to match)
         if ! remote "echo 'test_invitation_sent_at: \"$TIMESTAMP\"' >> '$ACCOUNT_PATH'" 2>/dev/null; then
-            log "  ⚠️  Email sent but failed to mark $USERNAME - WILL RESEND next cycle"
+            log "  ⚠️  Email sent but failed to write remote marker for $USERNAME (local sent-list prevents resend)"
             ((SENT++))
             continue
         fi
