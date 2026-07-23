@@ -90,6 +90,11 @@ test.describe('account self-service: email change', () => {
     const link = extractLink(confirmMsg, CONFIRM_LINK);
     expect(link).toBeTruthy();
 
+    // The confirm link must be ABSOLUTE (Utils::url $domain=true); a
+    // root-relative href renders as file:///konto/... in mail clients.
+    const confirmBody = String(confirmMsg.HTML || confirmMsg.Text || '');
+    expect(confirmBody).toMatch(/https?:\/\/[^\s"'<>]+\/konto\/confirm-email-change\//);
+
     // Pending state visible on /konto (address + resend/cancel affordances).
     await page.goto('/konto');
     await expect(page.locator('[data-pending="email"]')).toContainText(newEmail);

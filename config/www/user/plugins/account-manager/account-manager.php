@@ -131,7 +131,8 @@ class AccountManagerPlugin extends Plugin
         }
 
         // Always enable onPageInitialized to handle admin access-request endpoints
-        // (which are POST-only and return early); disable other hooks in admin mode.
+        // (GET/POST on /konto/access-request/*, returning early); disable
+        // other hooks in admin mode.
         $this->enable([
             'onPageInitialized' => ['onPageInitialized', 5],
         ]);
@@ -192,8 +193,12 @@ class AccountManagerPlugin extends Plugin
         }
 
         // Admin approval/rejection of access requests — token in query string,
-        // admin auth required.
-        if ($method === 'POST' && str_starts_with($this->grav['uri']->path(), '/admin/access-request/')) {
+        // admin auth required. GET is accepted because the admin mail embeds
+        // plain links (activation-link precedent); the handler already reads
+        // both $_POST and $_GET. Lives under /konto/ (NOT /admin/) because
+        // the Grav admin panel owns /admin/* on every tier and swallows the
+        // request before this hook ever runs.
+        if (($method === 'POST' || $method === 'GET') && str_starts_with($this->grav['uri']->path(), '/konto/access-request/')) {
             $this->handleAdminAccessRequest();
             return;
         }
@@ -851,7 +856,7 @@ class AccountManagerPlugin extends Plugin
 
     /**
      * Admin approval/rejection of access requests via email token links.
-     * Paths: /admin/access-request/approve or /admin/access-request/reject
+     * Paths: /konto/access-request/approve or /konto/access-request/reject
      */
     private function handleAdminAccessRequest(): void
     {
@@ -860,9 +865,12 @@ class AccountManagerPlugin extends Plugin
             $this->sendError(403, 'Ikke autoriseret.');
         }
 
-        // Superuser check
+        // Superuser check: an account with admin.super access qualifies
+        // directly; the 'admin' group is an alternative for delegated
+        // approvers. (groups.yaml defines no 'admin' group today, so the
+        // group-only check locked out every real super.)
         $groups = (array)($user->get('groups') ?? []);
-        if (!in_array('admin', $groups, true)) {
+        if (!$user->authorize('admin.super') && !in_array('admin', $groups, true)) {
             $this->sendError(403, 'Administratortilladelse påkrævet.');
         }
 
