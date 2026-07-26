@@ -19,6 +19,7 @@ namespace Grav\Plugin\AccountManager;
 use Grav\Common\Grav;
 use Grav\Common\User\Interfaces\UserInterface;
 use Grav\Common\Utils;
+use Symfony\Component\Yaml\Yaml;
 
 final class AccountEmail
 {
@@ -72,7 +73,7 @@ final class AccountEmail
      */
     public function sendOpsAlert(string $alertSubject, string $alertBody): void
     {
-        $this->send('ops-alert', $this->adminRecipient(), [
+        $this->sendToAdmins('ops-alert', [
             'alert_subject' => $alertSubject,
             'alert_body' => $alertBody,
         ]);
@@ -114,7 +115,7 @@ final class AccountEmail
             $reject_link = $this->accessRequestRejectLink((string)$account->username, $token);
         }
 
-        $this->send('access-request-admin', $this->adminRecipient(), [
+        $this->sendToAdmins('access-request-admin', [
             'user' => $account,
             'role' => $role,
             'role_label' => $roleLabel,
@@ -183,14 +184,113 @@ final class AccountEmail
      * never hardcoded. plugins.email.to lives in the gitignored env
      * email.yaml; site.author.email is the committed tier-agnostic fallback.
      */
-    public function adminRecipient(): string
+    /**
+     * Recipients for the two operator-facing mails (access requests, ops
+     * alerts): every ENABLED account holding admin.super, by email address.
+     *
+     * Sourced from the accounts rather than a config key on purpose — the
+     * people who can act on these mails are exactly the people who receive
+     * them, and a tier can no longer route operator mail to an address
+     * nobody reads just because a per-tier key was never filled in. That
+     * silent fallback is what let a dev-tier access request go to the
+     * association's contact address instead of the operator working on it.
+     *
+     * Enumerated by a read-only YAML sweep, the same shape PurgeService
+     * uses for whole-directory work. AccountStore's confinement covers
+     * $grav['accounts']->load(), whose freshness contract is about
+     * read-modify-write; this is neither.
+     *
+     * @return list<string>
+     */
+    public function adminRecipients(): array
     {
-        $config = $this->grav['config'];
-        $to = (string)$config->get('plugins.email.to', '');
-        if ($to !== '') {
-            return $to;
+        $found = [];
+        $dir = $this->grav['locator']->findResource('account://');
+        if (is_string($dir) && is_dir($dir)) {
+            foreach (glob($dir . '/*.yaml') ?: [] as $path) {
+                try {
+                    $data = Yaml::parse((string)file_get_contents($path));
+                } catch (\Throwable $e) {
+                    // One malformed account must not silence the others.
+                    continue;
+                }
+                if (!is_array($data)) {
+                    continue;
+                }
+                $super = $data['access']['admin']['super'] ?? false;
+                if ($super !== true && $super !== 1 && $super !== 'true' && $super !== '1') {
+                    continue;
+                }
+                // A disabled super cannot act on the mail; Grav treats a
+                // missing state as enabled.
+                if ((string)($data['state'] ?? 'enabled') !== 'enabled') {
+                    continue;
+                }
+                $email = trim((string)($data['email'] ?? ''));
+                if ($email !== '') {
+                    $found[$email] = true;
+                }
+            }
         }
-        return (string)$config->get('site.author.email', '');
+
+        if ($found !== []) {
+            return array_keys($found);
+        }
+
+        // No reachable super is an odd state for a running tier, so it is
+        // logged rather than absorbed — but operator mail still has to go
+        // somewhere, hence the old config chain as a last resort.
+        $config = $this->grav['config'];
+        $fallback = trim((string)$config->get('plugins.email.to', ''));
+        if ($fallback === '') {
+            $fallback = trim((string)$config->get('site.author.email', ''));
+        }
+        $this->grav['log']->warning(sprintf(
+            'account-manager: no enabled super-admin with an email address; operator mail falls back to "%s"',
+            $fallback !== '' ? $fallback : '(none)'
+        ));
+
+        return $fallback !== '' ? [$fallback] : [];
+    }
+
+    /**
+     * Send one operator mail to every admin recipient.
+     *
+     * One message per recipient, and one failure does not cancel the rest:
+     * with several supers a single bad address must not stop the others
+     * from being told. Only a total failure propagates, so the caller's
+     * existing swallow-and-log still means "nobody was notified".
+     *
+     * @param array<string,mixed> $context
+     */
+    private function sendToAdmins(string $template, array $context): void
+    {
+        $recipients = $this->adminRecipients();
+        if ($recipients === []) {
+            throw new \RuntimeException('account-manager: no admin recipient resolved for ' . $template);
+        }
+
+        $sent = 0;
+        $errors = [];
+        foreach ($recipients as $to) {
+            try {
+                $this->send($template, $to, $context);
+                $sent++;
+            } catch (\Throwable $e) {
+                $errors[] = $to . ': ' . $e->getMessage();
+            }
+        }
+
+        if ($sent === 0) {
+            throw new \RuntimeException(
+                'account-manager: ' . $template . ' reached no admin (' . implode('; ', $errors) . ')'
+            );
+        }
+        if ($errors !== []) {
+            $this->grav['log']->warning(
+                'account-manager: ' . $template . ' partially failed — ' . implode('; ', $errors)
+            );
+        }
     }
 
     /** @param array<string,mixed> $context */
