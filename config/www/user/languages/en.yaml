@@ -40,6 +40,30 @@ PLUGIN_LOGIN:
   # %s is the sending site's host.
   HOST_WARNING: '<div style="background-color: #FFEDAD; color: #725F1C; border: 1px solid #FFD74E; padding: 10px; margin: 10px 0; border-radius: 5px;">BEMÆRK: Hvis du ikke selv har bedt om denne e-mail, eller du ikke kender afsenderen <strong>"%s"</strong>, kan du roligt ignorere eller slette den.</div>'
 
+  # Password-reset email. NOTE the placeholder order differs from the
+  # activation mail — reset-password.html.twig passes them as:
+  #   %1$s full name   %2$s reset link   %3$s site author   %4$s site name
+  FORGOT_EMAIL_SUBJECT: "Nulstil din adgangskode på %s"
+  FORGOT_EMAIL_BODY: "<h1>Nulstil din adgangskode</h1><p>Hej %1$s,</p><p>Der er bedt om at nulstille adgangskoden til din konto på <b>%4$s</b>.</p><p><br/><a href=\"%2$s\" style=\"display:inline-block;padding:12px 24px;background-color:#13483b;color:#ffffff;text-decoration:none;font-weight:bold;\">Vælg en ny adgangskode</a><br/><br/></p><p>Virker knappen ikke, kan du kopiere dette link ind i adressefeltet i din browser:</p><p class=\"word-break\"><a href=\"%2$s\">%2$s</a></p><p>Har du ikke selv bedt om det, kan du ignorere denne e-mail — din adgangskode bliver ikke ændret.</p><p><br/>Venlig hilsen<br/><br/>%3$s</p>"
+
+  # Mails below are NOT reachable in the current configuration, so no test
+  # exercises them — they are translated so that turning the corresponding
+  # option on can never ship an English mail by surprise.
+  #   NOTIFICATION_*: admin notice on registration.
+  #                   send_notification_email is false on every tier.
+  #                   Order: %1$s site name, %2$s username, %3$s email, %4$s site URL.
+  #   INVITATION_*:   admin-issued invitations; the site registers openly instead.
+  #                   Order: %1$s site name, %2$s message, %3$s invitation link, %4$s inviter.
+  # WELCOME_EMAIL_* is deliberately NOT overridden: the welcome mail is a full
+  # theme template (emails/login/welcome.html.twig), and a second copy of that
+  # copy here would be a second source of truth. tests/anonymous/
+  # vendored-login-patch.js is what guards the override still resolving.
+  NOTIFICATION_EMAIL_SUBJECT: "Nyt medlem på %s"
+  NOTIFICATION_EMAIL_BODY: "<h1>Nyt medlem</h1><p>Der er oprettet en ny konto på %1$s.</p><ul><li>Brugernavn: <b>%2$s</b></li><li>E-mail: <b>%3$s</b></li></ul><p><br/><a href=\"%4$s\" style=\"display:inline-block;padding:12px 24px;background-color:#13483b;color:#ffffff;text-decoration:none;font-weight:bold;\">Gå til %1$s</a><br/><br/></p>"
+  INVITATION_EMAIL_SUBJECT: "Du er inviteret til %s"
+  INVITATION_EMAIL_MESSAGE: "Du er velkommen til at oprette en konto på sitet."
+  INVITATION_EMAIL_BODY: "<h1>Invitation</h1><p>Hej,</p><p>Du er inviteret til at være med i <b>%1$s</b>.</p><p>%2$s</p><p><br/><a href=\"%3$s\" style=\"display:inline-block;padding:12px 24px;background-color:#13483b;color:#ffffff;text-decoration:none;font-weight:bold;\">Opret din konto</a><br/><br/></p><p>Virker knappen ikke, kan du kopiere dette link ind i adressefeltet i din browser:</p><p class=\"word-break\"><a href=\"%3$s\">%3$s</a></p><p><br/>Venlig hilsen<br/><br/>%4$s</p>"
+
   # WI-2: activation outcomes (flash on / after following the link).
   USER_ACTIVATED_SUCCESSFULLY: "Din konto er nu aktiveret. Du kan logge ind."
   USER_ACTIVATED_SUCCESSFULLY_NOT_ENABLED: "Din konto er aktiveret, men afventer godkendelse."
@@ -84,3 +108,9 @@ PLUGIN_LOGIN:
   BTN_RESET_PASSWORD: "Nulstil adgangskode"
   BTN_FORGOT: "Glemt adgangskode"
   ENTER_NEW_PASSWORD: "Indtast ny adgangskode"
+
+# The footer under EVERY mail we send — login plugin, account-manager, and
+# anything else extending email/base.html.twig, which renders this key. The
+# stock value is the email plugin's own branding, "GetGrav.org".
+PLUGIN_EMAIL:
+  EMAIL_FOOTER: "Byværkstederne · Nørregade 21, 3390 Hundested"

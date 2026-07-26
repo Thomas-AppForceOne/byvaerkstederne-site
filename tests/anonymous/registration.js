@@ -236,8 +236,12 @@ test.describe('Registration & activation (WI-2/WI-6)', () => {
       /account has been successfully created|Activate Your Account Now/i,
     );
     expect(activationBody, 'the shared host warning is Danish too').toContain('BEMÆRK');
+    expect(activationBody, 'footer names the association').toContain('Byværkstederne · Nørregade 21');
+    expect(activationBody, 'plugin vendor branding must not ship to members').not.toMatch(
+      /GetGrav\.org/i,
+    );
     expect(activationBody, 'no untranslated key may leak into the mail').not.toMatch(
-      /PLUGIN_LOGIN\./,
+      /PLUGIN_(LOGIN|EMAIL)\./,
     );
 
     // Negative-before-positive: the disabled account cannot reach /roadmap.

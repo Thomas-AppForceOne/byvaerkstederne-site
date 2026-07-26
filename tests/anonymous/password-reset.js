@@ -154,6 +154,27 @@ test.describe('Password reset (WI-1/WI-6)', () => {
 
     // The reset email lands for the known account (email-sent assertion).
     const msg = await waitForMail(TEST_USER.email);
+
+    // Danish, like every member-facing string. Subject, body and the shared
+    // host warning come from the PLUGIN_LOGIN.* overrides in
+    // user/languages/en.yaml; the footer under every mail comes from the
+    // PLUGIN_EMAIL.EMAIL_FOOTER override (stock value: "GetGrav.org").
+    // A missing translation renders as the raw key rather than falling back,
+    // hence the separate raw-key guard.
+    const resetBody = `${msg.Text || ''}\n${msg.HTML || ''}`;
+    expect(msg.Subject, 'reset subject is Danish').toMatch(/^Nulstil din adgangskode på /);
+    expect(resetBody, 'stock English reset copy must not resurface').not.toMatch(
+      /Password Reset|Click this to reset your password/i,
+    );
+    expect(resetBody, 'the shared host warning is Danish too').toContain('BEMÆRK');
+    expect(resetBody, 'mail footer carries our identity, not the plugin vendor').not.toMatch(
+      /GetGrav\.org/i,
+    );
+    expect(resetBody, 'no untranslated key may leak into the mail').not.toMatch(/PLUGIN_(LOGIN|EMAIL)\./);
+
+    // Driving the link out of the TRANSLATED body is also what proves %2$s
+    // kept its index: the reset mail's placeholder order differs from the
+    // activation mail's, and a swapped index links nowhere.
     const link = extractLink(msg, /\/reset_password\/[^\s"'<>)]+/);
     expect(link, 'reset link must be present in the captured email').not.toBeNull();
 

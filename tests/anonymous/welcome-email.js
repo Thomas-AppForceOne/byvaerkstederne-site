@@ -160,6 +160,15 @@ test.describe('Welcome email (post-activation)', () => {
     );
     expect(body, 'greeting addresses the member by full name').toContain(who.fullName);
 
+    // Shared mail chrome: the footer under every mail is ours, not the email
+    // plugin's stock "GetGrav.org" branding, and no translation key leaks
+    // (Grav renders a missing translation as the key itself).
+    expect(body, 'footer names the association').toContain('Byværkstederne · Nørregade 21');
+    expect(body, 'plugin vendor branding must not ship to members').not.toMatch(/GetGrav\.org/i);
+    expect(body, 'no untranslated key may leak into the mail').not.toMatch(
+      /PLUGIN_(LOGIN|EMAIL)\./,
+    );
+
     // The surfaces the mail promises, in the words the UI actually uses.
     expect(body, 'calendar section present').toContain('Værkstedskalenderen');
     expect(body, 'capacity signup button named as the UI names it').toContain('Deltag');
