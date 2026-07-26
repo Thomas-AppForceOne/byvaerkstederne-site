@@ -22,6 +22,24 @@ PLUGIN_LOGIN:
   # Kept localised in case a tier runs with the gate off (welcome path).
   WELCOME_NOTICE_MSG: "Hej %s, din konto er oprettet."
 
+  # The activation email itself. Rendered by the login plugin's
+  # emails/login/activate.html.twig, which prepends HOST_WARNING and then this
+  # body; both were English while the welcome mail that follows is Danish.
+  # Placeholders are POSITIONAL and must keep their indices — the template
+  # passes them in this order (classes/Email.php sendActivationEmail):
+  #   %1$s member's full name   %2$s activation link
+  #   %3$s site name            %4$s site author
+  # Getting %2$s wrong yields a mail that delivers fine and links nowhere, so
+  # tests/anonymous/registration.js drives the link out of the Danish body.
+  # The CTA is inline-styled in brand green: the base template's .btn-primary
+  # is Grav's default blue.
+  ACTIVATION_EMAIL_SUBJECT: "Aktivér din konto på %s"
+  ACTIVATION_EMAIL_BODY: "<h1>Aktivér din konto</h1><p>Hej %1$s,</p><p>Din konto på <b>%3$s</b> er oprettet. Du mangler kun at aktivere den, før du kan logge ind.</p><p><br/><a href=\"%2$s\" style=\"display:inline-block;padding:12px 24px;background-color:#13483b;color:#ffffff;text-decoration:none;font-weight:bold;\">Aktivér din konto</a><br/><br/></p><p>Virker knappen ikke, kan du kopiere dette link ind i adressefeltet i din browser:</p><p class=\"word-break\"><a href=\"%2$s\">%2$s</a></p><p><br/>Venlig hilsen<br/><br/>%4$s</p>"
+
+  # Shared safety notice at the top of the activation and password-reset mails.
+  # %s is the sending site's host.
+  HOST_WARNING: '<div style="background-color: #FFEDAD; color: #725F1C; border: 1px solid #FFD74E; padding: 10px; margin: 10px 0; border-radius: 5px;">BEMÆRK: Hvis du ikke selv har bedt om denne e-mail, eller du ikke kender afsenderen <strong>"%s"</strong>, kan du roligt ignorere eller slette den.</div>'
+
   # WI-2: activation outcomes (flash on / after following the link).
   USER_ACTIVATED_SUCCESSFULLY: "Din konto er nu aktiveret. Du kan logge ind."
   USER_ACTIVATED_SUCCESSFULLY_NOT_ENABLED: "Din konto er aktiveret, men afventer godkendelse."
