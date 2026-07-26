@@ -201,9 +201,22 @@ test.describe('account self-service: access request', () => {
         })
       ).toBe(true);
       const approveResp = await adminPage.goto(approvePath);
-      // The endpoint answers a deliberate generic 404 on success; a 403 means
-      // the super was refused (the pre-fix phantom-group lockout).
-      expect(approveResp.status()).toBe(404);
+      // Success renders the themed fact sheet (200) with the applicant's
+      // details; a 403 means the super was refused (the pre-fix
+      // phantom-group lockout).
+      expect(approveResp.status()).toBe(200);
+      await expect(adminPage).toHaveTitle(/Anmodning godkendt/);
+      await expect(adminPage.locator('.bv-auth-card')).toContainText('Anmodning godkendt');
+      await expect(adminPage.locator('.bv-ar-result')).toContainText(target.username);
+      await expect(adminPage.locator('.bv-ar-result')).toContainText(target.email);
+      await expect(adminPage.locator('.bv-ar-result')).toContainText('Arrangør');
+
+      // Re-using the consumed link must show the NEUTRAL card: 404, no
+      // applicant data — indistinguishable from a bad or expired token.
+      const replayResp = await adminPage.goto(approvePath);
+      expect(replayResp.status()).toBe(404);
+      await expect(adminPage.locator('.bv-auth-card')).toContainText('kunne ikke behandles');
+      expect(await adminPage.content()).not.toContain(target.username);
       await adminContext.close();
 
       const yaml = readAccountYaml(target.username);

@@ -4950,3 +4950,44 @@ button.bv-event-row__signup {
     padding-left: var(--space-8);
     font-size: 0.95rem;
 }
+
+/* ==========================================================================
+   Access-request result page (/konto/access-request/approve|reject)
+   Fact sheet for the admin after acting on a mail link.
+   ========================================================================== */
+.bv-ar-result {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+}
+
+.bv-ar-result__facts {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: var(--space-2) var(--space-6);
+    margin: 0;
+}
+
+.bv-ar-result__facts dt {
+    color: var(--on-surface-variant);
+    font-weight: 600;
+}
+
+.bv-ar-result__facts dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.bv-ar-result__actions {
+    margin-top: var(--space-6);
+}
+
+@media (max-width: 480px) {
+    .bv-ar-result__facts {
+        grid-template-columns: 1fr;
+        gap: var(--space-1) 0;
+    }
+    .bv-ar-result__facts dd {
+        margin-bottom: var(--space-3);
+    }
+}
