@@ -1,11 +1,17 @@
 {# Result page for the admin access-request mail links
    (/konto/access-request/approve|reject). The account-manager plugin
    substitutes this page after processing and injects `ar_result`:
-     outcome:   'approved' | 'rejected' | null (null = invalid/expired/
-                already-processed token — render the neutral card, no data)
+     outcome:   'approved' | 'rejected' | 'wrong_account' | null
+                (null = invalid/expired/already-processed token — render the
+                neutral card, no data)
      applicant: { username, fullname, email, state, roles: [readable names] }
      request:   { role_label, motivation, requested_at }
-   Danish visitor copy, English identifiers. #}
+
+   'wrong_account' = the link was opened in a browser signed in as a member
+   who cannot approve. It carries NO applicant data (the viewer failed the
+   admin check) and no token — only current_user, which action was attempted,
+   and the nonce for the switch POST. The link to resume after switching is
+   held in the session by the plugin. #}
 {% extends 'partials/base.html.twig' %}
 
 {% block flash %}{% endblock %}
@@ -15,6 +21,7 @@
     {% block auth_title %}
         {%- if ar_result.outcome == 'approved' -%}Anmodning godkendt
         {%- elseif ar_result.outcome == 'rejected' -%}Anmodning afvist
+        {%- elseif ar_result.outcome == 'wrong_account' -%}Forkert konto
         {%- else -%}Anmodningen kunne ikke behandles
         {%- endif -%}
     {% endblock %}
@@ -23,11 +30,34 @@
             <p class="bv-body-lg">Ansøgeren har fået rollen <strong>{{ ar_result.request.role_label }}</strong> og kan bruge den fra sit næste login.</p>
         {% elseif ar_result.outcome == 'rejected' %}
             <p class="bv-body-lg">Anmodningen er afvist. Ansøgeren kan anmode igen efter en karensperiode.</p>
+        {% elseif ar_result.outcome == 'wrong_account' %}
+            <p class="bv-body-lg">
+                Du er logget ind som <strong>{{ ar_result.current_user.fullname ?: ar_result.current_user.username }}</strong>,
+                som ikke kan behandle anmodninger om rettigheder.
+            </p>
+            <p class="bv-body-lg">
+                Log ind med din administratorkonto for at fortsætte
+                {%- if ar_result.action == 'reject' %} — afvisningen{% else %} — godkendelsen{% endif %}
+                gennemføres automatisk bagefter.
+            </p>
         {% else %}
             <p class="bv-body-lg">Linket er ugyldigt, udløbet eller allerede behandlet.</p>
         {% endif %}
     {% endblock %}
     {% block auth_form %}
+        {% if ar_result.outcome == 'wrong_account' %}
+        {# The switch is a POST carrying its own nonce: opening a mail link
+           must never be able to end a session on its own. The link to resume
+           lives in the session, so this form carries nothing but the nonce —
+           no token, no applicant name, nothing to redirect anywhere else. #}
+        <form method="post" action="{{ ar_result.switch_path }}" class="bv-ar-switch">
+            <input type="hidden" name="account-nonce" value="{{ ar_result.switch_nonce }}"/>
+            <button type="submit" class="bv-btn bv-btn--primary bv-btn--lg">Log ind som administrator</button>
+        </form>
+        <div class="bv-ar-result__actions">
+            <a class="bv-btn bv-btn--outlined" href="/konto">Annullér og forbliv logget ind</a>
+        </div>
+        {% else %}
         {% if ar_result.outcome %}
         <div class="bv-ar-result">
             <section class="bv-account-section" aria-labelledby="ar-applicant-heading">
@@ -67,6 +97,7 @@
         <div class="bv-ar-result__actions">
             <a class="bv-btn bv-btn--primary" href="/">Til forsiden</a>
         </div>
+        {% endif %}
     {% endblock %}
 {% endembed %}
 {% endblock %}

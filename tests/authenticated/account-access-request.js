@@ -231,6 +231,119 @@ test.describe('account self-service: access request', () => {
     }
   });
 
+  test('mail link opened in a member session offers a switch, then completes the approval', async ({
+    page,
+    browser,
+  }) => {
+    test.skip(!hasAdminPassword, 'TEST_ADMIN_PASSWORD not set — admin approval flow unavailable');
+    test.skip(
+      !(await isMailSinkConfigured()),
+      `Mailpit sink not reachable at ${mailSinkUrl()} — mail-layer assertion unavailable`,
+    );
+    await ensureAccount(TEST_ADMIN, process.env.TEST_ADMIN_PASSWORD);
+    const target = createDisposableAccount({ tag: 'swt' });
+    // Distinct display name: the page must say who the viewer is signed in
+    // as, and both disposable accounts carry the same default full name.
+    const bystander = createDisposableAccount({ tag: 'byt', fullName: 'PW Bystander' });
+    try {
+      await clearMail();
+      expect(await loginAs(page, target)).toBe(true);
+      await submitAccessRequest(page, 'Kontoskift via maillink.');
+      const msg = await waitForMail(ADMIN_FALLBACK);
+      const approvePath = extractLink(
+        msg,
+        /https?:\/\/[^\s"'<>]+\/konto\/access-request\/approve[^\s"'<>]*/,
+      ).replace(/^https?:\/\/[^/]+/, '');
+
+      // The admin opens the mail on a browser already signed in as an
+      // ordinary member — the case that used to answer a raw JSON 403.
+      const ctx = await browser.newContext();
+      const memberPage = await ctx.newPage();
+      expect(await loginAs(memberPage, bystander)).toBe(true);
+      const wrongResp = await memberPage.goto(approvePath);
+
+      expect(wrongResp.status(), 'still refused — 403, just rendered').toBe(403);
+      await expect(memberPage).toHaveTitle(/Forkert konto/);
+      await expect(memberPage.locator('.bv-auth-card')).toContainText('Forkert konto');
+      const wrongHtml = await memberPage.content();
+      expect(wrongHtml, 'no raw JSON error body on a browser GET').not.toContain('"status":"error"');
+      // The viewer failed the admin check, so the page must disclose nothing
+      // about the applicant — only who they themselves are signed in as.
+      expect(wrongHtml, 'applicant username must not leak').not.toContain(target.username);
+      expect(wrongHtml, 'applicant email must not leak').not.toContain(target.email);
+      await expect(
+        memberPage.locator('.bv-auth-card'),
+        'the page names the account actually signed in',
+      ).toContainText('PW Bystander');
+
+      // The switch ends the member's session…
+      await memberPage.click('.bv-ar-switch button[type="submit"]');
+      await memberPage.waitForURL(/\/login/);
+      const kontoAfter = await memberPage.request.get('/konto', { maxRedirects: 0 });
+      expect(kontoAfter.status(), 'the member session is really gone').not.toBe(200);
+
+      // …and logging in as the admin resumes the approval automatically.
+      expect(
+        await loginAs(memberPage, {
+          username: TEST_ADMIN.username,
+          password: process.env.TEST_ADMIN_PASSWORD,
+        }),
+      ).toBe(true);
+      await expect(memberPage).toHaveTitle(/Anmodning godkendt/);
+      await expect(memberPage.locator('.bv-ar-result')).toContainText(target.username);
+      await ctx.close();
+
+      expect(readAccountYaml(target.username)).toContain('- organizers');
+    } finally {
+      removeDisposableAccount(bystander.username);
+      removeDisposableAccount(target.username);
+    }
+  });
+
+  test('the account switch refuses a tampered nonce and leaves the session intact', async ({
+    page,
+    browser,
+  }) => {
+    test.skip(
+      !(await isMailSinkConfigured()),
+      `Mailpit sink not reachable at ${mailSinkUrl()} — mail-layer assertion unavailable`,
+    );
+    const target = createDisposableAccount({ tag: 'nsw' });
+    const bystander = createDisposableAccount({ tag: 'nby' });
+    try {
+      await clearMail();
+      expect(await loginAs(page, target)).toBe(true);
+      await submitAccessRequest(page, 'Nonce-afvisning ved kontoskift.');
+      const msg = await waitForMail(ADMIN_FALLBACK);
+      const approvePath = extractLink(
+        msg,
+        /https?:\/\/[^\s"'<>]+\/konto\/access-request\/approve[^\s"'<>]*/,
+      ).replace(/^https?:\/\/[^/]+/, '');
+
+      const ctx = await browser.newContext();
+      const memberPage = await ctx.newPage();
+      expect(await loginAs(memberPage, bystander)).toBe(true);
+      await memberPage.goto(approvePath);
+
+      const nonce = await memberPage.locator('.bv-ar-switch input[name="account-nonce"]').inputValue();
+      const bad = await memberPage.request.post('/konto/access-request/switch-account', {
+        form: { 'account-nonce': `${nonce}x` },
+        maxRedirects: 0,
+      });
+      expect(bad.status(), 'a tampered switch nonce is refused').toBe(403);
+
+      // The refusal must not have logged anybody out: a CSRF attempt that
+      // still ends the victim's session is the very thing the nonce is here
+      // to prevent.
+      const konto = await memberPage.request.get('/konto', { maxRedirects: 0 });
+      expect(konto.status(), 'the session survives a refused switch').toBe(200);
+      await ctx.close();
+    } finally {
+      removeDisposableAccount(bystander.username);
+      removeDisposableAccount(target.username);
+    }
+  });
+
   test('the reject mail link clears the request, stamps the cooldown, notifies the applicant', async ({
     page,
     browser,
@@ -370,8 +483,17 @@ test.describe('account self-service: access request', () => {
         p2.waitForURL(/\/konto\/access-request\/approve/),
         form.locator('[type="submit"]').click(),
       ]);
-      // Authenticated but not a super: the hard refusal stands.
-      expect(await p2.content()).toContain('Administratortilladelse');
+      // Authenticated but not a super: the refusal stands. It is now the
+      // themed wrong-account page (403) instead of a raw JSON body — what
+      // changed is the presentation, not the outcome, and the applicant is
+      // still not disclosed to a viewer who failed the admin check.
+      await expect(p2).toHaveTitle(/Forkert konto/);
+      await expect(p2.locator('.bv-auth-card')).toContainText('Forkert konto');
+      const refusedHtml = await p2.content();
+      expect(refusedHtml, 'no raw JSON error body on a browser GET').not.toContain(
+        '"status":"error"',
+      );
+      expect(refusedHtml, 'applicant must not leak to a non-super').not.toContain(target.username);
       await ctx.close();
 
       const yaml = readAccountYaml(target.username);
