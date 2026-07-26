@@ -34,6 +34,7 @@ namespace Grav\Plugin;
 use Grav\Common\File\CompiledYamlFile;
 use Grav\Common\Grav;
 use Grav\Common\Page\Interfaces\PageInterface;
+use Grav\Common\Page\Page;
 use Grav\Common\Plugin;
 use Grav\Common\User\Interfaces\UserInterface;
 use Grav\Common\Utils;
@@ -83,6 +84,9 @@ class AccountManagerPlugin extends Plugin
     private const CONFIRM_FAILURE_FLASH = 'Linket er ugyldigt eller udløbet.';
 
     private ?AccountStore $store = null;
+
+    /** @var array<string,mixed>|null view model for access-request-result.html.twig */
+    private ?array $accessRequestResult = null;
 
     public static function getSubscribedEvents(): array
     {
@@ -862,6 +866,17 @@ class AccountManagerPlugin extends Plugin
     {
         $user = $this->grav['user'] ?? null;
         if (!$user || !$user->authenticated || !$user->authorized) {
+            // A mail-link GET from a logged-out admin: route through the site
+            // login and come straight back — the login plugin honors
+            // session->redirect_after_login, so the approval completes
+            // automatically after authentication. POSTs keep the hard 403.
+            if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? '')) === 'GET') {
+                $uri = $this->grav['uri'];
+                $query = (string)$uri->query();
+                $this->grav['session']->redirect_after_login =
+                    $uri->path() . ($query !== '' ? '?' . $query : '');
+                $this->grav->redirectLangSafe('/login', 302);
+            }
             $this->sendError(403, 'Ikke autoriseret.');
         }
 
@@ -878,45 +893,58 @@ class AccountManagerPlugin extends Plugin
         $token = (string)($_POST['token'] ?? $_GET['token'] ?? '');
         $username = (string)($_POST['username'] ?? $_GET['username'] ?? '');
 
-        if ($token === '' || $username === '') {
-            $this->sendGenericAccessRequestResponse();
-        }
+        // Validate token + dispatch. Every failure exits the do-block with a
+        // null outcome and renders the NEUTRAL result page — identical for
+        // unknown user, bad token, expired token, and already-processed
+        // request, so a super cannot probe which of them it was. Success
+        // renders the fact sheet (the viewer is an authenticated super; the
+        // data is what the admin needs to recognise the applicant).
+        $outcome = null;
+        $request = null;
+        do {
+            if ($token === '' || $username === '') {
+                break;
+            }
 
-        $account = $this->store()->read($username);
-        $request = is_array($account->get('access_request')) ? (array)$account->get('access_request') : null;
+            $account = $this->store()->read($username);
+            if ($account === null) {
+                break;
+            }
+            $request = is_array($account->get('access_request')) ? (array)$account->get('access_request') : null;
+            if ($request === null || !isset($request['token_hash'])) {
+                break;
+            }
 
-        if ($request === null || !isset($request['token_hash'])) {
-            $this->sendGenericAccessRequestResponse();
-        }
+            // Token validation: hash-compare and expiry check
+            $storedHash = (string)($request['token_hash'] ?? '');
+            $expiresAt = (string)($request['token_expires_at'] ?? '');
+            $tokenHash = hash('sha256', $token, false);
+            if (!hash_equals($storedHash, $tokenHash)) {
+                break;
+            }
+            if ($expiresAt !== '' && strtotime($expiresAt) < time()) {
+                break;
+            }
 
-        // Token validation: hash-compare and expiry check
-        $storedHash = (string)($request['token_hash'] ?? '');
-        $expiresAt = (string)($request['token_expires_at'] ?? '');
-        $tokenHash = hash('sha256', $token, false);
+            if (str_ends_with($path, '/approve')) {
+                if ($this->approveAccessRequest($username, $request, $user)) {
+                    $outcome = 'approved';
+                }
+            } elseif (str_ends_with($path, '/reject')) {
+                if ($this->rejectAccessRequest($username, $request, $user)) {
+                    $outcome = 'rejected';
+                }
+            }
+        } while (false);
 
-        if (!hash_equals($storedHash, $tokenHash)) {
-            $this->sendGenericAccessRequestResponse();
-        }
-
-        if ($expiresAt !== '' && strtotime($expiresAt) < time()) {
-            $this->sendGenericAccessRequestResponse();
-        }
-
-        // Dispatch to approve or reject
-        if (str_ends_with($path, '/approve')) {
-            $this->approveAccessRequest($username, $request, $user);
-        } elseif (str_ends_with($path, '/reject')) {
-            $this->rejectAccessRequest($username, $user);
-        } else {
-            $this->sendGenericAccessRequestResponse();
-        }
+        $this->renderAccessRequestResult($outcome, $outcome !== null ? $username : null, $request);
     }
 
-    private function approveAccessRequest(string $username, array $request, UserInterface $admin): void
+    private function approveAccessRequest(string $username, array $request, UserInterface $admin): bool
     {
         $role = (string)($request['role'] ?? '');
         if ($role === '') {
-            $this->sendGenericAccessRequestResponse();
+            return false;
         }
 
         try {
@@ -930,7 +958,7 @@ class AccountManagerPlugin extends Plugin
             });
         } catch (\Throwable $e) {
             error_log('account-manager approve_access_request failed: ' . $e->getMessage());
-            $this->sendGenericAccessRequestResponse();
+            return false;
         }
 
         $this->auditLog()->append('approve_access_request', (string)$admin->username, [
@@ -938,10 +966,22 @@ class AccountManagerPlugin extends Plugin
             'role' => $role,
         ]);
 
-        $this->sendGenericAccessRequestResponse();
+        // Notify the applicant. Mail failure must never undo the grant —
+        // same swallow-and-log posture as the admin notification.
+        try {
+            $account = $this->store()->read($username);
+            if ($account !== null) {
+                $roleLabel = (string)($this->config->get("groups.{$role}.readableName") ?: $role);
+                $this->accountEmail()->sendAccessRequestApproved($account, $role, $roleLabel);
+            }
+        } catch (\Throwable $e) {
+            error_log('account-manager access-request approved mail failed: ' . $e->getMessage());
+        }
+
+        return true;
     }
 
-    private function rejectAccessRequest(string $username, UserInterface $admin): void
+    private function rejectAccessRequest(string $username, array $request, UserInterface $admin): bool
     {
         try {
             $this->store()->mutate($username, static function (UserInterface $acct): void {
@@ -950,22 +990,88 @@ class AccountManagerPlugin extends Plugin
             });
         } catch (\Throwable $e) {
             error_log('account-manager reject_access_request failed: ' . $e->getMessage());
-            $this->sendGenericAccessRequestResponse();
+            return false;
         }
 
         $this->auditLog()->append('reject_access_request', (string)$admin->username, [
             'target_username' => $username,
         ]);
 
-        $this->sendGenericAccessRequestResponse();
+        // Notify the applicant — swallow-and-log like the approval mail.
+        try {
+            $account = $this->store()->read($username);
+            if ($account !== null) {
+                $role = (string)($request['role'] ?? '');
+                $roleLabel = (string)($this->config->get("groups.{$role}.readableName") ?: $role);
+                $this->accountEmail()->sendAccessRequestRejected($account, $role, $roleLabel);
+            }
+        } catch (\Throwable $e) {
+            error_log('account-manager access-request rejected mail failed: ' . $e->getMessage());
+        }
+
+        return true;
     }
 
-    private function sendGenericAccessRequestResponse(): void
+    /**
+     * Swap the current page for the themed result page and let Grav's normal
+     * rendering finish the request (login-plugin unauthorized-page pattern).
+     * Null outcome = the neutral no-details card with a 404 status; success
+     * carries the applicant fact sheet for the template.
+     *
+     * @param array<string,mixed>|null $request the access_request as it was
+     *   BEFORE the mutation cleared it (motivation, requested_at, role).
+     */
+    private function renderAccessRequestResult(?string $outcome, ?string $username, ?array $request): void
     {
-        header('HTTP/1.1 404 Not Found');
-        header('Content-Type: text/html; charset=utf-8');
-        echo '<!DOCTYPE html><html><head><title>404</title></head><body><h1>Anmodningen blev behandlet</h1></body></html>';
-        exit;
+        $viewModel = ['outcome' => $outcome, 'applicant' => null, 'request' => null];
+
+        if ($outcome !== null && $username !== null) {
+            // Re-read AFTER the mutation so the roles list reflects the grant.
+            $account = $this->store()->read($username);
+            $groups = $account !== null ? (array)($account->get('groups') ?? []) : [];
+            $roleLabels = [];
+            foreach ($groups as $group) {
+                $roleLabels[] = (string)($this->config->get("groups.{$group}.readableName") ?: $group);
+            }
+            $requestedRole = (string)($request['role'] ?? '');
+            $viewModel['applicant'] = [
+                'username' => $username,
+                'fullname' => $account !== null ? (string)($account->get('fullname') ?? '') : '',
+                'email' => $account !== null ? (string)($account->get('email') ?? '') : '',
+                'state' => $account !== null ? (string)($account->get('state') ?? '') : '',
+                'roles' => $roleLabels,
+            ];
+            $viewModel['request'] = [
+                'role_label' => (string)($this->config->get("groups.{$requestedRole}.readableName") ?: $requestedRole),
+                'motivation' => (string)($request['motivation'] ?? ''),
+                'requested_at' => (string)($request['requested_at'] ?? ''),
+            ];
+        }
+
+        $this->accessRequestResult = $viewModel;
+
+        $page = new Page();
+        $page->init(new \SplFileInfo('plugin://account-manager/pages/access-request-result.md'));
+        // PagesProcessor discards a non-routable page AFTER onPageInitialized
+        // and serves the themed 404 instead - the page must be routable.
+        $page->routable(true);
+        $route = $this->grav['uri']->path();
+        $page->route($route);
+        $page->slug(basename($route));
+        $header = $page->header();
+        $header->title = $outcome === 'approved' ? 'Anmodning godkendt'
+            : ($outcome === 'rejected' ? 'Anmodning afvist' : 'Anmodning');
+        if ($outcome === null) {
+            $header->http_response_code = 404;
+        }
+        $page->title($header->title);
+
+        /** @var \Grav\Common\Page\Pages $pages */
+        $pages = $this->grav['pages'];
+        $pages->addPage($page, $route);
+
+        unset($this->grav['page']);
+        $this->grav['page'] = $page;
     }
 
     // -------------------------------------------------------------------------
@@ -975,7 +1081,14 @@ class AccountManagerPlugin extends Plugin
     public function onTwigSiteVariables(): void
     {
         $page = $this->grav['page'] ?? null;
-        if (!$page instanceof PageInterface || $page->template() !== 'account') {
+        if (!$page instanceof PageInterface) {
+            return;
+        }
+        if ($page->template() === 'access-request-result' && $this->accessRequestResult !== null) {
+            $this->grav['twig']->twig_vars['ar_result'] = $this->accessRequestResult;
+            return;
+        }
+        if ($page->template() !== 'account') {
             return;
         }
         if (!$this->featureEnabled()) {

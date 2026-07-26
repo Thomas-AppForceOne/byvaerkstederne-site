@@ -124,6 +124,26 @@ final class AccountEmail
         ]);
     }
 
+    /** To the applicant: their access request was approved. */
+    public function sendAccessRequestApproved(UserInterface $account, string $role, string $roleLabel): void
+    {
+        $this->send('access-request-approved', (string)$account->email, [
+            'user' => $account,
+            'role' => $role,
+            'role_label' => $roleLabel,
+        ]);
+    }
+
+    /** To the applicant: their access request was rejected. */
+    public function sendAccessRequestRejected(UserInterface $account, string $role, string $roleLabel): void
+    {
+        $this->send('access-request-rejected', (string)$account->email, [
+            'user' => $account,
+            'role' => $role,
+            'role_label' => $roleLabel,
+        ]);
+    }
+
     /** Public URL of the confirm endpoint (activation-link precedent). */
     public function confirmLink(string $username, string $token): string
     {

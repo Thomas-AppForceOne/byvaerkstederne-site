@@ -201,9 +201,128 @@ test.describe('account self-service: access request', () => {
         })
       ).toBe(true);
       const approveResp = await adminPage.goto(approvePath);
-      // The endpoint answers a deliberate generic 404 on success; a 403 means
-      // the super was refused (the pre-fix phantom-group lockout).
-      expect(approveResp.status()).toBe(404);
+      // Success renders the themed fact sheet (200) with the applicant's
+      // details; a 403 means the super was refused (the pre-fix
+      // phantom-group lockout).
+      expect(approveResp.status()).toBe(200);
+      await expect(adminPage).toHaveTitle(/Anmodning godkendt/);
+      await expect(adminPage.locator('.bv-auth-card')).toContainText('Anmodning godkendt');
+      await expect(adminPage.locator('.bv-ar-result')).toContainText(target.username);
+      await expect(adminPage.locator('.bv-ar-result')).toContainText(target.email);
+      await expect(adminPage.locator('.bv-ar-result')).toContainText('Arrangør');
+
+      // Re-using the consumed link must show the NEUTRAL card: 404, no
+      // applicant data — indistinguishable from a bad or expired token.
+      const replayResp = await adminPage.goto(approvePath);
+      expect(replayResp.status()).toBe(404);
+      await expect(adminPage.locator('.bv-auth-card')).toContainText('kunne ikke behandles');
+      expect(await adminPage.content()).not.toContain(target.username);
+      await adminContext.close();
+
+      const yaml = readAccountYaml(target.username);
+      expect(yaml).toContain('- organizers');
+      expect(yaml).not.toContain('access_request:');
+
+      // The applicant is notified of the approval.
+      const applicantMsg = await waitForMail(target.email);
+      expect(JSON.stringify(applicantMsg)).toContain('godkendt');
+    } finally {
+      removeDisposableAccount(target.username);
+    }
+  });
+
+  test('the reject mail link clears the request, stamps the cooldown, notifies the applicant', async ({
+    page,
+    browser,
+  }) => {
+    test.skip(!hasAdminPassword, 'TEST_ADMIN_PASSWORD not set — admin approval flow unavailable');
+    test.skip(
+      !(await isMailSinkConfigured()),
+      `Mailpit sink not reachable at ${mailSinkUrl()} — mail-layer assertion unavailable`,
+    );
+    await ensureAccount(TEST_ADMIN, process.env.TEST_ADMIN_PASSWORD);
+    const target = createDisposableAccount({ tag: 'rej' });
+    try {
+      await clearMail();
+      expect(await loginAs(page, target)).toBe(true);
+      await submitAccessRequest(page, 'Afvisningsflow via maillink.');
+      const msg = await waitForMail(ADMIN_FALLBACK);
+      const rejectLink = extractLink(
+        msg,
+        /https?:\/\/[^\s"'<>]+\/konto\/access-request\/reject[^\s"'<>]*/
+      );
+      expect(rejectLink).toBeTruthy();
+      const rejectPath = rejectLink.replace(/^https?:\/\/[^/]+/, '');
+
+      const adminContext = await browser.newContext();
+      const adminPage = await adminContext.newPage();
+      expect(
+        await loginAs(adminPage, {
+          username: TEST_ADMIN.username,
+          password: process.env.TEST_ADMIN_PASSWORD,
+        })
+      ).toBe(true);
+      const rejectResp = await adminPage.goto(rejectPath);
+      expect(rejectResp.status()).toBe(200);
+      await expect(adminPage).toHaveTitle(/Anmodning afvist/);
+      await expect(adminPage.locator('.bv-auth-card')).toContainText('Anmodning afvist');
+      await adminContext.close();
+
+      // No role granted; request cleared with the cooldown stamp.
+      const yaml = readAccountYaml(target.username);
+      expect(yaml).not.toContain('- organizers');
+      expect(yaml).not.toContain('access_request:');
+      expect(yaml).toContain('access_request_cleared_at');
+
+      // The applicant is notified of the rejection.
+      const applicantMsg = await waitForMail(target.email);
+      expect(JSON.stringify(applicantMsg)).toContain('anmodning');
+      expect(JSON.stringify(applicantMsg)).not.toContain('godkendt');
+    } finally {
+      removeDisposableAccount(target.username);
+    }
+  });
+
+  test('a logged-out super clicking the mail link is routed via login; approval completes', async ({
+    page,
+    browser,
+  }) => {
+    test.skip(!hasAdminPassword, 'TEST_ADMIN_PASSWORD not set — admin approval flow unavailable');
+    test.skip(
+      !(await isMailSinkConfigured()),
+      `Mailpit sink not reachable at ${mailSinkUrl()} — mail-layer assertion unavailable`,
+    );
+    await ensureAccount(TEST_ADMIN, process.env.TEST_ADMIN_PASSWORD);
+    const target = createDisposableAccount({ tag: 'lrd' });
+    try {
+      await clearMail();
+      expect(await loginAs(page, target)).toBe(true);
+      await submitAccessRequest(page, 'Login-redirect flowet.');
+      const msg = await waitForMail(ADMIN_FALLBACK);
+      const approveLink = extractLink(
+        msg,
+        /https?:\/\/[^\s"'<>]+\/konto\/access-request\/approve[^\s"'<>]*/
+      );
+      expect(approveLink).toBeTruthy();
+      const approvePath = approveLink.replace(/^https?:\/\/[^/]+/, '');
+
+      const adminContext = await browser.newContext();
+      const adminPage = await adminContext.newPage();
+      // Logged out, the mail link must land on the site login — not a 403.
+      await adminPage.goto(approvePath);
+      await adminPage.waitForURL(/\/login/);
+      // Logging in must bounce straight back and complete the approval.
+      await adminPage.evaluate(() => {
+        const overlay = document.getElementById('bv-login-overlay');
+        if (overlay) overlay.classList.add('is-open');
+      });
+      const form = adminPage.locator('#bv-login-overlay form');
+      await form.locator('[name="username"]').fill(TEST_ADMIN.username);
+      await form.locator('[name="password"]').fill(process.env.TEST_ADMIN_PASSWORD);
+      await Promise.all([
+        adminPage.waitForURL(/\/konto\/access-request\/approve/),
+        form.locator('[type="submit"]').click(),
+      ]);
       await adminContext.close();
 
       const yaml = readAccountYaml(target.username);
@@ -211,6 +330,56 @@ test.describe('account self-service: access request', () => {
       expect(yaml).not.toContain('access_request:');
     } finally {
       removeDisposableAccount(target.username);
+    }
+  });
+
+  test('a non-super routed via login is refused and nothing is granted', async ({
+    page,
+    browser,
+  }) => {
+    test.skip(
+      !(await isMailSinkConfigured()),
+      `Mailpit sink not reachable at ${mailSinkUrl()} — mail-layer assertion unavailable`,
+    );
+    const target = createDisposableAccount({ tag: 'lrn' });
+    const bystander = createDisposableAccount({ tag: 'lrb' });
+    try {
+      await clearMail();
+      expect(await loginAs(page, target)).toBe(true);
+      await submitAccessRequest(page, '');
+      const msg = await waitForMail(ADMIN_FALLBACK);
+      const approveLink = extractLink(
+        msg,
+        /https?:\/\/[^\s"'<>]+\/konto\/access-request\/approve[^\s"'<>]*/
+      );
+      expect(approveLink).toBeTruthy();
+      const approvePath = approveLink.replace(/^https?:\/\/[^/]+/, '');
+
+      const ctx = await browser.newContext();
+      const p2 = await ctx.newPage();
+      await p2.goto(approvePath);
+      await p2.waitForURL(/\/login/);
+      await p2.evaluate(() => {
+        const overlay = document.getElementById('bv-login-overlay');
+        if (overlay) overlay.classList.add('is-open');
+      });
+      const form = p2.locator('#bv-login-overlay form');
+      await form.locator('[name="username"]').fill(bystander.username);
+      await form.locator('[name="password"]').fill(bystander.password);
+      await Promise.all([
+        p2.waitForURL(/\/konto\/access-request\/approve/),
+        form.locator('[type="submit"]').click(),
+      ]);
+      // Authenticated but not a super: the hard refusal stands.
+      expect(await p2.content()).toContain('Administratortilladelse');
+      await ctx.close();
+
+      const yaml = readAccountYaml(target.username);
+      expect(yaml).toContain('access_request:');
+      expect(yaml).not.toContain('- organizers');
+    } finally {
+      removeDisposableAccount(target.username);
+      removeDisposableAccount(bystander.username);
     }
   });
 });
