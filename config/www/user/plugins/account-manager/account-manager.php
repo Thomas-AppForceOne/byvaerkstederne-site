@@ -931,7 +931,7 @@ class AccountManagerPlugin extends Plugin
                     $outcome = 'approved';
                 }
             } elseif (str_ends_with($path, '/reject')) {
-                if ($this->rejectAccessRequest($username, $user)) {
+                if ($this->rejectAccessRequest($username, $request, $user)) {
                     $outcome = 'rejected';
                 }
             }
@@ -966,10 +966,22 @@ class AccountManagerPlugin extends Plugin
             'role' => $role,
         ]);
 
+        // Notify the applicant. Mail failure must never undo the grant —
+        // same swallow-and-log posture as the admin notification.
+        try {
+            $account = $this->store()->read($username);
+            if ($account !== null) {
+                $roleLabel = (string)($this->config->get("groups.{$role}.readableName") ?: $role);
+                $this->accountEmail()->sendAccessRequestApproved($account, $role, $roleLabel);
+            }
+        } catch (\Throwable $e) {
+            error_log('account-manager access-request approved mail failed: ' . $e->getMessage());
+        }
+
         return true;
     }
 
-    private function rejectAccessRequest(string $username, UserInterface $admin): bool
+    private function rejectAccessRequest(string $username, array $request, UserInterface $admin): bool
     {
         try {
             $this->store()->mutate($username, static function (UserInterface $acct): void {
@@ -984,6 +996,18 @@ class AccountManagerPlugin extends Plugin
         $this->auditLog()->append('reject_access_request', (string)$admin->username, [
             'target_username' => $username,
         ]);
+
+        // Notify the applicant — swallow-and-log like the approval mail.
+        try {
+            $account = $this->store()->read($username);
+            if ($account !== null) {
+                $role = (string)($request['role'] ?? '');
+                $roleLabel = (string)($this->config->get("groups.{$role}.readableName") ?: $role);
+                $this->accountEmail()->sendAccessRequestRejected($account, $role, $roleLabel);
+            }
+        } catch (\Throwable $e) {
+            error_log('account-manager access-request rejected mail failed: ' . $e->getMessage());
+        }
 
         return true;
     }

@@ -1,0 +1,24 @@
+{% extends 'email/base.html.twig' %}
+
+{# To the applicant when an admin approves their access request via the
+   mail link (or the request is otherwise granted). #}
+
+{%- set subject = 'Din anmodning om at blive ' ~ role_label ~ ' er godkendt — ' ~ site_name %}
+{%- do email.message.setSubject(subject) %}
+
+{%- block content -%}
+<p>Hej {{ user.fullname ?: user.username }},</p>
+<p>
+  Godt nyt: Din anmodning om rollen <b>{{ role_label }}</b> hos
+  <b>{{ site_name }}</b> er blevet godkendt.
+</p>
+<p>
+  Rollen er aktiv fra dit næste login. Log ud og ind igen, hvis du allerede
+  er logget ind.
+  {%- if role == 'organizers' %}
+  Derefter finder du dine nye muligheder under
+  <b>Værkstedskalenderen → Arrangørpanel</b>.
+  {%- endif %}
+</p>
+<p>Venlig hilsen<br/>{{ site_name }}</p>
+{%- endblock content -%}

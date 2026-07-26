@@ -1,0 +1,21 @@
+{% extends 'email/base.html.twig' %}
+
+{# To the applicant when an admin rejects their access request via the
+   mail link. Friendly tone: a rejection is often "not yet", not "never" —
+   and the member can re-request after the cooldown. Sent from the
+   no-reply identity; deliberately NO invitation to reply or contact. #}
+
+{%- set subject = 'Svar på din anmodning om at blive ' ~ role_label ~ ' — ' ~ site_name %}
+{%- do email.message.setSubject(subject) %}
+
+{%- block content -%}
+<p>Hej {{ user.fullname ?: user.username }},</p>
+<p>
+  Tak for din anmodning om rollen <b>{{ role_label }}</b> hos
+  <b>{{ site_name }}</b>. Vi kan desværre ikke imødekomme den lige nu.
+</p>
+<p>
+  Du kan sende en ny anmodning fra <b>Min konto</b> efter et døgn.
+</p>
+<p>Venlig hilsen<br/>{{ site_name }}</p>
+{%- endblock content -%}

@@ -222,6 +222,62 @@ test.describe('account self-service: access request', () => {
       const yaml = readAccountYaml(target.username);
       expect(yaml).toContain('- organizers');
       expect(yaml).not.toContain('access_request:');
+
+      // The applicant is notified of the approval.
+      const applicantMsg = await waitForMail(target.email);
+      expect(JSON.stringify(applicantMsg)).toContain('godkendt');
+    } finally {
+      removeDisposableAccount(target.username);
+    }
+  });
+
+  test('the reject mail link clears the request, stamps the cooldown, notifies the applicant', async ({
+    page,
+    browser,
+  }) => {
+    test.skip(!hasAdminPassword, 'TEST_ADMIN_PASSWORD not set — admin approval flow unavailable');
+    test.skip(
+      !(await isMailSinkConfigured()),
+      `Mailpit sink not reachable at ${mailSinkUrl()} — mail-layer assertion unavailable`,
+    );
+    await ensureAccount(TEST_ADMIN, process.env.TEST_ADMIN_PASSWORD);
+    const target = createDisposableAccount({ tag: 'rej' });
+    try {
+      await clearMail();
+      expect(await loginAs(page, target)).toBe(true);
+      await submitAccessRequest(page, 'Afvisningsflow via maillink.');
+      const msg = await waitForMail(ADMIN_FALLBACK);
+      const rejectLink = extractLink(
+        msg,
+        /https?:\/\/[^\s"'<>]+\/konto\/access-request\/reject[^\s"'<>]*/
+      );
+      expect(rejectLink).toBeTruthy();
+      const rejectPath = rejectLink.replace(/^https?:\/\/[^/]+/, '');
+
+      const adminContext = await browser.newContext();
+      const adminPage = await adminContext.newPage();
+      expect(
+        await loginAs(adminPage, {
+          username: TEST_ADMIN.username,
+          password: process.env.TEST_ADMIN_PASSWORD,
+        })
+      ).toBe(true);
+      const rejectResp = await adminPage.goto(rejectPath);
+      expect(rejectResp.status()).toBe(200);
+      await expect(adminPage).toHaveTitle(/Anmodning afvist/);
+      await expect(adminPage.locator('.bv-auth-card')).toContainText('Anmodning afvist');
+      await adminContext.close();
+
+      // No role granted; request cleared with the cooldown stamp.
+      const yaml = readAccountYaml(target.username);
+      expect(yaml).not.toContain('- organizers');
+      expect(yaml).not.toContain('access_request:');
+      expect(yaml).toContain('access_request_cleared_at');
+
+      // The applicant is notified of the rejection.
+      const applicantMsg = await waitForMail(target.email);
+      expect(JSON.stringify(applicantMsg)).toContain('anmodning');
+      expect(JSON.stringify(applicantMsg)).not.toContain('godkendt');
     } finally {
       removeDisposableAccount(target.username);
     }
