@@ -1,0 +1,181 @@
+{% extends 'email/base.html.twig' %}
+
+{# Welcome email to a new member.
+
+   SENT: by the login plugin (classes/Email.php sendWelcomeEmail) from the
+   activation handler in login.php — i.e. AFTER the member clicks the
+   activation link, not at registration. Requires
+   plugins.login.user_registration.options.send_welcome_email: true.
+
+   THEME OVERRIDE: this file shadows the login plugin's stock
+   templates/emails/login/welcome.html.twig. Grav merges theme://templates
+   into twig_paths BEFORE firing onTwigTemplatePaths (Twig::init), so the
+   FilesystemLoader resolves 'emails/login/welcome.html.twig' to this copy and
+   the vendored plugin file stays untouched and updatable. If a plugin update
+   ever renames that template key, this file goes silently unused and members
+   get the stock English mail — tests/anonymous/welcome-email.js asserts the
+   Danish content so that failure is loud.
+
+   CONTENT RULE: only surfaces that are released — or in active testing and
+   about to ship (workshop calendar, event creation, login, account
+   self-service) — may be described here. Anything still behind an unreleased
+   feature flag (roadmap, feature suggestions, bug reports, vedtægter,
+   referater, presse, newsletter) must stay out until it ships, or the mail
+   promises a member something they cannot find.
+
+   Danish copy is written as literal UTF-8, matching the account-manager mail
+   templates; the base template declares charset=UTF-8.
+
+   Links are built from base_url_absolute, which Grav puts in twig_vars and
+   processTemplate merges into the render context; the welcome mail is sent
+   during the activation request, so a web context is always present. #}
+
+{%- set subject = 'Velkommen til ' ~ site_name %}
+
+{%- do email.message.setSubject(subject) %}
+
+{%- set site = base_url_absolute|trim('/') %}
+
+{%- block content -%}
+{# Preheader: the inbox preview line. Hidden in the rendered body. #}
+<div style="display:none;font-size:1px;color:#f6f6f6;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">Fire værksteder, ét fællesskab i Nørregade 21.</div>
+
+<p>Hej {{ user.fullname ?: user.username }},</p>
+
+<p>
+  Velkommen til {{ site_name }}. Din konto er nu aktiv, og du er dermed en del
+  af et brugerdrevet værkstedsfællesskab i Nørregade 21 i Hundested.
+</p>
+
+<h2>Hvad er {{ site_name }}?</h2>
+
+<p>
+  Vi er mennesker fra Hundested og omegn, der har lyst til at lave noget
+  sammen. Nogle kommer for at bygge, sy eller så. Andre kommer for at drikke
+  kaffe, kigge med og lære noget nyt. Der er plads til det hele, og du
+  bestemmer selv, hvor meget du vil kaste dig ud i.
+</p>
+
+<p>
+  {{ site_name }} er oprettet på initiativ af og med støtte fra Halsnæs
+  Kommune, som også har stillet en deltidskoordinator til rådighed for at
+  hjælpe projektet i gang. Men værkstederne er helt og aldeles
+  brugerdefinerede og brugerdrevne: det er medlemmerne, der bestemmer, hvad
+  der skal ske, og frivillige, der får det til at ske. Intet program kommer
+  oppefra — det bliver til, fordi nogen har lyst.
+</p>
+
+<p>
+  Det vigtigste, du skal vide som ny: du behøver ingen forudsætninger. Kom
+  forbi, sig hej, og spørg løs.
+</p>
+
+<h2>De fire værksteder</h2>
+
+<h3><a href="{{ site }}/vaerksteder/makerspace">Makerspace &amp; Reparation</a></h3>
+<p>
+  3D-print, elektronik og lodning. Her fikser vi alt fra kaffemaskiner til
+  droner.
+</p>
+
+<h3><a href="{{ site }}/vaerksteder/krea-cafe">Krea Café</a></h3>
+<p>
+  Et rum til fordybelse og manuelt arbejde med tre atelierer under samme tag:
+  <b>Billedkunst</b> (skraldebøger, stempler, blindtegning, gelli- og paptryk,
+  silketryk, photo transfer, maling og collage), <b>Syværkstedet</b>
+  (upcycling, reparation og nyt design af stof og tøj) og
+  <b>Smykkeværkstedet</b> (pop op-værksted, hvor du laver dine egne smykker —
+  fra perler til guld).
+</p>
+
+<h3><a href="{{ site }}/vaerksteder/groent-byvaerksted">Grønt BYværksted</a></h3>
+<p>
+  Den lille byhave lige overfor Nørregade 21. Vi dyrker krydderurter, blomster,
+  tomater og frugtbuske, bytter frø, går havevandringer og deler ud af høsten.
+  Kom forbi med dine idéer — alene eller sammen med en ven og en termokande.
+</p>
+
+<h3><a href="{{ site }}/vaerksteder/eventvaerkstedet">Eventværkstedet</a></h3>
+<p>
+  Kultur, workshops, åben scene og fællesskab. Gratis events, skabt af
+  mennesker som dig. Har du noget på hjerte, eller elsker du at optræde —
+  synge, spille, danse, lave stand-up eller jonglere med tre appelsiner — så er
+  scenen også din.
+</p>
+
+<p>
+  Du behøver ikke vælge ét værksted og blive der. Mange går på tværs — bygger
+  noget i Makerspace, sår frø i byhaven og hjælper til ved et arrangement i
+  Eventværkstedet. Det samme gælder, når du selv arrangerer: hver aktivitet
+  hører til ét værksted, men du kan sagtens stå bag aktiviteter i flere af dem.
+  Fire værksteder, ét fællesskab.
+</p>
+
+<h2>Sådan bruger du websitet</h2>
+
+<p>
+  <b>Værkstedskalenderen</b> er hjertet i sitet. Her ser du alle kommende
+  aktiviteter, kurser og fælles arbejdsdage, og du kan filtrere efter
+  værksted. Klik ind på en aktivitet for at se detaljerne.
+</p>
+
+<p>
+  Er der et begrænset antal pladser, melder du dig til med knappen
+  <b>Deltag</b>. Det er en rigtig plads, du optager — så tryk, når du ved, at
+  du kommer, og tryk igen for at give pladsen fri, hvis noget kommer i vejen.
+  Drop-in-aktiviteter har i stedet knappen <b>Interesseret</b>. De er
+  uforpligtende og uden pladsloft: dér kan du roligt kigge forbi bare for at
+  se, hvad det er for noget, og få en snak.
+</p>
+
+<p>
+  Når du har markeret noget, samler filteret <b>Mine aktiviteter</b> dit eget
+  overblik.
+</p>
+
+<p>
+  <a href="{{ site }}/vaerkstedskalenderen"
+     style="display:inline-block;padding:12px 24px;background-color:#13483b;color:#ffffff;text-decoration:none;font-weight:bold;">Se Værkstedskalenderen</a>
+</p>
+
+<p>
+  <b><a href="{{ site }}/konto">Din konto</a></b> finder du øverst til højre,
+  når du er logget ind. Under <b>Min konto</b> kan du rette dit navn, skifte
+  adgangskode og skifte e-mailadresse. Og skulle du en dag ønske det, kan du
+  slette din konto samme sted.
+</p>
+
+<p>
+  <b>Vil du selv arrangere noget?</b> Under
+  <a href="{{ site }}/konto#roles">Min konto → Rettigheder</a> kan du anmode om
+  at blive arrangør. Bliver du godkendt, får du adgang til at oprette dine egne
+  aktiviteter i kalenderen — sætte titel, dato, sted, beskrivelse og antal
+  pladser — og rette i dem undervejs. Det er sådan, programmet bliver til: ikke
+  fra oven, men fra medlemmerne.
+</p>
+
+<h2>Tre ting, du kan gøre nu</h2>
+
+<ol>
+  <li>
+    Kig kalenderen igennem og find noget, du har lyst til — er du bare
+    nysgerrig, så start med en drop-in-aktivitet.
+  </li>
+  <li>Læs om de fire værksteder og find det — eller dem — der kribler mest.</li>
+  <li>Kom forbi Nørregade 21. Det er den korteste vej ind i fællesskabet.</li>
+</ol>
+
+<p>
+  Har du spørgsmål, så skriv endelig til
+  <a href="mailto:kontakt@byvaerkstederne.dk">kontakt@byvaerkstederne.dk</a> —
+  eller fang os i værkstedet.
+</p>
+
+<p>Vi glæder os til at møde dig.</p>
+
+<p>
+  Mange hilsner<br/>
+  {{ site_name }}<br/>
+  Nørregade 21, 3390 Hundested
+</p>
+{%- endblock content -%}

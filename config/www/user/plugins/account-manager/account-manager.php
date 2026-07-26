@@ -77,6 +77,19 @@ class AccountManagerPlugin extends Plugin
     /** GET route segment for the email-change confirmation link (token+user Grav params). */
     private const CONFIRM_EMAIL_PATH = self::ROUTE_BASE . '/confirm-email-change';
 
+    /** Mail-link base for the admin approve/reject/switch-account routes. */
+    private const ACCESS_REQUEST_BASE = self::ROUTE_BASE . '/access-request/';
+
+    /**
+     * The wrong-account page's only action: end the current session and come
+     * back through login. POST-only and nonce-gated, so that opening a mail
+     * link can never terminate a member's session on its own — a plain GET
+     * side effect here would let any page force-log-out any visitor with an
+     * <img src="…/approve?token=…">.
+     */
+    private const ACCESS_REQUEST_SWITCH_PATH = self::ACCESS_REQUEST_BASE . 'switch-account';
+    private const ACCESS_REQUEST_SWITCH_NONCE = 'account-access-switch';
+
     /** The §6 neutral response — identical for available and occupied targets. */
     private const EMAIL_CHANGE_NEUTRAL_FLASH = 'Hvis adressen kan bruges, har vi sendt en bekræftelse til den nye adresse.';
 
@@ -880,12 +893,30 @@ class AccountManagerPlugin extends Plugin
             $this->sendError(403, 'Ikke autoriseret.');
         }
 
+        // Account switch, posted from the wrong-account page below. Handled
+        // BEFORE the admin check on purpose: the whole point is that the
+        // current session belongs to someone who fails that check.
+        if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? '')) === 'POST'
+            && $this->grav['uri']->path() === self::ACCESS_REQUEST_SWITCH_PATH) {
+            $this->handleAccessRequestSwitchAccount();
+        }
+
         // Superuser check: an account with admin.super access qualifies
         // directly; the 'admin' group is an alternative for delegated
         // approvers. (groups.yaml defines no 'admin' group today, so the
         // group-only check locked out every real super.)
         $groups = (array)($user->get('groups') ?? []);
         if (!$user->authorize('admin.super') && !in_array('admin', $groups, true)) {
+            // A mail link opened in a browser that happens to be logged in as
+            // a member: render the themed wrong-account page, which offers to
+            // switch accounts and resume this exact approval. sendError()
+            // answers JSON — right for the AJAX endpoints, but as a mail-link
+            // response it put a raw JSON blob on screen. Non-GET keeps the
+            // hard 403; only a human following a link gets the page.
+            if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? '')) === 'GET') {
+                $this->renderAccessRequestWrongAccount($user);
+                return;
+            }
             $this->sendError(403, 'Administratortilladelse påkrævet.');
         }
 
@@ -938,6 +969,40 @@ class AccountManagerPlugin extends Plugin
         } while (false);
 
         $this->renderAccessRequestResult($outcome, $outcome !== null ? $username : null, $request);
+    }
+
+    /**
+     * End the current session and route back through login to the approval
+     * link that was clicked. Posted from the wrong-account page; nonce-gated.
+     */
+    private function handleAccessRequestSwitchAccount(): void
+    {
+        $nonce = (string)($_POST['account-nonce'] ?? '');
+        if ($nonce === '' || !Utils::verifyNonce($nonce, self::ACCESS_REQUEST_SWITCH_NONCE)) {
+            $this->sendError(403, 'Sikkerhedstjekket fejlede. Åbn linket fra mailen igen.');
+        }
+
+        // The resume target comes from the session, stashed when the
+        // wrong-account page rendered — never from the POST body. Two things
+        // fall out of that: the page needs no hidden token/username fields,
+        // so it discloses nothing about the applicant to a viewer who just
+        // failed the admin check; and there is no submitted URL to turn into
+        // an open redirect. Read it BEFORE the logout wipes the session.
+        $session = $this->grav['session'];
+        $target = (string)($session->access_request_resume ?? '');
+        if ($target === '' || !str_starts_with($target, self::ACCESS_REQUEST_BASE)) {
+            $target = self::ROUTE_BASE;
+        }
+
+        // Order matters. The login plugin's userLogout() ends with
+        // $session->invalidate()->start(), so anything stashed BEFORE the
+        // logout is wiped with the session. remember_me clears the cookie in
+        // the same step — without it the redirect to /login can silently
+        // re-authenticate the very session we just ended, and the admin never
+        // gets a login form.
+        $this->grav['login']->logout(['remember_me' => true]);
+        $this->grav['session']->redirect_after_login = $target;
+        $this->grav->redirectLangSafe('/login', 302);
     }
 
     private function approveAccessRequest(string $username, array $request, UserInterface $admin): bool
@@ -1050,6 +1115,49 @@ class AccountManagerPlugin extends Plugin
 
         $this->accessRequestResult = $viewModel;
 
+        $title = $outcome === 'approved' ? 'Anmodning godkendt'
+            : ($outcome === 'rejected' ? 'Anmodning afvist' : 'Anmodning');
+        $this->renderAccessRequestPage($title, $outcome === null ? 404 : null);
+    }
+
+    /**
+     * Themed page for a mail link opened in a browser signed in as someone
+     * who cannot approve. Carries NO applicant data by design — the viewer
+     * just failed the admin check, so the page states only who they are
+     * signed in as and how to continue. The token and applicant username are
+     * read back off the URL the viewer already holds, so putting them in the
+     * form leaks nothing they did not arrive with.
+     */
+    private function renderAccessRequestWrongAccount(UserInterface $user): void
+    {
+        $uri = $this->grav['uri'];
+        $path = $uri->path();
+        $query = (string)$uri->query();
+
+        // Stash the link to resume after the switch. Session-scoped, so the
+        // page itself can stay free of the token and the applicant's name.
+        $this->grav['session']->access_request_resume =
+            $path . ($query !== '' ? '?' . $query : '');
+
+        $this->accessRequestResult = [
+            'outcome' => 'wrong_account',
+            'applicant' => null,
+            'request' => null,
+            'current_user' => [
+                'username' => (string)($user->get('username') ?? ''),
+                'fullname' => (string)($user->get('fullname') ?? ''),
+            ],
+            'action' => str_ends_with($path, '/reject') ? 'reject' : 'approve',
+            'switch_path' => self::ACCESS_REQUEST_SWITCH_PATH,
+            'switch_nonce' => Utils::getNonce(self::ACCESS_REQUEST_SWITCH_NONCE),
+        ];
+
+        $this->renderAccessRequestPage('Forkert konto', 403);
+    }
+
+    /** Substitute the themed result page for this request. */
+    private function renderAccessRequestPage(string $title, ?int $status): void
+    {
         $page = new Page();
         $page->init(new \SplFileInfo('plugin://account-manager/pages/access-request-result.md'));
         // PagesProcessor discards a non-routable page AFTER onPageInitialized
@@ -1059,12 +1167,11 @@ class AccountManagerPlugin extends Plugin
         $page->route($route);
         $page->slug(basename($route));
         $header = $page->header();
-        $header->title = $outcome === 'approved' ? 'Anmodning godkendt'
-            : ($outcome === 'rejected' ? 'Anmodning afvist' : 'Anmodning');
-        if ($outcome === null) {
-            $header->http_response_code = 404;
+        $header->title = $title;
+        if ($status !== null) {
+            $header->http_response_code = $status;
         }
-        $page->title($header->title);
+        $page->title($title);
 
         /** @var \Grav\Common\Page\Pages $pages */
         $pages = $this->grav['pages'];

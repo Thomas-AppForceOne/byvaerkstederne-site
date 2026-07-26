@@ -204,7 +204,9 @@ test.describe('Registration & activation (WI-2/WI-6)', () => {
   });
 
   // ── Email-bearing: activation token usability ─────────────────────────────
-  test('activation: email captured with tier From, token enables the account', async ({ page }) => {
+  test('activation: Danish mail captured with tier From, token enables the account', async ({
+    page,
+  }) => {
     test.skip(
       !(await isMailSinkConfigured()),
       `Mailpit sink not reachable at ${mailSinkUrl()} — activation email test skipped`,
@@ -223,11 +225,32 @@ test.describe('Registration & activation (WI-2/WI-6)', () => {
     expect(from, 'activation From must be the tier noreply identity').toBe('noreply@hackersbychoice.dk');
     expect(from, 'kontakt@ must never be the transactional From').not.toContain('kontakt@');
 
+    // Danish, like every other member-facing string. Subject and body come
+    // from the PLUGIN_LOGIN.* overrides in user/languages/en.yaml, so an
+    // untranslated key here means the override stopped resolving — and Grav
+    // renders a MISSING/empty translation as the raw key rather than falling
+    // back, which is why the raw-key guard is a separate assertion.
+    const activationBody = `${msg.Text || ''}\n${msg.HTML || ''}`;
+    expect(msg.Subject, 'activation subject is Danish').toMatch(/^Aktivér din konto på /);
+    expect(activationBody, 'stock English activation copy must not resurface').not.toMatch(
+      /account has been successfully created|Activate Your Account Now/i,
+    );
+    expect(activationBody, 'the shared host warning is Danish too').toContain('BEMÆRK');
+    expect(activationBody, 'footer names the association').toContain('Byværkstederne · Nørregade 21');
+    expect(activationBody, 'plugin vendor branding must not ship to members').not.toMatch(
+      /GetGrav\.org/i,
+    );
+    expect(activationBody, 'no untranslated key may leak into the mail').not.toMatch(
+      /PLUGIN_(LOGIN|EMAIL)\./,
+    );
+
     // Negative-before-positive: the disabled account cannot reach /roadmap.
     const before = await page.request.get('/roadmap', { maxRedirects: 0 });
     expect(before.status(), 'disabled account must not reach /roadmap').not.toBe(200);
 
-    // Extract the activation link from the captured email and drive it.
+    // Extract the activation link from the captured email and drive it. This
+    // is also what proves the translated body kept %2$s: a mistyped
+    // placeholder index delivers a fine-looking mail that links nowhere.
     const link = extractLink(msg, /\/activate_user\/[^\s"'<>)]+/);
     expect(link, 'activation link must be present in the captured email').not.toBeNull();
     await page.goto(/** @type {string} */ (link));

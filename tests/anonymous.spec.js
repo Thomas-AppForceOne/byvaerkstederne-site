@@ -37,6 +37,11 @@ require('./anonymous/password-policy');
 require('./anonymous/session-cookie');
 require('./anonymous/registration');
 require('./anonymous/registration-honeypot');
+// Welcome mail: sent from the ACTIVATION handler, content from the theme
+// override. vendored-login-patch is a pure source invariant (no browser, no
+// sink) guarding the plugin patches the mail depends on.
+require('./anonymous/welcome-email');
+require('./anonymous/vendored-login-patch');
 require('./anonymous/password-reset');
 require('./anonymous/auth-surface');
 // Frontend event CRUD — public read (M1) + anonymous management gating.
