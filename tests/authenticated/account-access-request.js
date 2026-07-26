@@ -29,7 +29,9 @@ const {
   mailSinkUrl,
   clearMail,
   waitForMail,
+  extractLink,
 } = require('../helpers/mail');
+const { TEST_ADMIN, hasAdminPassword, ensureAccount } = require('../helpers/accounts');
 const {
   createDisposableAccount,
   removeDisposableAccount,
@@ -85,6 +87,12 @@ test.describe('account self-service: access request', () => {
 
       const msg = await waitForMail(ADMIN_FALLBACK);
       expect(JSON.stringify(msg)).toContain(acct.username);
+
+      // The approve/reject links must be ABSOLUTE (Utils::url $domain=true);
+      // a root-relative href renders as file:///konto/... in mail clients.
+      const mailBody = String(msg.HTML || msg.Text || '');
+      expect(mailBody).toMatch(/https?:\/\/[^\s"'<>]+\/konto\/access-request\/approve\?/);
+      expect(mailBody).toMatch(/https?:\/\/[^\s"'<>]+\/konto\/access-request\/reject\?/);
 
       // Duplicate open request: the form is hidden now, so forced browsing
       // is the only route — refused with 400.
@@ -159,6 +167,50 @@ test.describe('account self-service: access request', () => {
       expect(readAccountYaml(acct.username)).not.toContain('access_request:');
     } finally {
       removeDisposableAccount(acct.username);
+    }
+  });
+
+  test('a super approves via the mail link without any admin group', async ({ page, browser }) => {
+    test.skip(!hasAdminPassword, 'TEST_ADMIN_PASSWORD not set — admin approval flow unavailable');
+    await ensureAccount(TEST_ADMIN, process.env.TEST_ADMIN_PASSWORD);
+    const target = createDisposableAccount({ tag: 'apr' });
+    try {
+      await clearMail();
+      expect(await loginAs(page, target)).toBe(true);
+      await submitAccessRequest(page, 'Godkendelsesflow via maillink.');
+      const msg = await waitForMail(ADMIN_FALLBACK);
+      const approveLink = extractLink(
+        msg,
+        /https?:\/\/[^\s"'<>]+\/konto\/access-request\/approve[^\s"'<>]*/
+      );
+      expect(approveLink).toBeTruthy();
+      // Navigate via path+query: deployed tiers get a correct absolute host
+      // from system.custom_base_url, but the local container has none set,
+      // so the generated host lacks the mapped port.
+      const approvePath = approveLink.replace(/^https?:\/\/[^/]+/, '');
+
+      // pw-test-admin is a super (access.admin.super) with NO groups entry —
+      // the endpoint must accept supers directly, not only members of an
+      // 'admin' group that groups.yaml never defined.
+      const adminContext = await browser.newContext();
+      const adminPage = await adminContext.newPage();
+      expect(
+        await loginAs(adminPage, {
+          username: TEST_ADMIN.username,
+          password: process.env.TEST_ADMIN_PASSWORD,
+        })
+      ).toBe(true);
+      const approveResp = await adminPage.goto(approvePath);
+      // The endpoint answers a deliberate generic 404 on success; a 403 means
+      // the super was refused (the pre-fix phantom-group lockout).
+      expect(approveResp.status()).toBe(404);
+      await adminContext.close();
+
+      const yaml = readAccountYaml(target.username);
+      expect(yaml).toContain('- organizers');
+      expect(yaml).not.toContain('access_request:');
+    } finally {
+      removeDisposableAccount(target.username);
     }
   });
 });

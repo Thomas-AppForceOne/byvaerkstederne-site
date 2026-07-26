@@ -55,6 +55,7 @@ while true; do
     SENT=0
     ERRORS=0
     ALREADY_SENT=0
+    PENDING=0
 
     ACCOUNTS=$(remote "ls $ACCOUNTS_DIR/*.yaml 2>/dev/null | xargs -n1 basename" 2>/dev/null || echo "")
 
@@ -87,6 +88,24 @@ while true; do
             no) ;;
             *)
                 log "  ⚠️  Marker check failed for $USERNAME (SSH error) - skipping this cycle"
+                ((ERRORS++))
+                continue
+                ;;
+        esac
+
+        # Only mail ACTIVATED accounts (spec: the welcome mail follows
+        # activation). Registration creates accounts with state: disabled;
+        # the account flips to enabled when the activation link is clicked,
+        # and the next cycle picks it up. Fail-closed like the marker probe.
+        STATE=$(remote "sed -n 's/^state:[[:space:]]*//p' '$ACCOUNT_PATH' | head -1" 2>/dev/null || echo "error")
+        case "$STATE" in
+            enabled) ;;
+            disabled)
+                ((PENDING++))
+                continue
+                ;;
+            *)
+                log "  ⚠️  State check failed for $USERNAME - skipping this cycle"
                 ((ERRORS++))
                 continue
                 ;;
@@ -192,7 +211,7 @@ Thomas</p>"
         ((SENT++))
     done
 
-    log "Summary: $SENT sent, $ALREADY_SENT already sent, $ERRORS errors"
+    log "Summary: $SENT sent, $ALREADY_SENT already sent, $PENDING awaiting activation, $ERRORS errors"
     log "Next check in 5 minutes..."
     sleep 300
 done

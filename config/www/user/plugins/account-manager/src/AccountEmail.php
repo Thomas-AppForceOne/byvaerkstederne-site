@@ -128,9 +128,12 @@ final class AccountEmail
     public function confirmLink(string $username, string $token): string
     {
         $sep = (string)$this->grav['config']->get('system.param_sep', ':');
+        // Utils::url($input, $domain, $fail_gracefully): $domain must be true
+        // for an absolute URL - mail clients render root-relative hrefs as
+        // file:/// links.
         return (string)Utils::url(
             '/konto/confirm-email-change/token' . $sep . $token . '/user' . $sep . $username,
-            null,
+            true,
             true
         );
     }
@@ -139,8 +142,8 @@ final class AccountEmail
     public function accessRequestApproveLink(string $username, string $token): string
     {
         return (string)Utils::url(
-            '/admin/access-request/approve?token=' . urlencode($token) . '&username=' . urlencode($username),
-            null,
+            '/konto/access-request/approve?token=' . urlencode($token) . '&username=' . urlencode($username),
+            true,
             true
         );
     }
@@ -149,8 +152,8 @@ final class AccountEmail
     public function accessRequestRejectLink(string $username, string $token): string
     {
         return (string)Utils::url(
-            '/admin/access-request/reject?token=' . urlencode($token) . '&username=' . urlencode($username),
-            null,
+            '/konto/access-request/reject?token=' . urlencode($token) . '&username=' . urlencode($username),
+            true,
             true
         );
     }
