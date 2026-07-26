@@ -838,15 +838,34 @@ class AccountManagerPlugin extends Plugin
             $this->failWith(500, ['Anmodningen kunne ikke gemmes. Prøv igen.'], 'roles');
         }
 
+        $notified = true;
         try {
             $roleLabel = (string)($this->config->get("groups.{$role}.readableName") ?: $role);
             $this->accountEmail()->sendAccessRequestAdmin($account, $role, $roleLabel, $motivation['value'], $token);
         } catch (\Throwable $e) {
             // The request is stored and visible on /konto either way.
+            $notified = false;
             error_log('account-manager access-request admin mail failed: ' . $e->getMessage());
         }
 
         $this->auditLog()->append('request_access', $user->username, ['role' => $role]);
+
+        if (!$notified) {
+            // Say so rather than claiming a notification that never left.
+            // The member is pointed at the association's public contact
+            // address — a mailbox for visitors, deliberately NOT a delivery
+            // fallback for operator mail: whoever reads it is not
+            // necessarily a super and cannot act on the request. They can
+            // pass it on, and a super then has the log to work from.
+            $contact = (string)$this->config->get('site.author.email', '');
+            $this->redirectWithFlash(
+                'Din anmodning er gemt, men vi kunne ikke give administratorerne besked automatisk.'
+                . ($contact !== '' ? ' Skriv til ' . $contact . ', så bliver den taget op manuelt.' : ''),
+                'roles',
+                'warning'
+            );
+        }
+
         $this->redirectWithFlash('Din anmodning er sendt og afventer godkendelse.', 'roles');
     }
 
@@ -1340,9 +1359,9 @@ class AccountManagerPlugin extends Plugin
     }
 
     /** §4.3 PRG: flash + 303 redirect back to the /konto section. */
-    private function redirectWithFlash(string $message, string $section): never
+    private function redirectWithFlash(string $message, string $section, string $type = 'success'): never
     {
-        $this->grav['messages']->add($message, 'success');
+        $this->grav['messages']->add($message, $type);
         $this->grav->redirect(self::ROUTE_BASE . '#' . $section, 303);
         exit; // @phpstan-ignore-line — redirect() exits; belt for static analysis
     }

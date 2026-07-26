@@ -264,6 +264,63 @@ function withBaseFlagOff(flag) {
 }
 
 /**
+ * Blank the email of every super-admin account in the container, so no
+ * account resolves as an operator-mail recipient. Returns a restore
+ * function; callers MUST invoke it in finally.
+ *
+ * The emails are blanked rather than the accounts deleted or disabled: the
+ * seeded supers are what the rest of the suite logs in with, and a deleted
+ * or disabled account would change far more than the one property under
+ * test. Each file is copied to <file>.super-bak first and moved back on
+ * restore, so a crashed run leaves the backup on disk rather than a
+ * mangled account.
+ *
+ * @returns {() => void}
+ */
+function withoutReachableSupers() {
+  const dir = '/app/www/public/user/accounts';
+  const list = execFileSync(
+    'docker',
+    [
+      'exec', gravContainer(), 'sh', '-c',
+      `grep -l -E '^[[:space:]]*super:[[:space:]]*true' ${dir}/*.yaml 2>/dev/null || true`,
+    ],
+    { stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 },
+  )
+    .toString()
+    .trim();
+  const files = list ? list.split('\n').filter(Boolean) : [];
+
+  for (const file of files) {
+    execFileSync(
+      'docker',
+      [
+        // -u abc: root-owned account files break Grav's web-user writes.
+        'exec', '-u', 'abc', gravContainer(), 'sh', '-c',
+        `cp "${file}" "${file}.super-bak" && sed -i 's/^email:.*/email: ""/' "${file}"`,
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 },
+    );
+  }
+  clearGravCache();
+
+  return () => {
+    for (const file of files) {
+      try {
+        execFileSync(
+          'docker',
+          ['exec', '-u', 'abc', gravContainer(), 'sh', '-c', `mv "${file}.super-bak" "${file}"`],
+          { stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 },
+        );
+      } catch (_) { /* best-effort — the backup stays for manual recovery */ }
+    }
+    try {
+      clearGravCache();
+    } catch (_) { /* ditto */ }
+  };
+}
+
+/**
  * Case-insensitive recursive grep for a needle across user/accounts/ and
  * user/data/ inside the container — the §7 zero-hits oracle. Returns the
  * matching file list (empty = clean).
@@ -380,6 +437,7 @@ module.exports = {
   footprintGrep,
   clearGravCache,
   withBaseFlagOff,
+  withoutReachableSupers,
   resetEmailChangeThrottle,
   loginAs,
   logout,

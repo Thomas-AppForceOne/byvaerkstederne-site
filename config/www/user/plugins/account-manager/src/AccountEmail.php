@@ -233,24 +233,21 @@ final class AccountEmail
             }
         }
 
-        if ($found !== []) {
-            return array_keys($found);
+        if ($found === []) {
+            // No delivery fallback on purpose. The obvious candidate is the
+            // association's public contact address, but whoever reads that
+            // mailbox is not necessarily a super and cannot act on an access
+            // request — sending there would look like a working notification
+            // while quietly landing in the wrong hands. A tier with no
+            // reachable super is a misconfiguration; it is logged as an
+            // error, the send fails, and the caller tells the member to
+            // contact the association so a human can escalate it.
+            $this->grav['log']->error(
+                'account-manager: no enabled super-admin with an email address — operator mail cannot be delivered'
+            );
         }
 
-        // No reachable super is an odd state for a running tier, so it is
-        // logged rather than absorbed — but operator mail still has to go
-        // somewhere, hence the old config chain as a last resort.
-        $config = $this->grav['config'];
-        $fallback = trim((string)$config->get('plugins.email.to', ''));
-        if ($fallback === '') {
-            $fallback = trim((string)$config->get('site.author.email', ''));
-        }
-        $this->grav['log']->warning(sprintf(
-            'account-manager: no enabled super-admin with an email address; operator mail falls back to "%s"',
-            $fallback !== '' ? $fallback : '(none)'
-        ));
-
-        return $fallback !== '' ? [$fallback] : [];
+        return array_keys($found);
     }
 
     /**

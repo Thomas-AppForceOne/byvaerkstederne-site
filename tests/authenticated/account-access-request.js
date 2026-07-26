@@ -6,9 +6,9 @@
  * (account_self_service_specification.md §8/§10).
  *
  *   - requesting shows the pending state and produces the admin email
- *     (addressed to every enabled super-admin, resolved from the accounts;
- *     the config chain plugins.email.to → site.author.email is only the
- *     last resort when no super is reachable);
+ *     (addressed to every enabled super-admin, resolved from the accounts —
+ *     there is no delivery fallback; with no reachable super the member is
+ *     told to contact the association instead);
  *   - a duplicate open request is refused (direct POST — the form is
  *     hidden while a request is open);
  *   - cancelling stamps the cooldown; an immediate re-request is refused;
@@ -39,15 +39,18 @@ const {
   readAccountYaml,
   grantGroups,
   loginAs,
+  withoutReachableSupers,
 } = require('../helpers/self-service');
 
 // Operator mail is addressed to every ENABLED super-admin, resolved from the
-// accounts themselves. pw-test-admin is that super here. The site-author
-// address is the last-resort fallback the resolver only uses when no super is
-// reachable — which is exactly the environment this suite runs in when
-// TEST_ADMIN_PASSWORD is unset and the super cannot be seeded.
-const SITE_AUTHOR_FALLBACK = 'kontakt@byvaerkstederne.dk';
-let adminRecipient = SITE_AUTHOR_FALLBACK;
+// accounts themselves; pw-test-admin is that super here. There is no delivery
+// fallback, so every mail-bearing test needs the super seeded — hence the
+// TEST_ADMIN_PASSWORD skip on each of them.
+const ADMIN_RECIPIENT = TEST_ADMIN.email;
+// The association's PUBLIC contact address. It is what the member is told to
+// write to when no super can be notified — and must never itself receive
+// operator mail: whoever reads it is not necessarily a super.
+const SITE_AUTHOR_CONTACT = 'kontakt@byvaerkstederne.dk';
 
 /**
  * Mint the request-form nonce for the CURRENT session (the form must still
@@ -74,18 +77,17 @@ async function submitAccessRequest(page, motivation) {
 test.describe('account self-service: access request', () => {
   test.skip(!hasUserPassword, 'TEST_PASSWORD not set — anonymous-only mode');
 
-  // Seed the super that operator mail is addressed to, and point the mail
-  // assertions at it. Without the admin password no super can be seeded, so
-  // the resolver's last-resort fallback is the correct expectation instead —
-  // the suite asserts whichever routing is genuinely right for the run.
+  // Seed the super that operator mail is addressed to. Without it nothing is
+  // sent at all — there is no fallback recipient — so the mail-bearing tests
+  // skip rather than assert against a delivery that cannot happen.
   test.beforeAll(async () => {
     if (hasAdminPassword) {
       await ensureAccount(TEST_ADMIN, process.env.TEST_ADMIN_PASSWORD);
-      adminRecipient = TEST_ADMIN.email;
     }
   });
 
   test('request shows pending state, notifies admins; duplicate is refused', async ({ page }) => {
+    test.skip(!hasAdminPassword, 'TEST_ADMIN_PASSWORD not set — no super-admin to notify');
     test.skip(
       !(await isMailSinkConfigured()),
       `Mailpit sink not reachable at ${mailSinkUrl()} — mail-layer assertion unavailable`,
@@ -101,7 +103,7 @@ test.describe('account self-service: access request', () => {
       await expect(page.locator('[data-pending="access"]')).toContainText('Arrangør');
       expect(readAccountYaml(acct.username)).toContain('access_request');
 
-      const msg = await waitForMail(adminRecipient);
+      const msg = await waitForMail(ADMIN_RECIPIENT);
       expect(JSON.stringify(msg)).toContain(acct.username);
 
       // The approve/reject links must be ABSOLUTE (Utils::url $domain=true);
@@ -122,7 +124,7 @@ test.describe('account self-service: access request', () => {
     }
   });
 
-  test('the admin mail is addressed to the super-admin, not to the config fallback', async ({
+  test('the admin mail is addressed to the super-admin, never to the contact address', async ({
     page,
   }) => {
     test.skip(!hasAdminPassword, 'TEST_ADMIN_PASSWORD not set — no super to address');
@@ -148,8 +150,8 @@ test.describe('account self-service: access request', () => {
       // address must receive nothing at all. This is the regression that
       // sent a tier's access requests to an address nobody was reading.
       expect(
-        await expectNoMail(SITE_AUTHOR_FALLBACK),
-        'nothing may go to the config fallback while a super exists',
+        await expectNoMail(SITE_AUTHOR_CONTACT),
+        'the public contact address is never an operator-mail recipient',
       ).toBe(true);
       expect(
         await expectNoMail(member.email),
@@ -157,6 +159,44 @@ test.describe('account self-service: access request', () => {
       ).toBe(true);
     } finally {
       removeDisposableAccount(member.username);
+      removeDisposableAccount(acct.username);
+    }
+  });
+
+  test('with no reachable super the member is told to contact the association', async ({ page }) => {
+    test.skip(
+      !(await isMailSinkConfigured()),
+      `Mailpit sink not reachable at ${mailSinkUrl()} — mail-layer assertion unavailable`,
+    );
+    const acct = createDisposableAccount({ tag: 'nsu' });
+    let restoreSupers = null;
+    try {
+      await clearMail();
+      expect(await loginAs(page, acct)).toBe(true);
+      restoreSupers = withoutReachableSupers();
+
+      await submitAccessRequest(page, 'Ingen super at underrette.');
+
+      // Not a success claim: the member is told the notification failed and
+      // where to take it. Silently answering "din anmodning er sendt" is
+      // what made the original misroute invisible.
+      const flash = page.locator('.bv-message--warning');
+      await expect(flash).toContainText('kunne ikke give administratorerne besked');
+      await expect(flash).toContainText(SITE_AUTHOR_CONTACT);
+      expect(await page.locator('.bv-message--success').count()).toBe(0);
+
+      // The request itself is stored regardless, so a super can still act
+      // on it once someone escalates.
+      expect(readAccountYaml(acct.username)).toContain('access_request');
+
+      // And nothing was delivered to the contact address — it is an
+      // instruction to a human, not a mail recipient.
+      expect(
+        await expectNoMail(SITE_AUTHOR_CONTACT),
+        'the contact address must not receive the operator mail',
+      ).toBe(true);
+    } finally {
+      if (restoreSupers) restoreSupers();
       removeDisposableAccount(acct.username);
     }
   });
@@ -233,7 +273,7 @@ test.describe('account self-service: access request', () => {
       await clearMail();
       expect(await loginAs(page, target)).toBe(true);
       await submitAccessRequest(page, 'Godkendelsesflow via maillink.');
-      const msg = await waitForMail(adminRecipient);
+      const msg = await waitForMail(ADMIN_RECIPIENT);
       const approveLink = extractLink(
         msg,
         /https?:\/\/[^\s"'<>]+\/konto\/access-request\/approve[^\s"'<>]*/
@@ -304,7 +344,7 @@ test.describe('account self-service: access request', () => {
       await clearMail();
       expect(await loginAs(page, target)).toBe(true);
       await submitAccessRequest(page, 'Kontoskift via maillink.');
-      const msg = await waitForMail(adminRecipient);
+      const msg = await waitForMail(ADMIN_RECIPIENT);
       const approvePath = extractLink(
         msg,
         /https?:\/\/[^\s"'<>]+\/konto\/access-request\/approve[^\s"'<>]*/,
@@ -359,6 +399,7 @@ test.describe('account self-service: access request', () => {
     page,
     browser,
   }) => {
+    test.skip(!hasAdminPassword, 'TEST_ADMIN_PASSWORD not set — no super-admin to notify');
     test.skip(
       !(await isMailSinkConfigured()),
       `Mailpit sink not reachable at ${mailSinkUrl()} — mail-layer assertion unavailable`,
@@ -369,7 +410,7 @@ test.describe('account self-service: access request', () => {
       await clearMail();
       expect(await loginAs(page, target)).toBe(true);
       await submitAccessRequest(page, 'Nonce-afvisning ved kontoskift.');
-      const msg = await waitForMail(adminRecipient);
+      const msg = await waitForMail(ADMIN_RECIPIENT);
       const approvePath = extractLink(
         msg,
         /https?:\/\/[^\s"'<>]+\/konto\/access-request\/approve[^\s"'<>]*/,
@@ -414,7 +455,7 @@ test.describe('account self-service: access request', () => {
       await clearMail();
       expect(await loginAs(page, target)).toBe(true);
       await submitAccessRequest(page, 'Afvisningsflow via maillink.');
-      const msg = await waitForMail(adminRecipient);
+      const msg = await waitForMail(ADMIN_RECIPIENT);
       const rejectLink = extractLink(
         msg,
         /https?:\/\/[^\s"'<>]+\/konto\/access-request\/reject[^\s"'<>]*/
@@ -466,7 +507,7 @@ test.describe('account self-service: access request', () => {
       await clearMail();
       expect(await loginAs(page, target)).toBe(true);
       await submitAccessRequest(page, 'Login-redirect flowet.');
-      const msg = await waitForMail(adminRecipient);
+      const msg = await waitForMail(ADMIN_RECIPIENT);
       const approveLink = extractLink(
         msg,
         /https?:\/\/[^\s"'<>]+\/konto\/access-request\/approve[^\s"'<>]*/
@@ -505,6 +546,7 @@ test.describe('account self-service: access request', () => {
     page,
     browser,
   }) => {
+    test.skip(!hasAdminPassword, 'TEST_ADMIN_PASSWORD not set — no super-admin to notify');
     test.skip(
       !(await isMailSinkConfigured()),
       `Mailpit sink not reachable at ${mailSinkUrl()} — mail-layer assertion unavailable`,
@@ -515,7 +557,7 @@ test.describe('account self-service: access request', () => {
       await clearMail();
       expect(await loginAs(page, target)).toBe(true);
       await submitAccessRequest(page, '');
-      const msg = await waitForMail(adminRecipient);
+      const msg = await waitForMail(ADMIN_RECIPIENT);
       const approveLink = extractLink(
         msg,
         /https?:\/\/[^\s"'<>]+\/konto\/access-request\/approve[^\s"'<>]*/
