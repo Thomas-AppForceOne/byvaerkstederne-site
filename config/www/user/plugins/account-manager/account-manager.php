@@ -862,6 +862,17 @@ class AccountManagerPlugin extends Plugin
     {
         $user = $this->grav['user'] ?? null;
         if (!$user || !$user->authenticated || !$user->authorized) {
+            // A mail-link GET from a logged-out admin: route through the site
+            // login and come straight back — the login plugin honors
+            // session->redirect_after_login, so the approval completes
+            // automatically after authentication. POSTs keep the hard 403.
+            if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? '')) === 'GET') {
+                $uri = $this->grav['uri'];
+                $query = (string)$uri->query();
+                $this->grav['session']->redirect_after_login =
+                    $uri->path() . ($query !== '' ? '?' . $query : '');
+                $this->grav->redirectLangSafe('/login', 302);
+            }
             $this->sendError(403, 'Ikke autoriseret.');
         }
 
