@@ -45,7 +45,16 @@ user_registration:
     send_activation_email: true
     login_after_registration: false
     send_notification_email: false
-    send_welcome_email: false
+    # Welcome mail to the new member. With send_activation_email on, the
+    # registration handler takes the activation branch and never sends this
+    # (login.php:927); the ONLY send is from the activation handler
+    # (login.php:467), after the token has flipped the account to enabled.
+    # That is the moment the mail's own text assumes ("Din konto er nu aktiv").
+    # Content lives in the theme override
+    # themes/byvaerkstederne/templates/emails/login/welcome.html.twig.
+    # A send failure can no longer break activation — the call site catches and
+    # logs it, because the account is already enabled and saved by then.
+    send_welcome_email: true
 
 rememberme:
   enabled: true

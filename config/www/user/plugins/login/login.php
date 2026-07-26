@@ -465,7 +465,20 @@ class LoginPlugin extends Plugin
                     $user->save();
 
                     if ($this->config->get('plugins.login.user_registration.options.send_welcome_email', false)) {
-                        $this->login->sendWelcomeEmail($user);
+                        // BYV patch: the account is already enabled and saved
+                        // above, so a mail failure must not turn a successful
+                        // activation into an error page. Login::sendWelcomeEmail()
+                        // rethrows every transport failure as a RuntimeException
+                        // and no frame above this one catches it. Log and carry
+                        // on — the member is activated either way, and the
+                        // welcome mail is informational, not a gate.
+                        try {
+                            $this->login->sendWelcomeEmail($user);
+                        } catch (\Exception $e) {
+                            $this->grav['log']->error(
+                                sprintf('login: welcome email failed for %s: %s', $user->username, $e->getMessage())
+                            );
+                        }
                     }
                     if ($this->config->get('plugins.login.user_registration.options.send_notification_email', false)) {
                         $this->login->sendNotificationEmail($user);
@@ -930,7 +943,18 @@ class LoginPlugin extends Plugin
             $messages->add($message, 'info');
         } else {
             if ($this->config->get('plugins.login.user_registration.options.send_welcome_email', false)) {
-                $this->login->sendWelcomeEmail($user);
+                // BYV patch: same reasoning as the activation branch above —
+                // the account already exists at this point, so a failed welcome
+                // mail must not blow up an otherwise successful registration.
+                // (Unreachable while send_activation_email is on; kept correct
+                // for any tier that turns the activation gate off.)
+                try {
+                    $this->login->sendWelcomeEmail($user);
+                } catch (\Exception $e) {
+                    $this->grav['log']->error(
+                        sprintf('login: welcome email failed for %s: %s', $user->username, $e->getMessage())
+                    );
+                }
             }
             if ($this->config->get('plugins.login.user_registration.options.send_notification_email', false)) {
                 $this->login->sendNotificationEmail($user);
