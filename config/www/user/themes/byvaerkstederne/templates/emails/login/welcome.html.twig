@@ -165,9 +165,13 @@
   <li>Kom forbi Nørregade 21. Det er den korteste vej ind i fællesskabet.</li>
 </ol>
 
+{# The contact address comes from site.author.email so a tier can point it at
+   a mailbox its testers actually read; hardcoding it sent dev's and test's
+   readers to the production address. #}
+{%- set contact = config.site.author.email %}
 <p>
   Har du spørgsmål, så skriv endelig til
-  <a href="mailto:kontakt@byvaerkstederne.dk">kontakt@byvaerkstederne.dk</a> —
+  {% if contact %}<a href="mailto:{{ contact }}">{{ contact }}</a>{% else %}os{% endif %} —
   eller fang os i værkstedet.
 </p>
 

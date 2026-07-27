@@ -180,11 +180,6 @@ final class AccountEmail
     }
 
     /**
-     * Admin notification recipient, resolved from per-tier email config —
-     * never hardcoded. plugins.email.to lives in the gitignored env
-     * email.yaml; site.author.email is the committed tier-agnostic fallback.
-     */
-    /**
      * Recipients for the two operator-facing mails (access requests, ops
      * alerts): every ENABLED account holding admin.super, by email address.
      *

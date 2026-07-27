@@ -1,0 +1,20 @@
+# Per-tier site override for dev (tracked config, no secrets).
+#
+# author.email is the association's contact address as every visitor-facing
+# surface renders it — the welcome mail's "skriv til …" line, and the warning
+# a member gets when no super-admin could be notified about their access
+# request (account-manager.php: handleRequestAccess).
+#
+# On dev it points at a Proton alias the operator can actually open, so a
+# test of "does the mail say the right thing, and does the address in it
+# work" does not send the tester to the production mailbox. Plus-addressing
+# on hackersbychoice@proton.me keeps every tier's test traffic in one inbox
+# while staying distinguishable per purpose:
+#   +kontakt   — this contact address
+#   +admin     — the tier's super-admin account
+#   +testuserN — disposable member registrations
+#
+# Deployed tiers other than dev keep the committed production value from
+# user/config/site.yaml.
+author:
+  email: hackersbychoice+kontakt@proton.me

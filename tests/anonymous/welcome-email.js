@@ -31,6 +31,8 @@
  */
 
 const { test, expect } = require('@playwright/test');
+const fs = require('fs');
+const path = require('path');
 const {
   uniqueSignup,
   submitRegistration,
@@ -88,6 +90,24 @@ async function noWelcomeWithin(to, settleMs = 3000) {
 /** Text + HTML parts joined, for content assertions. */
 function bodyOf(msg) {
   return `${msg.Text || ''}\n${msg.HTML || ''}`;
+}
+
+/**
+ * site.author.email as configured for the origin under test (the base
+ * profile — deployed tiers may override it per host). The welcome mail's
+ * contact line must follow this value rather than a literal: a hardcoded
+ * address points a tier's testers at the production mailbox.
+ */
+function configuredContactAddress() {
+  const siteYaml = fs.readFileSync(
+    path.resolve(__dirname, '..', '..', 'config/www/user/config/site.yaml'),
+    'utf8',
+  );
+  const m = siteYaml.match(/author:\s*[\r\n]+(?:\s*\w+:[^\r\n]*[\r\n]+)*?\s*email:\s*'?([^'\s]+)'?/);
+  if (!m) {
+    throw new Error('welcome-email: could not read site.author.email from site.yaml');
+  }
+  return m[1];
 }
 
 test.describe('Welcome email (post-activation)', () => {
@@ -164,6 +184,9 @@ test.describe('Welcome email (post-activation)', () => {
     // plugin's stock "GetGrav.org" branding, and no translation key leaks
     // (Grav renders a missing translation as the key itself).
     expect(body, 'footer names the association').toContain('Byværkstederne · Nørregade 21');
+    expect(body, 'contact line follows site.author.email, not a literal').toContain(
+      configuredContactAddress(),
+    );
     expect(body, 'plugin vendor branding must not ship to members').not.toMatch(/GetGrav\.org/i);
     expect(body, 'no untranslated key may leak into the mail').not.toMatch(
       /PLUGIN_(LOGIN|EMAIL)\./,
