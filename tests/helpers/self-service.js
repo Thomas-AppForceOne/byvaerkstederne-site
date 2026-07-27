@@ -15,7 +15,7 @@
  * stray container from another checkout.
  */
 
-const { execFileSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { discoverGravEnv } = require(path.join(__dirname, '..', '..', 'scripts', 'discover-grav-port.js'));
@@ -223,6 +223,24 @@ function runPurgeCli({ dryRun = false, ignoreCap = false } = {}) {
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 120_000,
   });
+}
+
+/**
+ * Run the privilege-escalation alert the tier tooling fires after a grant:
+ * `bin/plugin account-manager notify-super-granted`. Returns
+ * {status, stdout, stderr} instead of throwing, so the failure path is
+ * assertable.
+ *
+ * @param {{user: string, actor?: string}} opts
+ */
+function runNotifySuperGrantedCli({ user, actor = 'pw-test@runner' }) {
+  const args = [
+    'exec', '-u', 'abc', '-w', '/app/www/public', gravContainer(),
+    'bin/plugin', 'account-manager', 'notify-super-granted',
+    '--user', user, '--actor', actor,
+  ];
+  const res = spawnSync('docker', args, { encoding: 'utf8', timeout: 120_000 });
+  return { status: res.status, stdout: res.stdout || '', stderr: res.stderr || '' };
 }
 
 /** Full Grav cache clear as `abc` (root-owned cache files 500 the site). */
@@ -434,6 +452,7 @@ module.exports = {
   bustCompiledFileCache,
   setDeletionMarker,
   runPurgeCli,
+  runNotifySuperGrantedCli,
   footprintGrep,
   clearGravCache,
   withBaseFlagOff,

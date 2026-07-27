@@ -7,7 +7,7 @@
 GRP_DEV   := setup start stop restart status logs open admin cache-clear clean create-admin check-deps lfs-pull
 GRP_TEST  := test test-headed test-auth test-deploy test-backup-restore test-install test-registration-throttle
 GRP_SHIP  := release-start release-status bump-version tag-release deploy rollback migrate-atomic
-GRP_TIER  := list-users delete-user cleanup-unverified registration-throttle push-data
+GRP_TIER  := list-users delete-user cleanup-unverified registration-throttle push-data list-groups grant-rights revoke-rights list-supers grant-super revoke-super
 GRP_DATA  := backup list-backups restore restore-scratch add-age-key list-age-keys retire-age-key
 GRP_RESET := reset-users reset-admin reset-data reset-cache reset-all
 
@@ -314,6 +314,58 @@ revoke-rights: ## Revoke a group from a user on a tier (tier=... user=<username|
 	  *) echo "❌  revoke-rights: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
+list-supers: ## List super-admins on a tier (tier=dev|test|staging|prod)
+	@t="$(tier)"; \
+	if [ -z "$$t" ]; then \
+	  echo "❌  list-supers: missing 'tier'.  Got: tier='$$t'"; \
+	  echo "    Usage:   make list-supers tier=<dev|test|staging|prod>"; \
+	  echo "    Example: make list-supers tier=dev"; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/manage-super.sh list "$$t" ;; \
+	  *) echo "❌  list-supers: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
+grant-super: ## Grant super-admin on a tier (tier=... user=<username|email>, dry_run=1, yes=1, i_mean_it=1)
+	@t="$(tier)"; u="$(user)"; \
+	args=""; \
+	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
+	if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
+	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
+	if [ -z "$$t" ] || [ -z "$$u" ]; then \
+	  echo "❌  grant-super: missing required argument(s).  Got: tier='$$t' user='$$u'"; \
+	  [ -z "$$t" ] && echo "    → 'tier' is empty (required: dev|test|staging|prod)"; \
+	  [ -z "$$u" ] && echo "    → 'user' is empty (a username, or an email to resolve)"; \
+	  echo "    Usage:   make grant-super tier=<dev|test|staging|prod> user=<username|email> [dry_run=1] [yes=1] [i_mean_it=1]"; \
+	  echo "    Example: make grant-super tier=dev user=test+admin@hackersbychoice.dk"; \
+	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/manage-super.sh grant "$$t" "$$u" $$args ;; \
+	  *) echo "❌  grant-super: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
+revoke-super: ## Revoke super-admin on a tier (tier=... user=<username|email>, dry_run=1, yes=1, i_mean_it=1). Refuses the last super without i_mean_it=1.
+	@t="$(tier)"; u="$(user)"; \
+	args=""; \
+	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
+	if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
+	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
+	if [ -z "$$t" ] || [ -z "$$u" ]; then \
+	  echo "❌  revoke-super: missing required argument(s).  Got: tier='$$t' user='$$u'"; \
+	  [ -z "$$t" ] && echo "    → 'tier' is empty (required: dev|test|staging|prod)"; \
+	  [ -z "$$u" ] && echo "    → 'user' is empty (a username, or an email to resolve)"; \
+	  echo "    Usage:   make revoke-super tier=<dev|test|staging|prod> user=<username|email> [dry_run=1] [yes=1] [i_mean_it=1]"; \
+	  echo "    Example: make revoke-super tier=dev user=anders"; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/manage-super.sh revoke "$$t" "$$u" $$args ;; \
+	  *) echo "❌  revoke-super: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
 cleanup-unverified: ## Remove unconfirmed accounts older than N min (tier=dev|test|staging|prod, max_age=10, apply=1, i_mean_it=1). Dry-run unless apply=1.
 	@t="$(tier)"; \
 	args=""; \
@@ -533,6 +585,7 @@ test-deploy: ## Run deploy-script regression tests (lint + unit + atomic-layout 
 	@bash tests/deploy/unit-promotion-no-email-sync.sh
 	@bash tests/deploy/bump-version.sh
 	@bash tests/deploy/unit-manage-groups.sh
+	@bash tests/deploy/unit-manage-super.sh
 	@bash tests/deploy/unit-activate-user.sh
 	@bash tests/deploy/unit-reset-password.sh
 	@bash tests/deploy/unit-reset-users.sh

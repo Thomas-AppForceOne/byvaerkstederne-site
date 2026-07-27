@@ -102,6 +102,30 @@ final class AccountEmail
     }
 
     /**
+     * Privilege-escalation alert: an account was granted super-admin.
+     *
+     * Sent to every super on the tier — including the account that was just
+     * promoted, since the recipients are resolved after the change. A rights
+     * change made with server tooling is otherwise visible only in a log
+     * nobody reads until something has already gone wrong.
+     */
+    public function sendSuperGrantedAlert(
+        string $targetUsername,
+        string $targetEmail,
+        string $actor,
+        string $occurredAt,
+        string $source
+    ): void {
+        $this->sendToAdmins('super-granted', [
+            'target_username' => $targetUsername,
+            'target_email' => $targetEmail,
+            'actor' => $actor,
+            'occurred_at' => $occurredAt,
+            'source' => $source,
+        ]);
+    }
+
+    /**
      * Access-request notification to the admin recipients (§8). Granting
      * stays a manual super action in the admin panel — this mail is the
      * only automation.
