@@ -60,6 +60,21 @@ usage() {
 # same posture as delete-user.sh and manage-groups.sh.
 PROTECTED_USER_PREFIX="pw-test-"
 
+# Canonical host per tier — MUST match deploy.sh's ENV_HOST. Grav resolves its
+# environment config from the HOSTNAME, which a CLI run does not have: without
+# --env the tier's own user/env/<host>/config/plugins/email.yaml is never
+# loaded, the mailer has no transport, and the email plugin reports success
+# while sending nowhere. Verified on dev: the alert only arrives with --env.
+tier_host() {
+    case "$1" in
+        dev)     echo "dev.hackersbychoice.dk" ;;
+        test)    echo "test.hackersbychoice.dk" ;;
+        staging) echo "staging.hackersbychoice.dk" ;;
+        prod)    echo "www.byvaerkstederne.dk" ;;
+        *) return 1 ;;
+    esac
+}
+
 YES=0
 DRY_RUN=0
 I_MEAN_IT=0
@@ -304,8 +319,9 @@ fi
 # failed alert is reported but never undoes the change — and it is loud,
 # because "nobody was told" is the part an operator needs to know.
 if [ "$ACTION" = "grant" ]; then
+    ENV_HOST="$(tier_host "$TIER")"
     if alert="$(bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-            "cd \"$TIER_DIR\" && php bin/plugin account-manager notify-super-granted --user \"$USERNAME\" --actor \"$ACTOR\" --source deploy/manage-super.sh" \
+            "cd \"$TIER_DIR\" && php bin/plugin account-manager notify-super-granted --env \"$ENV_HOST\" --user \"$USERNAME\" --actor \"$ACTOR\" --source deploy/manage-super.sh" \
             2>&1 < /dev/null)"; then
         echo "  alerted: every super-admin on $TIER has been mailed about this change"
     else

@@ -65,6 +65,27 @@ class NotifySuperGrantedCommand extends ConsoleCommand
 
         $grav = Grav::instance();
 
+        // Refuse to claim success without a transport. Grav resolves its
+        // environment config from the HOSTNAME, which a CLI run does not
+        // have — without `--env <host>` the tier's own email.yaml is never
+        // merged, the mailer falls back to an unconfigured transport, and the
+        // email plugin returns without failed recipients. The send then
+        // "succeeds" and nothing is delivered, which is worse than an error:
+        // the operator is told the supers were alerted when they were not.
+        // Observed on dev before this guard existed.
+        $config = $grav['config'];
+        $engine = (string)$config->get('plugins.email.mailer.engine', '');
+        $server = (string)$config->get('plugins.email.mailer.smtp.server', '');
+        if ($config->get('plugins.email.enabled') !== true || $engine === ''
+            || ($engine === 'smtp' && $server === '')) {
+            $this->output->writeln(
+                '<red>notify-super-granted: no mail transport is configured in this context — '
+                . 'nothing would be delivered. Pass --env &lt;tier-host&gt; (e.g. dev.hackersbychoice.dk) '
+                . 'so the tier\'s email.yaml is loaded.</red>'
+            );
+            return 1;
+        }
+
         // Read the address straight off the account file: this runs in a CLI
         // context where the Flex account index may be stale right after the
         // edit, and the address is only used to identify the account in the
