@@ -331,7 +331,7 @@ if [ "$ACTION" = "grant" ]; then
     fi
 fi
 
-echo "✓ super-admin ${ACTION}ed for '$USERNAME' on $TIER (effective at next login)"
+echo "✓ super-admin $([ "$ACTION" = "grant" ] && echo granted || echo revoked) for '$USERNAME' on $TIER (effective at next login)"
 case "$result" in
     *changed+login*)
         echo "  note: the account had no access.site.login — it was granted too, so the"
