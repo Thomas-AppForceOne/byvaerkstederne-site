@@ -243,6 +243,65 @@ function runNotifySuperGrantedCli({ user, actor = 'pw-test@runner' }) {
   return { status: res.status, stdout: res.stdout || '', stderr: res.stderr || '' };
 }
 
+/**
+ * Run the site-side privilege-escalation watch:
+ * `bin/plugin account-manager watch-supers`. Returns {status, stdout, stderr}
+ * instead of throwing, so the failure paths are assertable.
+ *
+ * @param {{dryRun?: boolean}} [opts]
+ */
+function runWatchSupersCli({ dryRun = false } = {}) {
+  const args = [
+    'exec', '-u', 'abc', '-w', '/app/www/public', gravContainer(),
+    'bin/plugin', 'account-manager', 'watch-supers',
+  ];
+  if (dryRun) args.push('--dry-run');
+  const res = spawnSync('docker', args, { encoding: 'utf8', timeout: 120_000 });
+  return { status: res.status, stdout: res.stdout || '', stderr: res.stderr || '' };
+}
+
+/** Delete the watch's recorded baseline so the next run starts fresh. */
+function resetSuperBaseline() {
+  execFileSync(
+    'docker',
+    ['exec', '-u', 'abc', gravContainer(), 'sh', '-c',
+      'rm -f /app/www/public/user/data/account-manager/super-baseline.yaml'],
+    { stdio: ['ignore', 'pipe', 'pipe'], timeout: 10_000 },
+  );
+}
+
+/**
+ * Promote a disposable account by writing the rights straight into its YAML —
+ * deliberately NOT through the tier tooling, so the watch is tested against
+ * the paths that bypass it (hand edit, restored backup, unknown script).
+ *
+ * @param {string} username
+ */
+function makeAccountSuper(username) {
+  assertDisposableUsername(username);
+  // Reuse the tier tool's YAML editor (a real parse + dump) rather than
+  // appending text: an earlier version of this helper appended indented lines
+  // after the document's last key, producing YAML that parsed to something
+  // else entirely and a watch that correctly saw no new super. What makes
+  // this "outside the tooling" is that NO alert is fired here — the rights
+  // simply appear on disk, as they would after a hand edit or a restore.
+  const phpSource = fs.readFileSync(path.join(REPO_ROOT, 'deploy/lib/account-super.php'), 'utf8');
+  const res = spawnSync(
+    'docker',
+    [
+      'exec', '-i', '-u', 'abc', '-w', '/app/www/public', gravContainer(),
+      'php', '--', `/app/www/public/user/accounts/${username}.yaml`, 'grant', 'pw-test@fixture',
+    ],
+    { input: phpSource, encoding: 'utf8', timeout: 30_000 },
+  );
+  if (res.status !== 0 || !/changed/.test(res.stdout || '')) {
+    throw new Error(
+      `self-service: could not promote ${username}: ${(res.stderr || res.stdout || '').trim()}`,
+    );
+  }
+  bustCompiledFileCache();
+}
+
 /** Full Grav cache clear as `abc` (root-owned cache files 500 the site). */
 function clearGravCache() {
   execFileSync(
@@ -453,6 +512,9 @@ module.exports = {
   setDeletionMarker,
   runPurgeCli,
   runNotifySuperGrantedCli,
+  runWatchSupersCli,
+  resetSuperBaseline,
+  makeAccountSuper,
   footprintGrep,
   clearGravCache,
   withBaseFlagOff,

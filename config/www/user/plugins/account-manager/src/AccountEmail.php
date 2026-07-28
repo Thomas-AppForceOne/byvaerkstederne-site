@@ -223,32 +223,12 @@ final class AccountEmail
      */
     public function adminRecipients(): array
     {
+        // SuperWatch owns the definition of "a super" so the alerting and the
+        // addressing can never disagree about who counts.
         $found = [];
-        $dir = $this->grav['locator']->findResource('account://');
-        if (is_string($dir) && is_dir($dir)) {
-            foreach (glob($dir . '/*.yaml') ?: [] as $path) {
-                try {
-                    $data = Yaml::parse((string)file_get_contents($path));
-                } catch (\Throwable $e) {
-                    // One malformed account must not silence the others.
-                    continue;
-                }
-                if (!is_array($data)) {
-                    continue;
-                }
-                $super = $data['access']['admin']['super'] ?? false;
-                if ($super !== true && $super !== 1 && $super !== 'true' && $super !== '1') {
-                    continue;
-                }
-                // A disabled super cannot act on the mail; Grav treats a
-                // missing state as enabled.
-                if ((string)($data['state'] ?? 'enabled') !== 'enabled') {
-                    continue;
-                }
-                $email = trim((string)($data['email'] ?? ''));
-                if ($email !== '') {
-                    $found[$email] = true;
-                }
+        foreach ((new SuperWatch($this->grav))->supers() as $email) {
+            if ($email !== '') {
+                $found[$email] = true;
             }
         }
 

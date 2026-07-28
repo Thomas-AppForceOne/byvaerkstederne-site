@@ -686,6 +686,18 @@ class AccountManagerPlugin extends Plugin
             'account-manager-purge'
         );
         $job->at('0 3 * * *');
+
+        // Privilege-escalation watch (site-side backstop). Runs in-process
+        // under `bin/grav scheduler`, so it inherits whatever environment the
+        // cron entry resolved — which is why that entry MUST carry
+        // `--env <tier-host>`, or the alert is composed and delivered
+        // nowhere. See deploy/SCHEDULER.md.
+        $watch = $scheduler->addFunction(
+            'Grav\\Plugin\\AccountManager\\SuperWatch::runScheduled',
+            [],
+            'account-manager-super-watch'
+        );
+        $watch->at('*/30 * * * *');
     }
 
     // -------------------------------------------------------------------------
