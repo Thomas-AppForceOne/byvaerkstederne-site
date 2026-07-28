@@ -23,8 +23,8 @@ const { SIGNUP_USERNAME, removeSignupAccount } = require('./registration');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
-// Meets system.pwd_regex (≥8 chars, upper + lower + digit).
-const DISPOSABLE_PASSWORD = 'Abcdefg1';
+// Meets system.pwd_regex (>=12 chars) and contains no blocklisted term.
+const DISPOSABLE_PASSWORD = 'Playwright-Fixture-42';
 
 let _container = null;
 function gravContainer() {

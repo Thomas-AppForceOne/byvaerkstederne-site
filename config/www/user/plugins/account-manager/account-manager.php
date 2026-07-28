@@ -31,6 +31,7 @@
 
 namespace Grav\Plugin;
 
+use Grav\Common\Data\ValidationException;
 use Grav\Common\File\CompiledYamlFile;
 use Grav\Common\Grav;
 use Grav\Common\Page\Interfaces\PageInterface;
@@ -43,8 +44,10 @@ use Grav\Plugin\AccountManager\AccountAuditLog;
 use Grav\Plugin\AccountManager\AccountEmail;
 use Grav\Plugin\AccountManager\AccountStore;
 use Grav\Plugin\AccountManager\AccountValidator;
+use Grav\Plugin\AccountManager\PasswordPolicy;
 use Grav\Plugin\FeatureFlags\FeatureFlag;
 use Grav\Plugin\FeatureFlags\FlagStoreInterface;
+use RocketTheme\Toolbox\Event\Event;
 
 class AccountManagerPlugin extends Plugin
 {
@@ -178,7 +181,51 @@ class AccountManagerPlugin extends Plugin
             // see deploy/SCHEDULER.md). Unflagged like the login hook: a
             // member who consented to deletion must be deleted on schedule.
             'onSchedulerInitialized' => ['onSchedulerInitialized', 0],
+            // Password blocklist on the REGISTRATION form. Unflagged: the
+            // rule is about credential quality, not about a feature — and a
+            // tier with the self-service flag off still registers members.
+            'onFormValidationProcessed' => ['onFormValidationProcessed', 0],
         ]);
+    }
+
+    /**
+     * Reject a blocklisted password on the registration form.
+     *
+     * The forms plugin fires this inside its own try block, so a
+     * ValidationException here surfaces as a normal Danish field error rather
+     * than a 500 — and it lands on the SAME submission as the length rule
+     * from system.pwd_regex, which the plugin has already applied.
+     *
+     * Registration is the only form handled here; the /konto password change
+     * calls PasswordPolicy directly (handleChangePassword), and Grav's own
+     * password-RESET form never reaches the forms plugin at all — that gap is
+     * documented on PasswordPolicy.
+     */
+    public function onFormValidationProcessed(Event $event): void
+    {
+        $form = $event['form'] ?? null;
+        if ($form === null || !method_exists($form, 'value')) {
+            return;
+        }
+        $name = method_exists($form, 'getName') ? (string)$form->getName() : '';
+        if ($name !== 'registration') {
+            return;
+        }
+
+        $password = (string)($form->value('password1') ?? '');
+        if ($password === '') {
+            return;
+        }
+
+        $policy = new PasswordPolicy($this->grav);
+        if ($policy->blockedTerm($password) === null) {
+            return;
+        }
+
+        // The forms plugin's catch assigns the exception's message to the
+        // form (Form::$message), so throwing IS how a listener reports the
+        // rejection — Form::setError() is protected and not ours to call.
+        throw new ValidationException($policy->rejectionMessage());
     }
 
     // -------------------------------------------------------------------------
@@ -380,6 +427,14 @@ class AccountManagerPlugin extends Plugin
             $this->failWith(400, $result['errors'], 'password');
         }
         $password = $result['value'];
+
+        // The rule system.pwd_regex cannot express: a guessable-word blocklist.
+        // Checked after the regex so the member gets the length message first
+        // when both apply.
+        $policy = new PasswordPolicy($this->grav);
+        if ($policy->blockedTerm($password) !== null) {
+            $this->failWith(400, [$policy->rejectionMessage()], 'password');
+        }
 
         try {
             $this->store()->mutate($user->username, static function (UserInterface $account) use ($password): void {

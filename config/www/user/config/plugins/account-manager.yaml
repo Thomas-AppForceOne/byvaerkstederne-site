@@ -1,0 +1,56 @@
+# Site-level account-manager config (tracked; no secrets).
+#
+# The plugin's own blueprint defaults cover everything else — this file exists
+# for the values a reviewer should be able to see and change without reading
+# plugin code.
+
+password:
+  # Substrings a password may not contain, matched case-insensitively.
+  #
+  # WHY A BLOCKLIST AND NOT MORE COMPOSITION RULES: requiring an uppercase, a
+  # digit and a symbol produces "Sommer2026!" — which sits at the top of every
+  # cracking dictionary. Length plus a blocklist of the words people here
+  # actually reach for is worth more than any character-class rule, and it is
+  # what NIST SP 800-63B has recommended since it dropped composition rules.
+  #
+  # ONE SOURCE: this list is read by the server (PasswordPolicy) AND rendered
+  # into the client-side check by register.html.twig, so the two cannot drift.
+  # Keep entries lowercase — matching lowercases the candidate first.
+  #
+  # Site- and place-specific terms first: those are the guesses an attacker
+  # who has read this (public) repo would try before any generic list.
+  blocklist:
+    - byvaerkstederne
+    - byvaerksted
+    - vaerksted
+    - hundested
+    - noerregade
+    - nørregade
+    - halsnaes
+    - makerspace
+    - kreacafe
+    - eventvaerksted
+    # Generic favourites, Danish and English.
+    - adgangskode
+    - kodeord
+    - password
+    - passord
+    - qwerty
+    - qwertyuiop
+    - 123456
+    - 12345678
+    - 87654321
+    - abcdef
+    - welcome
+    - velkommen
+    - sommer
+    - vinter
+    - foraar
+    - efteraar
+    - januar
+    - december
+    - fodbold
+    - danmark
+    - koebenhavn
+    - administrator
+    - superadmin

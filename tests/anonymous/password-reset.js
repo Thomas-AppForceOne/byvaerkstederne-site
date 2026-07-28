@@ -116,7 +116,7 @@ test.describe('Password reset (WI-1/WI-6)', () => {
     );
 
     const oldPassword = process.env.TEST_PASSWORD || '';
-    const newPassword = 'Resetpw9X';
+    const newPassword = 'Reset-Fixture-99'; // >=12 per system.pwd_regex, no blocklisted term
 
     // Drive the themed reset form in the browser (session/nonce coherent).
     async function setPasswordViaReset(link, newPw) {

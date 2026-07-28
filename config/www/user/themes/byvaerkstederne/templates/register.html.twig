@@ -78,22 +78,31 @@
                         }
                     }
 
-                    // Password strength validation (WI-5/WI-7). Target the
-                    // first password field (password1) explicitly now that the
-                    // form has a confirmation field (password2). This .length +
-                    // /[a-z]/ + /[A-Z]/ + /[0-9]/ chain is the canonical
-                    // client-side policy proven equivalent to the server-side
-                    // pwd_regex by the shared truth-table fixture/test.
+                    // Password validation (WI-5/WI-7). Target the first password
+                    // field (password1) explicitly now that the form has a
+                    // confirmation field (password2). The length check is the
+                    // canonical client-side policy proven equivalent to the
+                    // server-side pwd_regex by the shared truth-table
+                    // fixture/test — length only, no character classes.
+                    //
+                    // The blocklist below is RENDERED FROM THE SAME CONFIG the
+                    // server reads (plugins.account-manager.password.blocklist),
+                    // so the two checks cannot drift apart. It is a courtesy,
+                    // not a boundary: account-manager re-checks the submission.
+                    var BLOCKED = {{ config.plugins['account-manager'].password.blocklist|default([])|json_encode|raw }};
                     var pwd = form.querySelector('input[name="data[password1]"]') || form.querySelector('input[type="password"]');
                     if (pwd) {
                         var val = pwd.value;
-                        var errors = [];
-                        if (val.length < 8) errors.push('mindst 8 tegn');
-                        if (!/[a-z]/.test(val)) errors.push('mindst ét lille bogstav');
-                        if (!/[A-Z]/.test(val)) errors.push('mindst ét stort bogstav');
-                        if (!/[0-9]/.test(val)) errors.push('mindst ét tal');
-                        if (errors.length > 0) {
-                            showError(pwd, 'Adgangskoden mangler: ' + errors.join(', ') + '.');
+                        if (val.length < 12) {
+                            showError(pwd, 'Adgangskoden skal være mindst 12 tegn.');
+                        } else {
+                            var lower = val.toLowerCase();
+                            for (var bi = 0; bi < BLOCKED.length; bi++) {
+                                if (String(BLOCKED[bi]) && lower.indexOf(String(BLOCKED[bi])) !== -1) {
+                                    showError(pwd, 'Adgangskoden indeholder et ord, der er for nemt at gætte. Vælg noget andet — gerne en sætning, du kan huske.');
+                                    break;
+                                }
+                            }
                         }
                     }
 

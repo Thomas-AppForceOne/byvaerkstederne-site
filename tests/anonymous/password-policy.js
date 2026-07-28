@@ -8,7 +8,13 @@
  *   - system.yaml: pwd_regex / username_regex (server-side, Grav core)
  *   - register.md: the username field's validate.pattern (forms plugin)
  *   - register.html.twig: the client-side username regex literal and the
- *     imperative password .length + /[a-z]/ + /[A-Z]/ + /[0-9]/ chain.
+ *     imperative password .length check.
+ *
+ * The policy is LENGTH ONLY (>=12, no character classes) — see the rationale
+ * in system.yaml. The guessable-word rule lives in a blocklist that a regex
+ * cannot carry; its parity is structural rather than asserted, because the
+ * client check is RENDERED from the same config the server reads. The last
+ * test here pins that structure.
  *
  * These are pure-source + pure-logic checks (no Grav container, no creds), so
  * they run always. They fail if any artifact drifts — e.g. a pwd_regex that
@@ -28,7 +34,7 @@ const REGISTER_TWIG = path.join(
 );
 
 const EXPECTED_USERNAME_REGEX = '^[a-z0-9_-]{3,16}$';
-const EXPECTED_PWD_REGEX = '(?=.*[A-Z])(?=.*[0-9])(?=.*[a-z]).{8,}';
+const EXPECTED_PWD_REGEX = '.{12,}';
 
 function read(file) {
   return fs.readFileSync(file, 'utf8');
@@ -64,6 +70,31 @@ test.describe('Password & username policy parity (WI-5)', () => {
     expect(twigMatch, 'register.html.twig must contain the same username regex literal').not.toBeNull();
   });
 
+  test('register.md pins the password pattern to the same value as pwd_regex', () => {
+    const sys = read(SYSTEM_YAML);
+    const md = read(REGISTER_MD);
+    // The forms plugin enforces this one server-side, so a drift here would
+    // let the page accept what Grav's own policy rejects (or the reverse).
+    const mdPattern = md.match(/pattern:\s*"(\.\{12,\})"/);
+    expect(yamlScalar(sys, 'pwd_regex')).toBe(EXPECTED_PWD_REGEX);
+    expect(mdPattern, 'register.md password1 validate.pattern must equal pwd_regex').not.toBeNull();
+  });
+
+  test('the client blocklist is rendered from config, not duplicated as a literal', () => {
+    const twig = read(REGISTER_TWIG);
+    // Structural parity: one source of truth. A hand-copied array here would
+    // silently drift from what the server enforces — the exact failure this
+    // whole file exists to prevent for the length rule.
+    expect(
+      twig.includes("config.plugins['account-manager'].password.blocklist"),
+      'register.html.twig must render the blocklist from plugin config',
+    ).toBe(true);
+    expect(
+      /var BLOCKED = \[/.test(twig),
+      'the blocklist must not be a hardcoded array literal in the template',
+    ).toBe(false);
+  });
+
   /**
    * Shared accept/reject truth table. Each row is fed to BOTH:
    *   - the server-side pwd_regex (as pinned in system.yaml), and
@@ -72,20 +103,16 @@ test.describe('Password & username policy parity (WI-5)', () => {
    * Both must produce the row's verdict. Divergence fails the test.
    */
   const TRUTH_TABLE = [
-    { pw: 'Abcdefg1', accept: true, why: 'meets all rules' },
-    { pw: 'abcdefg1', accept: false, why: 'no uppercase' },
-    { pw: 'ABCDEFG1', accept: false, why: 'no lowercase' },
-    { pw: 'Abcdefgh', accept: false, why: 'no digit' },
-    { pw: 'Abcdef1', accept: false, why: 'too short (7)' },
+    { pw: 'en helt almindelig sætning', accept: true, why: 'a passphrase, no classes needed' },
+    { pw: 'abcdefghijkl', accept: true, why: 'exactly 12, all lowercase — accepted by design' },
+    { pw: 'Abcdefg1', accept: false, why: 'too short (8) even with every class' },
+    { pw: 'abcdefghijk', accept: false, why: 'too short (11)' },
+    { pw: '', accept: false, why: 'empty' },
   ];
 
-  // Faithful copy of the register.html.twig client-side chain.
+  // Faithful copy of the register.html.twig client-side check.
   function clientAccepts(pw) {
-    if (pw.length < 8) return false;
-    if (!/[a-z]/.test(pw)) return false;
-    if (!/[A-Z]/.test(pw)) return false;
-    if (!/[0-9]/.test(pw)) return false;
-    return true;
+    return pw.length >= 12;
   }
 
   for (const row of TRUTH_TABLE) {
