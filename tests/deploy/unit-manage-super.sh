@@ -233,13 +233,30 @@ fi
 echo "---"
 echo "account-super.php (real PHP)"
 
+# A host php is not enough: account-super.php needs symfony/yaml on the
+# include path, and this repo vendors Grav's own tree only inside the Docker
+# image. Same two candidates unit-manage-groups.sh uses — the feature-flags
+# plugin's dev vendor tree (local, gitignored) and migrations/vendor, which
+# the ci-test-deploy workflow's composer step installs. That second one is
+# what makes these checks run in CI at all.
 PHP_MODE=""
+PHP_AUTOLOAD_DIR=""
 if command -v php >/dev/null 2>&1; then
-    PHP_MODE="host"
-elif command -v docker >/dev/null 2>&1; then
+    for candidate in "$PROJECT_ROOT/config/www/user/plugins/feature-flags" "$PROJECT_ROOT/migrations"; do
+        if [ -f "$candidate/vendor/autoload.php" ]; then
+            PHP_MODE="host"
+            PHP_AUTOLOAD_DIR="$candidate"
+            break
+        fi
+    done
+fi
+if [ -z "$PHP_MODE" ] && command -v docker >/dev/null 2>&1; then
     GRAV_CONTAINER="$(docker ps --format '{{.Names}}' | grep -m1 '^grav-' || true)"
     [ -n "$GRAV_CONTAINER" ] && PHP_MODE="docker"
 fi
+# Which engine ran is worth printing: the two modes exercise different code
+# paths in this harness, and the host one only ever runs in CI.
+echo "  (php mode: ${PHP_MODE:-none}${PHP_AUTOLOAD_DIR:+ via $(basename "$PHP_AUTOLOAD_DIR")})"
 
 # The account lives at <root>/user/accounts/<name>.yaml because the audit
 # entry is written to <root>/user/data/account-manager/ — the layout is part
@@ -252,7 +269,14 @@ AUDIT="$FAKE_ROOT_LOCAL/user/data/account-manager/account-audit.jsonl"
 run_super_php() {
     # $1 action, $2 actor
     if [ "$PHP_MODE" = "host" ]; then
-        (cd "$PROJECT_ROOT/config/www" && php "$SB/proj/deploy/lib/account-super.php" -- "$ACCT" "$1" "$2" 2>&1)
+        # Pipe the script in on stdin and `cd` to a tree that HAS
+        # vendor/autoload.php — the same shape unit-manage-groups.sh uses.
+        # (An earlier version passed the file as an argument AND an extra
+        # `--`, which made $argv[1] "--" and ran from a directory with no
+        # vendor tree: it passed locally, where only the docker branch runs,
+        # and failed every real-PHP assertion in CI.)
+        ( cd "$PHP_AUTOLOAD_DIR" \
+          && php -- "$ACCT" "$1" "$2" < "$SB/proj/deploy/lib/account-super.php" 2>&1 )
     else
         docker exec "$GRAV_CONTAINER" rm -rf /tmp/bv-super-test >/dev/null 2>&1 || true
         docker exec "$GRAV_CONTAINER" mkdir -p /tmp/bv-super-test/user/accounts >/dev/null
