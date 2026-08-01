@@ -80,6 +80,42 @@ test.describe('Password & username policy parity (WI-5)', () => {
     expect(mdPattern, 'register.md password1 validate.pattern must equal pwd_regex').not.toBeNull();
   });
 
+  test('every user-facing text states the length the regex actually enforces', () => {
+    // The rule lives in five places a member can read. When the policy moved
+    // from 8 to 12 the /konto hint and the change-password rejection were
+    // left behind, telling members to satisfy a rule that no longer existed.
+    // A wrong rejection message sends someone round in circles, so the text
+    // is pinned to the regex here.
+    const surfaces = {
+      'register.md (help + placeholder)': path.join(
+        REPO_ROOT,
+        'config/www/user/pages/09.opret-medlemskab/register.md',
+      ),
+      'account.html.twig (change-password hint)': path.join(
+        REPO_ROOT,
+        'config/www/user/themes/byvaerkstederne/templates/account.html.twig',
+      ),
+      'AccountValidator.php (rejection)': path.join(
+        REPO_ROOT,
+        'config/www/user/plugins/account-manager/src/AccountValidator.php',
+      ),
+      'en.yaml (PLUGIN_LOGIN messages)': path.join(
+        REPO_ROOT,
+        'config/www/user/languages/en.yaml',
+      ),
+    };
+
+    for (const [label, file] of Object.entries(surfaces)) {
+      const text = read(file);
+      expect(text, `${label} must state the 12-character minimum`).toMatch(/[Mm]indst 12 tegn/);
+      // The old rule, in the shapes it was written in. "3-16 tegn" (username)
+      // is untouched by this.
+      expect(text, `${label} still states the retired 8-character rule`).not.toMatch(
+        /mindst 8 tegn|8 tegn med/i,
+      );
+    }
+  });
+
   test('the client blocklist is rendered from config, not duplicated as a literal', () => {
     const twig = read(REGISTER_TWIG);
     // Structural parity: one source of truth. A hand-copied array here would

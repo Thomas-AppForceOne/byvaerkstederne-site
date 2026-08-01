@@ -84,7 +84,7 @@ test.describe('account self-service: change password', () => {
   test('policy-violating new password is rejected', async ({ page }) => {
     expect(await loginAs(page, acct)).toBe(true);
     await submitPasswordChange(page, { current: acct.password, new1: 'weakpass', new2: 'weakpass' });
-    await expect(page.locator('.bv-message--error')).toContainText('mindst 8 tegn');
+    await expect(page.locator('.bv-message--error')).toContainText('mindst 12 tegn');
   });
 
   test('happy path: old password stops working, new password logs in', async ({ page }) => {
