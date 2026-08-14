@@ -7,7 +7,7 @@
 GRP_DEV   := setup start stop restart status logs open admin cache-clear clean create-admin check-deps lfs-pull
 GRP_TEST  := test test-headed test-auth test-deploy test-backup-restore test-install test-registration-throttle
 GRP_SHIP  := release-start release-status bump-version tag-release deploy rollback migrate-atomic
-GRP_TIER  := list-users delete-user cleanup-unverified registration-throttle push-data list-groups grant-rights revoke-rights list-supers grant-super revoke-super
+GRP_TIER  := list-users delete-user cleanup-unverified registration-throttle push-data list-groups grant-rights revoke-rights list-supers grant-super revoke-super scheduler-token
 GRP_DATA  := backup list-backups restore restore-scratch add-age-key list-age-keys retire-age-key
 GRP_RESET := reset-users reset-admin reset-data reset-cache reset-all
 
@@ -364,6 +364,23 @@ revoke-super: ## Revoke super-admin on a tier (tier=... user=<username|email>, d
 	case "$$t" in \
 	  dev|test|staging|prod) ./deploy/manage-super.sh revoke "$$t" "$$u" $$args ;; \
 	  *) echo "❌  revoke-super: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
+scheduler-token: ## Provision/rotate a tier's scheduler-trigger token (tier=dev|test|staging|prod, show=1 to print the URL, status=1, yes=1)
+	@t="$(tier)"; \
+	args=""; \
+	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
+	if [ "$(show)" = "1" ]; then args="$$args --show"; fi; \
+	if [ "$(status)" = "1" ]; then args="$$args --status"; fi; \
+	if [ -z "$$t" ]; then \
+	  echo "❌  scheduler-token: missing 'tier'."; \
+	  echo "    Usage:   make scheduler-token tier=<dev|test|staging|prod> [show=1] [status=1] [yes=1]"; \
+	  echo "    Example: make scheduler-token tier=dev"; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/scheduler-token.sh "$$t" $$args ;; \
+	  *) echo "❌  scheduler-token: invalid tier '$$t'"; exit 1 ;; \
 	esac
 
 cleanup-unverified: ## Remove unconfirmed accounts older than N min (tier=dev|test|staging|prod, max_age=10, apply=1, i_mean_it=1). Dry-run unless apply=1.

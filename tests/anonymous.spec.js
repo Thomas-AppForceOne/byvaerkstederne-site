@@ -28,6 +28,8 @@ require('./anonymous/feature-flags-html');
 require('./anonymous/feature-flags-plugins');
 require('./anonymous/feature-flags-link-hiding');
 require('./anonymous/version-footer');
+// Token-gated cron endpoint (the hosting plan has no cron of its own).
+require('./anonymous/scheduler-trigger');
 // Member auth hardening (WI-4/WI-5/WI-6). password-policy + session-cookie run
 // always (pure source/logic + the X-Forwarded-Proto cookie probe); the login
 // round-trip, registration, and password-reset gate on TEST_PASSWORD, the
