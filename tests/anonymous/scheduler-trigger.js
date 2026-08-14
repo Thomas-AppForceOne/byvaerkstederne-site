@@ -160,12 +160,13 @@ test.describe('Scheduler trigger (token-gated cron endpoint)', () => {
     }
   });
 
-  test('the throttle is short enough for a per-minute caller', async () => {
-    // Grav only runs a job when the call lands in the job's own minute, so
-    // the caller must fire every minute. A throttle at or above 60s would
-    // swallow roughly every other call, and any job whose minute fell in a
-    // swallowed call would never run at all — the failure this endpoint
-    // exists to prevent, reintroduced one layer up.
+  test('the throttle cannot swallow a scheduled call', async () => {
+    // The throttle is burst protection, not a scheduling knob. It must stay
+    // well below the trigger interval: a throttle that swallows a scheduled
+    // call silently drops whatever was due in that minute — the failure this
+    // endpoint exists to prevent, reintroduced one layer up. The caller runs
+    // every 5 minutes (see deploy/SCHEDULER.md), so anything under 30s is
+    // comfortably safe and still stops a flood cold.
     const yaml = require('fs').readFileSync(
       path.join(REPO_ROOT, 'config/www/user/plugins/scheduler-trigger/scheduler-trigger.yaml'),
       'utf8',

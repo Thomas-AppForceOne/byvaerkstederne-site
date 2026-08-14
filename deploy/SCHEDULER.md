@@ -51,16 +51,25 @@ per-tier `email.yaml`.
 ### The cron service
 
 Create one job per tier — dev, test, staging AND prod — at
-<https://cron-job.org> (free), calling that tier's URL **every minute**.
+<https://cron-job.org> (free), calling that tier's URL **every 5 minutes**.
 
-**Every minute, not every quarter.** Grav evaluates each job's cron
-expression against the current minute and neither tolerates nor catches up
-(`Job::isDue`). A caller that fires every 15 minutes only ever triggers jobs
-whose minute happens to coincide — and the moment the service is a minute
-late, a job scheduled at `0 3 * * *` misses that day entirely. Invoking every
-minute is what Grav's own documentation prescribes for a cron entry, and it
-makes the job expressions in the code mean what they say. The cost is one
-short request a minute per tier.
+**Why 5 and not 15, and why not every minute either.** Grav matches each job's
+cron expression against the current minute, with no tolerance and no catch-up
+(`Job::isDue`). An expression like `*/30` therefore only fires when the caller
+happens to knock at :00 or :30, and one late call skips the slot outright.
+Rather than knock every minute to make coincidences likely, the interval jobs
+are marked **always-due** (`* * * * *`) and take their cadence from the
+caller: the detection interval simply *is* the trigger interval, and jitter
+cannot make them miss. Five minutes is 288 calls a day per tier — a rounding
+error in traffic terms — and gives the privilege-escalation watch a five
+minute detection latency instead of the thirty it was originally written for.
+
+The one exception is the daily purge (`0 3 * * *`), which stays at a fixed
+time because its per-run cap is what makes a mass-lapse safe: running it 288
+times a day would turn "at most 5 accounts per run" into "at most 5 every five
+minutes". It needs a call to land inside minute 03:00; a service outage across
+that minute delays a deletion by one day, which the 30-day window absorbs
+without ceremony.
 
 Enable failure notifications: the service telling you it cannot reach the URL
 is the only external signal that a tier's scheduled work has stopped.

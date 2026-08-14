@@ -687,17 +687,26 @@ class AccountManagerPlugin extends Plugin
         );
         $job->at('0 3 * * *');
 
-        // Privilege-escalation watch (site-side backstop). Runs in-process
-        // under `bin/grav scheduler`, so it inherits whatever environment the
-        // cron entry resolved — which is why that entry MUST carry
-        // `--env <tier-host>`, or the alert is composed and delivered
-        // nowhere. See deploy/SCHEDULER.md.
+        // Privilege-escalation watch (site-side backstop).
+        //
+        // ALWAYS DUE, on purpose. Grav matches a job's expression against the
+        // current minute with no tolerance and no catch-up (Job::isDue), so
+        // an expression like */30 only fires when the caller happens to knock
+        // at :00 or :30 — and one late call skips the slot entirely. Marking
+        // it always-due hands the cadence to whatever invokes the scheduler:
+        // the detection interval simply IS the trigger interval, and jitter
+        // cannot make it miss. The work is a read-only scan of the account
+        // files, cheap enough to run on every invocation.
+        //
+        // It runs in-process under `bin/grav scheduler`, so it inherits the
+        // environment the caller resolved — which is why an SSH/cron
+        // invocation must carry `--env <tier-host>`. See deploy/SCHEDULER.md.
         $watch = $scheduler->addFunction(
             'Grav\\Plugin\\AccountManager\\SuperWatch::runScheduled',
             [],
             'account-manager-super-watch'
         );
-        $watch->at('*/30 * * * *');
+        $watch->at('* * * * *');
     }
 
     // -------------------------------------------------------------------------
