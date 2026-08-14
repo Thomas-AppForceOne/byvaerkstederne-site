@@ -136,7 +136,9 @@ if [ "$SHOW" = "1" ]; then
     token="$(bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
         "cat \"$TOKEN_FILE\" 2>/dev/null || true" 2>/dev/null | tr -d '\r\n')"
     if [ -z "$token" ]; then
-        echo "✗ No token provisioned on $TIER. Run: $0 $TIER" >&2
+        echo "✗ No token provisioned on $TIER — --show only READS one." >&2
+        echo "  Provision it first:  make scheduler-token tier=$TIER" >&2
+        echo "  then read the URL:   make scheduler-token tier=$TIER show=1" >&2
         exit 1
     fi
     echo "Paste this as the cron job's URL (keep it out of shared documents):"
@@ -212,5 +214,5 @@ esac
 echo "✓ token written (sha256 starts with ${fingerprint})"
 echo
 echo "  Next: get the full URL — run this yourself, it prints the secret:"
-echo "      ./deploy/scheduler-token.sh $TIER --show"
-echo "  then create a job at https://cron-job.org calling that URL every 15 minutes."
+echo "      make scheduler-token tier=$TIER show=1"
+echo "  then create a job at https://cron-job.org calling that URL every 5 minutes."
