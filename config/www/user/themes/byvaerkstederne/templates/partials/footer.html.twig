@@ -88,6 +88,18 @@
         </div>
     </div>
 
+    {# EU co-funding acknowledgement. Required on every page of the funded
+       project, so it sits in its own full-width row rather than inside the
+       column grid — no feature flag, no auth gate, no responsive column that
+       can collapse it away. #}
+    <div class="bv-footer__funding">
+        <img class="bv-footer__funding-logo"
+             src="{{ url('theme://images/eu-cofunded.png') }}"
+             width="600" height="122"
+             alt="Medfinansieret af Den Europ&aelig;iske Union"
+             loading="lazy" />
+    </div>
+
     <div class="bv-footer__bottom">
         <div class="bv-footer__bottom-inner">
             <span class="bv-footer__copyright">&copy; 2026 BYV&AElig;RKSTEDERNE I HUNDESTED.</span>
