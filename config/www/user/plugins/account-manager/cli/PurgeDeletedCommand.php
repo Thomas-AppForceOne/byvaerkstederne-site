@@ -46,6 +46,15 @@ class PurgeDeletedCommand extends ConsoleCommand
         require_once __DIR__ . '/../src/PurgeService.php';
         require_once __DIR__ . '/../src/AccountAuditLog.php';
 
+        // The per-run cap trips an ops alert (PurgeService::guardCap), and the
+        // email plugin registers its 'Email' service on onPluginsInitialized —
+        // which bin/plugin does not fire by default. Without this the alert
+        // dies with 'Identifier "Email" is not defined', gets swallowed by its
+        // own try/catch, and the loudest failure path in the purge job becomes
+        // a line in error_log. Themes too: the mail templates extend
+        // email/base.html.twig from the theme's template paths.
+        $this->initializeThemes();
+
         $grav = Grav::instance();
         $service = new PurgeService($grav);
 

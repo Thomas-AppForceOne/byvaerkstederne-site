@@ -84,7 +84,9 @@ final class AccountValidator
         } elseif ($password1 !== $password2) {
             $errors[] = 'De to adgangskoder er ikke ens.';
         } elseif ($regex !== '' && !preg_match('/' . $regex . '/', $password1)) {
-            $errors[] = 'Adgangskoden skal være mindst 8 tegn og indeholde store og små bogstaver samt tal.';
+            // Must describe system.pwd_regex as it actually is — a rejection
+            // that states the wrong rule sends the member round in circles.
+            $errors[] = 'Adgangskoden skal være mindst 12 tegn. Der er ingen krav om store bogstaver eller tal — en sætning, du kan huske, er både stærkere og nemmere.';
         }
         return ['value' => $password1, 'errors' => $errors];
     }

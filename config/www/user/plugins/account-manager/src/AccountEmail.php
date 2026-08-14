@@ -19,6 +19,7 @@ namespace Grav\Plugin\AccountManager;
 use Grav\Common\Grav;
 use Grav\Common\User\Interfaces\UserInterface;
 use Grav\Common\Utils;
+use Symfony\Component\Yaml\Yaml;
 
 final class AccountEmail
 {
@@ -72,7 +73,7 @@ final class AccountEmail
      */
     public function sendOpsAlert(string $alertSubject, string $alertBody): void
     {
-        $this->send('ops-alert', $this->adminRecipient(), [
+        $this->sendToAdmins('ops-alert', [
             'alert_subject' => $alertSubject,
             'alert_body' => $alertBody,
         ]);
@@ -101,6 +102,30 @@ final class AccountEmail
     }
 
     /**
+     * Privilege-escalation alert: an account was granted super-admin.
+     *
+     * Sent to every super on the tier — including the account that was just
+     * promoted, since the recipients are resolved after the change. A rights
+     * change made with server tooling is otherwise visible only in a log
+     * nobody reads until something has already gone wrong.
+     */
+    public function sendSuperGrantedAlert(
+        string $targetUsername,
+        string $targetEmail,
+        string $actor,
+        string $occurredAt,
+        string $source
+    ): void {
+        $this->sendToAdmins('super-granted', [
+            'target_username' => $targetUsername,
+            'target_email' => $targetEmail,
+            'actor' => $actor,
+            'occurred_at' => $occurredAt,
+            'source' => $source,
+        ]);
+    }
+
+    /**
      * Access-request notification to the admin recipients (§8). Granting
      * stays a manual super action in the admin panel — this mail is the
      * only automation.
@@ -114,7 +139,7 @@ final class AccountEmail
             $reject_link = $this->accessRequestRejectLink((string)$account->username, $token);
         }
 
-        $this->send('access-request-admin', $this->adminRecipient(), [
+        $this->sendToAdmins('access-request-admin', [
             'user' => $account,
             'role' => $role,
             'role_label' => $roleLabel,
@@ -179,18 +204,89 @@ final class AccountEmail
     }
 
     /**
-     * Admin notification recipient, resolved from per-tier email config —
-     * never hardcoded. plugins.email.to lives in the gitignored env
-     * email.yaml; site.author.email is the committed tier-agnostic fallback.
+     * Recipients for the two operator-facing mails (access requests, ops
+     * alerts): every ENABLED account holding admin.super, by email address.
+     *
+     * Sourced from the accounts rather than a config key on purpose — the
+     * people who can act on these mails are exactly the people who receive
+     * them, and a tier can no longer route operator mail to an address
+     * nobody reads just because a per-tier key was never filled in. That
+     * silent fallback is what let a dev-tier access request go to the
+     * association's contact address instead of the operator working on it.
+     *
+     * Enumerated by a read-only YAML sweep, the same shape PurgeService
+     * uses for whole-directory work. AccountStore's confinement covers
+     * $grav['accounts']->load(), whose freshness contract is about
+     * read-modify-write; this is neither.
+     *
+     * @return list<string>
      */
-    public function adminRecipient(): string
+    public function adminRecipients(): array
     {
-        $config = $this->grav['config'];
-        $to = (string)$config->get('plugins.email.to', '');
-        if ($to !== '') {
-            return $to;
+        // SuperWatch owns the definition of "a super" so the alerting and the
+        // addressing can never disagree about who counts.
+        $found = [];
+        foreach ((new SuperWatch($this->grav))->supers() as $email) {
+            if ($email !== '') {
+                $found[$email] = true;
+            }
         }
-        return (string)$config->get('site.author.email', '');
+
+        if ($found === []) {
+            // No delivery fallback on purpose. The obvious candidate is the
+            // association's public contact address, but whoever reads that
+            // mailbox is not necessarily a super and cannot act on an access
+            // request — sending there would look like a working notification
+            // while quietly landing in the wrong hands. A tier with no
+            // reachable super is a misconfiguration; it is logged as an
+            // error, the send fails, and the caller tells the member to
+            // contact the association so a human can escalate it.
+            $this->grav['log']->error(
+                'account-manager: no enabled super-admin with an email address — operator mail cannot be delivered'
+            );
+        }
+
+        return array_keys($found);
+    }
+
+    /**
+     * Send one operator mail to every admin recipient.
+     *
+     * One message per recipient, and one failure does not cancel the rest:
+     * with several supers a single bad address must not stop the others
+     * from being told. Only a total failure propagates, so the caller's
+     * existing swallow-and-log still means "nobody was notified".
+     *
+     * @param array<string,mixed> $context
+     */
+    private function sendToAdmins(string $template, array $context): void
+    {
+        $recipients = $this->adminRecipients();
+        if ($recipients === []) {
+            throw new \RuntimeException('account-manager: no admin recipient resolved for ' . $template);
+        }
+
+        $sent = 0;
+        $errors = [];
+        foreach ($recipients as $to) {
+            try {
+                $this->send($template, $to, $context);
+                $sent++;
+            } catch (\Throwable $e) {
+                $errors[] = $to . ': ' . $e->getMessage();
+            }
+        }
+
+        if ($sent === 0) {
+            throw new \RuntimeException(
+                'account-manager: ' . $template . ' reached no admin (' . implode('; ', $errors) . ')'
+            );
+        }
+        if ($errors !== []) {
+            $this->grav['log']->warning(
+                'account-manager: ' . $template . ' partially failed — ' . implode('; ', $errors)
+            );
+        }
     }
 
     /** @param array<string,mixed> $context */

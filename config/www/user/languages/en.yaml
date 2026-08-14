@@ -73,8 +73,8 @@ PLUGIN_LOGIN:
   USER_ACCOUNT_DISABLED: "Din konto er deaktiveret eller endnu ikke aktiveret. Tjek din indbakke for aktiveringslinket."
 
   # WI-7: password validation rejections (Danish, not the English RuntimeException).
-  PASSWORD_NOT_VALID: "Adgangskoden skal indeholde mindst ét tal, ét stort og ét lille bogstav samt være mindst 8 tegn."
-  PASSWORD_VALIDATION_MESSAGE: "Adgangskoden skal indeholde mindst ét tal, ét stort og ét lille bogstav samt være mindst 8 tegn."
+  PASSWORD_NOT_VALID: "Adgangskoden skal være mindst 12 tegn. Der er ingen krav om store bogstaver eller tal — en sætning, du kan huske, er både stærkere og nemmere."
+  PASSWORD_VALIDATION_MESSAGE: "Adgangskoden skal være mindst 12 tegn. Der er ingen krav om store bogstaver eller tal — en sætning, du kan huske, er både stærkere og nemmere."
   PASSWORDS_DO_NOT_MATCH: "Adgangskoderne er ikke ens. Kontrollér at du har indtastet den samme adgangskode i begge felter."
 
   # WI-1: password reset / forgot flow flashes.

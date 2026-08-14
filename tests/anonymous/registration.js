@@ -132,6 +132,31 @@ test.describe('Registration & activation (WI-2/WI-6)', () => {
     expect(accountExists(who.username), 'weak password must not create an account (WI-5)').toBe(false);
   });
 
+  test('failure: a blocklisted password is rejected server-side (no account created)', async ({
+    page,
+  }) => {
+    // Long enough for pwd_regex, so only the blocklist can reject it — the
+    // rule a regex cannot carry. "byvaerkstederne" is the first thing anyone
+    // reading this public repo would try.
+    const who = { ...uniqueSignup('bl'), password: 'byvaerkstederne2026' };
+    await page.goto('/opret-medlemskab');
+    await disableClientValidation(page); // force the bad value to the server
+    await page.fill('input[name="data[fullname]"]', who.fullName);
+    await page.fill('input[name="data[email]"]', who.email);
+    await page.fill('input[name="data[username]"]', who.username);
+    await page.fill('input[name="data[password1]"]', who.password);
+    await page.fill('input[name="data[password2]"]', who.password);
+    await Promise.all([
+      page.waitForLoadState('networkidle'),
+      page.click('button[type="submit"], input[type="submit"]'),
+    ]);
+    expect(
+      accountExists(who.username),
+      'a blocklisted password must not create an account',
+    ).toBe(false);
+    expect(await page.textContent('body')).toMatch(/for nemt at g[æa]tte/);
+  });
+
   test('failure: invalid username pattern is rejected server-side (no account created)', async ({
     page,
   }) => {
@@ -140,8 +165,8 @@ test.describe('Registration & activation (WI-2/WI-6)', () => {
     await page.fill('input[name="data[fullname]"]', 'Bad Name');
     await page.fill('input[name="data[email]"]', 'badname@example.invalid');
     await page.fill('input[name="data[username]"]', 'Has Spaces!'); // violates ^[a-z0-9_-]{3,16}$
-    await page.fill('input[name="data[password1]"]', 'Abcdefg1');
-    await page.fill('input[name="data[password2]"]', 'Abcdefg1');
+    await page.fill('input[name="data[password1]"]', 'Playwright-Fixture-42');
+    await page.fill('input[name="data[password2]"]', 'Playwright-Fixture-42');
     await Promise.all([
       page.waitForLoadState('networkidle'),
       page.click('button[type="submit"], input[type="submit"]'),

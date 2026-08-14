@@ -15,7 +15,7 @@
  * stray container from another checkout.
  */
 
-const { execFileSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { discoverGravEnv } = require(path.join(__dirname, '..', '..', 'scripts', 'discover-grav-port.js'));
@@ -23,8 +23,8 @@ const { SIGNUP_USERNAME, removeSignupAccount } = require('./registration');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
-// Meets system.pwd_regex (≥8 chars, upper + lower + digit).
-const DISPOSABLE_PASSWORD = 'Abcdefg1';
+// Meets system.pwd_regex (>=12 chars) and contains no blocklisted term.
+const DISPOSABLE_PASSWORD = 'Playwright-Fixture-42';
 
 let _container = null;
 function gravContainer() {
@@ -225,6 +225,83 @@ function runPurgeCli({ dryRun = false, ignoreCap = false } = {}) {
   });
 }
 
+/**
+ * Run the privilege-escalation alert the tier tooling fires after a grant:
+ * `bin/plugin account-manager notify-super-granted`. Returns
+ * {status, stdout, stderr} instead of throwing, so the failure path is
+ * assertable.
+ *
+ * @param {{user: string, actor?: string}} opts
+ */
+function runNotifySuperGrantedCli({ user, actor = 'pw-test@runner' }) {
+  const args = [
+    'exec', '-u', 'abc', '-w', '/app/www/public', gravContainer(),
+    'bin/plugin', 'account-manager', 'notify-super-granted',
+    '--user', user, '--actor', actor,
+  ];
+  const res = spawnSync('docker', args, { encoding: 'utf8', timeout: 120_000 });
+  return { status: res.status, stdout: res.stdout || '', stderr: res.stderr || '' };
+}
+
+/**
+ * Run the site-side privilege-escalation watch:
+ * `bin/plugin account-manager watch-supers`. Returns {status, stdout, stderr}
+ * instead of throwing, so the failure paths are assertable.
+ *
+ * @param {{dryRun?: boolean}} [opts]
+ */
+function runWatchSupersCli({ dryRun = false } = {}) {
+  const args = [
+    'exec', '-u', 'abc', '-w', '/app/www/public', gravContainer(),
+    'bin/plugin', 'account-manager', 'watch-supers',
+  ];
+  if (dryRun) args.push('--dry-run');
+  const res = spawnSync('docker', args, { encoding: 'utf8', timeout: 120_000 });
+  return { status: res.status, stdout: res.stdout || '', stderr: res.stderr || '' };
+}
+
+/** Delete the watch's recorded baseline so the next run starts fresh. */
+function resetSuperBaseline() {
+  execFileSync(
+    'docker',
+    ['exec', '-u', 'abc', gravContainer(), 'sh', '-c',
+      'rm -f /app/www/public/user/data/account-manager/super-baseline.yaml'],
+    { stdio: ['ignore', 'pipe', 'pipe'], timeout: 10_000 },
+  );
+}
+
+/**
+ * Promote a disposable account by writing the rights straight into its YAML —
+ * deliberately NOT through the tier tooling, so the watch is tested against
+ * the paths that bypass it (hand edit, restored backup, unknown script).
+ *
+ * @param {string} username
+ */
+function makeAccountSuper(username) {
+  assertDisposableUsername(username);
+  // Reuse the tier tool's YAML editor (a real parse + dump) rather than
+  // appending text: an earlier version of this helper appended indented lines
+  // after the document's last key, producing YAML that parsed to something
+  // else entirely and a watch that correctly saw no new super. What makes
+  // this "outside the tooling" is that NO alert is fired here — the rights
+  // simply appear on disk, as they would after a hand edit or a restore.
+  const phpSource = fs.readFileSync(path.join(REPO_ROOT, 'deploy/lib/account-super.php'), 'utf8');
+  const res = spawnSync(
+    'docker',
+    [
+      'exec', '-i', '-u', 'abc', '-w', '/app/www/public', gravContainer(),
+      'php', '--', `/app/www/public/user/accounts/${username}.yaml`, 'grant', 'pw-test@fixture',
+    ],
+    { input: phpSource, encoding: 'utf8', timeout: 30_000 },
+  );
+  if (res.status !== 0 || !/changed/.test(res.stdout || '')) {
+    throw new Error(
+      `self-service: could not promote ${username}: ${(res.stderr || res.stdout || '').trim()}`,
+    );
+  }
+  bustCompiledFileCache();
+}
+
 /** Full Grav cache clear as `abc` (root-owned cache files 500 the site). */
 function clearGravCache() {
   execFileSync(
@@ -260,6 +337,63 @@ function withBaseFlagOff(flag) {
       fs.writeFileSync(yamlPath, original, 'utf8');
       clearGravCache();
     } catch (_) { /* best-effort — global-teardown does not cover this file */ }
+  };
+}
+
+/**
+ * Blank the email of every super-admin account in the container, so no
+ * account resolves as an operator-mail recipient. Returns a restore
+ * function; callers MUST invoke it in finally.
+ *
+ * The emails are blanked rather than the accounts deleted or disabled: the
+ * seeded supers are what the rest of the suite logs in with, and a deleted
+ * or disabled account would change far more than the one property under
+ * test. Each file is copied to <file>.super-bak first and moved back on
+ * restore, so a crashed run leaves the backup on disk rather than a
+ * mangled account.
+ *
+ * @returns {() => void}
+ */
+function withoutReachableSupers() {
+  const dir = '/app/www/public/user/accounts';
+  const list = execFileSync(
+    'docker',
+    [
+      'exec', gravContainer(), 'sh', '-c',
+      `grep -l -E '^[[:space:]]*super:[[:space:]]*true' ${dir}/*.yaml 2>/dev/null || true`,
+    ],
+    { stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 },
+  )
+    .toString()
+    .trim();
+  const files = list ? list.split('\n').filter(Boolean) : [];
+
+  for (const file of files) {
+    execFileSync(
+      'docker',
+      [
+        // -u abc: root-owned account files break Grav's web-user writes.
+        'exec', '-u', 'abc', gravContainer(), 'sh', '-c',
+        `cp "${file}" "${file}.super-bak" && sed -i 's/^email:.*/email: ""/' "${file}"`,
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 },
+    );
+  }
+  clearGravCache();
+
+  return () => {
+    for (const file of files) {
+      try {
+        execFileSync(
+          'docker',
+          ['exec', '-u', 'abc', gravContainer(), 'sh', '-c', `mv "${file}.super-bak" "${file}"`],
+          { stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000 },
+        );
+      } catch (_) { /* best-effort — the backup stays for manual recovery */ }
+    }
+    try {
+      clearGravCache();
+    } catch (_) { /* ditto */ }
   };
 }
 
@@ -377,9 +511,14 @@ module.exports = {
   bustCompiledFileCache,
   setDeletionMarker,
   runPurgeCli,
+  runNotifySuperGrantedCli,
+  runWatchSupersCli,
+  resetSuperBaseline,
+  makeAccountSuper,
   footprintGrep,
   clearGravCache,
   withBaseFlagOff,
+  withoutReachableSupers,
   resetEmailChangeThrottle,
   loginAs,
   logout,

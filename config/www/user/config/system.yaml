@@ -8,11 +8,20 @@ reverse_proxy_setup: true
 # page-level validate.pattern (register.md):
 #   - username_regex string-equals register.md's username validate.pattern and
 #     the JS literal in register.html.twig.
-#   - pwd_regex (>=8 chars, >=1 upper, >=1 lower, >=1 digit) is proven
-#     equivalent to the imperative client-side JS chain by the shared
-#     accept/reject truth-table fixture (tests/anonymous/password-policy.js).
+#   - pwd_regex (>=12 chars, no character-class rules) is proven equivalent to
+#     the imperative client-side JS chain by the shared accept/reject
+#     truth-table fixture (tests/anonymous/password-policy.js).
+#
+# LENGTH ONLY, ON PURPOSE. The previous rule was >=8 with an upper, a lower
+# and a digit. Composition rules of that shape do not buy entropy — they push
+# people to "Sommer2026!", which every cracking dictionary already holds — and
+# NIST SP 800-63B has recommended dropping them for years. Twelve characters
+# with no class requirement is both stronger and easier to satisfy with a
+# passphrase or a password manager. The guessable-word rule that composition
+# rules were really reaching for lives in the blocklist
+# (config/plugins/account-manager.yaml), which a regex cannot express.
 username_regex: '^[a-z0-9_-]{3,16}$'
-pwd_regex: '(?=.*[A-Z])(?=.*[0-9])(?=.*[a-z]).{8,}'
+pwd_regex: '.{12,}'
 
 # WI-4: harden the session cookie. httponly + SameSite=Lax are scheme-
 # independent and pinned here for every tier (SameSite=Lax, not Strict, so

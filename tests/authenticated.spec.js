@@ -31,6 +31,10 @@ require('./authenticated/events-details');
 // Account self-service (/konto) — one file per operation; destructive flows
 // run on disposable accounts only.
 require('./authenticated/account-access-request');
+// Privilege-escalation alert fired by the tier tooling after a super grant.
+require('./authenticated/super-granted-alert');
+// Site-side detection of a super created outside the tooling.
+require('./authenticated/super-watch');
 require('./authenticated/account-deletion');
 require('./authenticated/account-dropdown');
 require('./authenticated/account-email-change');

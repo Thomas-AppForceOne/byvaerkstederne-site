@@ -31,6 +31,7 @@
 
 namespace Grav\Plugin;
 
+use Grav\Common\Data\ValidationException;
 use Grav\Common\File\CompiledYamlFile;
 use Grav\Common\Grav;
 use Grav\Common\Page\Interfaces\PageInterface;
@@ -43,8 +44,10 @@ use Grav\Plugin\AccountManager\AccountAuditLog;
 use Grav\Plugin\AccountManager\AccountEmail;
 use Grav\Plugin\AccountManager\AccountStore;
 use Grav\Plugin\AccountManager\AccountValidator;
+use Grav\Plugin\AccountManager\PasswordPolicy;
 use Grav\Plugin\FeatureFlags\FeatureFlag;
 use Grav\Plugin\FeatureFlags\FlagStoreInterface;
+use RocketTheme\Toolbox\Event\Event;
 
 class AccountManagerPlugin extends Plugin
 {
@@ -178,7 +181,51 @@ class AccountManagerPlugin extends Plugin
             // see deploy/SCHEDULER.md). Unflagged like the login hook: a
             // member who consented to deletion must be deleted on schedule.
             'onSchedulerInitialized' => ['onSchedulerInitialized', 0],
+            // Password blocklist on the REGISTRATION form. Unflagged: the
+            // rule is about credential quality, not about a feature — and a
+            // tier with the self-service flag off still registers members.
+            'onFormValidationProcessed' => ['onFormValidationProcessed', 0],
         ]);
+    }
+
+    /**
+     * Reject a blocklisted password on the registration form.
+     *
+     * The forms plugin fires this inside its own try block, so a
+     * ValidationException here surfaces as a normal Danish field error rather
+     * than a 500 — and it lands on the SAME submission as the length rule
+     * from system.pwd_regex, which the plugin has already applied.
+     *
+     * Registration is the only form handled here; the /konto password change
+     * calls PasswordPolicy directly (handleChangePassword), and Grav's own
+     * password-RESET form never reaches the forms plugin at all — that gap is
+     * documented on PasswordPolicy.
+     */
+    public function onFormValidationProcessed(Event $event): void
+    {
+        $form = $event['form'] ?? null;
+        if ($form === null || !method_exists($form, 'value')) {
+            return;
+        }
+        $name = method_exists($form, 'getName') ? (string)$form->getName() : '';
+        if ($name !== 'registration') {
+            return;
+        }
+
+        $password = (string)($form->value('password1') ?? '');
+        if ($password === '') {
+            return;
+        }
+
+        $policy = new PasswordPolicy($this->grav);
+        if ($policy->blockedTerm($password) === null) {
+            return;
+        }
+
+        // The forms plugin's catch assigns the exception's message to the
+        // form (Form::$message), so throwing IS how a listener reports the
+        // rejection — Form::setError() is protected and not ours to call.
+        throw new ValidationException($policy->rejectionMessage());
     }
 
     // -------------------------------------------------------------------------
@@ -380,6 +427,14 @@ class AccountManagerPlugin extends Plugin
             $this->failWith(400, $result['errors'], 'password');
         }
         $password = $result['value'];
+
+        // The rule system.pwd_regex cannot express: a guessable-word blocklist.
+        // Checked after the regex so the member gets the length message first
+        // when both apply.
+        $policy = new PasswordPolicy($this->grav);
+        if ($policy->blockedTerm($password) !== null) {
+            $this->failWith(400, [$policy->rejectionMessage()], 'password');
+        }
 
         try {
             $this->store()->mutate($user->username, static function (UserInterface $account) use ($password): void {
@@ -631,6 +686,18 @@ class AccountManagerPlugin extends Plugin
             'account-manager-purge'
         );
         $job->at('0 3 * * *');
+
+        // Privilege-escalation watch (site-side backstop). Runs in-process
+        // under `bin/grav scheduler`, so it inherits whatever environment the
+        // cron entry resolved — which is why that entry MUST carry
+        // `--env <tier-host>`, or the alert is composed and delivered
+        // nowhere. See deploy/SCHEDULER.md.
+        $watch = $scheduler->addFunction(
+            'Grav\\Plugin\\AccountManager\\SuperWatch::runScheduled',
+            [],
+            'account-manager-super-watch'
+        );
+        $watch->at('*/30 * * * *');
     }
 
     // -------------------------------------------------------------------------
@@ -838,15 +905,34 @@ class AccountManagerPlugin extends Plugin
             $this->failWith(500, ['Anmodningen kunne ikke gemmes. Prøv igen.'], 'roles');
         }
 
+        $notified = true;
         try {
             $roleLabel = (string)($this->config->get("groups.{$role}.readableName") ?: $role);
             $this->accountEmail()->sendAccessRequestAdmin($account, $role, $roleLabel, $motivation['value'], $token);
         } catch (\Throwable $e) {
             // The request is stored and visible on /konto either way.
+            $notified = false;
             error_log('account-manager access-request admin mail failed: ' . $e->getMessage());
         }
 
         $this->auditLog()->append('request_access', $user->username, ['role' => $role]);
+
+        if (!$notified) {
+            // Say so rather than claiming a notification that never left.
+            // The member is pointed at the association's public contact
+            // address — a mailbox for visitors, deliberately NOT a delivery
+            // fallback for operator mail: whoever reads it is not
+            // necessarily a super and cannot act on the request. They can
+            // pass it on, and a super then has the log to work from.
+            $contact = (string)$this->config->get('site.author.email', '');
+            $this->redirectWithFlash(
+                'Din anmodning er gemt, men vi kunne ikke give administratorerne besked automatisk.'
+                . ($contact !== '' ? ' Skriv til ' . $contact . ', så bliver den taget op manuelt.' : ''),
+                'roles',
+                'warning'
+            );
+        }
+
         $this->redirectWithFlash('Din anmodning er sendt og afventer godkendelse.', 'roles');
     }
 
@@ -1340,9 +1426,9 @@ class AccountManagerPlugin extends Plugin
     }
 
     /** §4.3 PRG: flash + 303 redirect back to the /konto section. */
-    private function redirectWithFlash(string $message, string $section): never
+    private function redirectWithFlash(string $message, string $section, string $type = 'success'): never
     {
-        $this->grav['messages']->add($message, 'success');
+        $this->grav['messages']->add($message, $type);
         $this->grav->redirect(self::ROUTE_BASE . '#' . $section, 303);
         exit; // @phpstan-ignore-line — redirect() exits; belt for static analysis
     }

@@ -52,7 +52,8 @@ function uniqueSignup(tag = '') {
     username,
     email: `${username}@example.invalid`,
     fullName: 'PW Signup Tester',
-    password: 'Abcdefg1',
+    // >=12 chars per system.pwd_regex, and free of any blocklisted term.
+    password: 'Playwright-Fixture-42',
   };
 }
 

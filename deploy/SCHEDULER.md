@@ -14,12 +14,35 @@ dev/test/staging, chosting cPanel for prod — 15-minute granularity is
 ample for a daily job):
 
 ```cron
-*/15 * * * * cd <grav-root> && bin/grav scheduler 1>/dev/null 2>&1
+*/15 * * * * cd <grav-root> && bin/grav scheduler --env <tier-host> 1>/dev/null 2>&1
 ```
 
 `<grav-root>` is the tier's Grav document root (the directory containing
 `bin/grav`). The scheduler is idempotent about granularity: each
 registered job carries its own cron expression and only fires when due.
+
+### `--env` is not optional — it decides whether mail is delivered
+
+Grav resolves its environment config from the request HOSTNAME. A cron run
+has none, so **without `--env` the tier's own
+`user/env/<host>/config/plugins/email.yaml` is never merged**: the mailer
+ends up with no transport, and the email plugin returns *successfully*
+having sent nothing. Every alert a scheduled job raises — the purge
+circuit-breaker (`PurgeService::guardCap`) and the privilege-escalation
+watch (`SuperWatch::runScheduled`) — is then composed, reported as sent, and
+delivered nowhere. This was observed on dev before the guard existed; it is
+the quietest possible failure, because the only symptom is silence.
+
+`<tier-host>` is the canonical host, matching `deploy.sh`'s `ENV_HOST`:
+
+| tier | `--env` value |
+|---|---|
+| dev | `dev.hackersbychoice.dk` |
+| test | `test.hackersbychoice.dk` |
+| staging | `staging.hackersbychoice.dk` |
+| prod | `www.byvaerkstederne.dk` |
+
+The same applies to any manual `bin/plugin` run below that can send mail.
 
 ## Manual / operational runs
 

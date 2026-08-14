@@ -27,7 +27,7 @@ const {
 const { port: PORT } = discoverGravEnv(path.resolve(__dirname, '..', '..'));
 const BASE = `http://127.0.0.1:${PORT}`;
 
-const NEW_PASSWORD = 'Zyxwvut9';
+const NEW_PASSWORD = 'Zyxwvut-Fixture-9'; // >=12 per system.pwd_regex, no blocklisted term
 
 /**
  * Fill and submit the change-password form on /konto.
@@ -70,10 +70,21 @@ test.describe('account self-service: change password', () => {
     await expect(page.locator('.bv-message--error')).toContainText('ikke ens');
   });
 
+  test('a blocklisted new password is rejected', async ({ page }) => {
+    expect(await loginAs(page, acct)).toBe(true);
+    // Long enough for pwd_regex — only the blocklist can refuse it.
+    await submitPasswordChange(page, {
+      current: acct.password,
+      new1: 'hundested-sommer',
+      new2: 'hundested-sommer',
+    });
+    await expect(page.locator('.bv-message--error')).toContainText('for nemt at gætte');
+  });
+
   test('policy-violating new password is rejected', async ({ page }) => {
     expect(await loginAs(page, acct)).toBe(true);
     await submitPasswordChange(page, { current: acct.password, new1: 'weakpass', new2: 'weakpass' });
-    await expect(page.locator('.bv-message--error')).toContainText('mindst 8 tegn');
+    await expect(page.locator('.bv-message--error')).toContainText('mindst 12 tegn');
   });
 
   test('happy path: old password stops working, new password logs in', async ({ page }) => {
@@ -94,7 +105,9 @@ test.describe('account self-service: change password', () => {
     // session snapshot predates the password change made on device A —
     // re-auth must verify against the on-disk hash, never the snapshot.
     const xdAcct = createDisposableAccount({ tag: 'xd' });
-    const changed = 'Qwertyu7';
+    // >=12 per system.pwd_regex, and free of blocklisted terms — an earlier
+    // 'Qwertyu…' fixture was correctly refused by the blocklist itself.
+    const changed = 'Zzxxccvv-Fixture-7';
     const ctxB = await browser.newContext({ baseURL: BASE });
     try {
       // Device B logs in FIRST (its session snapshot holds the old hash)
