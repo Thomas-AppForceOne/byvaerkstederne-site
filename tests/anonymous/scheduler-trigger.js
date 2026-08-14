@@ -29,6 +29,7 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const ROUTE = '/scheduler-trigger';
 const STATE_DIR = '/app/www/public/user/data/scheduler-trigger';
 const LAST_CRON = '/app/www/public/logs/lastcron.run';
+const GRAV_LOG = '/app/www/public/logs/grav.log';
 
 let _container = null;
 function container() {
@@ -84,6 +85,15 @@ function acceptMarker() {
 function lastCronRun() {
   try {
     return sh(`cat ${LAST_CRON} 2>/dev/null || true`).trim();
+  } catch (_) {
+    return '';
+  }
+}
+
+/** Lines this plugin wrote to Grav's log, newest last. */
+function triggerLogLines() {
+  try {
+    return sh(`grep scheduler-trigger ${GRAV_LOG} 2>/dev/null || true`).trim();
   } catch (_) {
     return '';
   }
@@ -158,6 +168,31 @@ test.describe('Scheduler trigger (token-gated cron endpoint)', () => {
     } finally {
       token = provisionToken();
     }
+  });
+
+  test('a rejected call with a token is logged; a bare visit is not', async ({ request }) => {
+    // Silent to the caller, not to the operator. A cron service whose URL lost
+    // its query string, or that still holds a rotated token, is
+    // indistinguishable from a job that was never created — and shared
+    // hosting gives no access log to tell them apart. This line is the only
+    // way to answer "is anything even reaching us?".
+    const before = triggerLogLines();
+
+    await request.get(`${ROUTE}?token=abc123`, { maxRedirects: 0 });
+    await expect.poll(() => triggerLogLines(), { timeout: 10_000 }).not.toBe(before);
+
+    const logged = triggerLogLines();
+    expect(logged, 'the length is recorded — it separates a truncated paste from a wrong secret')
+      .toMatch(/token length 6/);
+    expect(logged, 'the reason is recorded').toMatch(/does not match/);
+    expect(logged, 'the token itself must never be written').not.toContain('abc123');
+
+    // A bare visit to the path is noise, not signal: logging it would let
+    // anyone fill the log by refreshing a URL.
+    const beforeBare = triggerLogLines();
+    await request.get(ROUTE, { maxRedirects: 0 });
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(triggerLogLines(), 'a visit without a token is not logged').toBe(beforeBare);
   });
 
   test('the throttle cannot swallow a scheduled call', async () => {

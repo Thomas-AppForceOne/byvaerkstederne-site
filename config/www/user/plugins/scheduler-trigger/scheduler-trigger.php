@@ -85,6 +85,25 @@ class SchedulerTriggerPlugin extends Plugin
         // normal themed 404, identical to any unknown URL. No branch here may
         // answer differently, or the endpoint becomes discoverable.
         if ($expected === '' || $presented === '' || !hash_equals($expected, $presented)) {
+            // Silent to the CALLER, not to the operator. A cron service whose
+            // URL lost its query string, or that still holds a rotated token,
+            // produces exactly the same symptom as a job that was never
+            // created: nothing happens, and shared hosting offers no access
+            // log to tell the two apart. One line here answers that question.
+            //
+            // Only when a token was actually PRESENTED: a bare visit to the
+            // path is noise, an attempt with a token is either a
+            // misconfiguration worth seeing or a probe worth knowing about.
+            // The token itself is never written — only its length, which is
+            // what distinguishes "truncated on paste" from "wrong secret".
+            if ($presented !== '') {
+                $this->grav['log']->warning(sprintf(
+                    'scheduler-trigger: rejected call (token length %d, %s) from %s',
+                    strlen($presented),
+                    $expected === '' ? 'no token provisioned on this tier' : 'does not match',
+                    (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown')
+                ));
+            }
             return;
         }
 
