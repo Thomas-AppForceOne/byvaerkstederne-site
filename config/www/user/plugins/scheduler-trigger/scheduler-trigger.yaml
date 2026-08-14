@@ -5,7 +5,15 @@ enabled: true
 # referrers.
 route: '/scheduler-trigger'
 
-# Minimum seconds between two real runs. A flood of calls is answered
-# identically but only actually runs the scheduler this often, so the
-# endpoint cannot be used to make the site work harder than it should.
-min_interval: 60
+# Burst protection ONLY — deliberately not a scheduling knob.
+#
+# Grav evaluates a job's cron expression against the CURRENT MINUTE, with no
+# tolerance and no catch-up (Job::isDue). The caller must therefore invoke
+# this endpoint every minute, exactly as Grav's own docs prescribe for cron.
+# A throttle of 60s would then swallow roughly every other call — a call at
+# T and the next at T+59s — and a job whose minute fell in a swallowed call
+# would simply never run.
+#
+# 10 seconds still stops a flood cold while leaving a per-minute cadence
+# untouched.
+min_interval: 10

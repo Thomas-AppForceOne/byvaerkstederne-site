@@ -51,9 +51,19 @@ per-tier `email.yaml`.
 ### The cron service
 
 Create one job per tier — dev, test, staging AND prod — at
-<https://cron-job.org> (free), calling that tier's URL **every 15 minutes**. Enable its failure notifications: the service
-telling you it cannot reach the URL is the only external signal that a tier's
-scheduled work has stopped.
+<https://cron-job.org> (free), calling that tier's URL **every minute**.
+
+**Every minute, not every quarter.** Grav evaluates each job's cron
+expression against the current minute and neither tolerates nor catches up
+(`Job::isDue`). A caller that fires every 15 minutes only ever triggers jobs
+whose minute happens to coincide — and the moment the service is a minute
+late, a job scheduled at `0 3 * * *` misses that day entirely. Invoking every
+minute is what Grav's own documentation prescribes for a cron entry, and it
+makes the job expressions in the code mean what they say. The cost is one
+short request a minute per tier.
+
+Enable failure notifications: the service telling you it cannot reach the URL
+is the only external signal that a tier's scheduled work has stopped.
 
 Rotating a token invalidates the old URL immediately — update the cron job in
 the same sitting, or the tier stops running its jobs silently.

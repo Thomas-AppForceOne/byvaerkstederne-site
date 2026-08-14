@@ -160,6 +160,21 @@ test.describe('Scheduler trigger (token-gated cron endpoint)', () => {
     }
   });
 
+  test('the throttle is short enough for a per-minute caller', async () => {
+    // Grav only runs a job when the call lands in the job's own minute, so
+    // the caller must fire every minute. A throttle at or above 60s would
+    // swallow roughly every other call, and any job whose minute fell in a
+    // swallowed call would never run at all — the failure this endpoint
+    // exists to prevent, reintroduced one layer up.
+    const yaml = require('fs').readFileSync(
+      path.join(REPO_ROOT, 'config/www/user/plugins/scheduler-trigger/scheduler-trigger.yaml'),
+      'utf8',
+    );
+    const configured = Number((yaml.match(/^min_interval:\s*(\d+)/m) || [])[1]);
+    expect(configured, 'min_interval must be set').toBeGreaterThan(0);
+    expect(configured, 'min_interval must leave a per-minute cadence intact').toBeLessThan(30);
+  });
+
   test('a second call inside the window answers 204 but does not re-run', async ({ request }) => {
     clearThrottle();
     const first = await request.get(`${ROUTE}?token=${token}`, { maxRedirects: 0 });
