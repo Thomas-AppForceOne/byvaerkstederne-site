@@ -202,6 +202,40 @@ final class FeatureFlagCatalogueTest extends TestCase
         $this->assertSame([], $logger->warnings(), 'Empty enabled map must not warn.');
     }
 
+    /**
+     * Staging is production's rehearsal — both governance headers say so, and
+     * the staging one spells out the direction: it flips a flag "at the same
+     * time (or earlier, never later)" than prod. So anything enabled in
+     * production must also be enabled on staging.
+     *
+     * This is a RELATION between the two files, not a pinned state: which
+     * features are live stays operational state (see
+     * testDevProfileEnablesAllCatalogueFlags). What it catches is the
+     * half-done rollout — prod flipped, staging forgotten — after which
+     * staging silently stops showing reviewers what production shows.
+     */
+    public function testStagingIsNeverBehindProd(): void
+    {
+        $prod = self::loadProfileYaml('www.byvaerkstederne.dk');
+        $staging = self::loadProfileYaml('staging.hackersbychoice.dk');
+        $this->assertIsArray($prod, 'prod features.yaml must parse to an array.');
+        $this->assertIsArray($staging, 'staging features.yaml must parse to an array.');
+
+        $behind = [];
+        foreach ($prod as $flag => $value) {
+            if ($value === 'true' && ($staging[$flag] ?? 'false') !== 'true') {
+                $behind[] = $flag;
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $behind,
+            'Enabled on prod but not on staging: ' . implode(', ', $behind)
+            . ' — flip the same flag on staging.hackersbychoice.dk (staging never lags prod).'
+        );
+    }
+
     public function testTestTierYamlPayloadIsFlagMetadataOnly(): void
     {
         $this->assertFlagPayloadIsMetadataOnly('test.hackersbychoice.dk');
