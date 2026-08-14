@@ -8,8 +8,9 @@
 # jobs) only runs when something calls the token-gated trigger URL. An
 # external cron service does the calling; this provisions the secret it needs.
 #
-# THE TOKEN NEVER TRAVELS. It is generated ON THE TIER with the tier's own
-# openssl and written straight into that tier's live-state dir. Nothing is
+# THE TOKEN NEVER TRAVELS. It is generated ON THE TIER (PHP's random_bytes —
+# one.com's shell has no openssl) and written straight into that tier's
+# live-state dir. Nothing is
 # printed but a fingerprint — so provisioning it does not put the secret into
 # a terminal scrollback, a shell history, a CI log or an assistant's
 # transcript.
