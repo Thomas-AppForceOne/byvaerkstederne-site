@@ -56,10 +56,26 @@ const TEST_ADMIN = Object.freeze({
   isAdmin: true,
 });
 
-const ALLOWED_USERNAMES = Object.freeze([TEST_USER.username, TEST_ADMIN.username]);
+// Arrangør (frontend event CRUD): an ordinary member that global-setup adds
+// to the `organizers` group, conferring admin.events.* — but never
+// admin.login. Password env var: TEST_ORGANIZER_PASSWORD.
+const TEST_ORGANIZER = Object.freeze({
+  username: 'pw-test-org',
+  email: 'pw-test-org@example.invalid',
+  fullName: 'Playwright Test Organizer',
+  isAdmin: false,
+  groups: Object.freeze(['organizers']),
+});
+
+const ALLOWED_USERNAMES = Object.freeze([
+  TEST_USER.username,
+  TEST_ADMIN.username,
+  TEST_ORGANIZER.username,
+]);
 
 const hasUserPassword = Boolean(process.env.TEST_PASSWORD);
 const hasAdminPassword = Boolean(process.env.TEST_ADMIN_PASSWORD);
+const hasOrganizerPassword = Boolean(process.env.TEST_ORGANIZER_PASSWORD);
 
 /**
  * Validate an account argument before any shell-out or filesystem call.
@@ -129,7 +145,9 @@ function ensureAccount(account, password) {
   assertDockerAndGravRunning();
 
   const args = [
-    'exec', '-w', '/app/www/public', gravContainer(),
+    // -u abc: running PHP as root leaves root-owned cache/account files the
+    // web user can't overwrite, which 500s the whole site (admin included).
+    'exec', '-u', 'abc', '-w', '/app/www/public', gravContainer(),
     'bin/plugin', 'login', 'new-user',
     '-u', a.username,
     '-p', password,
@@ -161,6 +179,15 @@ function ensureAccount(account, password) {
           grantAdminSuperInContainer(a);
         } catch (patchErr) {
           reject(new Error(`accounts.ensureAccount(${a.username}) created but failed to grant admin.super: ${/** @type {any} */ (patchErr).message}`));
+          return;
+        }
+      }
+      const groups = /** @type {any} */ (account).groups;
+      if (Array.isArray(groups) && groups.length > 0) {
+        try {
+          grantGroupsInContainer(a, groups);
+        } catch (patchErr) {
+          reject(new Error(`accounts.ensureAccount(${a.username}) created but failed to assign groups: ${/** @type {any} */ (patchErr).message}`));
           return;
         }
       }
@@ -261,7 +288,38 @@ function grantAdminSuperInContainer(account) {
     `  awk '1; /^\\s*admin:\\s*$/ && !d { print "    super: true"; d=1 }' "${yamlPath}" > "${yamlPath}.tmp" && mv "${yamlPath}.tmp" "${yamlPath}"`,
     `fi`,
   ].join('\n');
-  execFileSync('docker', ['exec', gravContainer(), 'sh', '-c', script], {
+  // -u abc: the awk|mv branch rewrites the account YAML; as root it would
+  // leave a root-owned file Grav's web user can no longer update.
+  execFileSync('docker', ['exec', '-u', 'abc', gravContainer(), 'sh', '-c', script], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 10_000,
+  });
+}
+
+/**
+ * Idempotently append a `groups:` list to an account YAML in the container.
+ * Group names are allowlist-validated (lowercase identifiers) — the only
+ * caller passes the compile-time TEST_ORGANIZER.groups constant.
+ *
+ * @param {{username: string}} account
+ * @param {readonly string[]} groups
+ */
+function grantGroupsInContainer(account, groups) {
+  for (const g of groups) {
+    if (!/^[a-z0-9_-]+$/.test(g)) {
+      throw new Error(`accounts: group name '${g}' is not a valid identifier`);
+    }
+  }
+  const yamlPath = `/config/www/user/accounts/${account.username}.yaml`;
+  const lines = ['groups:', ...groups.map((g) => `  - ${g}`)].join('\\n');
+  const script = [
+    'set -e',
+    `if ! grep -q '^groups:' "${yamlPath}"; then`,
+    `  printf '${lines}\\n' >> "${yamlPath}"`,
+    'fi',
+  ].join('\n');
+  // -u abc: keep the account YAML writable by Grav's web user.
+  execFileSync('docker', ['exec', '-u', 'abc', gravContainer(), 'sh', '-c', script], {
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 10_000,
   });
@@ -295,8 +353,10 @@ function assertDockerAndGravRunning() {
 module.exports = {
   TEST_USER,
   TEST_ADMIN,
+  TEST_ORGANIZER,
   hasUserPassword,
   hasAdminPassword,
+  hasOrganizerPassword,
   ensureAccount,
   removeAccount,
   // Exported for tests / callers that need to assert on the path; never used

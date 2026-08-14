@@ -22,8 +22,15 @@
 
 const { test, expect } = require('@playwright/test');
 const { execFileSync } = require('child_process');
+const path = require('path');
 const { login, loginAsAdmin, hasUserPassword, hasAdminPassword } = require('../helpers/auth');
 const { removeVote } = require('../helpers/cleanup');
+const { discoverGravEnv } = require(path.join(__dirname, '..', '..', 'scripts', 'discover-grav-port.js'));
+
+// Resolve this checkout's deterministic Grav container name — NOT the bare
+// legacy "grav" name, which doesn't exist in the worktree container model and
+// produced "No such container: grav" when this spec shelled into it.
+const { container: GRAV_CONTAINER } = discoverGravEnv(path.resolve(__dirname, '..', '..'));
 
 const LOCKED_STATUSES = ['under_implementation', 'klar_til_test', 'loest'];
 
@@ -180,7 +187,9 @@ test.describe('Roadmap — authenticated', () => {
         + "echo $g['twig']->twig()->createTemplate(getenv('TPL'))->render([]);";
       const out = execFileSync(
         'docker',
-        ['exec', '-e', `TPL=${tpl}`, '-w', '/app/www/public', 'grav', 'php', '-r', php],
+        // -u abc: this bootstrap writes doctrine/twig cache entries; as root
+        // they become unwritable for the web user and 500 the whole site.
+        ['exec', '-u', 'abc', '-e', `TPL=${tpl}`, '-w', '/app/www/public', GRAV_CONTAINER, 'php', '-r', php],
         { encoding: 'utf8', timeout: 30_000 }
       ).trim();
       expect(['bool-true', 'bool-false']).toContain(out);
@@ -411,8 +420,21 @@ test.describe('Roadmap — authenticated', () => {
 
       // The release_nonce input only renders on items in the
       // klar_til_implementation state with unreleased votes — globalSetup seeds
-      // rm_fixture_releasable precisely for that condition.
-      const { RELEASABLE_ROADMAP_ITEM_ID } = require('../helpers/fixtures');
+      // rm_fixture_releasable precisely for that condition. Re-seed it HERE
+      // rather than relying on globalSetup: earlier vote-flow tests in this file
+      // can trigger a Flex save that rewrites roadmap-items.yaml from the cached
+      // index, dropping the raw-appended fixture (or consuming its unreleased
+      // votes). Reset + cache-clear makes this admin test independent of suite
+      // ordering. (This is also why it passed in isolation but not in-suite.)
+      const {
+        RELEASABLE_ROADMAP_ITEM_ID,
+        removeReleasableRoadmapItem,
+        ensureReleasableRoadmapItem,
+        clearGravCache,
+      } = require('../helpers/fixtures');
+      removeReleasableRoadmapItem();
+      ensureReleasableRoadmapItem();
+      clearGravCache();
       const itemId = RELEASABLE_ROADMAP_ITEM_ID;
       await page.goto(`/admin/flex-objects/roadmap-items/${itemId}`);
       const nonce = await page.evaluate(() => {

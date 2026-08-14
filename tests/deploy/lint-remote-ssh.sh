@@ -224,6 +224,312 @@ if [ -f "$SSH_AUTH" ]; then
     fi
 fi
 
+# 8. WI-1 — per-tier email.yaml symlink wiring (ADR-004 §Consequences:
+#    this lint extension is the discharge for the email.yaml deploy.sh
+#    change to remote-mode code paths). The symlink that wires each tier's
+#    SMTP credentials into the release must be present in BOTH deploy.sh
+#    (the live remote path) and the lib's bv_wire_release_symlinks (the
+#    fixture/local path), and the absent-file WARN must be emitted so an
+#    unprovisioned tier's silent mail-degrade is surfaced. Removing any of
+#    these silently reopens the WI-1 defect (transactional mail falls back
+#    to non-sending with no warning), so the lint locks them in.
+#
+# 8a. deploy.sh symlinks the per-tier email.yaml into the release. It lives
+#     under config/plugins/ so Grav's env merge folds it into plugins.email.
+if grep -Eq 'ln -sfn .*\$VDIR/user/env/\$E/config/plugins/email\.yaml' "$DEPLOY_DIR/deploy.sh"; then
+    check "deploy.sh wires the per-tier email.yaml symlink (WI-1)" ok
+else
+    check "deploy.sh must wire the per-tier email.yaml symlink (WI-1)" fail
+fi
+
+# 8b. The symlink sits one level deeper than the env security.yaml
+#     (config/plugins/email.yaml), so its climb is SEVEN (../ x7). A wrong
+#     climb count would dangle the link even when the file exists.
+if grep -Eq 'ln -sfn "\.\./\.\./\.\./\.\./\.\./\.\./\.\./\$DDN/\$VDIR/user/env/\$E/config/plugins/email\.yaml"' "$DEPLOY_DIR/deploy.sh"; then
+    check "deploy.sh email.yaml symlink uses the correct 7-level climb" ok
+else
+    check "deploy.sh email.yaml symlink must use the 7-level climb (../ x7)" fail
+fi
+
+# 8c. The lib's bv_wire_release_symlinks (fixture/local path) wires it too.
+if grep -Eq 'ln -sfn "\.\./\.\./\.\./\.\./\.\./\.\./\.\./\$data_dir_name/\$vdir/user/env/\$env/config/plugins/email\.yaml"' "$DEPLOY_DIR/lib/atomic-release.sh"; then
+    check "bv_wire_release_symlinks wires the per-tier email.yaml symlink (WI-1)" ok
+else
+    check "bv_wire_release_symlinks must wire the per-tier email.yaml symlink (WI-1)" fail
+fi
+
+# 8d. deploy.sh emits a non-fatal WARN when a tier's email.yaml is absent
+#     (the absent-file-is-surfaced-not-silent acceptance criterion).
+if grep -Eq 'WARN: no email\.yaml provisioned' "$DEPLOY_DIR/deploy.sh"; then
+    check "deploy.sh emits a WARN when a tier's email.yaml is absent (WI-1)" ok
+else
+    check "deploy.sh must WARN when a tier's email.yaml is absent (WI-1)" fail
+fi
+
+# 9. Per-tier env-config dir name must be the canonical HOST, not the short
+#    tier name. Grav resolves its environment from the request hostname (no
+#    setup.php / GRAV_ENVIRONMENT — the generated .htaccess only sets
+#    X-Forwarded-Proto), so user/env/<X>/ is loaded ONLY when <X> is the host.
+#    deploy.sh historically passed the short tier name ($ENV) into the remote
+#    blocks that build user/env/<X>/, landing per-tier security.yaml/email.yaml
+#    in a dir Grav never reads — silently degrading transactional mail to
+#    non-sending. The promote scripts already use the host path; this locks
+#    deploy.sh onto the same convention. (ADR-004 §Consequences: this lint
+#    extension is the discharge for the remote-mode change.)
+#
+# 9a. deploy.sh derives the env-dir name from ENV_URL (single source of truth).
+if grep -qF 'ENV_HOST="${ENV_URL#https://}"' "$DEPLOY_DIR/deploy.sh"; then
+    check "deploy.sh derives ENV_HOST from ENV_URL (host = Grav env name)" ok
+else
+    check "deploy.sh must derive ENV_HOST from ENV_URL" fail
+fi
+
+# 9b. Every remote block that builds user/env/<X>/ is passed the HOST
+#     (ENV_HOST), never the bare short tier name. The buggy short-name form
+#     (DEPLOY_ENV="$ENV" / E="$ENV") must not reappear — this is the
+#     regression guard for the silent-mail-degrade defect.
+if grep -qF 'DEPLOY_ENV="$ENV_HOST"' "$DEPLOY_DIR/deploy.sh" \
+   && grep -qF 'E="$ENV_HOST"' "$DEPLOY_DIR/deploy.sh"; then
+    check "deploy.sh passes ENV_HOST into the env-dir remote blocks" ok
+else
+    check "deploy.sh must pass ENV_HOST (not \$ENV) into the env-dir remote blocks" fail
+fi
+SHORT_NAME_HITS="$(grep -nE '(DEPLOY_ENV|[[:space:]]E)="\$ENV"' "$DEPLOY_DIR/deploy.sh" 2>/dev/null \
+                   | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' \
+                   || true)"
+if [ -z "$SHORT_NAME_HITS" ]; then
+    check "deploy.sh never passes the short tier name \$ENV as the env-dir component" ok
+else
+    check "deploy.sh must not pass \$ENV (short tier name) as the env-dir component" fail
+    printf '%s\n' "$SHORT_NAME_HITS" | sed 's/^/      /' >&2
+fi
+
+# 9c. Each Grav tier's host (the value ENV_HOST resolves to) has a matching
+#     user/env/<host>/ dir in the repo — i.e. the derivation lands on a dir
+#     Grav actually reads, and deploy.sh's ENV_URL agrees with it.
+for host in dev.hackersbychoice.dk test.hackersbychoice.dk staging.hackersbychoice.dk www.byvaerkstederne.dk; do
+    if [ -d "$PROJECT_ROOT/config/www/user/env/$host/config" ]; then
+        check "repo ships a Grav-readable env dir for $host" ok
+    else
+        check "repo must ship user/env/$host/config (Grav reads env by hostname)" fail
+    fi
+    if grep -qF "ENV_URL=\"https://$host\"" "$DEPLOY_DIR/deploy.sh"; then
+        check "deploy.sh maps a tier to host $host" ok
+    else
+        check "deploy.sh must map a tier to host $host (ENV_URL)" fail
+    fi
+done
+
+# 10. push-email.sh — per-tier SMTP credential push. Secret-bearing and it
+#     writes to live tiers, so lock in its load-bearing safety properties.
+PUSH_EMAIL="$DEPLOY_DIR/push-email.sh"
+if [ -f "$PUSH_EMAIL" ]; then
+    # 10a. Goes through the SSH helpers (password-auth-aware), never bare ssh.
+    if grep -q 'lib/ssh-auth.sh' "$PUSH_EMAIL" \
+       && grep -q 'bv_ssh_cmd' "$PUSH_EMAIL" \
+       && grep -q 'bv_rsync_via_ssh' "$PUSH_EMAIL"; then
+        check "push-email.sh uses bv_ssh_cmd / bv_rsync_via_ssh (not bare ssh)" ok
+    else
+        check "push-email.sh must use the ssh-auth helpers, not bare ssh" fail
+    fi
+    bare="$(grep -nE 'ssh -o BatchMode=yes|rsync.*-e[[:space:]]+"ssh ' "$PUSH_EMAIL" 2>/dev/null \
+            | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' || true)"
+    if [ -z "$bare" ]; then
+        check "push-email.sh has no bare ssh/rsync invocation" ok
+    else
+        check "push-email.sh must not invoke bare ssh/rsync" fail
+        printf '%s\n' "$bare" | sed 's/^/      /' >&2
+    fi
+
+    # 10b. The SMTP password must never be printed/diffed — compare by hash.
+    if grep -qE 'sha256sum|shasum' "$PUSH_EMAIL"; then
+        check "push-email.sh compares email.yaml by hash (no secret content printed)" ok
+    else
+        check "push-email.sh must compare by hash, never print email.yaml content" fail
+    fi
+    leak="$(grep -nE 'cat "\$local_file"|diff .*email\.yaml' "$PUSH_EMAIL" 2>/dev/null \
+            | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' || true)"
+    if [ -z "$leak" ]; then
+        check "push-email.sh does not cat/diff the email.yaml body" ok
+    else
+        check "push-email.sh must not cat/diff the email.yaml body (secret leak)" fail
+        printf '%s\n' "$leak" | sed 's/^/      /' >&2
+    fi
+
+    # 10c. prod gated by --i-mean-it; staging guarded against real delivery.
+    if grep -q 'Refusing to push prod without --i-mean-it' "$PUSH_EMAIL"; then
+        check "push-email.sh gates prod behind --i-mean-it" ok
+    else
+        check "push-email.sh must gate prod behind --i-mean-it" fail
+    fi
+    if grep -qi 'mailtrap' "$PUSH_EMAIL" && grep -qi 'sandbox' "$PUSH_EMAIL"; then
+        check "push-email.sh guards staging against real delivery (sandbox-only)" ok
+    else
+        check "push-email.sh must guard staging against real delivery (ADR-002)" fail
+    fi
+fi
+
+# 11. delete-user.sh — destructive (removes a member account YAML on a tier).
+#     Lock in its safety properties.
+DELETE_USER="$DEPLOY_DIR/delete-user.sh"
+if [ -f "$DELETE_USER" ]; then
+    if grep -q 'lib/ssh-auth.sh' "$DELETE_USER" && grep -q 'bv_ssh_cmd' "$DELETE_USER"; then
+        check "delete-user.sh uses the ssh-auth helpers (not bare ssh)" ok
+    else
+        check "delete-user.sh must use the ssh-auth helpers" fail
+    fi
+    if grep -q 'Refusing to delete a prod account without --i-mean-it' "$DELETE_USER"; then
+        check "delete-user.sh gates prod behind --i-mean-it" ok
+    else
+        check "delete-user.sh must gate prod behind --i-mean-it" fail
+    fi
+    # username becomes a remote path component — must reject traversal.
+    if grep -q 'Refusing unsafe username' "$DELETE_USER"; then
+        check "delete-user.sh validates username against path traversal" ok
+    else
+        check "delete-user.sh must validate username against traversal" fail
+    fi
+fi
+
+# 12. list-users.sh — read-only account listing; must still go through the
+#     ssh-auth helpers (no bare ssh).
+LIST_USERS="$DEPLOY_DIR/list-users.sh"
+if [ -f "$LIST_USERS" ]; then
+    if grep -q 'lib/ssh-auth.sh' "$LIST_USERS" && grep -q 'bv_ssh_cmd' "$LIST_USERS"; then
+        check "list-users.sh uses the ssh-auth helpers (not bare ssh)" ok
+    else
+        check "list-users.sh must use the ssh-auth helpers" fail
+    fi
+    lbare="$(grep -nE 'ssh -o BatchMode=yes' "$LIST_USERS" 2>/dev/null \
+             | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' || true)"
+    if [ -z "$lbare" ]; then
+        check "list-users.sh has no bare ssh invocation" ok
+    else
+        check "list-users.sh must not invoke bare ssh" fail
+    fi
+fi
+
+# 13. cleanup-unverified-users.sh — destructive auto-cleanup (deletes accounts).
+#     Lock in: ssh-auth helpers, dry-run default, prod --apply gate, and the
+#     narrow target set (only state:disabled accounts with a pending token).
+CLEANUP="$DEPLOY_DIR/cleanup-unverified-users.sh"
+if [ -f "$CLEANUP" ]; then
+    if grep -q 'lib/ssh-auth.sh' "$CLEANUP" && grep -q 'bv_ssh_cmd' "$CLEANUP"; then
+        check "cleanup-unverified-users.sh uses the ssh-auth helpers" ok
+    else
+        check "cleanup-unverified-users.sh must use the ssh-auth helpers" fail
+    fi
+    if grep -q 'APPLY=0' "$CLEANUP"; then
+        check "cleanup-unverified-users.sh defaults to dry-run (APPLY=0)" ok
+    else
+        check "cleanup-unverified-users.sh must default to dry-run" fail
+    fi
+    if grep -q 'Refusing to --apply on prod without --i-mean-it' "$CLEANUP"; then
+        check "cleanup-unverified-users.sh gates prod --apply behind --i-mean-it" ok
+    else
+        check "cleanup-unverified-users.sh must gate prod --apply behind --i-mean-it" fail
+    fi
+    # Must only ever target unconfirmed accounts: state:disabled AND a token.
+    if grep -q 'activation_token' "$CLEANUP" && grep -qE '= disabled|disabled ' "$CLEANUP"; then
+        check "cleanup-unverified-users.sh targets only disabled accounts with a pending token" ok
+    else
+        check "cleanup-unverified-users.sh must restrict to disabled + activation_token" fail
+    fi
+fi
+
+# 14. throttle.sh — live on/off toggle for the registration throttle. Goes
+#     through the ssh-auth helpers and gates prod behind --i-mean-it.
+THROTTLE="$DEPLOY_DIR/throttle.sh"
+if [ -f "$THROTTLE" ]; then
+    if grep -q 'lib/ssh-auth.sh' "$THROTTLE" && grep -q 'bv_ssh_cmd' "$THROTTLE"; then
+        check "throttle.sh uses the ssh-auth helpers (not bare ssh)" ok
+    else
+        check "throttle.sh must use the ssh-auth helpers" fail
+    fi
+    if grep -q "Toggling prod's registration throttle" "$THROTTLE"; then
+        check "throttle.sh gates prod behind --i-mean-it" ok
+    else
+        check "throttle.sh must gate prod behind --i-mean-it" fail
+    fi
+fi
+
+# 15. reset-users.sh / reset-data.sh — bulk-destructive tier resets. Lock in:
+#     ssh-auth helpers, the prod --i-mean-it gate, and the Make-layer prod
+#     refusal (bulk prod wipes are operator-supervised, script-direct only).
+for base in reset-users.sh reset-data.sh; do
+    script="$DEPLOY_DIR/$base"
+    [ -f "$script" ] || { check "$base exists" fail; continue; }
+    if grep -q 'lib/ssh-auth.sh' "$script" && grep -q 'bv_ssh_cmd' "$script"; then
+        check "$base uses the ssh-auth helpers (not bare ssh)" ok
+    else
+        check "$base must use the ssh-auth helpers" fail
+    fi
+    if grep -qE 'Refusing to reset (users|data) on prod without --i-mean-it' "$script"; then
+        check "$base gates prod behind --i-mean-it" ok
+    else
+        check "$base must gate prod behind --i-mean-it" fail
+    fi
+    target="${base%.sh}"
+    if grep -qF "'make $target tier=prod' is intentionally refused" "$PROJECT_ROOT/Makefile"; then
+        check "Makefile refuses 'make $target tier=prod'" ok
+    else
+        check "Makefile must refuse 'make $target tier=prod'" fail
+    fi
+done
+
+# 15b. reset-users.sh must never put admins or the pw-test-* Playwright
+#      seeds in its delete set — removing either breaks tier admin access /
+#      the auth suite. Lock in the keep-classification markers.
+RESET_USERS="$DEPLOY_DIR/reset-users.sh"
+if [ -f "$RESET_USERS" ]; then
+    if grep -q 'keep_reason="admin"' "$RESET_USERS" \
+       && grep -q 'keep_reason="playwright-seed"' "$RESET_USERS"; then
+        check "reset-users.sh keeps admins and pw-test-* seeds out of the delete set" ok
+    else
+        check "reset-users.sh must keep admins and pw-test-* seeds" fail
+    fi
+fi
+
+# 15c. clear-cache.sh — remote cache clear; must still go through the
+#      ssh-auth helpers (no bare ssh).
+CLEAR_CACHE="$DEPLOY_DIR/clear-cache.sh"
+if [ -f "$CLEAR_CACHE" ]; then
+    if grep -q 'lib/ssh-auth.sh' "$CLEAR_CACHE" && grep -q 'bv_ssh_cmd' "$CLEAR_CACHE"; then
+        check "clear-cache.sh uses the ssh-auth helpers (not bare ssh)" ok
+    else
+        check "clear-cache.sh must use the ssh-auth helpers" fail
+    fi
+fi
+
+# 16. Prod tier-root convention — prod's Grav root is the chosting.dk
+#     docroot ITSELF (promote-to-prod.sh: PROD_DOCROOT="$DEPLOY_PROD_PATH");
+#     there is no prod/ subdirectory. Every user-ops script must resolve its
+#     tier root via bv_tier_root — a hardcoded "$PATH/$TIER" works on the
+#     one.com tiers and silently breaks on prod (found live 2026-07-18:
+#     every user-ops command failed on prod with 'No such file or directory').
+if grep -q '^bv_tier_root() {' "$DEPLOY_DIR/lib/ssh-auth.sh"; then
+    check "bv_tier_root helper defined in lib/ssh-auth.sh" ok
+else
+    check "bv_tier_root helper must be defined in lib/ssh-auth.sh" fail
+fi
+for base in list-users.sh delete-user.sh cleanup-unverified-users.sh \
+            activate-user.sh reset-password.sh manage-groups.sh throttle.sh \
+            push-data.sh reset-users.sh reset-data.sh clear-cache.sh; do
+    if grep -q 'bv_tier_root' "$DEPLOY_DIR/$base"; then
+        check "$base resolves its tier root via bv_tier_root" ok
+    else
+        check "$base must resolve its tier root via bv_tier_root" fail
+    fi
+done
+hard="$(grep -nE '"\$(PATH_SSH|DEPLOY_PATH)/\$TIER"' "$DEPLOY_DIR"/*.sh 2>/dev/null \
+        | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' || true)"
+if [ -z "$hard" ]; then
+    check "no deploy script hardcodes \"\$PATH/\$TIER\" as a tier root" ok
+else
+    check "deploy scripts must not hardcode \"\$PATH/\$TIER\" (use bv_tier_root)" fail
+    printf '%s\n' "$hard" | sed 's/^/      /' >&2
+fi
+
 echo ""
 echo "─────────────────────────────────────"
 echo "  Pass: $PASS    Fail: $FAIL"

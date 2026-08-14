@@ -71,6 +71,12 @@ config/www/user/accounts/*
 # Flex Objects indexes (auto-generated)
 config/www/user/data/flex/indexes/
 
+# Flex Objects data — live user state (organizer-created events, RSVP
+# signups, roadmap votes, user submissions, audit log). Never tracked;
+# sample content lives in tests/fixtures/grav-seeds/sample-content/.
+# See specifications/flex_data_out_of_git_specification.md.
+config/www/user/data/flex-objects/
+
 # Scheduler data (runtime)
 config/www/user/data/scheduler/
 
@@ -82,6 +88,13 @@ config/www/user/data/rememberme/
 
 # Feed cache
 config/www/user/data/feed/
+
+# Bug-report uploaded screenshots — runtime user uploads (the bug-report tests
+# also create these). Keep the access-control infra (.htaccess + index.html);
+# never track the uploaded images themselves.
+config/www/user/data/bug-report-images/*
+!config/www/user/data/bug-report-images/.htaccess
+!config/www/user/data/bug-report-images/index.html
 
 # Claude Code — ignore by default, but track project-level settings + hooks.
 # Local per-operator state (permissions, worktree registry, transient
@@ -112,3 +125,43 @@ test-results/
 # /prod), not to the repo. Committing local-tier salts would pin them as
 # production values on the next deploy.
 config/www/user/env/*/config/security.yaml
+
+# Root security.yaml — same class of secret. Grav regenerates it with a
+# fresh per-instance salt on first request when absent (WI-3). The committed
+# copy pinned a publicly-known salt into the repo / local dev / the initial
+# release window; it is now untracked. See README setup notes.
+config/www/user/config/security.yaml
+
+# Per-tier SMTP transport credentials. Like security.yaml, these belong to
+# each runtime tier, not the repo (WI-1). Provisioned out of band and wired
+# into each release by deploy.sh. They live under config/plugins/ so Grav's
+# environment merge folds them into the `plugins.email` namespace (the email
+# plugin's config); a sibling-of-config/ file would land in a dead namespace.
+# The `.example` provisioning templates are tracked (the negation keeps them).
+config/www/user/env/*/config/plugins/email.yaml
+!config/www/user/env/*/config/plugins/email.yaml.example
+
+# review-and-plan / execute-fix-plan run artifacts (per-diff scratch — not
+# project artefacts; regenerated each run).
+.review-runs/
+
+# spec-review-and-plan / spec-execute-fix-plan run artifacts (transient).
+.spec-review-runs/
+
+# promote-to-prod operator journal — operator-local audit trail, may carry
+# sensitive --reason context. Kept on the operator's machine, never committed.
+deploy/promotion-log.jsonl
+
+# Event-manager audit trail — live state written by the plugin, per-tier, never committed
+config/www/user/data/flex-objects/events-audit.jsonl
+
+# Event RSVP signups — live per-tier state written by the plugin, never committed
+config/www/user/data/flex-objects/event-signups.yaml
+
+# Event-details uploaded images — runtime user uploads (the RSVP tests also
+# create these), per-event subfolders with random filenames; never track them.
+config/www/user/data/event-images/
+# Account-manager runtime state (audit trail + write lock) — live per-tier
+# state written by the plugin, never committed
+config/www/user/data/account-manager/
+logs/

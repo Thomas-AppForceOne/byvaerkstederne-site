@@ -49,10 +49,23 @@
                 <a href="/roadmap">Roadmap</a>
                 {% endif %}
                 {% if feature_enabled('feature_suggestion') %}
-                <button type="button" onclick="bvFeatureSuggestion.open(); return false;">Forsl&aring; feature</button>
+                {# Anchor (not a bare button) so the affordance degrades to the
+                   /foreslaa-feature landing page when JS is off — the same
+                   progressive-enhancement pattern as "Bliv medlem" →
+                   /opret-medlemskab in the nav. With JS the onclick opens the
+                   overlay and cancels navigation, so the page stays a fallback,
+                   not the primary path. Bug report has no standalone page, so
+                   it stays a bare <button>. #}
+                <a href="/foreslaa-feature" data-footer-fs-trigger onclick="bvFeatureSuggestion.open(); return false;">Forsl&aring; feature</a>
                 {% endif %}
                 {% if feature_enabled('bug_report') %}
                 <button type="button" onclick="bvBugReport.open(); return false;">Rapport&eacute;r fejl</button>
+                {% endif %}
+                {# Event management entry point — footer-only, auth-gated per
+                   ADR-001; additionally hidden from members without the
+                   organizers capability (UX only, never the boundary). #}
+                {% if feature_enabled('event_management') and (grav.user.authorize('admin.events.read') or grav.user.authorize('admin.super')) %}
+                <a href="/begivenheder/arrangoerpanel">Arrangørpanel</a>
                 {% endif %}
             </nav>
         </div>
@@ -73,6 +86,18 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    {# EU co-funding acknowledgement. Required on every page of the funded
+       project, so it sits in its own full-width row rather than inside the
+       column grid — no feature flag, no auth gate, no responsive column that
+       can collapse it away. #}
+    <div class="bv-footer__funding">
+        <img class="bv-footer__funding-logo"
+             src="{{ url('theme://images/eu-cofunded.png') }}"
+             width="600" height="122"
+             alt="Medfinansieret af Den Europ&aelig;iske Union"
+             loading="lazy" />
     </div>
 
     <div class="bv-footer__bottom">

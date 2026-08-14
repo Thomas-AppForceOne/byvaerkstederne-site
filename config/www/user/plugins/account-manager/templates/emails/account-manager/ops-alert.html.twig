@@ -1,0 +1,17 @@
+{% extends 'email/base.html.twig' %}
+
+{# Operational fail-loud alert to the admin recipients (purge circuit
+   breaker, missing scheduler heartbeat). Cron output is discarded on the
+   hosting tiers — this mail is the signal a human actually sees. #}
+
+{%- set subject = '[Drift] ' ~ alert_subject ~ ' — ' ~ site_name %}
+{%- do email.message.setSubject(subject) %}
+
+{%- block content -%}
+<p>Hej,</p>
+<p>{{ alert_body|e|nl2br }}</p>
+<p>
+  Denne besked er sendt automatisk af account-manager-pluginet på
+  {{ site_host }}.
+</p>
+{%- endblock content -%}

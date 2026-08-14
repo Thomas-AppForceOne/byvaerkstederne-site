@@ -1,0 +1,4 @@
+# Team members shown on /kontakt (flex-objects: teammedlemmer).
+# Empty until real tovholdere are added — the team_cards section on /kontakt
+# hides itself when no member has published + show_on_contact.
+{}

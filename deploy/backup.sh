@@ -319,7 +319,7 @@ NOW_FNAME_TIME="${NOW_ISO//:/-}"   # 2026-04-29T12-34Z
 # Provenance:
 #   code_version → <source>/config/www/VERSION       (first line, trimmed)
 #   code_build   → <source>/config/www/BUILD         (first line, trimmed)
-#   data_version → <source>/config/www/user/data-version.yaml `version:` field
+#   data_version → <source>/config/www/user/data-version.yaml `data_version:` field (legacy `version:` accepted)
 #
 # Failure modes:
 #   - VERSION or BUILD missing on the source: hard fail (exit 3,
@@ -379,25 +379,36 @@ source_read_first_line() {
         2>/dev/null || true
 }
 
-# Parse a yaml `version:` field (top-level) from the supplied content.
-# Accepts quoted or unquoted values. Echoes the value or empty.
+# Parse the data-schema version from data-version.yaml content. The
+# CANONICAL field is `data_version:` — the key the shipped data-versioning
+# feature writes (data-version.yaml.example, atomic-release's release
+# metadata, migrate.sh's extract_data_version all agree). The bare
+# `version:` key is accepted as a legacy fallback for files that predate
+# the standardisation; canonical wins when both are present. Accepts
+# quoted or unquoted values. Echoes the value or empty.
 extract_yaml_version_field() {
     local content="$1"
     printf '%s\n' "$content" \
         | awk '
+            function clean(v) {
+                # strip surrounding quotes, trailing comment, whitespace
+                gsub(/^["'\'']|["'\'']$/, "", v)
+                sub(/[[:space:]]+#.*$/, "", v)
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+                return v
+            }
             /^[[:space:]]*#/ { next }
-            /^version:[[:space:]]*/ {
+            /^data_version:[[:space:]]*/ && canonical == "" {
+                v = $0
+                sub(/^data_version:[[:space:]]*/, "", v)
+                canonical = clean(v)
+            }
+            /^version:[[:space:]]*/ && legacy == "" {
                 v = $0
                 sub(/^version:[[:space:]]*/, "", v)
-                # strip surrounding quotes
-                gsub(/^["'\'']|["'\'']$/, "", v)
-                # strip trailing comment
-                sub(/[[:space:]]+#.*$/, "", v)
-                # trim
-                gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
-                print v
-                exit
+                legacy = clean(v)
             }
+            END { print (canonical != "" ? canonical : legacy) }
         '
 }
 
@@ -458,7 +469,7 @@ else
         # destructive results. Refusing to back up is the safe
         # response — the operator can fix or remove the file and
         # retry.
-        die "source tier user/data-version.yaml exists but has no parseable 'version:' field; refusing to stamp metadata" 3
+        die "source tier user/data-version.yaml exists but has no parseable 'data_version:' (or legacy 'version:') field; refusing to stamp metadata" 3
     fi
 fi
 

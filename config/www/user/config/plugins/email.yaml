@@ -1,0 +1,18 @@
+# TEST-ONLY Mailpit override written by tests/global-setup.js. The committed,
+# credential-free file is restored by tests/global-teardown.js via
+# `git checkout`. DO NOT COMMIT this form — it points the mailer at the
+# Mailpit sink (mailpit:1025) which only exists inside the test compose network.
+enabled: true
+from: 'noreply@hackersbychoice.dk'
+from_name: 'Byværkstederne'
+charset: utf-8
+content_type: text/html
+debug: false
+mailer:
+  engine: smtp
+  smtp:
+    server: mailpit
+    port: 1025
+    encryption: none
+    user: ''
+    password: ''

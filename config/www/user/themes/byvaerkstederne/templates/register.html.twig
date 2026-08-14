@@ -1,17 +1,30 @@
+{# Account creation, rendered inside the shared floating auth card
+   (partials/auth_card.html.twig) — same identity as login/forgot/reset. The
+   registration form itself still uses Grav's form rendering (forms/form.html.twig)
+   for proper nonce/CSRF handling; .bv-register-card carries the field styling.
+   No plugin PHP is touched. (auth-surface UI/UX) #}
 {% extends 'partials/base.html.twig' %}
 
+{# Flash renders inside the card; suppress base's top-of-page flash. #}
+{% block flash %}{% endblock %}
+
 {% block body %}
-<section style="min-height: 70vh; display: flex; align-items: center; justify-content: center; padding: var(--space-12) var(--space-4);">
-    <div style="max-width: 36rem; width: 100%;">
-        {# Header #}
-        <div style="margin-bottom: var(--space-12);">
-            <h1 class="bv-display" style="margin-bottom: var(--space-4);">Bliv en del af v&aelig;rkstedet</h1>
-            <div style="width: 6rem; height: 0.5rem; background: var(--primary); margin-bottom: var(--space-6);"></div>
-            <p class="bv-body-lg">Byg, skab og deltag i f&aelig;llesskabet. Opret dit medlemskab herunder for at f&aring; adgang til maskiner, kurser og netv&aelig;rk.</p>
-        </div>
+{% embed 'partials/auth_card.html.twig' %}
+    {% block auth_title %}Bliv en del af v&aelig;rkstedet{% endblock %}
+    {% block auth_intro %}
+        <p class="bv-body-lg">Byg, skab og deltag i f&aelig;llesskabet. Opret dit medlemskab herunder for at f&aring; adgang til maskiner, kurser og netv&aelig;rk.</p>
+    {% endblock %}
+    {% block auth_form %}
+        <style>
+          /* Honeypot anti-spam field (form field "website", type: honeypot). Hidden
+             from humans; bots fill it and the forms plugin rejects the submission
+             server-side. The field also carries aria-hidden + tabindex=-1; this rule
+             hides it visually regardless of the form plugin's inline_css setting. */
+          .form-honeybear { position: absolute !important; left: -10000px !important; width: 1px; height: 1px; overflow: hidden; }
+        </style>
 
         {# Form Card — use Grav's form rendering for proper nonce/CSRF handling #}
-        <div class="bv-register-card" style="background: var(--surface-container-lowest); border-left: 8px solid var(--primary); padding: var(--space-8); position: relative; overflow: hidden;">
+        <div class="bv-register-card">
             {% include "forms/form.html.twig" with {form: forms('registration')} %}
         </div>
 
@@ -65,18 +78,40 @@
                         }
                     }
 
-                    // Password validation
-                    var pwd = form.querySelector('input[type="password"]');
+                    // Password validation (WI-5/WI-7). Target the first password
+                    // field (password1) explicitly now that the form has a
+                    // confirmation field (password2). The length check is the
+                    // canonical client-side policy proven equivalent to the
+                    // server-side pwd_regex by the shared truth-table
+                    // fixture/test — length only, no character classes.
+                    //
+                    // The blocklist below is RENDERED FROM THE SAME CONFIG the
+                    // server reads (plugins.account-manager.password.blocklist),
+                    // so the two checks cannot drift apart. It is a courtesy,
+                    // not a boundary: account-manager re-checks the submission.
+                    var BLOCKED = {{ config.plugins['account-manager'].password.blocklist|default([])|json_encode|raw }};
+                    var pwd = form.querySelector('input[name="data[password1]"]') || form.querySelector('input[type="password"]');
                     if (pwd) {
                         var val = pwd.value;
-                        var errors = [];
-                        if (val.length < 8) errors.push('mindst 8 tegn');
-                        if (!/[a-z]/.test(val)) errors.push('mindst ét lille bogstav');
-                        if (!/[A-Z]/.test(val)) errors.push('mindst ét stort bogstav');
-                        if (!/[0-9]/.test(val)) errors.push('mindst ét tal');
-                        if (errors.length > 0) {
-                            showError(pwd, 'Adgangskoden mangler: ' + errors.join(', ') + '.');
+                        if (val.length < 12) {
+                            showError(pwd, 'Adgangskoden skal være mindst 12 tegn.');
+                        } else {
+                            var lower = val.toLowerCase();
+                            for (var bi = 0; bi < BLOCKED.length; bi++) {
+                                if (String(BLOCKED[bi]) && lower.indexOf(String(BLOCKED[bi])) !== -1) {
+                                    showError(pwd, 'Adgangskoden indeholder et ord, der er for nemt at gætte. Vælg noget andet — gerne en sætning, du kan huske.');
+                                    break;
+                                }
+                            }
                         }
+                    }
+
+                    // Password confirmation match (WI-7). Mirror the server-side
+                    // validate_password1_and_password2 enforcement client-side so
+                    // a typo is caught before submit.
+                    var pwd2 = form.querySelector('input[name="data[password2]"]');
+                    if (pwd && pwd2 && pwd.value !== pwd2.value) {
+                        showError(pwd2, 'Adgangskoderne er ikke ens. Skriv den samme adgangskode i begge felter.');
                     }
 
                     if (hasError) {
@@ -88,20 +123,13 @@
             }
         })();
         </script>
-
-        {# Login link #}
+    {% endblock %}
+    {% block auth_footer %}
         <div style="text-align: center; padding-top: var(--space-8);">
-            <a href="#" onclick="document.getElementById('bv-login-overlay').classList.add('is-open'); document.body.style.overflow='hidden'; return false;"
-               class="bv-label" style="color: var(--outline); text-decoration: underline; text-underline-offset: 4px;">
+            <a href="/login" class="bv-label" style="color: var(--outline); text-decoration: underline; text-underline-offset: 4px;">
                 Har du allerede en profil? Log ind her
             </a>
         </div>
-
-        {# Bottom accent #}
-        <div style="margin-top: var(--space-8); display: flex; justify-content: flex-end; align-items: center; gap: var(--space-4);">
-            <span class="bv-label" style="color: var(--outline-variant);">Hundested / DK</span>
-            <div style="width: 8rem; height: 1px; background: var(--outline-variant);"></div>
-        </div>
-    </div>
-</section>
+    {% endblock %}
+{% endembed %}
 {% endblock %}

@@ -1,0 +1,11 @@
+# Per-tier login override (tracked config, not secret).
+#
+# site_host = the absolute base URL the login plugin uses to build the
+# activation and password-reset links in its emails (see plugin
+# classes/Email.php: sendActivationEmail / sendResetEmail). The plugin calls
+# Utils::url($path, null, true) with $domain=null, so WITHOUT site_host it
+# emits a ROOT-RELATIVE link (/activate_user/...), which mail clients render
+# as file:///activate_user/... — a dead link. Grav's custom_base_url does NOT
+# feed this path; the plugin reads its own site_host. Mirror this tier's
+# custom_base_url (env system.yaml).
+site_host: 'https://dev.hackersbychoice.dk'

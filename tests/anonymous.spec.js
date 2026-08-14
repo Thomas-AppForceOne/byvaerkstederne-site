@@ -28,6 +28,32 @@ require('./anonymous/feature-flags-html');
 require('./anonymous/feature-flags-plugins');
 require('./anonymous/feature-flags-link-hiding');
 require('./anonymous/version-footer');
+// Token-gated cron endpoint (the hosting plan has no cron of its own).
+require('./anonymous/scheduler-trigger');
+// Member auth hardening (WI-4/WI-5/WI-6). password-policy + session-cookie run
+// always (pure source/logic + the X-Forwarded-Proto cookie probe); the login
+// round-trip, registration, and password-reset gate on TEST_PASSWORD, the
+// membership_signup feature, and a reachable Mailpit sink — skipping-with-
+// reason otherwise.
+require('./anonymous/password-policy');
+require('./anonymous/session-cookie');
+require('./anonymous/registration');
+require('./anonymous/registration-honeypot');
+// Welcome mail: sent from the ACTIVATION handler, content from the theme
+// override. vendored-login-patch is a pure source invariant (no browser, no
+// sink) guarding the plugin patches the mail depends on.
+require('./anonymous/welcome-email');
+require('./anonymous/vendored-login-patch');
+require('./anonymous/password-reset');
+require('./anonymous/auth-surface');
+// Frontend event CRUD — public read (M1) + anonymous management gating.
+require('./anonymous/events-public');
+// Event RSVP — anonymous availability, login offer, forced-browsing negatives,
+// and the inline card expansion (no login needed).
+require('./anonymous/events-rsvp-public');
+require('./anonymous/events-card-expand');
+// Account self-service — /konto access control + flag-off endpoint gating.
+require('./anonymous/account-access');
 
 // Visual-parity tests live at tests/anonymous/event-card-visual-parity.js
 // and are picked up directly by the chromium project's testMatch (see

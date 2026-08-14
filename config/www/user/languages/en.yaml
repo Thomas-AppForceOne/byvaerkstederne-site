@@ -1,0 +1,116 @@
+# Site-level language overrides (WI-2, WI-7).
+#
+# The site runs single-language with Grav's active translation language "en"
+# (site.yaml default_lang: da sets the content fallback, not the active UI
+# language, and system.languages.supported is unset). The stock login plugin
+# emits its flash/validation messages via PLUGIN_LOGIN.* translation keys in
+# English. Grav merges user/languages/<active>.yaml OVER plugin language
+# files, so overriding the keys here re-localises the auth surface to Danish
+# WITHOUT modifying any plugin PHP or plugin language file (per the spec's
+# non-goal: stock plugins stay unpatched).
+#
+# Covers:
+#   WI-2 — registration "check your inbox to activate" notice, activation
+#          confirmed/expired, and the disabled-account login rejection.
+#   WI-7 — Danish password rejection and password-mismatch messages.
+#   WI-1 — themed auth-page button labels.
+PLUGIN_LOGIN:
+  # WI-2: registration success now means "account created, verify your email".
+  # %s is the member's full name. Must contain "aktiver" / "tjek din indbakke"
+  # (the WI-2 acceptance criterion asserts this substring on the / redirect).
+  ACTIVATION_NOTICE_MSG: "Hej %s, din konto er oprettet. Tjek din indbakke og klik på linket for at aktivere din konto, før du kan logge ind."
+  # Kept localised in case a tier runs with the gate off (welcome path).
+  WELCOME_NOTICE_MSG: "Hej %s, din konto er oprettet."
+
+  # The activation email itself. Rendered by the login plugin's
+  # emails/login/activate.html.twig, which prepends HOST_WARNING and then this
+  # body; both were English while the welcome mail that follows is Danish.
+  # Placeholders are POSITIONAL and must keep their indices — the template
+  # passes them in this order (classes/Email.php sendActivationEmail):
+  #   %1$s member's full name   %2$s activation link
+  #   %3$s site name            %4$s site author
+  # Getting %2$s wrong yields a mail that delivers fine and links nowhere, so
+  # tests/anonymous/registration.js drives the link out of the Danish body.
+  # The CTA is inline-styled in brand green: the base template's .btn-primary
+  # is Grav's default blue.
+  ACTIVATION_EMAIL_SUBJECT: "Aktivér din konto på %s"
+  ACTIVATION_EMAIL_BODY: "<h1>Aktivér din konto</h1><p>Hej %1$s,</p><p>Din konto på <b>%3$s</b> er oprettet. Du mangler kun at aktivere den, før du kan logge ind.</p><p><br/><a href=\"%2$s\" style=\"display:inline-block;padding:12px 24px;background-color:#13483b;color:#ffffff;text-decoration:none;font-weight:bold;\">Aktivér din konto</a><br/><br/></p><p>Virker knappen ikke, kan du kopiere dette link ind i adressefeltet i din browser:</p><p class=\"word-break\"><a href=\"%2$s\">%2$s</a></p><p><br/>Venlig hilsen<br/><br/>%4$s</p>"
+
+  # Shared safety notice at the top of the activation and password-reset mails.
+  # %s is the sending site's host.
+  HOST_WARNING: '<div style="background-color: #FFEDAD; color: #725F1C; border: 1px solid #FFD74E; padding: 10px; margin: 10px 0; border-radius: 5px;">BEMÆRK: Hvis du ikke selv har bedt om denne e-mail, eller du ikke kender afsenderen <strong>"%s"</strong>, kan du roligt ignorere eller slette den.</div>'
+
+  # Password-reset email. NOTE the placeholder order differs from the
+  # activation mail — reset-password.html.twig passes them as:
+  #   %1$s full name   %2$s reset link   %3$s site author   %4$s site name
+  FORGOT_EMAIL_SUBJECT: "Nulstil din adgangskode på %s"
+  FORGOT_EMAIL_BODY: "<h1>Nulstil din adgangskode</h1><p>Hej %1$s,</p><p>Der er bedt om at nulstille adgangskoden til din konto på <b>%4$s</b>.</p><p><br/><a href=\"%2$s\" style=\"display:inline-block;padding:12px 24px;background-color:#13483b;color:#ffffff;text-decoration:none;font-weight:bold;\">Vælg en ny adgangskode</a><br/><br/></p><p>Virker knappen ikke, kan du kopiere dette link ind i adressefeltet i din browser:</p><p class=\"word-break\"><a href=\"%2$s\">%2$s</a></p><p>Har du ikke selv bedt om det, kan du ignorere denne e-mail — din adgangskode bliver ikke ændret.</p><p><br/>Venlig hilsen<br/><br/>%3$s</p>"
+
+  # Mails below are NOT reachable in the current configuration, so no test
+  # exercises them — they are translated so that turning the corresponding
+  # option on can never ship an English mail by surprise.
+  #   NOTIFICATION_*: admin notice on registration.
+  #                   send_notification_email is false on every tier.
+  #                   Order: %1$s site name, %2$s username, %3$s email, %4$s site URL.
+  #   INVITATION_*:   admin-issued invitations; the site registers openly instead.
+  #                   Order: %1$s site name, %2$s message, %3$s invitation link, %4$s inviter.
+  # WELCOME_EMAIL_* is deliberately NOT overridden: the welcome mail is a full
+  # theme template (emails/login/welcome.html.twig), and a second copy of that
+  # copy here would be a second source of truth. tests/anonymous/
+  # vendored-login-patch.js is what guards the override still resolving.
+  NOTIFICATION_EMAIL_SUBJECT: "Nyt medlem på %s"
+  NOTIFICATION_EMAIL_BODY: "<h1>Nyt medlem</h1><p>Der er oprettet en ny konto på %1$s.</p><ul><li>Brugernavn: <b>%2$s</b></li><li>E-mail: <b>%3$s</b></li></ul><p><br/><a href=\"%4$s\" style=\"display:inline-block;padding:12px 24px;background-color:#13483b;color:#ffffff;text-decoration:none;font-weight:bold;\">Gå til %1$s</a><br/><br/></p>"
+  INVITATION_EMAIL_SUBJECT: "Du er inviteret til %s"
+  INVITATION_EMAIL_MESSAGE: "Du er velkommen til at oprette en konto på sitet."
+  INVITATION_EMAIL_BODY: "<h1>Invitation</h1><p>Hej,</p><p>Du er inviteret til at være med i <b>%1$s</b>.</p><p>%2$s</p><p><br/><a href=\"%3$s\" style=\"display:inline-block;padding:12px 24px;background-color:#13483b;color:#ffffff;text-decoration:none;font-weight:bold;\">Opret din konto</a><br/><br/></p><p>Virker knappen ikke, kan du kopiere dette link ind i adressefeltet i din browser:</p><p class=\"word-break\"><a href=\"%3$s\">%3$s</a></p><p><br/>Venlig hilsen<br/><br/>%4$s</p>"
+
+  # WI-2: activation outcomes (flash on / after following the link).
+  USER_ACTIVATED_SUCCESSFULLY: "Din konto er nu aktiveret. Du kan logge ind."
+  USER_ACTIVATED_SUCCESSFULLY_NOT_ENABLED: "Din konto er aktiveret, men afventer godkendelse."
+  ACTIVATION_LINK_EXPIRED: "Aktiveringslinket er udløbet. Prøv at oprette medlemskab igen."
+
+  # WI-2: a disabled / not-yet-activated account cannot log in.
+  USER_ACCOUNT_DISABLED: "Din konto er deaktiveret eller endnu ikke aktiveret. Tjek din indbakke for aktiveringslinket."
+
+  # WI-7: password validation rejections (Danish, not the English RuntimeException).
+  PASSWORD_NOT_VALID: "Adgangskoden skal være mindst 12 tegn. Der er ingen krav om store bogstaver eller tal — en sætning, du kan huske, er både stærkere og nemmere."
+  PASSWORD_VALIDATION_MESSAGE: "Adgangskoden skal være mindst 12 tegn. Der er ingen krav om store bogstaver eller tal — en sætning, du kan huske, er både stærkere og nemmere."
+  PASSWORDS_DO_NOT_MATCH: "Adgangskoderne er ikke ens. Kontrollér at du har indtastet den samme adgangskode i begge felter."
+
+  # WI-1: password reset / forgot flow flashes.
+  FORGOT_INSTRUCTIONS_SENT_VIA_EMAIL: "Hvis der findes en konto, er der sendt en vejledning til nulstilling af adgangskode på e-mail."
+  FORGOT_FAILED_TO_EMAIL: "Kunne ikke sende vejledningen. Prøv igen senere."
+  FORGOT_EMAIL_NOT_CONFIGURED: "Kan ikke nulstille adgangskoden. Dette miljø er ikke konfigureret til at sende e-mail."
+  RESET_PASSWORD_RESET: "Din adgangskode er nulstillet. Du kan nu logge ind med den nye adgangskode."
+  RESET_LINK_EXPIRED: "Nulstillingslinket er udløbet. Prøv igen."
+  RESET_INVALID_LINK: "Ugyldigt nulstillingslink. Prøv igen."
+
+  # Login rate-limit and failure.
+  TOO_MANY_LOGIN_ATTEMPTS: "For mange mislykkede loginforsøg inden for det tilladte tidsrum (%s minutter). Prøv igen senere."
+  LOGIN_FAILED: "Login mislykkedes. Tjek brugernavn og adgangskode."
+
+  # Success confirmations suppressed by design: logging in / out is self-evident
+  # from the reloaded nav (username shown / gone), so these transient bars were
+  # removed as noise. Suppressed here rather than in vendor code.
+  #
+  # The value is a single SPACE, not "". Grav's Language::translate() guards the
+  # lookup with `if ($translation)` — an empty string is falsy, so "" makes it
+  # fall through and return the raw key ("PLUGIN_LOGIN.LOGIN_SUCCESSFUL") as the
+  # flash. A single space is truthy (no fallback) and the messages partial's
+  # `|trim is not empty` guard then drops it, so nothing renders. Failure/
+  # rate-limit above and the activation/reset instructions still flash — those
+  # are the user's only feedback for an otherwise-invisible action.
+  LOGIN_SUCCESSFUL: " "
+  LOGGED_OUT: " "
+
+  # WI-1: auth-page button labels (themed forgot/reset pages reuse plugin partials).
+  BTN_SEND_INSTRUCTIONS: "Send nulstillingslink"
+  BTN_RESET_PASSWORD: "Nulstil adgangskode"
+  BTN_FORGOT: "Glemt adgangskode"
+  ENTER_NEW_PASSWORD: "Indtast ny adgangskode"
+
+# The footer under EVERY mail we send — login plugin, account-manager, and
+# anything else extending email/base.html.twig, which renders this key. The
+# stock value is the email plugin's own branding, "GetGrav.org".
+PLUGIN_EMAIL:
+  EMAIL_FOOTER: "Byværkstederne · Nørregade 21, 3390 Hundested"

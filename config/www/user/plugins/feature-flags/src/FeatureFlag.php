@@ -22,7 +22,6 @@ enum FeatureFlag: string
     case FeatureSuggestion = 'feature_suggestion';
     case BugReport = 'bug_report';
     case CommunityFooterColumn = 'community_footer_column';
-    case MembershipSignup = 'membership_signup';
     case NewsletterSignup = 'newsletter_signup';
     case EventHighlight = 'event_highlight';
     case PressPage = 'press_page';
@@ -49,6 +48,19 @@ enum FeatureFlag: string
     case SocialMediaLinks = 'social_media_links';
     case MakerspaceMeetingLink = 'makerspace_meeting_link';
 
+    // --- Frontend event CRUD (frontend_event_crud_specification.md) ---
+    // Gates the entire event-management surface: the /begivenheder/* routes
+    // (detail, dashboard, create/edit/delete forms) and every mutating
+    // handler in the event-manager plugin.
+    case EventManagement = 'event_management';
+
+    // --- Account self-service (account_self_service_specification.md) ---
+    // Gates the header account dropdown, the /konto page, and every
+    // mutating endpoint in the account-manager plugin. The reinstatement
+    // login hook and the scheduled purge job deliberately run unflagged
+    // (see the account-manager plugin README).
+    case AccountSelfService = 'account_self_service';
+
     /**
      * All rollout-catalogue flag string values, in declaration order. Used by
      * tests and profile validators that need to assert "every catalogue flag
@@ -66,7 +78,6 @@ enum FeatureFlag: string
             'feature_suggestion',
             'bug_report',
             'community_footer_column',
-            'membership_signup',
             'newsletter_signup',
             'event_highlight',
             'press_page',
@@ -88,6 +99,8 @@ enum FeatureFlag: string
             'gear_donation',
             'social_media_links',
             'makerspace_meeting_link',
+            'event_management',
+            'account_self_service',
         ];
     }
 }

@@ -370,6 +370,13 @@ class FeatureFlagsPlugin extends Plugin
         ));
 
         $twig->addFunction(new TwigFunction(
+            'feature_disabled',
+            static function (mixed $name) use ($helpers): bool {
+                return $helpers->featureDisabled($name);
+            }
+        ));
+
+        $twig->addFunction(new TwigFunction(
             'enabled_features',
             static function () use ($helpers): array {
                 return $helpers->enabledFeatures();

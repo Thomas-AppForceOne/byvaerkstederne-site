@@ -1,0 +1,543 @@
+{# ============================================================================
+   Inline event card editor — shared by /begivenheder/opret (create) and
+   /begivenheder/rediger (edit). The organizer edits the event directly on the
+   card as it will appear in the værkstedskalender; popovers on each element
+   capture the values. Only "Uddybende detaljer" (WYSIWYG) stays a classic field.
+
+   A plain <form> that POSTs the SAME data[...] fields the old form did — the
+   event-manager §8.1 contract handler + EventValidator are the unchanged server
+   authority. Card edits are mirrored into hidden data[...] inputs by the inline
+   JS; Gem is gated until the required fields are valid (the server re-validates
+   regardless). The card's accent/badge/CTA follow the chosen group (mirrors
+   EventValidator::ACCENT_BY_GROUP / BADGE_BY_GROUP — keep the two in sync).
+
+   Include variables:
+     ee_action        POST target ('/begivenheder/opret' | '/begivenheder/rediger')
+     ee_heading       page H1
+     ee_intro         intro line under the heading (HTML)
+     ee_key           value for the hidden data[key] (pre-generated | existing)
+     ee_submit_label  Gem button label (default 'Gem')
+   Context: em_editor_state — the initial client state (FormDataProvider::editorState).
+   ============================================================================ #}
+
+{% set st = em_editor_state|default({}) %}
+{% set _submit = ee_submit_label|default('Gem') %}
+
+<section class="bv-event-editor" aria-label="{{ ee_heading }}">
+  <div class="bv-container bv-event-editor__inner">
+
+    <div class="bv-event-editor__head">
+      <h1 class="bv-headline bv-event-editor__title">{{ ee_heading }}</h1>
+      <p class="bv-body-lg">{{ ee_intro|raw }}</p>
+    </div>
+
+    {# Invisible backdrop that closes any open popover on outside click. #}
+    <div class="bv-ee-backdrop" id="ee-backdrop" hidden></div>
+
+    <form method="post" action="{{ ee_action }}" class="bv-event-editor__form" id="ee-form">
+      {{ nonce_field('form', 'form-nonce')|raw }}
+      <input type="hidden" name="data[key]" value="{{ ee_key }}">
+      {# Popover-driven values, kept in sync by the inline JS. #}
+      <input type="hidden" name="data[group]" id="ee-group" value="{{ st.group|default('') }}">
+      <input type="hidden" name="data[event_date]" id="ee-date" value="{{ st.eventDate|default('') }}">
+      <input type="hidden" name="data[time_start]" id="ee-time-start" value="{{ st.timeStart|default('') }}">
+      <input type="hidden" name="data[time_end]" id="ee-time-end" value="{{ st.timeEnd|default('') }}">
+      <input type="hidden" name="data[location]" id="ee-location" value="{{ st.location|default('') }}">
+      <input type="hidden" name="data[capacity_unlimited]" id="ee-cap-unlim" value="{{ st.capacityUnlimited ? '1' : '0' }}">
+      <input type="hidden" name="data[capacity_count]" id="ee-cap-count" value="{{ st.capacityCount|default('') }}">
+      <input type="hidden" name="data[event_type]" id="ee-event-type" value="{{ st.eventType|default('') }}">
+      <input type="hidden" name="data[button_text]" id="ee-button-text" value="{{ st.buttonText|default('Tilmeld') }}">
+      <input type="hidden" name="data[published]" id="ee-published" value="{{ st.published ? '1' : '0' }}">
+      {# Honeypot — humans never see it; a filled value is a bot (checked by handleCreate). #}
+      <input type="text" name="data[website]" class="form-honeybear" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+      {# ── Control line: draft/public + Gem ── #}
+      <div class="bv-ee-controls">
+        <div class="bv-ee-seg" role="group" aria-label="Synlighed">
+          <button type="button" class="bv-ee-seg__btn" data-published="0">Kladde</button>
+          <button type="button" class="bv-ee-seg__btn" data-published="1">Offentlig</button>
+        </div>
+        {# Gem is always available: an in-progress event saves as a draft even
+           with nothing (or nothing valid) filled in. Only "Offentlig" is gated
+           on completeness (see render()). #}
+        <button type="submit" class="bv-ee-save" id="ee-save">{{ _submit }}</button>
+      </div>
+
+      {# ── The editable event card ── #}
+      <article class="bv-event-row bv-ee-card" id="ee-card" style="--bv-accent: var(--primary);">
+
+        {# DATE #}
+        <div class="bv-event-row__date bv-ee-field">
+          <button type="button" class="bv-ee-datebtn" data-ee-open="date" title="Vælg dato">
+            <span class="bv-event-row__date-month" id="ee-month">···</span>
+            <span class="bv-event-row__date-day" id="ee-day">?</span>
+          </button>
+          <div class="bv-ee-pop bv-ee-pop--left" data-ee-pop="date" hidden>
+            <span class="bv-ee-pop__label">Dato</span>
+            <input type="date" lang="da-DK" min="{{ 'now'|date('Y-m-d') }}" class="bv-ee-popinput bv-ee-dateinput" id="ee-date-input">
+          </div>
+        </div>
+
+        {# BODY #}
+        <div class="bv-event-row__body">
+
+          {# group badge #}
+          <div class="bv-ee-field bv-ee-badge-field">
+            <button type="button" class="bv-badge bv-ee-badge bv-ee-badge--empty" id="ee-badge" data-ee-open="group" title="Vælg værkstedsgruppe">Vælg værksted</button>
+            <div class="bv-ee-pop bv-ee-pop--left" data-ee-pop="group" hidden>
+              <span class="bv-ee-pop__label">Værkstedsgruppe</span>
+              <p class="bv-ee-pop__help">Kortets farve følger automatisk værkstedet.</p>
+              <div class="bv-ee-optlist">
+                <button type="button" class="bv-ee-opt bv-ee-groupopt" data-group="alle" style="--opt-accent: var(--primary);">Alle grupper</button>
+                <button type="button" class="bv-ee-opt bv-ee-groupopt" data-group="makerspace" style="--opt-accent: var(--secondary);">Makerspace &amp; Reparation</button>
+                <button type="button" class="bv-ee-opt bv-ee-groupopt" data-group="kreativ" style="--opt-accent: var(--tertiary);">Krea Café</button>
+                <button type="button" class="bv-ee-opt bv-ee-groupopt" data-group="groenne" style="--opt-accent: var(--primary);">Grønt BYværksted</button>
+                <button type="button" class="bv-ee-opt bv-ee-groupopt" data-group="kulturhus" style="--opt-accent: var(--kulturhus);">Eventværkstedet</button>
+              </div>
+            </div>
+          </div>
+
+          {# title #}
+          <input type="text" name="data[title]" id="ee-title" class="bv-ee-title" placeholder="Din begivenhed — klik og skriv" title="Titlen på begivenheden" maxlength="80" autocomplete="off" value="{{ st.title|default('') }}">
+
+          {# time #}
+          <div class="bv-ee-field">
+            <button type="button" class="bv-ee-line bv-ee-line--ghost" id="ee-time-line" data-ee-open="time" title="Vælg tidspunkt">
+              <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
+              <span id="ee-time-text">Vælg tidspunkt</span>
+            </button>
+            <div class="bv-ee-pop bv-ee-pop--left" data-ee-pop="time" hidden>
+              <div class="bv-ee-timegrid">
+                <div class="bv-ee-timecol">
+                  <span class="bv-ee-pop__label">Start</span>
+                  <div class="bv-ee-timefield" data-timelist="start">
+                    <input type="text" inputmode="numeric" maxlength="5" placeholder="--:--" class="bv-ee-timeinput" id="ee-ts-input">
+                    <button type="button" class="bv-ee-timeicon" data-timetoggle="start" title="Vælg tidspunkt"><span class="material-symbols-outlined" aria-hidden="true">schedule</span></button>
+                    <div class="bv-ee-timelist" id="ee-ts-list" hidden></div>
+                  </div>
+                </div>
+                <div class="bv-ee-timecol">
+                  <span class="bv-ee-pop__label">Slut</span>
+                  <div class="bv-ee-timefield" data-timelist="end">
+                    <input type="text" inputmode="numeric" maxlength="5" placeholder="--:--" class="bv-ee-timeinput" id="ee-te-input">
+                    <button type="button" class="bv-ee-timeicon" data-timetoggle="end" title="Vælg tidspunkt"><span class="material-symbols-outlined" aria-hidden="true">schedule</span></button>
+                    <div class="bv-ee-timelist" id="ee-te-list" hidden></div>
+                  </div>
+                </div>
+              </div>
+              <p class="bv-ee-pop__help">Sluttidspunktet skal være efter starttidspunktet.</p>
+            </div>
+          </div>
+
+          {# location #}
+          <div class="bv-ee-field">
+            <button type="button" class="bv-ee-line bv-ee-line--ghost" id="ee-loc-line" data-ee-open="location" title="Vælg lokation">
+              <span class="material-symbols-outlined" aria-hidden="true">location_on</span>
+              <span id="ee-loc-text">Vælg lokation</span>
+            </button>
+            <div class="bv-ee-pop bv-ee-pop--left" data-ee-pop="location" hidden>
+              <span class="bv-ee-pop__label">Lokation</span>
+              <p class="bv-ee-pop__help">Vælg et rum — eller skriv selv et sted.</p>
+              <div class="bv-ee-chips">
+                <button type="button" class="bv-ee-chip" data-loc="Store Rum">Store Rum</button>
+                <button type="button" class="bv-ee-chip" data-loc="Lille Rum">Lille Rum</button>
+                <button type="button" class="bv-ee-chip" data-loc="Plænen">Plænen</button>
+              </div>
+              <input type="text" class="bv-ee-popinput" id="ee-loc-input" placeholder="Andet sted…" maxlength="120">
+            </div>
+          </div>
+
+          {# arrangør — read-only preview of who owns the event (the current
+             user on opret, the stored owner on rediger). Owner is stamped
+             server-side and is never client-settable, so there is no popover. #}
+          {% if st.organizerName %}
+            <p class="bv-event-row__organizer bv-ee-organizer"><span class="material-symbols-outlined" aria-hidden="true">person</span>Arrangør: {{ st.organizerName }}</p>
+          {% endif %}
+
+          {# description #}
+          <textarea name="data[description]" id="ee-desc" class="bv-ee-desc" rows="2" placeholder="Et par linjer om hvad der sker, hvem det er for, og om man skal medbringe noget…" title="Kort beskrivelse" maxlength="2000">{{ st.description|default('') }}</textarea>
+        </div>
+
+        {# META #}
+        <div class="bv-event-row__meta bv-ee-meta">
+
+          {# event type #}
+          <div class="bv-ee-field">
+            <button type="button" class="bv-ee-metaval bv-ee-ghost" id="ee-event-type-val" data-ee-open="event-type" title="Vælg begivenhedstype">+ Begivenhedstype</button>
+            <div class="bv-ee-pop bv-ee-pop--right" data-ee-pop="event-type" hidden>
+              <span class="bv-ee-pop__label">Begivenhedstype</span>
+              <div class="bv-ee-optlist">
+                <button type="button" class="bv-ee-opt bv-ee-typeopt" data-event-type="Gratis">Gratis</button>
+                <button type="button" class="bv-ee-opt bv-ee-typeopt" data-event-type="Brugerbetaling">Brugerbetaling</button>
+                <button type="button" class="bv-ee-opt bv-ee-typeopt" data-event-type="Drop-in">Drop-in</button>
+              </div>
+            </div>
+          </div>
+
+          {# CTA button — derived from the event type and locked (see render()
+             in the inline JS): a preview of the visitor's signup button, shown
+             as 'Deltag' (Tilmeld event) or 'Interesseret' (Drop-in). No chooser. #}
+          <div class="bv-ee-field" id="ee-cta-field">
+            <button type="button" class="bv-btn bv-btn--sm bv-ee-cta" id="ee-cta-val" disabled>Deltag</button>
+          </div>
+
+          {# capacity #}
+          <div class="bv-ee-field">
+            <button type="button" class="bv-ee-capchip bv-ee-ghost" id="ee-cap-val" data-ee-open="capacity" title="Antal pladser">
+              <span class="material-symbols-outlined" aria-hidden="true">group</span>
+              <span id="ee-cap-text">+ Pladser</span>
+            </button>
+            <div class="bv-ee-pop bv-ee-pop--right" data-ee-pop="capacity" hidden>
+              <span class="bv-ee-pop__label">Ubegrænset</span>
+              <div class="bv-ee-seg bv-ee-seg--sm" role="group" aria-label="Ubegrænset">
+                <button type="button" class="bv-ee-seg__btn" data-unlim="1">Ja</button>
+                <button type="button" class="bv-ee-seg__btn" data-unlim="0">Nej</button>
+              </div>
+              <div class="bv-ee-cap-count" id="ee-cap-count-wrap">
+                <span class="bv-ee-pop__label">Antal pladser</span>
+                <input type="number" min="1" max="9999" class="bv-ee-popinput bv-ee-popinput--num" id="ee-cap-input">
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      {# ── Details WYSIWYG ── #}
+      <div class="bv-ee-details">
+        <h3 class="bv-ee-details__title">Uddybende detaljer</h3>
+        <p class="bv-ee-details__help">Længere beskrivelse med formatering og billeder. Vises når man åbner begivenheden.</p>
+        <textarea name="data[details]" id="ee-details" class="bv-rich-editor" rows="16" placeholder="Skriv de uddybende detaljer her…">{{ st.details|default('') }}</textarea>
+      </div>
+    </form>
+
+    <div class="bv-ee-foot">
+      <a class="bv-btn bv-btn--outlined" href="/begivenheder/arrangoerpanel">Tilbage til Arrangørpanel</a>
+    </div>
+
+  </div>
+</section>
+
+{# Initial client state (repopulated after a validation redirect via old input). #}
+<script id="ee-initial" type="application/json">{{ (em_editor_state|default({}))|json_encode|raw }}</script>
+
+<script>
+(function () {
+  'use strict';
+  var form = document.getElementById('ee-form');
+  if (!form) { return; }
+
+  var $ = function (id) { return document.getElementById(id); };
+  var initEl = $('ee-initial');
+  var state = JSON.parse(initEl ? initEl.textContent : '{}');
+  // Earliest selectable event date (today) — mirrors the input's `min` and the
+  // server-side guard; events may not be created/edited into the past. The
+  // Twig-rendered `min` can go stale if the page is cached, so freshen it
+  // client-side to the visitor's today — this disables past days in the native
+  // date picker regardless of when the page was cached.
+  (function () {
+    var di = $('ee-date-input');
+    if (!di) { return; }
+    var d = new Date();
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    di.min = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  })();
+  var minDate = ($('ee-date-input') && $('ee-date-input').getAttribute('min')) || '';
+
+  // Group → accent token + badge label (mirrors EventValidator maps).
+  var ACCENT = { alle: 'primary', makerspace: 'secondary', kreativ: 'tertiary', groenne: 'primary', kulturhus: 'kulturhus' };
+  var BADGE = { alle: 'Alle grupper', makerspace: 'Makerspace & Reparation', kreativ: 'Krea Café', groenne: 'Grønt BYværksted', kulturhus: 'Eventværkstedet' };
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var HOURS = []; for (var i = 0; i < 24; i++) { HOURS.push(String(i).padStart(2, '0')); }
+  var MINS = ['00', '15', '30', '45'];
+
+  var openPop = null;   // which popover is open
+  var openList = null;  // which time list is open ('start' | 'end' | null)
+  // Per-open-session record of which columns the user has picked. The time
+  // list stays open until BOTH the hour and the minute have been chosen, so a
+  // single pick (of either) never closes it prematurely.
+  var timePick = { start: { h: false, m: false }, end: { h: false, m: false } };
+
+  // ── Popover open/close ──────────────────────────────────────────────────
+  function closeAll() {
+    openPop = null; openList = null;
+    document.querySelectorAll('.bv-ee-pop').forEach(function (p) { p.hidden = true; });
+    document.querySelectorAll('.bv-ee-timelist').forEach(function (l) { l.hidden = true; });
+    var b = $('ee-backdrop'); if (b) { b.hidden = true; }
+  }
+  function openPopover(name) {
+    if (openPop === name) { closeAll(); return; }
+    closeAll();
+    var pop = document.querySelector('.bv-ee-pop[data-ee-pop="' + name + '"]');
+    if (!pop) { return; }
+    pop.hidden = false;
+    openPop = name;
+    var b = $('ee-backdrop'); if (b) { b.hidden = false; }
+    var input = pop.querySelector('input');
+    if (input && name !== 'time') { setTimeout(function () { try { input.focus(); } catch (e) {} }, 30); }
+  }
+
+  document.querySelectorAll('[data-ee-open]').forEach(function (trigger) {
+    trigger.addEventListener('click', function (e) {
+      e.stopPropagation();
+      openPopover(trigger.getAttribute('data-ee-open'));
+    });
+  });
+  $('ee-backdrop').addEventListener('click', closeAll);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && openPop) { closeAll(); } });
+
+  // ── Time picker ─────────────────────────────────────────────────────────
+  function normalizeTime(v) {
+    var t = (v || '').trim().replace(/[.,;]/g, ':');
+    if (t === '') { return ''; }
+    var mt = t.match(/^(\d{1,2}):(\d{1,2})$/) || t.match(/^(\d{1,2})(\d{2})$/) || t.match(/^(\d{1,2})$/);
+    if (!mt) { return ''; }
+    var hh = parseInt(mt[1], 10), mm = parseInt(mt[2] || '0', 10);
+    if (hh > 23 || mm > 59) { return ''; }
+    return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+  }
+  function buildTimeList(which) {
+    var listEl = $(which === 'start' ? 'ee-ts-list' : 'ee-te-list');
+    var cur = which === 'start' ? state.timeStart : state.timeEnd;
+    var curH = (cur || '').split(':')[0];
+    var curM = (cur || '').split(':')[1];
+    listEl.innerHTML = '';
+    var grid = document.createElement('div');
+    grid.className = 'bv-ee-timelist__grid';
+    var hourCol = document.createElement('div');
+    hourCol.className = 'bv-ee-timelist__col bv-ee-timelist__col--hours';
+    HOURS.forEach(function (h) {
+      var d = document.createElement('div');
+      d.className = 'bv-ee-timelist__opt' + (h === curH ? ' is-sel' : '');
+      d.textContent = h;
+      d.addEventListener('click', function (e) { e.stopPropagation(); pickHour(which, h); });
+      hourCol.appendChild(d);
+    });
+    var minCol = document.createElement('div');
+    minCol.className = 'bv-ee-timelist__col';
+    MINS.forEach(function (mm) {
+      var d = document.createElement('div');
+      d.className = 'bv-ee-timelist__opt' + (mm === curM ? ' is-sel' : '');
+      d.textContent = mm;
+      d.addEventListener('click', function (e) { e.stopPropagation(); pickMinute(which, mm); });
+      minCol.appendChild(d);
+    });
+    grid.appendChild(hourCol); grid.appendChild(minCol);
+    listEl.appendChild(grid);
+    var sel = hourCol.querySelector('.is-sel');
+    if (sel) { hourCol.scrollTop = Math.max(0, sel.offsetTop - hourCol.clientHeight / 2 + sel.clientHeight / 2); }
+  }
+  function closeTimeList(which) {
+    openList = null;
+    $(which === 'start' ? 'ee-ts-list' : 'ee-te-list').hidden = true;
+  }
+  function toggleTimeList(which) {
+    if (openList === which) { closeTimeList(which); return; }
+    openList = which;
+    // Fresh session: require both an hour AND a minute pick before auto-close.
+    timePick[which] = { h: false, m: false };
+    ['start', 'end'].forEach(function (w) { $(w === 'start' ? 'ee-ts-list' : 'ee-te-list').hidden = (w !== which); });
+    buildTimeList(which);
+  }
+  function maybeCloseTimeList(which) {
+    if (timePick[which].h && timePick[which].m) { closeTimeList(which); }
+    else { buildTimeList(which); }
+  }
+  function pickHour(which, h) {
+    var cur = which === 'start' ? state.timeStart : state.timeEnd;
+    var mm = (cur || '').split(':')[1] || '00';
+    setTime(which, h + ':' + mm);
+    timePick[which].h = true;
+    maybeCloseTimeList(which);
+  }
+  function pickMinute(which, mm) {
+    var cur = which === 'start' ? state.timeStart : state.timeEnd;
+    var h = (cur || '').split(':')[0] || '00';
+    setTime(which, h + ':' + mm);
+    timePick[which].m = true;
+    maybeCloseTimeList(which);
+  }
+  function setTime(which, val) {
+    if (which === 'start') { state.timeStart = val; $('ee-ts-input').value = val; }
+    else { state.timeEnd = val; $('ee-te-input').value = val; }
+    render();
+  }
+  $('ee-ts-input').addEventListener('input', function (e) { state.timeStart = e.target.value; render(); });
+  $('ee-te-input').addEventListener('input', function (e) { state.timeEnd = e.target.value; render(); });
+  $('ee-ts-input').addEventListener('blur', function (e) { setTime('start', normalizeTime(e.target.value)); });
+  $('ee-te-input').addEventListener('blur', function (e) { setTime('end', normalizeTime(e.target.value)); });
+  document.querySelectorAll('[data-timetoggle]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) { e.stopPropagation(); toggleTimeList(btn.getAttribute('data-timetoggle')); });
+  });
+  var timePop = document.querySelector('.bv-ee-pop[data-ee-pop="time"]');
+  if (timePop) {
+    timePop.addEventListener('click', function (e) {
+      if (!openList) { return; }
+      var field = e.target.closest && e.target.closest('[data-timelist]');
+      if (!field || field.getAttribute('data-timelist') !== openList) {
+        openList = null;
+        document.querySelectorAll('.bv-ee-timelist').forEach(function (l) { l.hidden = true; });
+      }
+    });
+  }
+
+  // ── Simple field bindings ───────────────────────────────────────────────
+  $('ee-title').addEventListener('input', function (e) { state.title = e.target.value; render(); });
+  $('ee-desc').addEventListener('input', function (e) { state.description = e.target.value; render(); });
+  $('ee-date-input').addEventListener('input', function (e) { state.eventDate = e.target.value; render(); });
+  $('ee-loc-input').addEventListener('input', function (e) { state.location = e.target.value; render(); });
+  $('ee-cap-input').addEventListener('input', function (e) { state.capacityCount = e.target.value; render(); });
+
+  document.querySelectorAll('.bv-ee-chip').forEach(function (c) {
+    c.addEventListener('click', function () { state.location = c.getAttribute('data-loc'); render(); closeAll(); });
+  });
+  document.querySelectorAll('.bv-ee-groupopt').forEach(function (o) {
+    o.addEventListener('click', function () { state.group = o.getAttribute('data-group'); render(); closeAll(); });
+  });
+  document.querySelectorAll('.bv-ee-typeopt').forEach(function (o) {
+    o.addEventListener('click', function () {
+      // state.eventType = the event type (Gratis / Brugerbetaling / Drop-in).
+      state.eventType = o.getAttribute('data-event-type');
+      render(); closeAll();   // render() enforces Drop-in ⇒ locked-unlimited capacity
+    });
+  });
+  document.querySelectorAll('[data-unlim]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (state.eventType === 'Drop-in') { return; } // capacity is locked to unlimited for Drop-in
+      state.capacityUnlimited = b.getAttribute('data-unlim') === '1'; render();
+    });
+  });
+  document.querySelectorAll('[data-published]').forEach(function (b) {
+    b.addEventListener('click', function () { state.published = b.getAttribute('data-published') === '1'; render(); });
+  });
+
+  // ── Render: card preview + hidden inputs + gating ───────────────────────
+  function render() {
+    var accent = ACCENT[state.group] || 'primary';
+    $('ee-card').style.setProperty('--bv-accent', 'var(--' + accent + ')');
+
+    var m = (state.eventDate || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    $('ee-month').textContent = m ? (MONTHS[parseInt(m[2], 10) - 1] || '···') : '···';
+    $('ee-day').textContent = m ? String(parseInt(m[3], 10)) : '?';
+
+    var badge = $('ee-badge');
+    if (state.group) {
+      badge.textContent = BADGE[state.group] || 'Vælg værksted';
+      badge.classList.remove('bv-ee-badge--empty');
+      ['primary', 'secondary', 'tertiary', 'kulturhus'].forEach(function (a) { badge.classList.remove('bv-badge--' + a); });
+      badge.classList.add('bv-badge--' + accent);
+    } else {
+      badge.textContent = 'Vælg værksted';
+      badge.classList.add('bv-ee-badge--empty');
+      ['primary', 'secondary', 'tertiary', 'kulturhus'].forEach(function (a) { badge.classList.remove('bv-badge--' + a); });
+    }
+
+    var haveTime = state.timeStart && state.timeEnd;
+    $('ee-time-text').textContent = haveTime ? (state.timeStart + ' - ' + state.timeEnd) : 'Vælg tidspunkt';
+    $('ee-time-line').classList.toggle('bv-ee-line--ghost', !haveTime);
+
+    $('ee-loc-text').textContent = state.location || 'Vælg lokation';
+    $('ee-loc-line').classList.toggle('bv-ee-line--ghost', !state.location);
+
+    var typeVal = $('ee-event-type-val');
+    typeVal.textContent = state.eventType === '' ? '+ Begivenhedstype' : state.eventType;
+    typeVal.classList.toggle('bv-ee-ghost', state.eventType === '');
+
+    // The CTA follows the event type and is ALWAYS locked (not a free choice):
+    // Drop-in ⇒ Interesseret, every other type ⇒ Tilmeld. The STORED value is
+    // the mode word (button_text); the shown label mirrors the live card —
+    // 'Deltag' for a Tilmeld event, 'Interesseret' for a Drop-in one.
+    var _dropin = state.eventType === 'Drop-in';
+    state.buttonText = _dropin ? 'Interesseret' : 'Tilmeld';
+    $('ee-cta-field').hidden = false;
+    var cta = $('ee-cta-val');
+    cta.textContent = _dropin ? 'Interesseret' : 'Deltag';
+    cta.classList.toggle('is-signed-up', false);
+    cta.disabled = true;
+    cta.title = _dropin ? 'Drop-in-arrangementer bruger altid "Interesseret"' : 'Knappen følger begivenhedstypen';
+    // The signup button is one colour on every card (the brand primary, not the
+    // accent), so the preview shows it that way too.
+    ['primary', 'secondary', 'tertiary', 'kulturhus'].forEach(function (a) { cta.classList.remove('bv-btn--' + a); });
+    cta.classList.add('bv-btn--primary');
+
+    // Drop-in events never have a capacity cap: force "Ubegrænset" and lock the
+    // toggle so the limit can't be turned on. Selecting any other type lifts it.
+    if (_dropin) { state.capacityUnlimited = true; }
+    var capChip = $('ee-cap-val');
+    var showCap = !state.capacityUnlimited && String(state.capacityCount).trim() !== '';
+    $('ee-cap-text').textContent = showCap ? String(state.capacityCount).trim() : (state.capacityUnlimited ? 'Ubegrænset' : '+ Pladser');
+    capChip.classList.toggle('bv-ee-ghost', !showCap);
+    capChip.title = _dropin ? 'Drop-in har altid ubegrænset antal pladser' : 'Antal pladser';
+    $('ee-cap-input').disabled = state.capacityUnlimited;
+    $('ee-cap-count-wrap').classList.toggle('is-disabled', state.capacityUnlimited);
+    setActive('[data-unlim]', 'data-unlim', state.capacityUnlimited ? '1' : '0');
+    // Lock the "Nej" (limited) option for Drop-in — the cap can't be turned on;
+    // re-enabled for every other type so the lock lifts on switch-away.
+    var capNej = document.querySelector('[data-unlim="0"]');
+    if (capNej) { capNej.disabled = _dropin; }
+    // Required-to-publish set (the "Offentlig" gate). Mirrors the fields an
+    // organizer must fill before an event may go public: værkstedsbanner
+    // (group), titel, dato, tid, beskrivelse, begivenhedstype, and — only when
+    // a limit is actually selectable — antal. Saving a DRAFT never checks any
+    // of these; only "Offentlig" does.
+    var missing = [];
+    if (!state.group) { missing.push('Værkstedsbanner'); }
+    if (!state.title || state.title.trim() === '') { missing.push('Titel'); }
+    if (!m) { missing.push('Dato'); }
+    else if (minDate && state.eventDate < minDate) { missing.push('Dato kan ikke være i fortiden'); }
+    if (!state.timeStart || !state.timeEnd) { missing.push('Tid'); }
+    else if (state.timeEnd <= state.timeStart) { missing.push('Sluttid efter start'); }
+    if (!state.description || state.description.trim() === '') { missing.push('Beskrivelse'); }
+    if (!state.eventType) { missing.push('Begivenhedstype'); }
+    // A Drop-in (or an event left unlimited) never needs a count; the antal is
+    // only "missing" when a limit is selectable and left blank/invalid.
+    if (!_dropin && !state.capacityUnlimited && !/^\d+$/.test(String(state.capacityCount).trim())) { missing.push('Antal pladser'); }
+
+    // An incomplete event can never be public: disable "Offentlig" until the
+    // set is filled, and if it was already selected, fall back to "Kladde" so a
+    // Gem never submits an incomplete PUBLIC event.
+    var canPublish = missing.length === 0;
+    if (!canPublish && state.published) { state.published = false; }
+    var pubBtn = document.querySelector('[data-published="1"]');
+    if (pubBtn) {
+      pubBtn.disabled = !canPublish;
+      pubBtn.title = canPublish ? '' : ('Udfyld for at kunne udgive: ' + missing.join(' · '));
+    }
+
+    setActive('[data-published]', 'data-published', state.published ? '1' : '0');
+    setActive('.bv-ee-groupopt', 'data-group', state.group);
+    setActive('.bv-ee-typeopt', 'data-event-type', state.eventType);
+
+    $('ee-group').value = state.group;
+    $('ee-date').value = state.eventDate;
+    $('ee-time-start').value = state.timeStart;
+    $('ee-time-end').value = state.timeEnd;
+    $('ee-location').value = state.location;
+    $('ee-cap-unlim').value = state.capacityUnlimited ? '1' : '0';
+    $('ee-cap-count').value = state.capacityUnlimited ? '' : String(state.capacityCount).trim();
+    $('ee-event-type').value = state.eventType;
+    $('ee-button-text').value = state.buttonText;
+    $('ee-published').value = state.published ? '1' : '0';
+
+    // Gem is always enabled — the in-progress event saves as a draft.
+    $('ee-save').disabled = false;
+  }
+
+  function setActive(selector, attr, value) {
+    document.querySelectorAll(selector).forEach(function (el) {
+      el.classList.toggle('is-active', el.getAttribute(attr) === String(value));
+    });
+  }
+
+  // Seed the visible controls from initial state (edit prefill / old input).
+  $('ee-title').value = state.title || '';
+  $('ee-desc').value = state.description || '';
+  $('ee-date-input').value = state.eventDate || '';
+  $('ee-loc-input').value = state.location || '';
+  $('ee-ts-input').value = state.timeStart || '';
+  $('ee-te-input').value = state.timeEnd || '';
+  if (state.capacityCount) { $('ee-cap-input').value = state.capacityCount; }
+  render();
+})();
+</script>
+
+{% include 'partials/tinymce_details.html.twig' %}

@@ -21,6 +21,13 @@ interface FlagStoreInterface
     public function isEnabled(FeatureFlag $flag): bool;
 
     /**
+     * The exact inverse of {@see isEnabled()} under the same resolution rules:
+     * true iff the flag is NOT enabled (disabled, absent, or malformed all
+     * resolve true here, mirroring the fail-closed contract).
+     */
+    public function isDisabled(FeatureFlag $flag): bool;
+
+    /**
      * True iff the flag's key is present in the configured map, regardless
      * of whether the value is valid. Distinguishes "present-but-disabled"
      * from "absent" for operator tooling.

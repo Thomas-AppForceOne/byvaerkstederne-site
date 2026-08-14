@@ -1,0 +1,10 @@
+# Per-tier login override (tracked config, not secret).
+# site_host = absolute base URL for the login plugin's activation/reset email
+# links (Email.php). Without it the links are root-relative and render as
+# file:///activate_user/... in mail clients.
+#
+# NOTE: prod has no env system.yaml / custom_base_url pinned. This value is
+# the canonical host from deploy.sh's ENV_URL. CONFIRM prod's real public
+# canonical (www.byvaerkstederne.dk vs the apex byvaerkstederne.dk) before
+# relying on prod activation/reset mail.
+site_host: 'https://www.byvaerkstederne.dk'

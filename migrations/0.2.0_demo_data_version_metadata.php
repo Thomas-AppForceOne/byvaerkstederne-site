@@ -30,7 +30,7 @@ return function (string $dataDir): void {
         );
     }
 
-    $markerDir  = $dataDir . '/config/www/user';
+    $markerDir  = $dataDir . '/user';
     $markerPath = $markerDir . '/data-version.yaml';
 
     if (!is_dir($markerDir)) {

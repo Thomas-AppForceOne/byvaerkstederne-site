@@ -1,0 +1,24 @@
+# Per-tier email transport — PROVISIONING TEMPLATE (inactive).
+#
+# Copy to `email.yaml` to activate; the real file is gitignored and provisioned
+# as per-tier state by deploy.sh. Never commit the real file or credentials.
+#
+# This block OVERRIDES the credential-free mailer.smtp block in the
+# repo-tracked config/www/user/config/plugins/email.yaml AND overrides the
+# `from` identity to the prod sending domain.
+#
+# Prod tier (www.byvaerkstederne.dk) on chosting.dk:
+#   From identity: noreply@byvaerkstederne.dk  (PROD OVERRIDE — must be set
+#   here so SPF/DKIM/DMARC align with the chosting sending host).
+#   Delivery posture: REAL SMTP — the only tier that delivers to real members.
+#   Validate deliverability at cutover (Prerequisites step 4: real-inbox send +
+#   mail-tester.com score) BEFORE flipping the WI-2 verification gate here.
+from: 'noreply@byvaerkstederne.dk'
+mailer:
+  engine: smtp
+  smtp:
+    server: 'REPLACE_WITH_CHOSTING_SMTP_HOST'   # chosting may require enabling SMTP via support
+    port: 587
+    encryption: tls
+    user: 'noreply@byvaerkstederne.dk'
+    password: 'REPLACE_WITH_REAL_SMTP_PASSWORD'

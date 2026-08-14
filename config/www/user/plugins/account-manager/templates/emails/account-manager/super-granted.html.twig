@@ -1,0 +1,50 @@
+{% extends 'email/base.html.twig' %}
+
+{# Privilege-escalation alert to every super-admin on the tier: someone was
+   granted super. Sent from deploy/manage-super.sh via the plugin's
+   notify-super-granted CLI command, so a rights change made over SSH is
+   visible to the people it concerns and not only in a log file nobody reads
+   until afterwards.
+
+   The recipient list is resolved AFTER the grant, so the new super receives
+   it too — they should know what they were given. #}
+
+{%- set subject = 'Ny super-admin på ' ~ site_name ~ ': ' ~ target_username %}
+{%- do email.message.setSubject(subject) %}
+
+{%- block content -%}
+<p>Hej,</p>
+<p>
+  Kontoen <b>{{ target_username }}</b> har fået <b>super-admin-rettigheder</b>
+  på <b>{{ site_name }}</b>.
+</p>
+<table style="border-collapse:collapse;margin:16px 0;">
+  <tr>
+    <td style="padding:4px 16px 4px 0;"><b>Konto</b></td>
+    <td style="padding:4px 0;">{{ target_username }}{% if target_email %} ({{ target_email }}){% endif %}</td>
+  </tr>
+  <tr>
+    <td style="padding:4px 16px 4px 0;"><b>Udført af</b></td>
+    <td style="padding:4px 0;">{{ actor }}</td>
+  </tr>
+  <tr>
+    <td style="padding:4px 16px 4px 0;"><b>Tidspunkt</b></td>
+    <td style="padding:4px 0;">{{ occurred_at }} (UTC)</td>
+  </tr>
+  <tr>
+    <td style="padding:4px 16px 4px 0;"><b>Hvordan</b></td>
+    <td style="padding:4px 0;">Serverværktøj ({{ source }})</td>
+  </tr>
+</table>
+<p>
+  En super-admin kan læse og ændre alt på sitet, inklusive alle medlemmers
+  oplysninger. Du får denne besked, fordi du selv er super-admin.
+</p>
+<p>
+  <b>Var det ikke ventet?</b> Så skal rettigheden fjernes med det samme, og
+  adgangen til serveren gennemgås — den, der kan udføre denne ændring, har i
+  forvejen fuld adgang til serveren. Ændringen er også skrevet i
+  revisionsloggen (<code>user/data/account-manager/account-audit.jsonl</code>).
+</p>
+<p>Venlig hilsen<br/>{{ site_name }}</p>
+{%- endblock content -%}

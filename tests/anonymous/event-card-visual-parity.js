@@ -5,11 +5,18 @@
  * Anonymous — event-card visual-parity baselines (sprint 1).
  *
  * Captures desktop-viewport (chromium project default) screenshots of
- * the three sprint-1 affected routes — /vaerkstedskalenderen (event_list),
- * /vaerksteder/krea-cafe/syvaerkstedet (atelier_sessions Krea Café), and
- * /vaerksteder/krea-cafe/billedkunst (atelier_sessions Lene Pels) — and
- * compares them against baselines captured AFTER all sprint-1 migrations
- * landed. Baselines from any prior attempt are discarded.
+ * the affected routes and compares them against baselines captured
+ * AFTER all migrations landed. Baselines from any prior attempt are
+ * discarded.
+ *
+ * The atelier_sessions surface (/vaerksteder/krea-cafe/syvaerkstedet and
+ * /vaerksteder/krea-cafe/billedkunst) is no longer covered: the workshop
+ * calendar (/vaerkstedskalenderen) supersedes the hardcoded per-workshop
+ * event sections, which were removed, so those routes no longer render
+ * event cards. atelier_sessions.html.twig is now a routeless card
+ * template — same situation as calendar_featured.html.twig below — and
+ * its parity is locked by the template-level grep criteria instead of a
+ * screenshot baseline.
  *
  * Tolerance: 5 % pixel-diff threshold (maxDiffPixelRatio: 0.05). This
  * absorbs the small typographic / sub-pixel deltas font hinting and
@@ -52,23 +59,6 @@ test.describe('event-card-visual-parity (sprint 1)', () => {
     });
   });
 
-  test('atelier_sessions — /vaerksteder/krea-cafe/syvaerkstedet visual parity', async ({ page }) => {
-    await page.goto('/vaerksteder/krea-cafe/syvaerkstedet');
-    await waitForFontsAndStability(page);
-    await expect(page).toHaveScreenshot('syvaerkstedet.png', {
-      maxDiffPixelRatio: 0.05,
-      fullPage: false,
-    });
-  });
-
-  test('atelier_sessions — /vaerksteder/krea-cafe/billedkunst (Lene Pels) visual parity', async ({ page }) => {
-    await page.goto('/vaerksteder/krea-cafe/billedkunst');
-    await waitForFontsAndStability(page);
-    await expect(page).toHaveScreenshot('billedkunst.png', {
-      maxDiffPixelRatio: 0.05,
-      fullPage: false,
-    });
-  });
 });
 
 test.describe('event-card-visual-parity (sprint 2)', () => {

@@ -4,18 +4,29 @@
 # `test.hackersbychoice.dk` (see adjacent README.md for the four-tier
 # topology).
 #
-# The `enabled` map is intentionally empty. Every catalogue flag therefore
-# resolves to `false` per the FlagStore "missing key" rule, which is the
-# defined secure default for the test tier: no roadmap, no bug report
-# surface, no feature suggestion surface, no community footer column, no
-# membership / newsletter / event / press / minutes / workshop calendar /
-# workshop detail / contact / statutes pages.
+# The test tier is OPERATIONAL preview state: flip flags here freely to
+# try unreleased or temporary features before a staging/prod rollout —
+# no test code depends on this file's contents (the browser suites' all-off
+# fixture is the dedicated, never-deployed `env/flags-off.invalid/`
+# profile). A missing key resolves to `false` (FlagStore missing-key
+# rule), so only the flags you want ON need a line here; remove the line
+# to turn a surface back off.
 #
-# DO NOT add flags here — adding a key flips a surface ON for the test tier.
-# If you need a single flag enabled for a one-off preview, make that
-# decision explicit in a code review, not a silent YAML edit.
-#
-# The file contains flag metadata only. No credentials, tokens, API keys,
-# or secrets of any kind may appear in this file; FlagStore will log a
-# warning and fail closed for any non-`"true"`/`"false"` value anyway.
-enabled: {}
+# Values are the strict strings `"true"` or `"false"`. Any other value
+# (bare YAML booleans, `TRUE`, `1`, `yes`, nulls, nested maps) is treated
+# by FlagStore as invalid, logs a warning, and fails closed. The file
+# contains flag metadata only — no credentials, tokens, API keys, or
+# secrets of any kind may appear here (structurally enforced by
+# FeatureFlagCatalogueTest's payload checks).
+enabled:
+  # Member self-service (/konto) — on for super sign-off before the
+  # staging/prod rollout.
+  account_self_service: "true"
+  # Event RSVP and calendar enhancements — newly shipped, testing on test tier
+  event_rsvp: "true"
+  workshop_calendar: "true"
+  workshop_calendar_filters: "true"
+  workshop_calendar_featured: "true"
+  # Organizer event CRUD (opret/rediger/slet/arrangørpanel) — on so testers
+  # who are granted the organizer role can exercise event management.
+  event_management: "true"

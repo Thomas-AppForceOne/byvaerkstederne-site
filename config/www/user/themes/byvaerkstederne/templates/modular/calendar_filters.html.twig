@@ -3,14 +3,26 @@
     <div class="bv-container">
         <div class="bv-filters">
             <span class="bv-label" style="margin-right: var(--space-4);">Filtr&eacute;r efter:</span>
-            <button class="bv-filter-btn is-active" data-filter="all">
-                <span class="bv-filter-dot bv-filter-dot--primary"></span>
+            {# "Mine aktiviteter" — a personal filter shown only to signed-in
+               members (anonymous visitors have no signups). It narrows the
+               calendar to the events the viewer is tilmeldt/interesseret i
+               (cards carrying .bv-event-row--attending, rendered per-user and
+               toggled live on signup). Placed before "Alle aktiviteter", which
+               stays the default active filter. #}
+            {% if grav.user.authenticated and feature_enabled('event_rsvp') %}
+            <button class="bv-filter-btn bv-filter-btn--mine" data-filter="mine">
+                <span class="material-symbols-outlined bv-filter-btn__icon" aria-hidden="true">star</span>
+                Mine aktiviteter
+            </button>
+            {% endif %}
+            <button class="bv-filter-btn bv-filter-btn--all is-active" data-filter="all">
+                <span class="bv-filter-dot bv-filter-dot--all"></span>
                 Alle aktiviteter
             </button>
             {% for filter in h.filters|default([
                 {label: 'Makerspace & Reparation', group: 'secondary', filter: 'makerspace'},
-                {label: 'Krea Café', group: 'tertiary', filter: 'kreativ'},
-                {label: 'Grønt BYværksted', group: 'primary', filter: 'groenne'},
+                {label: 'Krea Café', group: 'tertiary', filter: 'krea'},
+                {label: 'Grønt BYværksted', group: 'primary', filter: 'groent'},
                 {label: 'Eventværkstedet', group: 'kulturhus', filter: 'kulturhus'}
             ]) %}
             <button class="bv-filter-btn bv-filter-btn--{{ filter.group }}" data-filter="{{ filter.filter }}">

@@ -1,0 +1,20 @@
+{% extends 'email/base.html.twig' %}
+
+{# To the member after a login inside the regret window reinstated the
+   account (cleared the deletion marker). #}
+
+{%- set subject = 'Din konto er genaktiveret — ' ~ site_name %}
+{%- do email.message.setSubject(subject) %}
+
+{%- block content -%}
+<p>Hej {{ user.fullname ?: user.username }},</p>
+<p>
+  Du er logget ind igen, og din konto hos <b>{{ site_name }}</b> er
+  genaktiveret. Den planlagte sletning er annulleret.
+</p>
+<p>
+  Hvis det ikke var dig, der loggede ind, bør du straks skifte din
+  adgangskode på {{ site_host }}/konto og kontakte foreningen.
+</p>
+<p>Venlig hilsen<br/>{{ site_name }}</p>
+{%- endblock content -%}

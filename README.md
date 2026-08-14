@@ -15,6 +15,45 @@ This will check dependencies, pull LFS files, start Docker, and prompt you to cr
 
 ## First-time setup
 
+### Authentication secrets (security.yaml salt + SMTP credentials)
+
+Two authentication secrets are **not** tracked in git and must be supplied per
+environment. Both follow the same rule: gitignored real file, tracked
+`.example` template.
+
+**`config/www/user/config/security.yaml` — the nonce/remember-me salt.**
+This file is gitignored (it previously committed a publicly-known salt — see the
+note below). You do **not** need to create it by hand: Grav regenerates
+`security.yaml` with a fresh per-instance salt on the first request when the
+file is absent. A clean checkout + `make start` produces a working site whose
+salt is unique to that checkout. If you want to pin a value, copy
+`config/www/user/config/security.yaml.example` to `security.yaml` and replace
+the placeholder.
+
+> **Salt rotation (operator action — WI-3).** The repo formerly tracked a real
+> salt (`Wbd0yZKOPckagC`). It is now untracked, but it leaked into git history
+> and into any tier that deployed before this change. **Rotate it on every tier
+> that used it:** for each live tier, check `user/env/<host>/config/security.yaml`
+> (and the root `user/config/security.yaml`) — wherever the salt equals
+> `Wbd0yZKOPckagC`, replace it with a freshly generated value (e.g. delete the
+> file and let Grav regenerate, or set a new random `salt:`). Rotating
+> invalidates existing remember-me cookies and in-flight nonces (users get
+> logged out once) — acceptable. Scrubbing the old salt from git history with
+> `git filter-repo` is optional follow-up, not required.
+
+**Per-tier `config/www/user/env/<host>/config/plugins/email.yaml` — SMTP credentials.**
+Also gitignored. Transactional mail (password reset, activation) needs a
+working SMTP transport per tier. The file lives under `config/plugins/` so
+Grav's environment merge folds it into the `plugins.email` namespace (the email
+plugin's own config) — a file directly under `config/` would land in a dead
+namespace and never take effect. Copy the tier's
+`email.yaml.example` to `email.yaml` (same directory) and fill in the host/port/user/password.
+`deploy.sh` wires this file into each release (it lives in `<tier>data` and is
+symlinked in, like `security.yaml` but one level deeper). If a tier has no `email.yaml`,
+deploy emits a non-fatal **WARN** and transactional mail degrades to
+non-sending until the file is provisioned — the tier still boots. Under local
+test/CI, mail is captured by a Mailpit sink (no real SMTP needed).
+
 ### Backup operator hygiene (macOS)
 
 `deploy/backup.sh` and `deploy/restore.sh` write encrypted archives and
@@ -256,7 +295,7 @@ Run `make help` to see all available commands:
 | `make list-backups [tier=<env>]` | List available backup ids |
 | `make restore tier=<env> from=<id>` | Restore a tier (add `RESTORE_TO_TIER_ENABLED=1` to actually wipe; prod refused) |
 | `make rollback tier=<env>` | Roll back a tier to its previous release |
-| `make push-data tier=<env>` | Push local Flex Objects YAML to a tier's data tree (dev/test/staging; prod refused without `i_mean_it=1`). Defaults to `files=begivenheder.yaml`; pass `files=a.yaml,b.yaml` for multiple, `dry_run=1` for diff-only, `yes=1` to skip the confirmation prompt. |
+| `make push-data tier=<env>` | Push local Flex Objects YAML to a tier's data tree (dev/test/staging; prod refused without `i_mean_it=1`). `files=a.yaml,b.yaml` is **required** — flex data is live user state on the tiers (organizer events, RSVP signups, votes), so every push names its payload explicitly. `dry_run=1` for diff-only, `yes=1` to skip the confirmation prompt. |
 | `make migrate-atomic tier=<env>` | One-time migration to atomic-release layout (prod refused) |
 | `make cache-clear` | Clear Grav cache |
 | `make reset-users` | Delete all user accounts (except admin) |
@@ -333,7 +372,9 @@ Content that non-technical admins need to manage is stored in Flex Objects (flat
 
 Data files live in `config/www/user/data/flex-objects/`. Templates pull from Flex Objects automatically, with fallback to page YAML if Flex Objects is unavailable.
 
-`make deploy` deliberately excludes the live-state tree from its rsync (so a code deploy can't overwrite admin-edited content). To push local Flex Objects YAML to a tier's data tree out-of-band, use `make push-data tier=<env>` (see Commands table). `bug-reports.yaml`, `feature-suggestions.yaml`, and `submission-tokens.yaml` are refused unconditionally — they carry user-generated content or CSRF tokens that local-as-truth would erase.
+`make deploy` deliberately excludes the live-state tree from its rsync (so a code deploy can't overwrite admin-edited content). To push local Flex Objects YAML to a tier's data tree out-of-band, use `make push-data tier=<env> files=<list>` (see Commands table). `bug-reports.yaml`, `feature-suggestions.yaml`, and `submission-tokens.yaml` are refused unconditionally — they carry user-generated content or CSRF tokens that local-as-truth would erase.
+
+Flex Objects data is **not tracked in git** (it is live user state — see `specifications/flex_data_out_of_git_specification.md`). Sample content for local development lives in the `tests/fixtures/grav-seeds/sample-content/` bundle; `make setup` applies it automatically, and `make seed-content` applies it to an already-running instance (idempotent — never overwrites runtime changes).
 
 ### Pages
 

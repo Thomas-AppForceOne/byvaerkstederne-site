@@ -1,0 +1,27 @@
+{# Themed override of the login plugin's forgot.html.twig.
+   Renders /forgot_password inside the shared floating auth card
+   (partials/auth_card.html.twig) and reuses the THEME shadow of
+   partials/forgot-form.html.twig — which drops the stock English boilerplate
+   while keeping the form's nonce/CSRF and field rendering. No plugin PHP is
+   touched. (WI-1; auth-surface UI/UX) #}
+{% extends 'partials/base.html.twig' %}
+
+{# Flash renders inside the card; suppress base's top-of-page flash. #}
+{% block flash %}{% endblock %}
+
+{% block body %}
+{% embed 'partials/auth_card.html.twig' %}
+    {% block auth_title %}Glemt adgangskode{% endblock %}
+    {% block auth_intro %}
+        <p class="bv-body-lg">Indtast din e-mail, s&aring; sender vi dig et link til at nulstille din adgangskode.</p>
+    {% endblock %}
+    {% block auth_form %}
+        {% include 'partials/forgot-form.html.twig' %}
+    {% endblock %}
+    {% block auth_footer %}
+        <div style="text-align: center; padding-top: var(--space-8);">
+            <a href="/login" class="bv-label" style="color: var(--outline); text-decoration: underline; text-underline-offset: 4px;">Tilbage til login</a>
+        </div>
+    {% endblock %}
+{% endembed %}
+{% endblock %}

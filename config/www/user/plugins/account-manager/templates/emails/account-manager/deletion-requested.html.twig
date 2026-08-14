@@ -1,0 +1,26 @@
+{% extends 'email/base.html.twig' %}
+
+{# To the member when deletion is requested: the exact hard-delete date and
+   the reinstatement rule. No further mail is sent at hard delete. #}
+
+{%- set subject = 'Din konto slettes den ' ~ hard_delete_date ~ ' — ' ~ site_name %}
+{%- do email.message.setSubject(subject) %}
+
+{%- block content -%}
+<p>Hej {{ user.fullname ?: user.username }},</p>
+<p>
+  Du har anmodet om at få slettet din konto hos <b>{{ site_name }}</b>, og du
+  er blevet logget ud.
+</p>
+<p>
+  Kontoen slettes endeligt den <b>{{ hard_delete_date }}</b> ({{ window_days }}
+  dage fra i dag). Herefter fjernes alle personlige oplysninger permanent;
+  indhold, du har oprettet (fx begivenheder), bevares uden dit navn.
+</p>
+<p>
+  <b>Fortryder du?</b> Log ind igen inden den {{ hard_delete_date }}, så
+  genaktiveres kontoen automatisk, og sletningen annulleres. Der sendes ingen
+  yderligere varsler.
+</p>
+<p>Venlig hilsen<br/>{{ site_name }}</p>
+{%- endblock content -%}

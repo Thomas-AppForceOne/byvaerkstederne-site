@@ -1,0 +1,22 @@
+{% extends 'email/base.html.twig' %}
+
+{# To the EXISTING owner of a requested address. The requester saw the
+   neutral success-shaped response — this informational mail is the only
+   observable difference (no-enumeration, spec §6). #}
+
+{%- set subject = 'Din e-mailadresse blev angivet på ' ~ site_name %}
+{%- do email.message.setSubject(subject) %}
+
+{%- block content -%}
+<p>Hej,</p>
+<p>
+  Nogen har netop angivet denne e-mailadresse i et forsøg på at ændre
+  adressen på en anden konto hos <b>{{ site_name }}</b>. Adressen er
+  allerede knyttet til din konto, så der er ikke sket nogen ændring.
+</p>
+<p>
+  Var det dig, der tastede adressen ind på en anden konto, kan du se bort
+  fra denne mail.
+</p>
+<p>Venlig hilsen<br/>{{ site_name }}</p>
+{%- endblock content -%}

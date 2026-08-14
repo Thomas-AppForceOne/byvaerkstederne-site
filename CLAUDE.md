@@ -10,6 +10,30 @@ Byværkstederne is a Grav CMS site (PHP 8 + Twig templates + vanilla JS) running
 
 ---
 
+## Language conventions — English code, Danish UI
+
+The site's audience is Danish; the codebase is worked on in English. The rule for every change, whether made directly, via `/gan`, or by a sub-agent:
+
+**English — everything a developer reads:**
+
+- Variable, function, class, and method names; PHP namespaces
+- Plugin names, config keys, YAML frontmatter *field* names, Flex type names
+- Twig template filenames and block names, CSS class names, JS identifiers
+- Code comments, commit messages, branch names, PR titles/bodies
+- Specs, ADRs, READMEs, and all other repo documentation
+
+**Danish — everything a site visitor reads:**
+
+- Page content (markdown bodies, frontmatter *values* like `title:`)
+- Page folder names / URL slugs (`03.vaerksteder`, `04.kontakt`) — slugs are user-facing URLs on a Danish-only site
+- Form labels, validation messages, emails, and any string rendered in the UI
+
+**The boundary case — templates bound to Danish slugs:** Grav picks a page's template from its `.md` filename, so a Danish page file like `foreslaa-feature.md` pulls in `foreslaa-feature.html.twig`. When creating a new page whose slug is Danish, set `template:` explicitly in the page frontmatter to an English template name instead of letting the Danish slug propagate into the theme. Existing Danish-named templates stay as-is until touched for other reasons.
+
+When reviewing a PR, flag new Danish identifiers in code or new English strings in the UI as changes requiring fixes before merge.
+
+---
+
 ## Repository structure
 
 | Folder | Contents |
@@ -207,9 +231,9 @@ When running `/gan`, the orchestrator (main Claude session) is the sole writer o
 
 GAN sub-agents (generator and evaluator in particular) run under a `PreToolUse` hook that restricts their writes to `$WORKTREE_PATH` plus a narrow carve-out for harness metadata under `$REPO_ROOT/.gan/`. Everything else in the main repo is off-limits: `config/`, `tests/`, `specifications/`, `decisions/`, `scripts/`, `.claude/`, `CLAUDE.md`, `docker-compose.yml` — all read-only to them.
 
-The hook lives at `.claude/hooks/gan-confine.sh` and activates when the orchestrator writes the marker file `.gan/confinement-active` (a single line containing the absolute path of the worktree). The orchestrator writes the marker when it creates the worktree and removes it on teardown. Sub-agents must never remove the marker themselves.
+The hook is the ClaudeAgents framework's user-tier hook at `~/.claude/hooks/gan-confine.sh`, registered in `~/.claude/settings.json` and kept refreshed by the framework's `install.sh`. It gates on `GAN_RUN_ID` (exported by the orchestrator alongside `GAN_WORKTREE` and `GAN_RUN_DIR`) and no-ops entirely outside a `/gan` run. The project-tier copy that used to live at `.claude/hooks/gan-confine.sh` (marker-file activation via `.gan/confinement-active`) was retired in June 2026 after framework H3 — do not re-add it unless the project deliberately needs a project-tier override, and if you do, register it in `.claude/settings.json` in the same commit that adds the script (a registration pointing at a missing script fires a hook error on every tool call).
 
-In addition to the filesystem confinement, a fixed list of bash patterns is always blocked under an active marker:
+The bash-pattern rules that the old project-tier hook enforced remain binding on GAN agents as prose contract (see the agent definitions referenced below), even though the v0.6.0 user-tier hook only intercepts file-write tools:
 - `rsync --delete` anywhere (caused the April 2026 accounts wipe)
 - `rm -r` with `..` traversal
 - Any command referencing live-state dirs (`config/www/user/accounts/`, `config/www/user/data/`, `config/www/logs/`) without first `cd`-ing into the worktree

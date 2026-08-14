@@ -1,0 +1,57 @@
+name: Registration Throttle
+slug: registration-throttle
+type: plugin
+version: 0.1.0
+description: Per-IP rate limit on the membership registration form (anti-abuse backstop to the honeypot).
+icon: shield
+author:
+  name: Byværkstederne
+  email: kontakt@byvaerkstederne.dk
+homepage: https://byvaerkstederne.dk
+keywords: registration, rate limit, throttle, anti-spam, security
+license: MIT
+
+dependencies:
+  - { name: grav, version: '>=1.7.0' }
+  - { name: login }
+  - { name: form }
+
+form:
+  validation: loose
+  fields:
+    enabled:
+      type: toggle
+      label: Plugin status
+      highlight: 1
+      default: 0
+      options:
+        1: PLUGIN_ADMIN.ENABLED
+        0: PLUGIN_ADMIN.DISABLED
+      validate:
+        type: bool
+
+    form_name:
+      type: text
+      label: Form name to throttle
+      default: registration
+
+    max_count:
+      type: number
+      label: Max registrations per IP per window (0 = unlimited)
+      default: 10
+      validate:
+        type: int
+        min: 0
+
+    interval:
+      type: number
+      label: Window length (minutes)
+      default: 60
+      validate:
+        type: int
+        min: 1
+
+    message:
+      type: text
+      label: Message shown when throttled
+      default: 'For mange medlemskaber er oprettet fra din forbindelse for nylig. Vent venligst et øjeblik og prøv igen.'

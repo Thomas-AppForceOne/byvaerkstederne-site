@@ -8,7 +8,10 @@
 
         {# Left: Image + branding #}
         <div class="bv-login-overlay__image">
-            <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuDWT86Oh-mwD2qZPsPKoZLsIJP_nhOvx1qmXBat4v3kqG0FsNm6PenpAPoqLAmqNyZI_YISM-cU8T-KsVupYERiGXh9Pv-Dbdqv9lkfcIzSgSpT-AZgThXdLn3PvW5D0fRLWuTRnBbBAuN5Z40d2eG1hbZh9QtFsvQej7RY8Bp_0tlnNyFM0No-Ad4bY2A3kUJYJMyA3_AolkyLMxfweR71WflssZ8jmcZPnMi4-iIfD9h_dChfrJlKxYq1wosI30NfgpNgwZBWhv0" alt="V&aelig;rksted" />
+            {# WI-7: locally hosted asset. Previously hotlinked a
+               googleusercontent.com image — fragile and leaked visitor IPs to
+               Google. Served from the theme so no external request is made. #}
+            <img src="{{ url('theme://images/login-panel.webp') }}?v={{ 'now'|date('U') }}" alt="V&aelig;rksted" />
             <div class="bv-login-overlay__image-content">
                 <span class="bv-badge bv-badge--primary">Medlemsportal</span>
                 <h2 class="bv-headline" style="color: #fff; margin-top: var(--space-4);">F&aelig;llesskab gennem h&aring;ndv&aelig;rk.</h2>
@@ -41,22 +44,20 @@
                         <input type="checkbox" name="rememberme" value="1" class="bv-checkbox" />
                         <span class="bv-label" style="color: var(--on-surface-variant);">Husk mig</span>
                     </label>
-                    <a href="/forgot_password" class="bv-label" style="color: var(--tertiary);">Glemt adgangskode</a>
+                    <a href="/forgot_password" onclick="bvOpenOverlay('bv-forgot-overlay'); return false;" class="bv-label" style="color: var(--tertiary);">Glemt adgangskode</a>
                 </div>
 
                 <button type="submit" class="bv-btn bv-btn--primary bv-btn--lg bv-btn--full">Log ind</button>
             </form>
 
-            {% if feature_enabled('membership_signup') %}
             <div style="margin-top: var(--space-12); padding-top: var(--space-8); border-top: 1px solid var(--surface-container-highest);">
                 <p class="bv-label" style="color: var(--outline); margin-bottom: var(--space-4);">Ikke medlem endnu?</p>
-                <a href="/opret-medlemskab" onclick="document.getElementById('bv-login-overlay').classList.remove('is-open'); document.body.style.overflow='';"
+                <a href="/opret-medlemskab" onclick="bvOpenOverlay('bv-register-overlay'); return false;"
                    style="display: inline-flex; align-items: center; gap: var(--space-4); font-family: var(--font-headline); font-weight: 700; text-transform: uppercase; color: var(--secondary);">
                     <span>Bliv medlem af foreningen</span>
                     <span class="material-symbols-outlined">arrow_forward</span>
                 </a>
             </div>
-            {% endif %}
         </div>
     </div>
 </div>

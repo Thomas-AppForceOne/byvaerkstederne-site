@@ -1,0 +1,27 @@
+{# Themed override of the login plugin's reset.html.twig.
+   Renders the password-reset form (reached from the link in the reset email)
+   inside the shared floating auth card. Reuses the THEME shadow of
+   partials/reset-form.html.twig — which drops the stock English boilerplate
+   while keeping the token/nonce handling and field rendering. No plugin PHP is
+   touched. (WI-1; auth-surface UI/UX) #}
+{% extends 'partials/base.html.twig' %}
+
+{# Flash renders inside the card; suppress base's top-of-page flash. #}
+{% block flash %}{% endblock %}
+
+{% block body %}
+{% embed 'partials/auth_card.html.twig' %}
+    {% block auth_title %}Nulstil adgangskode{% endblock %}
+    {% block auth_intro %}
+        <p class="bv-body-lg">V&aelig;lg en ny adgangskode. Mindst 8 tegn, med mindst &eacute;t tal, &eacute;t stort og &eacute;t lille bogstav.</p>
+    {% endblock %}
+    {% block auth_form %}
+        {% include 'partials/reset-form.html.twig' %}
+    {% endblock %}
+    {% block auth_footer %}
+        <div style="text-align: center; padding-top: var(--space-8);">
+            <a href="/login" class="bv-label" style="color: var(--outline); text-decoration: underline; text-underline-offset: 4px;">Tilbage til login</a>
+        </div>
+    {% endblock %}
+{% endembed %}
+{% endblock %}

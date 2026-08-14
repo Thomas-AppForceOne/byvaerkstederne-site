@@ -557,10 +557,12 @@ class Login
             $this->rememberMe->setCookieName($cookieName);
             $this->rememberMe->setExpireTime($timeout);
 
-            // Hardening cookies with user-agent and random salt or
-            // fallback to use system based cache key
-            $server_agent = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
-            $data = $server_agent . $config->get('security.salt', $this->grav['cache']->getKey());
+            // BV-PATCH: derive the salt from the system secret ONLY. Mixing in
+            // $_SERVER['HTTP_USER_AGENT'] silently invalidated every remembered
+            // session on each browser update (new UA -> new salt -> the stored
+            // triplet no longer matched) and adds no real security: a cookie
+            // thief copies the UA header just as easily as the cookie.
+            $data = $config->get('security.salt', $this->grav['cache']->getKey());
             $this->rememberMe->setSalt(hash('sha512', $data));
 
             // Set cookie with correct base path of Grav install

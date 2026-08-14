@@ -5,7 +5,9 @@
             <div style="flex: 1;">
                 <h2 style="font-family: var(--font-headline); font-weight: 800; text-transform: uppercase; font-size: 1.75rem; margin-bottom: var(--space-4);">{{ h.contact_title|default('Pressekontakt') }}</h2>
                 <div style="font-size: 1.25rem; font-weight: 600;">{{ h.contact_name|default('') }}</div>
-                <div style="opacity: 0.8; margin-top: var(--space-2);">{{ h.contact_role|default('') }}</div>
+                {% if h.contact_role %}
+                <div style="opacity: 0.8; margin-top: var(--space-2);">{{ h.contact_role }}</div>
+                {% endif %}
                 {% if h.contact_phone %}
                 <div style="margin-top: var(--space-4); display: flex; align-items: center; gap: var(--space-2);">
                     <span class="material-symbols-outlined">phone</span> {{ h.contact_phone }}

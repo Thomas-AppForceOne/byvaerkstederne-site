@@ -29,11 +29,15 @@ test.describe('Footer — authenticated', () => {
     await expect(page).toHaveURL(/\/roadmap/);
   });
 
-  test('Forslå Feature button opens the feature suggestion overlay', async ({ page }) => {
+  test('Forslå Feature trigger opens the feature suggestion overlay', async ({ page }) => {
     await page.goto('/');
     const footer = page.locator('footer');
-    await footer.getByRole('button', { name: /forsl/i }).click();
+    // The trigger is an <a href="/foreslaa-feature"> (role: link) so it degrades
+    // to the landing page without JS; its onclick opens the overlay and cancels
+    // navigation, so clicking it here must open the overlay and stay on /.
+    await footer.getByRole('link', { name: /forsl/i }).click();
     await expect(page.locator('#bv-feature-suggestion-overlay, .bv-feature-suggestion-overlay')).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
   });
 
   test('Rapportér fejl button opens the bug report overlay', async ({ page }) => {

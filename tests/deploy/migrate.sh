@@ -862,14 +862,29 @@ else
     check "smoke_probe.matched=true (got '$matched_val')" fail
 fi
 
-# release-meta.yaml mtime predates the swap-completion (i.e. it was
-# written BEFORE step 6's atomic swap touched the docroot).
-META_MTIME="$(stat -f %m "$META" 2>/dev/null || stat -c %Y "$META" 2>/dev/null)"
-DOCROOT_MTIME="$(stat -f %m "$DOCROOT" 2>/dev/null || stat -c %Y "$DOCROOT" 2>/dev/null)"
-# The check is "META_MTIME <= DOCROOT_MTIME" — they may be equal at
-# fixture speed, but META must never come AFTER DOCROOT.
-if [ -n "$META_MTIME" ] && [ -n "$DOCROOT_MTIME" ] && [ "$META_MTIME" -le "$DOCROOT_MTIME" ]; then
-    check "release-meta.yaml mtime is <= docroot symlink mtime (writer ran before swap)" ok
+# release-meta.yaml is FINALISED after the swap: migrate-to-atomic-layout.sh
+# writes the pre-swap fields, performs the ln -sfn docroot swap, then
+# *appends* the post-swap audit fields (swapped_at, swap_duration_ms) —
+# so the meta file's final mtime is at or after the swap that set the
+# docroot symlink's mtime. The invariant is therefore META_MTIME >=
+# DOCROOT_MTIME, and it is deterministic: appending strictly after the
+# swap means floor(meta) >= floor(docroot) regardless of where the two
+# writes fall relative to a wall-clock second boundary.
+#
+# (The previous assertion was META <= DOCROOT, which encoded the wrong
+# model — "meta written before the swap" — and only passed when the
+# post-swap append and the swap happened to land in the same second; it
+# flaked across a second boundary. META >= DOCROOT is both correct and a
+# stronger freshness check: a STALE meta left from an earlier deploy
+# would be OLDER than this deploy's docroot and now fails loudly.)
+# Portable mtime: GNU `stat -c %Y` FIRST, BSD `stat -f %m` as fallback.
+# Order matters — on Linux `stat -f` is --file-system (not a format),
+# so it prints fs-status to stdout AND exits non-zero, concatenating
+# garbage onto the fallback. GNU-first fails cleanly (stderr only) on macOS.
+META_MTIME="$(stat -c %Y "$META" 2>/dev/null || stat -f %m "$META" 2>/dev/null)"
+DOCROOT_MTIME="$(stat -c %Y "$DOCROOT" 2>/dev/null || stat -f %m "$DOCROOT" 2>/dev/null)"
+if [ -n "$META_MTIME" ] && [ -n "$DOCROOT_MTIME" ] && [ "$META_MTIME" -ge "$DOCROOT_MTIME" ]; then
+    check "release-meta.yaml mtime is >= docroot symlink mtime (post-swap audit fields appended after swap)" ok
 else
     check "release-meta mtime ordering (meta=$META_MTIME, docroot=$DOCROOT_MTIME)" fail
 fi
@@ -900,7 +915,7 @@ echo ""
 echo "Test 8: idempotence guard — re-run refused, backup not called"
 
 PRE_RERUN_SHA="$(find "$T_OK_PARENT/${TIER}-releases" "$T_OK_PARENT/${TIER}data" -type f -print0 2>/dev/null | sort -z | xargs -0 shasum 2>/dev/null | shasum)"
-PRE_RERUN_DATA_MTIME="$(stat -f %m "$T_OK_PARENT/${TIER}data" 2>/dev/null || stat -c %Y "$T_OK_PARENT/${TIER}data" 2>/dev/null)"
+PRE_RERUN_DATA_MTIME="$(stat -c %Y "$T_OK_PARENT/${TIER}data" 2>/dev/null || stat -f %m "$T_OK_PARENT/${TIER}data" 2>/dev/null)"
 
 RERUN_BAK_MARKER="$WORK/t-rerun-backup-invoked"
 T_RERUN_ERR="$WORK/t-rerun.err"
@@ -932,7 +947,7 @@ if [ "$PRE_RERUN_SHA" = "$POST_RERUN_SHA" ]; then
 else
     check "re-run did not corrupt on-disk content" fail
 fi
-POST_RERUN_DATA_MTIME="$(stat -f %m "$T_OK_PARENT/${TIER}data" 2>/dev/null || stat -c %Y "$T_OK_PARENT/${TIER}data" 2>/dev/null)"
+POST_RERUN_DATA_MTIME="$(stat -c %Y "$T_OK_PARENT/${TIER}data" 2>/dev/null || stat -f %m "$T_OK_PARENT/${TIER}data" 2>/dev/null)"
 if [ "$PRE_RERUN_DATA_MTIME" = "$POST_RERUN_DATA_MTIME" ]; then
     check "re-run did not change <tier>data/ mtime" ok
 else

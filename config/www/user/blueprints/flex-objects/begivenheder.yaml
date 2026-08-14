@@ -62,11 +62,14 @@ form:
       validate:
         type: bool
 
+    # title / group / event_date are deliberately NOT `required` here. Grav Flex
+    # runs this blueprint's validation inside FlexObject::update(), so a
+    # `required: true` 500s a legitimate DRAFT save that leaves them empty (an
+    # in-progress event may be saved with nothing filled in). EventValidator is
+    # the server authority and enforces these only when PUBLISHING.
     title:
       type: text
       label: Titel
-      validate:
-        required: true
 
     description:
       type: textarea
@@ -76,8 +79,6 @@ form:
     group:
       type: select
       label: Værkstedsgruppe
-      validate:
-        required: true
       options:
         alle: Alle grupper (fælles)
         makerspace: Makerspace & Reparation
@@ -94,8 +95,6 @@ form:
       type: text
       label: Dato
       help: "Format: 2026-05-02"
-      validate:
-        required: true
 
     event_time:
       type: text
@@ -112,10 +111,10 @@ form:
       label: Kapacitet
       help: "F.eks. '8 Pladser', 'Begrænset plads' eller tom for ubegrænset"
 
-    price:
+    event_type:
       type: text
-      label: Pris
-      help: "F.eks. '50 kr. voksne', 'Gratis entrè' eller tom"
+      label: Begivenhedstype
+      help: "Gratis, Brugerbetaling eller Drop-in (styrer kortets CTA). Ældre begivenheder kan have fri tekst."
 
     button_text:
       type: text
@@ -127,6 +126,9 @@ form:
       label: Tilmelding URL
       default: '#'
 
+    # On the frontend management surface this is DERIVED from `group`
+    # (EventValidator::ACCENT_BY_GROUP) — the accent follows the workshop and
+    # is never a user choice. The select remains here for admin edits.
     button_style:
       type: select
       label: Knap stil
@@ -135,11 +137,53 @@ form:
         primary: Primær (grøn)
         secondary: Sekundær (blå)
         tertiary: Terracotta
+        kulturhus: Orange (Eventværkstedet)
 
-    featured:
+    # Rich details body (event RSVP §5). Server-managed: the frontend form
+    # posts a raw `details` field which the event-manager plugin sanitizes to
+    # this allowlisted HTML (DetailsSanitizer) before storing. Never edited
+    # directly from the frontend; the stored value is sanitizer output.
+    details_html:
+      type: textarea
+      label: Detaljer (HTML)
+      readonly: true
+
+    # ── Server-managed fields (frontend event CRUD) ─────────────────────
+    # Stamped exclusively by the event-manager plugin's handlers; readonly
+    # in every form and never client-settable. `owner` is the basis of
+    # per-object authorization: a missing/empty owner means the event is
+    # editable only by admin.super (covers the pre-existing legacy events,
+    # so no data migration is needed).
+
+    owner:
+      type: text
+      label: Ejer
+      readonly: true
+
+    created_by:
+      type: text
+      label: Oprettet af
+      readonly: true
+
+    created_at:
+      type: text
+      label: Oprettet
+      readonly: true
+
+    updated_by:
+      type: text
+      label: Senest ændret af
+      readonly: true
+
+    updated_at:
+      type: text
+      label: Senest ændret
+      readonly: true
+
+    archived:
       type: toggle
-      label: Fremhævet begivenhed
-      help: Vises stort øverst på kalendersiden
+      label: Arkiveret
+      readonly: true
       highlight: 1
       default: 0
       options:
@@ -148,7 +192,19 @@ form:
       validate:
         type: bool
 
-    featured_tag:
-      type: text
-      label: Fremhævet tag
-      help: "F.eks. 'All Hands' — kun vist når fremhævet"
+    # Soft-delete (frontend event CRUD). Set by the arrangør's "Slet" action:
+    # the event is hidden from their dashboard and every public surface but
+    # retained in storage. Only admin.super (or a future cleanup job) removes
+    # it permanently. Distinct from `archived` (which stays visible on the
+    # owner's dashboard as "Arkiveret").
+    deleted:
+      type: toggle
+      label: Slettet
+      readonly: true
+      highlight: 1
+      default: 0
+      options:
+        1: Ja
+        0: Nej
+      validate:
+        type: bool

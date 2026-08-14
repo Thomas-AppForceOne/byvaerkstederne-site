@@ -1,6 +1,5 @@
 ---
 title: Opret Medlemskab
-feature: membership_signup
 
 form:
     name: registration
@@ -13,6 +12,16 @@ form:
           autocomplete: name
           validate:
             required: true
+            # Forbid angle brackets so the name cannot inject markup. The login
+            # plugin interpolates fullname into the activation flash
+            # (PLUGIN_LOGIN.ACTIVATION_NOTICE_MSG), which the site renders via
+            # partials/messages.html.twig with |raw — without this gate a name
+            # like "<img onerror=…>" would execute on the post-register redirect.
+            # [^<>] still allows every real name (Unicode letters, spaces,
+            # hyphens, apostrophes, periods); enforced server-side by the forms
+            # plugin and client-side via the HTML5 pattern attribute.
+            pattern: "^[^<>]{1,80}$"
+            message: "Navnet må ikke indeholde tegnene < eller >."
 
         - name: email
           type: email
@@ -33,14 +42,43 @@ form:
             pattern: "^[a-z0-9_-]{3,16}$"
             message: "Brugernavn skal være 3-16 tegn og kun indeholde små bogstaver, tal, bindestreg og understregning."
 
-        - name: password
+        - name: password1
           type: password
           label: Adgangskode
-          placeholder: "Mindst 8 tegn"
+          placeholder: "Mindst 12 tegn"
           autocomplete: new-password
-          help: "Mindst 8 tegn, med mindst ét tal, ét stort og ét lille bogstav."
+          help: "Mindst 12 tegn. Ingen krav om store bogstaver eller tal — en sætning, du kan huske, er både stærkere og nemmere."
           validate:
             required: true
+            # WI-5/WI-7: server-side password policy pinned in the page so the
+            # forms plugin rejects a non-compliant password with a DANISH
+            # message BEFORE Login::register() throws its English
+            # RuntimeException (keeps the stock plugin unpatched). This pattern
+            # is equivalent to system.pwd_regex (>=12 chars, no class rules) —
+            # pinned identical and proven equivalent to the client-side JS
+            # chain by the shared truth-table fixture/test. The blocklist is
+            # NOT here: a regex cannot carry it readably, so account-manager
+            # enforces it on the same submission via onFormValidationProcessed.
+            pattern: ".{12,}"
+            message: "Adgangskoden skal være mindst 12 tegn."
+
+        - name: password2
+          type: password
+          label: Gentag adgangskode
+          placeholder: "Gentag din adgangskode"
+          autocomplete: new-password
+          help: "Skriv den samme adgangskode igen for at bekræfte."
+          validate:
+            required: true
+            message: "Bekræft din adgangskode ved at skrive den igen."
+
+        # Honeypot anti-spam field. Hidden from humans (CSS .form-honeybear in
+        # register.html.twig), but bots fill every field. The forms plugin
+        # rejects the submission server-side when a honeypot-type field is
+        # non-empty (form.php onFormValidationProcessed). It is NOT in the
+        # register_user process fields below, so it never reaches the account.
+        - name: website
+          type: honeypot
 
     buttons:
         - type: submit
@@ -51,7 +89,8 @@ form:
         - register_user:
             fields:
               - username
-              - password
+              - password1
+              - password2
               - email
               - fullname
         - redirect: /

@@ -2,6 +2,51 @@ absolute_urls: false
 
 reverse_proxy_setup: true
 
+# WI-5: pin the password and username policy in this repo so a Grav-core
+# upgrade or a differently-configured tier cannot silently weaken them. These
+# must agree exactly with the client-side checks (register.html.twig) and the
+# page-level validate.pattern (register.md):
+#   - username_regex string-equals register.md's username validate.pattern and
+#     the JS literal in register.html.twig.
+#   - pwd_regex (>=12 chars, no character-class rules) is proven equivalent to
+#     the imperative client-side JS chain by the shared accept/reject
+#     truth-table fixture (tests/anonymous/password-policy.js).
+#
+# LENGTH ONLY, ON PURPOSE. The previous rule was >=8 with an upper, a lower
+# and a digit. Composition rules of that shape do not buy entropy — they push
+# people to "Sommer2026!", which every cracking dictionary already holds — and
+# NIST SP 800-63B has recommended dropping them for years. Twelve characters
+# with no class requirement is both stronger and easier to satisfy with a
+# passphrase or a password manager. The guessable-word rule that composition
+# rules were really reaching for lives in the blocklist
+# (config/plugins/account-manager.yaml), which a regex cannot express.
+username_regex: '^[a-z0-9_-]{3,16}$'
+pwd_regex: '.{12,}'
+
+# WI-4: harden the session cookie. httponly + SameSite=Lax are scheme-
+# independent and pinned here for every tier (SameSite=Lax, not Strict, so
+# activation/reset links arriving as top-level navigations from email still
+# carry the cookie while cross-site POST is blocked).
+#
+# The Secure flag is deliberately NOT hard-forced. Grav's SessionServiceProvider
+# computes it as `session.secure OR (session.secure_https AND scheme == https)`.
+# secure_https defaults to true, and with reverse_proxy_setup (above) Grav reads
+# the scheme from X-Forwarded-Proto — so on a TLS tier behind the proxy the
+# cookie automatically gets Secure, while plain-HTTP localhost (make start /
+# make test-auth, no XFP) correctly does NOT, so local sessions still hold.
+# Pinning `secure: true` here instead would force Secure even over local HTTP,
+# breaking every authenticated flow that isn't behind TLS — which is why we let
+# Grav's per-scheme detection do it.
+#
+# MANUAL RELEASE GATE (WI-4): on the first deploy to a real TLS tier, capture
+# the live Set-Cookie and confirm Secure is present and a login completes
+# through the proxy — the real proxy must forward X-Forwarded-Proto and must not
+# strip the flag. The localhost X-Forwarded-Proto substitute only proves Grav
+# EMITS Secure when told HTTPS.
+session:
+  httponly: true
+  samesite: 'Lax'
+
 home:
   alias: '/home'
 

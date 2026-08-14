@@ -14,6 +14,24 @@
 #
 # Pure function → unit-tested directly.
 
+# bv_is_clean_semver <value>
+#
+# The canonical "is this a clean release X.Y.Z?" predicate for the
+# sourced deploy/lib SemVer vocabulary. Returns 0 (true) iff <value> is
+# exactly three dot-separated digit runs — no pre-release / build suffix,
+# no missing component. This is a purely STRUCTURAL ^X.Y.Z$ shape check:
+# like the regex it replaces it does not constrain leading zeros (the
+# comparator/bump helpers force base-10 with `10#` after this screen).
+#
+# Every sourced site that asks "is this clean SemVer?" must call this
+# rather than re-spelling the regex, so the shape has a single owner.
+# (deploy/migrate.sh's is_semver carries its own copy by necessity — it
+# is an executable script, never sourced as a library; see the cross-ref
+# comment there.)
+bv_is_clean_semver() {
+    printf '%s' "$1" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
+}
+
 # bv_bump_semver <current> <major|minor|patch> [pre]
 #
 # Echoes the bumped version on stdout. With a non-empty [pre] label, a
@@ -29,7 +47,7 @@ bv_bump_semver() {
 
     # Core = everything before the first '-' (pre-release) or '+' (build).
     local core="${current%%[-+]*}"
-    if ! printf '%s' "$core" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+    if ! bv_is_clean_semver "$core"; then
         printf 'bv_bump_semver: no valid X.Y.Z core in %s\n' "$current" >&2
         return 1
     fi
@@ -58,4 +76,45 @@ bv_bump_semver() {
     fi
 
     printf '%s\n' "$result"
+}
+
+# bv_semver_compare <a> <b>
+#
+# Compares two CLEAN release SemVers (X.Y.Z, no pre-release/build
+# suffix) componentwise and echoes -1 (a<b), 0 (a==b), or 1 (a>b) on
+# stdout. This is the comparison primitive `release-pr-guard`'s
+# "version is bumped" check (rule 4) needs — `bv_bump_semver` bumps but
+# cannot compare, and the repo's other comparator lived un-sourceably
+# inside `deploy/migrate.sh`.
+#
+# Returns non-zero (diagnostic on stderr, nothing on stdout) when
+# EITHER argument is not a clean X.Y.Z. The caller must screen
+# pre-release values out first (rule 3 before rule 4); feeding a
+# `-dev`/`-rc.N` value is a caller bug, not a silent "they're equal".
+bv_semver_compare() {
+    local a="$1" b="$2"
+    if ! bv_is_clean_semver "$a"; then
+        printf 'bv_semver_compare: not a clean X.Y.Z version: %s\n' "$a" >&2
+        return 1
+    fi
+    if ! bv_is_clean_semver "$b"; then
+        printf 'bv_semver_compare: not a clean X.Y.Z version: %s\n' "$b" >&2
+        return 1
+    fi
+
+    local a1 a2 a3 b1 b2 b3
+    IFS=. read -r a1 a2 a3 <<< "$a"
+    IFS=. read -r b1 b2 b3 <<< "$b"
+    # Force base-10 so a stray leading zero never reads as octal.
+    a1=$((10#$a1)); a2=$((10#$a2)); a3=$((10#$a3))
+    b1=$((10#$b1)); b2=$((10#$b2)); b3=$((10#$b3))
+
+    local x y pair
+    for pair in "$a1:$b1" "$a2:$b2" "$a3:$b3"; do
+        x="${pair%:*}"; y="${pair#*:}"
+        if   [ "$x" -lt "$y" ]; then printf '%s\n' -1; return 0
+        elif [ "$x" -gt "$y" ]; then printf '%s\n'  1; return 0
+        fi
+    done
+    printf '%s\n' 0
 }

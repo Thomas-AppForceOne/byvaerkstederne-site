@@ -1,0 +1,25 @@
+# Per-tier site override for dev (tracked config, no secrets).
+#
+# author.email is the association's contact address as every visitor-facing
+# surface renders it — the welcome mail's "skriv til …" line, and the warning
+# a member gets when no super-admin could be notified about their access
+# request (account-manager.php: handleRequestAccess).
+#
+# On dev it points at the operator test mailbox rather than the production
+# address, so a tester following the address in a mail does not write to the
+# association for real. test@hackersbychoice.dk is a real one.com mailbox
+# with IMAP, which means delivered mail can also be asserted on directly —
+# unlike a Proton address, which offers no programmatic access without a
+# paid Bridge subscription.
+#
+# Plus-addressing is verified to work on one.com (a probe to <box>+probe@
+# landed in the base mailbox in ~5s), so one mailbox covers every purpose
+# while staying distinguishable:
+#   test+kontakt@   — this contact address
+#   test+admin@     — the tier's super-admin account
+#   test+userN@     — disposable member registrations
+#
+# Deployed tiers other than dev keep the committed production value from
+# user/config/site.yaml.
+author:
+  email: test+kontakt@hackersbychoice.dk

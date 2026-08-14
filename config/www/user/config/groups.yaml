@@ -1,0 +1,19 @@
+# User groups (frontend event CRUD — frontend_event_crud_specification.md §5).
+#
+# `organizers` is the arrangør role: ordinary email-activated members that a
+# super has added to the group via the account's `groups:` list. The access
+# tree confers the scoped admin.events.* capabilities checked by the
+# event-manager plugin — deliberately WITHOUT admin.login, so group members
+# never gain admin-panel access (least privilege, spec §10).
+organizers:
+  readableName: 'Arrangør'
+  description: 'Can create and edit own events from the public site.'
+  access:
+    site:
+      login: true
+    admin:
+      events:
+        create: true
+        read: true
+        update: true
+        delete: true

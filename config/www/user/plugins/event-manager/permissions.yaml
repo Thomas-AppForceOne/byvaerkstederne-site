@@ -1,0 +1,21 @@
+# Declares the admin.events.* capability namespace
+# (frontend_event_crud_specification.md §4) so the strings appear as real,
+# checkable permissions — mirroring user/plugins/admin/permissions.yaml.
+# Granted to the `organizers` group in user/config/groups.yaml; a scoped
+# admin.events.* grant does NOT confer admin-panel access (that needs
+# admin.login). Cross-owner actions and hard delete are gated on admin.super,
+# not on any admin.events.* permission.
+actions:
+  admin:
+    actions:
+      events:
+        label: Events
+        actions:
+          create:
+            label: Create events
+          read:
+            label: Read own unpublished/archived events
+          update:
+            label: Update own events (incl. publish/unpublish)
+          delete:
+            label: Archive own events

@@ -104,6 +104,29 @@ final class TwigHelpers
     }
 
     /**
+     * Inverse of {@see featureEnabled()} for a KNOWN flag: true iff the flag
+     * resolves disabled. Fail-closed semantics differ deliberately for an
+     * unknown/invalid name — both featureEnabled() and featureDisabled() return
+     * false for it, so a typo'd flag triggers neither a `feature_enabled` nor a
+     * `feature_disabled` branch (never silently shows fallback content).
+     */
+    public function featureDisabled(mixed $name): bool
+    {
+        if (!is_string($name) || $name === '') {
+            return false;
+        }
+        $flag = FeatureFlag::tryFrom($name);
+        if ($flag === null) {
+            return false;
+        }
+        try {
+            return $this->store->isDisabled($flag);
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
      * List enabled flags as their backed string values.
      *
      * @return list<string>

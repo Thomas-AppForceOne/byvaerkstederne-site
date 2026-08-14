@@ -19,7 +19,6 @@ enabled:
   feature_suggestion: "true"
   bug_report: "true"
   community_footer_column: "true"
-  membership_signup: "true"
   newsletter_signup: "true"
   event_highlight: "true"
   press_page: "true"
@@ -41,3 +40,5 @@ enabled:
   gear_donation: "true"
   social_media_links: "true"
   makerspace_meeting_link: "true"
+  event_management: "true"
+  account_self_service: "true"

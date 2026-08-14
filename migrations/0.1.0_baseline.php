@@ -6,7 +6,7 @@
  * `data-version.yaml`) as `0.1.0` by convention, so historical
  * backups stay restorable. This baseline migration is the deliberate
  * "stamp it" step: it ensures the file exists at
- * `$dataDir/config/www/user/data-version.yaml` and that it declares
+ * `$dataDir/user/data-version.yaml` and that it declares
  * `data_version: "0.1.0"`. Re-running against an already-stamped
  * tree is a no-op.
  *
@@ -24,7 +24,7 @@ return function (string $dataDir): void {
         );
     }
 
-    $markerDir  = $dataDir . '/config/www/user';
+    $markerDir  = $dataDir . '/user';
     $markerPath = $markerDir . '/data-version.yaml';
 
     if (!is_dir($markerDir)) {

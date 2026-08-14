@@ -12,8 +12,10 @@
 const {
   TEST_USER,
   TEST_ADMIN,
+  TEST_ORGANIZER,
   hasUserPassword,
   hasAdminPassword,
+  hasOrganizerPassword,
 } = require('./accounts');
 
 /**
@@ -81,9 +83,41 @@ async function loginAsAdmin(page) {
   await page.waitForFunction(() => !document.getElementById('admin-login'), null, { timeout: 10_000 });
 }
 
+/**
+ * Log in as the canonical organizer (arrangør) account. Reads
+ * TEST_ORGANIZER_PASSWORD from the env.
+ *
+ * @param {import('@playwright/test').Page} page
+ */
+async function loginAsOrganizer(page) {
+  const password = process.env.TEST_ORGANIZER_PASSWORD;
+  if (!password) {
+    throw new Error('loginAsOrganizer(): TEST_ORGANIZER_PASSWORD env var is not set');
+  }
+  await loginWith(page, TEST_ORGANIZER.username, password);
+}
+
+/**
+ * Log in as the admin account through the SITE login form (session for
+ * public pages like /begivenheder/*, unlike loginAsAdmin which targets the
+ * separate /admin session). pw-test-admin carries site.login + admin.super.
+ *
+ * @param {import('@playwright/test').Page} page
+ */
+async function loginAsSiteAdmin(page) {
+  const password = process.env.TEST_ADMIN_PASSWORD;
+  if (!password) {
+    throw new Error('loginAsSiteAdmin(): TEST_ADMIN_PASSWORD env var is not set');
+  }
+  await loginWith(page, TEST_ADMIN.username, password);
+}
+
 module.exports = {
   login,
   loginAsAdmin,
+  loginAsSiteAdmin,
+  loginAsOrganizer,
   hasUserPassword,
   hasAdminPassword,
+  hasOrganizerPassword,
 };

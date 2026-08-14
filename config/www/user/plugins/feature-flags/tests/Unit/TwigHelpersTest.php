@@ -51,6 +51,39 @@ final class TwigHelpersTest extends TestCase
         $this->assertSame([], $logger->warnings());
     }
 
+    // -------- feature_disabled (inverse helper) --------
+
+    public function testFeatureDisabledIsInverseForKnownFlags(): void
+    {
+        $logger = new ArrayLogger();
+        $store = new FlagStore(['roadmap' => 'true', 'press_page' => 'false'], $logger);
+        $helpers = new TwigHelpers($store, $logger);
+
+        // Enabled flag -> not disabled.
+        $this->assertTrue($helpers->featureEnabled('roadmap'));
+        $this->assertFalse($helpers->featureDisabled('roadmap'));
+
+        // Explicitly-disabled flag -> disabled.
+        $this->assertFalse($helpers->featureEnabled('press_page'));
+        $this->assertTrue($helpers->featureDisabled('press_page'));
+
+        // Absent (unconfigured) known flag -> disabled (fail-closed).
+        $this->assertTrue($helpers->featureDisabled('contact_page'));
+    }
+
+    public function testFeatureDisabledFailsClosedToFalseForUnknownOrInvalidNames(): void
+    {
+        $logger = new ArrayLogger();
+        $helpers = new TwigHelpers(new FlagStore([], $logger), $logger);
+
+        // Unknown/empty/non-string names trigger NEITHER branch: both
+        // featureEnabled and featureDisabled return false for them.
+        $this->assertFalse($helpers->featureDisabled('not_a_real_flag'));
+        $this->assertFalse($helpers->featureDisabled(''));
+        $this->assertFalse($helpers->featureDisabled(null));
+        $this->assertFalse($helpers->featureDisabled(['x']));
+    }
+
     public function testUnknownNameReturnsFalseAndLogsExactlyOneWarning(): void
     {
         $logger = new ArrayLogger();
@@ -164,6 +197,7 @@ final class TwigHelpersTest extends TestCase
         $logger = new ArrayLogger();
         $throwingStore = new class implements \Grav\Plugin\FeatureFlags\FlagStoreInterface {
             public function isEnabled(FeatureFlag $flag): bool { throw new \RuntimeException('boom'); }
+            public function isDisabled(FeatureFlag $flag): bool { throw new \RuntimeException('boom'); }
             public function isConfigured(FeatureFlag $flag): bool { return false; }
             public function getEnabledFlags(): array { throw new \RuntimeException('boom'); }
             public function allFlags(): array { return []; }
@@ -172,6 +206,7 @@ final class TwigHelpersTest extends TestCase
 
         $helpers = new TwigHelpers($throwingStore, $logger);
         $this->assertFalse($helpers->featureEnabled('roadmap'));
+        $this->assertFalse($helpers->featureDisabled('roadmap'), 'A throwing store must fail closed to false.');
         $this->assertSame([], $helpers->enabledFeatures());
     }
 }
