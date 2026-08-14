@@ -1823,6 +1823,22 @@ button.bv-event-row__signup {
 .bv-footer__contact-item .material-symbols-outlined { color: var(--outline); margin-top: 0.125rem; }
 .bv-footer__contact-item a:hover { text-decoration: underline; }
 
+/* EU co-funding acknowledgement row — aligned with the footer grid's left
+   edge and its container width, so the logo lines up under the brand column
+   on every breakpoint. The asset has a transparent background, so it sits on
+   the footer surface without a white box around it. */
+.bv-footer__funding {
+    max-width: var(--container);
+    margin: 0 auto;
+    padding: 0 var(--space-8) var(--space-12);
+}
+.bv-footer__funding-logo {
+    display: block;
+    width: 100%;
+    max-width: 15rem;
+    height: auto;
+}
+
 .bv-footer__bottom {
     background: var(--surface-container);
     padding: var(--space-8);
@@ -1948,6 +1964,7 @@ button.bv-event-row__signup {
         height: auto;
     }
     .bv-footer__grid { grid-template-columns: 1fr; padding: var(--space-12) var(--space-4); }
+    .bv-footer__funding { padding: 0 var(--space-4) var(--space-8); }
     .bv-newsletter__form { flex-direction: column; }
     .bv-stats { grid-template-columns: 1fr 1fr; }
     .bv-bento { grid-template-columns: 1fr; }
