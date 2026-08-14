@@ -1,0 +1,11 @@
+enabled: true
+
+# Path the external cron service calls. The path is not a secret — the token
+# is — but keeping it boring avoids advertising the mechanism in logs and
+# referrers.
+route: '/scheduler-trigger'
+
+# Minimum seconds between two real runs. A flood of calls is answered
+# identically but only actually runs the scheduler this often, so the
+# endpoint cannot be used to make the site work harder than it should.
+min_interval: 60

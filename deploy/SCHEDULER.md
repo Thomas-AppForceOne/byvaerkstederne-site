@@ -7,7 +7,71 @@ footprint (`account_self_service` spec §7). Grav's scheduler only runs
 when `bin/grav scheduler` is invoked — nothing happens without a cron
 entry on the tier.
 
-## Cron entry
+## How the scheduler is triggered — every tier
+
+**All four tiers are driven the same way**: a token-gated HTTP endpoint called
+by <https://cron-job.org>. One mechanism, one place to look when jobs stop,
+one thing to learn.
+
+The forcing reason was one.com: its plan has no cron and its SSH shell has no
+`crontab`, so dev, test and staging could not use the classic entry at all —
+every job sat at `Last Run: Never`, including Grav's own cache jobs. prod on
+chosting *does* have cPanel cron, but running it differently from the other
+three would mean two mechanisms, two failure modes and a difference that only
+shows up when something is already wrong.
+
+The endpoint:
+
+```
+https://<tier>/scheduler-trigger?token=<token>
+```
+
+The `scheduler-trigger` plugin answers `204` for a valid token and Grav's
+ordinary themed `404` for anything else — a wrong token, no token, or a tier
+where none is provisioned. That makes the endpoint indistinguishable from a
+page that does not exist, so it cannot be found by probing.
+
+### Provisioning a tier
+
+```bash
+make scheduler-token tier=dev            # generate/rotate; prints only a fingerprint
+make scheduler-token tier=dev show=1     # print the full URL (run this yourself)
+make scheduler-token tier=dev status=1   # is one provisioned? no secret printed
+```
+
+The token is generated **on the tier** and never crosses the wire, so
+provisioning does not put the secret into a scrollback, a shell history or a
+CI log. `show=1` is the deliberate exception, for the one moment you paste the
+URL into the cron service.
+
+It lives in the tier's live-state dir (`user/data/scheduler-trigger/token`),
+so it survives every deploy and is never in the repo — same posture as the
+per-tier `email.yaml`.
+
+### The cron service
+
+Create one job per tier — dev, test, staging AND prod — at
+<https://cron-job.org> (free), calling that tier's URL **every 15 minutes**. Enable its failure notifications: the service
+telling you it cannot reach the URL is the only external signal that a tier's
+scheduled work has stopped.
+
+Rotating a token invalidates the old URL immediately — update the cron job in
+the same sitting, or the tier stops running its jobs silently.
+
+### Why not GitHub Actions
+
+It would be free on this public repo, but a scheduled workflow is disabled
+after 60 days of repository inactivity — a watchdog that switches itself off
+when the project goes quiet is precisely the wrong shape. The SSH-based
+variant was rejected outright: it would put the hosting password, which opens
+dev, test *and* staging, into repository secrets. The token can do exactly one
+thing — make the site run its own housekeeping a little sooner.
+
+## Appendix: the classic cron entry
+
+Not used by any tier today — kept because chosting (prod) does offer cPanel
+cron, so this is the fallback if cron-job.org is ever unavailable. Adopting it
+would mean two mechanisms in play; prefer fixing the trigger.
 
 One line per tier, in the hosting panel's cron configuration (one.com for
 dev/test/staging, chosting cPanel for prod — 15-minute granularity is

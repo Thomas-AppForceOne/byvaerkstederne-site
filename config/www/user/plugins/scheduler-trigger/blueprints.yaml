@@ -1,0 +1,30 @@
+name: Scheduler Trigger
+slug: scheduler-trigger
+type: plugin
+version: 1.0.0
+description: Token-gated HTTP endpoint that runs Grav's scheduler, for hosting without cron.
+icon: clock
+author:
+  name: Byværkstederne
+homepage: https://byvaerkstederne.dk
+license: MIT
+
+form:
+  validation: strict
+  fields:
+    enabled:
+      type: toggle
+      label: Plugin status
+      highlight: 1
+      default: 1
+      options:
+        1: Enabled
+        0: Disabled
+      validate:
+        type: bool
+    route:
+      type: text
+      label: Trigger route
+    min_interval:
+      type: number
+      label: Minimum seconds between real runs
