@@ -167,16 +167,37 @@ esac
 
 # Generated remotely; the value never crosses the wire. The fingerprint is a
 # prefix of its sha256 — enough to tell two tokens apart, useless as a secret.
+# PHP does the generating and the hashing: one.com's shell has no openssl
+# (and no crontab, which is why this endpoint exists at all), but every tier
+# is a Grav install, so PHP is the one tool guaranteed to be there.
+# random_bytes() is a CSPRNG; /dev/urandom via od is the fallback.
 fingerprint="$(bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" "
     set -e
     mkdir -p \"$STATE_DIR\"
     umask 077
-    openssl rand -hex 32 > \"$TOKEN_FILE\"
-    chmod 600 \"$TOKEN_FILE\"
-    if command -v sha256sum >/dev/null 2>&1; then
+    # Write to a temp file and rename: a failure part-way through must not
+    # leave a truncated token in place. A first attempt against a host without
+    # openssl did exactly that — the shell created the empty target before the
+    # missing binary failed, and only the plugin's length check kept it from
+    # being treated as a real token.
+    tmp=\"$TOKEN_FILE.new\"
+    if command -v php >/dev/null 2>&1; then
+        php -r 'file_put_contents(\$argv[1], bin2hex(random_bytes(32)));' \"\$tmp\"
+    elif [ -r /dev/urandom ]; then
+        head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > \"\$tmp\"
+    else
+        echo 'error: no random source on this host' >&2
+        exit 1
+    fi
+    [ -s \"\$tmp\" ] || { echo 'error: generated token is empty' >&2; rm -f \"\$tmp\"; exit 1; }
+    chmod 600 \"\$tmp\"
+    mv \"\$tmp\" \"$TOKEN_FILE\"
+    if command -v php >/dev/null 2>&1; then
+        php -r 'echo substr(hash(\"sha256\", trim(file_get_contents(\$argv[1]))), 0, 12);' \"$TOKEN_FILE\"
+    elif command -v sha256sum >/dev/null 2>&1; then
         sha256sum \"$TOKEN_FILE\" | cut -c1-12
     else
-        openssl dgst -sha256 \"$TOKEN_FILE\" | awk '{print substr(\$NF,1,12)}'
+        echo 'nofingerprint'
     fi
 " 2>&1 || echo __SSHFAIL__)"
 
