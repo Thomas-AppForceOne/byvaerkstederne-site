@@ -925,7 +925,41 @@ bv_remote_run '
         mkdir -p "$DD/$VDIR/user/env/$DEPLOY_ENV/config/plugins"
         mv "$RD/user/env/$DEPLOY_ENV/config/plugins/email.yaml" "$DD/$VDIR/user/env/$DEPLOY_ENV/config/plugins/email.yaml"
     fi
-' RD="$RELEASE_DIR" DD="$DATA_DIR" DEPLOY_ENV="$ENV_HOST"
+    # Last resort for the per-host env salt. The mv above only fires when
+    # the RELEASE carries one, and it never does: env security.yaml is
+    # gitignored, so it is not in the repo and not in the rsync. When the
+    # data dir has none either, the symlink wired in step 5 dangles, Grav
+    # fails to write the salt at boot, and every request 500s — the
+    # 2026-08-14 production incident, which stayed invisible until the
+    # post-swap smoke probe because the CLI cache-clear never resolves a
+    # per-host env.
+    #
+    # Prefer the PREVIOUS RELEASE'"'"'s real file: on the first deploy after
+    # the env dir was renamed from the short tier name to the host name,
+    # that file holds the salt the tier has been running on, and every
+    # live session is bound to it. Only mint a new one when the tier
+    # genuinely has none. Mirrors bv_seed_security_salt (single contract).
+    ENVSEC="$DD/$VDIR/user/env/$DEPLOY_ENV/config/security.yaml"
+    if [ ! -f "$ENVSEC" ]; then
+        mkdir -p "$DD/$VDIR/user/env/$DEPLOY_ENV/config"
+        PREVSEC="$RDIR/$PREV/user/env/$DEPLOY_ENV/config/security.yaml"
+        if [ -n "$PREV" ] && [ -f "$PREVSEC" ] && [ ! -L "$PREVSEC" ]; then
+            cp -p "$PREVSEC" "$ENVSEC"
+            chmod 644 "$ENVSEC"
+            echo "  ✓ Salt: migrated from release $PREV into $ENVSEC"
+        else
+            SALT="$(od -An -tx1 -N16 /dev/urandom 2>/dev/null | tr -d " \n")"
+            if [ -z "$SALT" ]; then
+                echo "FATAL: could not read randomness for a new salt (/dev/urandom unavailable on the remote)" >&2
+                exit 1
+            fi
+            printf "salt: %s\n" "$SALT" > "$ENVSEC"
+            chmod 644 "$ENVSEC"
+            echo "  ✓ Salt: generated fresh for tier $DEPLOY_ENV (none existed) at $ENVSEC"
+        fi
+    fi
+' RD="$RELEASE_DIR" DD="$DATA_DIR" DEPLOY_ENV="$ENV_HOST" \
+  RDIR="$RELEASES_DIR" PREV="${PREV_RELEASE_ID:-}"
 
 # ── Step 5: Wire release symlinks ─────────────────────────────────────
 echo "→ Step 5/8: Wiring release symlinks (per §Symlink contract)..."
@@ -965,6 +999,39 @@ bv_remote_run '
     E="$ENV_HOST"
 
 echo "  ✓ Symlinks wired"
+
+# Pre-swap gate: every §Symlink-contract link must actually resolve.
+# A link that dangles here is a tier that 500s the instant the swap
+# makes it live, and NOTHING later in this script would notice — the
+# step-7 cache-clear runs through the CLI, which has no HTTP Host and
+# therefore never resolves the per-host env at all. It exits 0 on a
+# release that is already broken for every browser. That is exactly how
+# the 2026-08-14 production 500 got past eight green steps and was
+# caught only by the post-swap smoke probe, with no auto-rollback.
+#
+# email.yaml is deliberately excluded (ABSENT-FILE CONTRACT — the WARN
+# block below covers it). Mirrors bv_verify_release_state_symlinks
+# (single contract); `set -e` turns a non-zero exit here into an abort
+# BEFORE the swap.
+bv_remote_run '
+    missing=""
+    for p in "$RD/user/accounts" \
+             "$RD/user/data" \
+             "$RD/user/config/security.yaml" \
+             "$RD/user/env/$E/config/security.yaml" \
+             "$RD/logs"; do
+        if [ ! -e "$p" ]; then
+            t="$(readlink "$p" 2>/dev/null || echo "<not a symlink>")"
+            echo "FATAL: release state symlink does not resolve: $p -> $t" >&2
+            missing="x$missing"
+        fi
+    done
+    if [ -n "$missing" ]; then
+        echo "FATAL: refusing to swap a release that cannot boot." >&2
+        exit 1
+    fi
+' RD="$RELEASE_DIR" E="$ENV_HOST"
+echo "  ✓ State symlinks resolve"
 
 # Absent-file surfacing (WI-1): email.yaml is its own state category —
 # operator-provisioned, must-be-present-to-function, but NOT fatal-to-boot.

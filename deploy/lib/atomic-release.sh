@@ -96,6 +96,36 @@ bv_validate_tier_name() {
     esac
 }
 
+# Validate the env DIRECTORY name — the `<name>` in `user/env/<name>/`.
+#
+# That name is the request HOSTNAME, not the tier name: Grav resolves
+# its environment from the Host header, so production reads
+# `user/env/www.byvaerkstederne.dk/`, not `user/env/prod/`. deploy.sh
+# has passed the host since the env-dir naming fix, but these helpers
+# still demanded a tier name — so every fixture test exercised
+# `user/env/staging/` while the deploy wrote
+# `user/env/staging.hackersbychoice.dk/`. The library modelled a layout
+# production had stopped using, which is why no test could have caught
+# the dangling per-host salt link that took prod down on 2026-08-14.
+#
+# Same traversal defence as bv_validate_tier_name — empty, '/', '..'
+# and leading '-'/'.' are all rejected — just not a closed set.
+bv_validate_env_dir_name() {
+    local name="${1:-}"
+    case "$name" in
+        ''|*/*|*..*|-*|.*)
+            echo "FATAL: env dir name '$name' must be a single safe path component (no '/', no '..', not empty, no leading '-' or '.')" >&2
+            return 1
+            ;;
+    esac
+    if ! printf '%s' "$name" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]*$'; then
+        echo "FATAL: env dir name '$name' contains characters outside [A-Za-z0-9._-]" >&2
+        return 1
+    fi
+    printf '%s\n' "$name"
+    return 0
+}
+
 bv_validate_release_id() {
     local rid="${1:-}"
     # Defence in depth: explicit checks for the patterns the regex
@@ -274,7 +304,8 @@ bv_bootstrap_data_dir() {
     local env="${2:?env required}"
 
     # env name was already validated by the caller, but be paranoid.
-    if ! bv_validate_tier_name "$env" >/dev/null; then
+    # Accepts a tier name OR the host-shaped env dir the deploy writes.
+    if ! bv_validate_env_dir_name "$env" >/dev/null; then
         return 1
     fi
 
@@ -293,10 +324,128 @@ bv_bootstrap_data_dir() {
     fi
 }
 
+# Seed a security.yaml salt file at <target>, if and only if it is
+# absent. Never overwrites: the salt in a live data dir is load-bearing
+# state (sessions, remember-me tokens and nonces are bound to it), so
+# rotating it silently logs every member out.
+#
+# Order of preference, and why:
+#
+#   1. target exists            → no-op. The tier already has a salt.
+#   2. <source> is a real file  → copy it. This is the migration path:
+#                                 the salt used to live INSIDE the
+#                                 release dir, so on the first deploy
+#                                 that moves it into <tier>data/ we
+#                                 carry the existing value across
+#                                 rather than minting a new one.
+#   3. otherwise                → generate. A genuinely fresh tier has
+#                                 no salt to preserve; Grav would
+#                                 generate one on first request — if it
+#                                 could write, which through a dangling
+#                                 symlink it cannot.
+#
+# A SYMLINK at <source> is deliberately not accepted as a source: on a
+# wired release it points at the very file we are seeding, so copying
+# it would either be a no-op or read a dangling link.
+#
+# Prints one line describing what it did (nothing when it did nothing),
+# so the deploy log records salt provenance for the audit trail.
+bv_seed_security_salt() {
+    local target="${1:?target security.yaml path required}"
+    local source="${2:-}"
+
+    if [ -f "$target" ]; then
+        return 0
+    fi
+
+    local dir
+    dir="$(dirname "$target")"
+    mkdir -p "$dir" || return 1
+
+    if [ -n "$source" ] && [ -f "$source" ] && [ ! -L "$source" ]; then
+        cp -p "$source" "$target" || return 1
+        chmod 644 "$target" 2>/dev/null || true
+        echo "migrated existing salt into $target"
+        return 0
+    fi
+
+    local salt
+    salt="$(od -An -tx1 -N16 /dev/urandom 2>/dev/null | tr -d ' \n')"
+    if [ -z "$salt" ]; then
+        echo "FATAL: could not read randomness for a new salt (/dev/urandom unavailable)" >&2
+        return 1
+    fi
+    printf 'salt: %s\n' "$salt" > "$target" || return 1
+    chmod 644 "$target" 2>/dev/null || true
+    echo "generated a fresh salt at $target"
+}
+
+# Verify every §Symlink-contract link in a freshly wired release dir
+# actually resolves. Called BEFORE the atomic swap: a link that dangles
+# here is a tier that 500s the moment the swap makes it live.
+#
+# The per-host env security.yaml is in the must-resolve set for a
+# reason the 2026-08-14 production incident paid for: Grav's
+# Setup::check() writes the salt file at boot when it is missing, and a
+# write through a dangling symlink is a RuntimeException before any
+# page renders. `bin/grav clearcache` does not catch it — the CLI has
+# no HTTP Host, so it never resolves the per-host env at all and exits
+# 0 on a tier that is already broken for every browser.
+#
+# email.yaml stays OUT of the must-resolve set: it is operator-
+# provisioned, absent on an unprovisioned tier by design, and only
+# degrades mail (ABSENT-FILE CONTRACT — deploy.sh WARNs separately).
+#
+# Reports EVERY broken link, not just the first, so one deploy-and-fix
+# cycle is enough.
+bv_verify_release_state_symlinks() {
+    local release_dir="${1:?release dir required}"
+    local env="${2:?env required}"
+
+    if ! bv_validate_env_dir_name "$env" >/dev/null; then
+        return 1
+    fi
+    if [ ! -d "$release_dir" ]; then
+        echo "FATAL: release dir '$release_dir' does not exist" >&2
+        return 1
+    fi
+
+    local sym path target bad=0
+    for sym in \
+        "user/accounts" \
+        "user/data" \
+        "user/config/security.yaml" \
+        "user/env/$env/config/security.yaml" \
+        "logs"
+    do
+        path="$release_dir/$sym"
+        # -e follows symlinks, so `! -e` covers both "dangling link" and
+        # "nothing here at all".
+        if [ ! -e "$path" ]; then
+            target="$(readlink "$path" 2>/dev/null || echo "<not a symlink>")"
+            echo "FATAL: release state symlink does not resolve: $sym -> $target" >&2
+            bad=$((bad+1))
+        fi
+    done
+
+    if [ "$bad" -gt 0 ]; then
+        echo "FATAL: $bad §Symlink-contract target(s) missing — refusing to swap a release that cannot boot." >&2
+        return 1
+    fi
+    return 0
+}
+
 # Wire the five symlinks from §Symlink contract inside the release
 # dir. All targets are RELATIVE — no absolute paths leak in. ln -sfn
-# is idempotent; missing data targets are tolerated (Grav regenerates
-# security.yaml on first request).
+# is idempotent.
+#
+# Missing data targets are NOT tolerated for the security.yaml pair —
+# an earlier version of this comment claimed "Grav regenerates
+# security.yaml on first request", which is only half true: Grav tries,
+# and a write through a dangling symlink is a fatal RuntimeException.
+# bv_seed_security_salt makes sure the target exists before wiring, and
+# bv_verify_release_state_symlinks refuses the swap if one still
+# dangles. email.yaml is the one link allowed to dangle.
 #
 # The four versioned symlinks (accounts, data, and the two
 # security.yaml files) resolve into <tier>data/<vdir>/...; <vdir>
@@ -338,7 +487,7 @@ bv_wire_release_symlinks() {
     # component).
     local vdir="${4-v0}"
 
-    if ! bv_validate_tier_name "$env" >/dev/null; then
+    if ! bv_validate_env_dir_name "$env" >/dev/null; then
         return 1
     fi
     # vdir becomes a path component in every versioned symlink target.
