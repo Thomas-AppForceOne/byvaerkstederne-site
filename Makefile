@@ -586,6 +586,7 @@ test-deploy: ## Run deploy-script regression tests (lint + unit + atomic-layout 
 	@bash tests/deploy/unit-ssh-auth.sh
 	@bash tests/deploy/unit-age-keychain.sh
 	@bash tests/deploy/excludes-preserve-live-state.sh
+	@bash tests/deploy/unit-state-symlink-guard.sh
 	@bash tests/deploy/atomic-layout.sh
 	@bash tests/deploy/rollback.sh
 	@bash tests/deploy/migrate.sh
