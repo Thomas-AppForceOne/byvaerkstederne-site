@@ -261,6 +261,64 @@ final class FeatureFlagCatalogueTest extends TestCase
         );
     }
 
+    /**
+     * Hosts that reach a tier without being its canonical name: production's
+     * bare apex, and the one.com account root under which dev/test/staging
+     * live as folders. Grav resolves its environment from the Host header, so
+     * each of these needs its own profile — a Host with no user/env/<host>/
+     * directory falls back to user/config/features.yaml, the LOCAL profile
+     * where every flag is ON.
+     *
+     * @return array<string,array{0:string}>
+     */
+    public static function nonCanonicalHosts(): array
+    {
+        return [
+            'production apex'            => ['byvaerkstederne.dk'],
+            'one.com account root'       => ['hackersbychoice.dk'],
+            'one.com account root (www)' => ['www.hackersbychoice.dk'],
+        ];
+    }
+
+    /**
+     * These profiles must fail CLOSED. The canonical-host redirect in the
+     * generated .htaccess should mean nobody arrives under these names at
+     * all; this is the second layer, for the day that redirect is lost.
+     *
+     * On 2026-08-15, before these profiles existed, production's apex served
+     * /vedtaegter, /privatlivspolitik, /referater and /presse with 200 while
+     * www 404'd all four — the all-on developer profile, in production.
+     *
+     * @dataProvider nonCanonicalHosts
+     */
+    public function testNonCanonicalHostProfileFailsClosed(string $host): void
+    {
+        // assertFileExists first: loadProfileYaml() returns null for a missing
+        // file, and null resolves every flag false — so without this the test
+        // would pass just as happily if someone deleted the profile.
+        $this->assertFileExists(
+            self::envRoot() . "/{$host}/config/features.yaml",
+            "{$host} reaches a tier but has no profile — it would fall back to the all-on developer defaults."
+        );
+
+        $enabled = self::loadProfileYaml($host);
+        $this->assertTrue(
+            $enabled === null || $enabled === [],
+            "{$host} must declare an empty enabled map — a non-canonical host enables nothing."
+        );
+
+        $logger = new ArrayLogger();
+        $store = new FlagStore($enabled, $logger, $host);
+        foreach (self::CATALOGUE as $flagValue) {
+            $case = FeatureFlag::from($flagValue);
+            $this->assertFalse(
+                $store->isEnabled($case),
+                "{$host} must not enable `{$flagValue}`."
+            );
+        }
+        $this->assertSame([], $logger->warnings(), "{$host} profile must load without warnings.");
+    }
+
     public function testTestTierYamlPayloadIsFlagMetadataOnly(): void
     {
         $this->assertFlagPayloadIsMetadataOnly('test.hackersbychoice.dk');
