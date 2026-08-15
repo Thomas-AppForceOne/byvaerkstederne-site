@@ -93,7 +93,6 @@ const FLAG_ROUTES = {
   bug_report: ['/bug-report', '/bug-report-submit'],
   press_page: ['/presse'],
   minutes_archive: ['/referater'],
-  workshop_calendar: ['/vaerkstedskalenderen'],
   contact_page: ['/kontakt'],
   statutes_page: ['/vedtaegter'],
   privacy_policy: ['/privatlivspolitik'],

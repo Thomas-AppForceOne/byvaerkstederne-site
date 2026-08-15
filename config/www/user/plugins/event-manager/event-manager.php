@@ -225,9 +225,6 @@ class EventManagerPlugin extends Plugin
      */
     private function enforceManagementAccess(string $capability): void
     {
-        if (!$this->featureEnabled()) {
-            return; // the page's `feature:` gate serves the 404
-        }
         $user = $this->grav['user'] ?? null;
         if (!$user || !$user->authenticated || !$user->authorized) {
             return; // anonymous: login plugin's access gate takes over
@@ -242,14 +239,10 @@ class EventManagerPlugin extends Plugin
      * retired — event details are shown inline on the calendar (card
      * expansion), so any /begivenheder/<key> URL redirects to the calendar.
      * Redirecting every key uniformly (published, unpublished, unknown alike)
-     * means no event's existence leaks via a distinct 404 (§8.2). Feature off
-     * still falls through to the natural themed 404.
+     * means no event's existence leaks via a distinct 404 (§8.2).
      */
     private function resolveDetailRoute(string $key): void
     {
-        if (!$this->featureEnabled()) {
-            return; // feature off → natural themed 404 (the page's `feature:` gate)
-        }
         $this->grav->redirect('/vaerkstedskalenderen', 302);
     }
 
@@ -265,9 +258,6 @@ class EventManagerPlugin extends Plugin
      */
     private function resolveKeyedManagementRoute(string $action, string $key): void
     {
-        if (!$this->featureEnabled()) {
-            return; // no page at this route → natural themed 404
-        }
         if (!preg_match(self::KEY_PATTERN, $key)) {
             return;
         }
@@ -316,15 +306,14 @@ class EventManagerPlugin extends Plugin
             return;
         }
 
-        // 1. Feature-flag gate — before any payload parsing. Belt to the
-        //    page-level gate: a disabled feature never processes a POST. The
-        //    CRUD actions gate on event_management; the RSVP toggle and the
-        //    image upload (part of the details feature, §3/§5/§6) additionally
-        //    require event_rsvp — either off ⇒ the same no-leak 404.
-        $flagOk = in_array($action, ['rsvp', 'upload'], true)
-            ? $this->rsvpFeatureEnabled()
-            : $this->featureEnabled();
-        if (!$flagOk) {
+        // 1. Feature-flag gate — before any payload parsing. Only the RSVP
+        //    toggle and the image upload (part of the details feature,
+        //    §3/§5/§6) still carry one: they gate on event_rsvp, and off ⇒ a
+        //    no-leak 404. The CRUD actions used to gate on event_management
+        //    as well; that flag graduated to every tier and was retired, so
+        //    they now rest on the authentication and capability checks below
+        //    — which were always the real boundary.
+        if (in_array($action, ['rsvp', 'upload'], true) && !$this->rsvpFeatureEnabled()) {
             $this->sendFlagDisabled404();
         }
 
@@ -1047,22 +1036,13 @@ class EventManagerPlugin extends Plugin
     }
 
     /**
-     * Container read of the FlagStore singleton — profile resolution stays
-     * identical to the rest of the app. Fails open only if the feature-flags
-     * plugin is missing/mis-registered (same posture as roadmap/bug-report).
-     */
-    private function featureEnabled(): bool
-    {
-        $store = $this->grav['feature_flags'] ?? null;
-        if (!$store instanceof FlagStoreInterface) {
-            return true;
-        }
-        return $store->isEnabled(FeatureFlag::EventManagement);
-    }
-
-    /**
-     * RSVP gate: both event_rsvp AND event_management must be on (§3/§6).
-     * Same fail-open-if-missing posture as featureEnabled().
+     * RSVP gate (§3/§6). Container read of the FlagStore singleton — profile
+     * resolution stays identical to the rest of the app. Fails open only if
+     * the feature-flags plugin is missing/mis-registered (same posture as
+     * roadmap/bug-report).
+     *
+     * Used to require event_management as well; that flag graduated to every
+     * tier and was retired, so event_rsvp is the whole gate now.
      */
     private function rsvpFeatureEnabled(): bool
     {
@@ -1070,8 +1050,7 @@ class EventManagerPlugin extends Plugin
         if (!$store instanceof FlagStoreInterface) {
             return true;
         }
-        return $store->isEnabled(FeatureFlag::EventRsvp)
-            && $store->isEnabled(FeatureFlag::EventManagement);
+        return $store->isEnabled(FeatureFlag::EventRsvp);
     }
 
     /** The signup store, bound to user/data/flex-objects/event-signups.yaml. */

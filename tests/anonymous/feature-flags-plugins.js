@@ -27,9 +27,6 @@
  *     event_highlight            -> GET  / → no event highlight module
  *     press_page                 -> GET  /presse → 404
  *     minutes_archive            -> GET  /referater → 404
- *     workshop_calendar          -> GET  /vaerkstedskalenderen → 404
- *     workshop_calendar_filters  -> GET  / → no calendar-filter anchors
- *     workshop_calendar_featured -> GET  / → no featured-calendar markup
  *     press_assets_download      -> GET  / → no press-asset download anchors
  *     press_stats                -> GET  / → no press-stats markup
  *     contact_page               -> GET  /kontakt → 404
@@ -447,45 +444,6 @@ const FLAG_PROBES = [
     },
   },
   {
-    flag: 'workshop_calendar',
-    desc: '/vaerkstedskalenderen 404 under public-demo; reachable under internal',
-    async publicDemo(ctx) {
-      const r = await ctx.get('/vaerkstedskalenderen', { maxRedirects: 0 });
-      expect(r.status()).toBe(404);
-    },
-    async internal(ctx) {
-      const r = await ctx.get('/vaerkstedskalenderen', { maxRedirects: 0 });
-      expect([200, 301, 302].includes(r.status())).toBe(true);
-    },
-  },
-  {
-    flag: 'workshop_calendar_filters',
-    desc: 'calendar filters sub-module absent from public-demo calendar surface',
-    async publicDemo(ctx) {
-      // Under public-demo, parent workshop_calendar is gated so the
-      // route 404s — the absence of filter markup is implied. We still
-      // assert the 404 so the flag name appears on a real probe.
-      const r = await ctx.get('/vaerkstedskalenderen', { maxRedirects: 0 });
-      expect(r.status()).toBe(404);
-    },
-    async internal(ctx) {
-      const r = await ctx.get('/vaerkstedskalenderen', { maxRedirects: 0 });
-      expect([200, 301, 302].includes(r.status())).toBe(true);
-    },
-  },
-  {
-    flag: 'workshop_calendar_featured',
-    desc: 'featured-calendar sub-module absent from public-demo calendar',
-    async publicDemo(ctx) {
-      const r = await ctx.get('/vaerkstedskalenderen', { maxRedirects: 0 });
-      expect(r.status()).toBe(404);
-    },
-    async internal(ctx) {
-      const r = await ctx.get('/vaerkstedskalenderen', { maxRedirects: 0 });
-      expect([200, 301, 302].includes(r.status())).toBe(true);
-    },
-  },
-  {
     flag: 'press_assets_download',
     desc: 'press-asset download surface reachable only under internal (parent /presse gated in public-demo)',
     async publicDemo(ctx) {
@@ -772,7 +730,6 @@ const FLAGGED_ROUTES = [
   '/foreslaa-feature',
   '/presse',
   '/referater',
-  '/vaerkstedskalenderen',
   '/kontakt',
   '/vedtaegter',
 ];

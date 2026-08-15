@@ -9,7 +9,7 @@
                read, same as the footer entry); creating an event happens from
                the Arrangørpanel itself, so the calendar no longer carries an
                "Opret begivenhed" button. #}
-            {% set _can_read = feature_enabled('event_management') and (grav.user.authorize('admin.events.read') or grav.user.authorize('admin.super')) %}
+            {% set _can_read = grav.user.authorize('admin.events.read') or grav.user.authorize('admin.super') %}
             {% if _can_read %}
                 <div class="bv-event-list__head-actions">
                     <a class="bv-btn bv-btn--primary" href="/begivenheder/arrangoerpanel" data-testid="calendar-mine-link">Arrangørpanel</a>

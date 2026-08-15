@@ -9,8 +9,11 @@
  * Grav's environment-overlay layer keys feature-flag profiles by the
  * incoming HTTP Host header (user/env/<host>/config/features.yaml). The
  * default profile at user/config/features.yaml leaves every flag commented
- * out — so /vaerkstedskalenderen, which is gated on `workshop_calendar`,
- * 404s for any client whose Host is plain `127.0.0.1` or `localhost`.
+ * out, so a flagged surface 404s for any client whose Host is plain
+ * `127.0.0.1` or `localhost`. (/vaerkstedskalenderen itself no longer
+ * depends on this — `workshop_calendar` graduated to every tier and was
+ * retired — but the mobile routes still cross flagged surfaces, and the
+ * Host mapping below is what keeps the profile deterministic.)
  *
  * The spec/contract requires probing /vaerkstedskalenderen as one of the
  * four mobile routes, so the mobile-chromium project in playwright.config.js

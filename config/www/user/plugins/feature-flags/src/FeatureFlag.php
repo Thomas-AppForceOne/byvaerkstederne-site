@@ -26,9 +26,6 @@ enum FeatureFlag: string
     case EventHighlight = 'event_highlight';
     case PressPage = 'press_page';
     case MinutesArchive = 'minutes_archive';
-    case WorkshopCalendar = 'workshop_calendar';
-    case WorkshopCalendarFilters = 'workshop_calendar_filters';
-    case WorkshopCalendarFeatured = 'workshop_calendar_featured';
     case PressAssetsDownload = 'press_assets_download';
     case PressStats = 'press_stats';
     case ContactPage = 'contact_page';
@@ -41,18 +38,9 @@ enum FeatureFlag: string
     case EventRsvp = 'event_rsvp';
     case WorkshopProjectBlueprints = 'workshop_project_blueprints';
     case WorkshopWorkdaySignup = 'workshop_workday_signup';
-    case KulturhusProgram = 'kulturhus_program';
-    case KulturhusVolunteer = 'kulturhus_volunteer';
-    case DonationMobilepay = 'donation_mobilepay';
     case GearDonation = 'gear_donation';
     case SocialMediaLinks = 'social_media_links';
     case MakerspaceMeetingLink = 'makerspace_meeting_link';
-
-    // --- Frontend event CRUD (frontend_event_crud_specification.md) ---
-    // Gates the entire event-management surface: the /begivenheder/* routes
-    // (detail, dashboard, create/edit/delete forms) and every mutating
-    // handler in the event-manager plugin.
-    case EventManagement = 'event_management';
 
     // --- Account self-service (account_self_service_specification.md) ---
     // Gates the header account dropdown, the /konto page, and every
@@ -82,9 +70,6 @@ enum FeatureFlag: string
             'event_highlight',
             'press_page',
             'minutes_archive',
-            'workshop_calendar',
-            'workshop_calendar_filters',
-            'workshop_calendar_featured',
             'press_assets_download',
             'press_stats',
             'contact_page',
@@ -93,13 +78,9 @@ enum FeatureFlag: string
             'event_rsvp',
             'workshop_project_blueprints',
             'workshop_workday_signup',
-            'kulturhus_program',
-            'kulturhus_volunteer',
-            'donation_mobilepay',
             'gear_donation',
             'social_media_links',
             'makerspace_meeting_link',
-            'event_management',
             'account_self_service',
         ];
     }
