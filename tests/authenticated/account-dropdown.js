@@ -11,9 +11,11 @@
  *   - "Log ud" stays a separate, functional header link;
  *   - the mobile overlay lists the same entries inline;
  *   - anonymous pages carry no menu markup;
- *   - with the flag off the chip renders as today's dead <span> (base-profile
- *     cache-flip, restored in afterAll — the run probes 127.0.0.1, which
- *     resolves the base features.yaml, not the dev host profile).
+ *   - with the flag off the chip renders as today's dead <span> (profile
+ *     cache-flip, restored in afterAll — the run probes 127.0.0.1, which Grav
+ *     aliases to the `localhost` environment, so the flip has to land in
+ *     user/env/localhost/, not in the empty fail-closed fallback at
+ *     user/config/features.yaml — see ADR-007).
  *
  * Read-only against the seeded pw-test-user.
  */
@@ -26,8 +28,8 @@ const { login, hasUserPassword } = require('../helpers/auth');
 const { discoverGravEnv } = require(path.join(__dirname, '..', '..', 'scripts', 'discover-grav-port.js'));
 
 const WORKTREE = path.resolve(__dirname, '..', '..');
-const BASE_FEATURES_YAML = path.join(
-  WORKTREE, 'config', 'www', 'user', 'config', 'features.yaml',
+const LOCALHOST_FEATURES_YAML = path.join(
+  WORKTREE, 'config', 'www', 'user', 'env', 'localhost', 'config', 'features.yaml',
 );
 
 function clearGravCache() {
@@ -144,10 +146,10 @@ test.describe('account self-service: header dropdown', () => {
     let originalYaml = '';
 
     test.beforeAll(() => {
-      originalYaml = fs.readFileSync(BASE_FEATURES_YAML, 'utf8');
+      originalYaml = fs.readFileSync(LOCALHOST_FEATURES_YAML, 'utf8');
       expect(originalYaml).toContain('account_self_service: "true"');
       fs.writeFileSync(
-        BASE_FEATURES_YAML,
+        LOCALHOST_FEATURES_YAML,
         originalYaml.replace(/(\n\s*account_self_service:\s*)"true"/, '$1"false"'),
         'utf8',
       );
@@ -157,7 +159,7 @@ test.describe('account self-service: header dropdown', () => {
     test.afterAll(() => {
       // Belt-and-braces restore — the file must never stay flipped.
       try {
-        fs.writeFileSync(BASE_FEATURES_YAML, originalYaml, 'utf8');
+        fs.writeFileSync(LOCALHOST_FEATURES_YAML, originalYaml, 'utf8');
         clearGravCache();
       } catch (_) { /* best-effort */ }
     });

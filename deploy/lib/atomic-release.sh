@@ -207,11 +207,17 @@ EOF
 #   * no blanket `*.md` — page content is markdown; only specific
 #     CHANGELOG* doc filenames are dropped.
 #   * composer.json is kept (only composer.lock is dropped).
+#   * /env/localhost/ is the developer's ALL-ON feature-flag profile. It is
+#     inert on a tier (nothing reaches a server with Host: localhost), but
+#     shipping an all-on profile to production is one refactor away from
+#     being dangerous, so it stays on the developer machine. See
+#     decisions/ADR-007-feature-flag-fallback-fails-closed.md.
 bv_staging_user_excludes() {
     cat <<'EOF'
 --exclude=.DS_Store
 --exclude=/themes/quark/
 --exclude=/plugins/feature-flags/vendor/
+--exclude=/env/localhost/
 --exclude=tests/
 --exclude=test/
 --exclude=.github/

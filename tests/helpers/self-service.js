@@ -312,23 +312,31 @@ function clearGravCache() {
 }
 
 /**
- * Flip a base-profile flag (config/www/user/config/features.yaml — what the
- * 127.0.0.1 test origin resolves) to "false" + clear the cache. Returns a
- * restore function; callers MUST invoke it in finally. Throws if the flag
- * isn't currently "true", so a double flip can never persist.
+ * Flip a flag to "false" in the profile the test origin actually resolves,
+ * then clear the cache. Returns a restore function; callers MUST invoke it in
+ * finally. Throws if the flag isn't currently "true", so a double flip can
+ * never persist.
+ *
+ * That profile is user/env/localhost/config/features.yaml: the suite reaches
+ * Grav over 127.0.0.1, and Grav aliases 127.0.0.1 and ::1 to `localhost`
+ * (Setup::$environments). It used to be user/config/features.yaml — that file
+ * is now the deliberately-empty fail-closed fallback (ADR-007) and flipping a
+ * flag there changes nothing the browser sees.
  *
  * @param {string} flag
  * @returns {() => void}
  */
-function withBaseFlagOff(flag) {
+function withLocalhostFlagOff(flag) {
   if (!/^[a-z0-9_]+$/.test(flag)) {
     throw new Error(`self-service: '${flag}' is not a flag identifier`);
   }
-  const yamlPath = path.join(REPO_ROOT, 'config', 'www', 'user', 'config', 'features.yaml');
+  const yamlPath = path.join(
+    REPO_ROOT, 'config', 'www', 'user', 'env', 'localhost', 'config', 'features.yaml',
+  );
   const original = fs.readFileSync(yamlPath, 'utf8');
   const flipped = original.replace(new RegExp(`(\\n\\s*${flag}:\\s*)"true"`), '$1"false"');
   if (flipped === original) {
-    throw new Error(`self-service: flag '${flag}' is not "true" in the base profile`);
+    throw new Error(`self-service: flag '${flag}' is not "true" in the localhost profile`);
   }
   fs.writeFileSync(yamlPath, flipped, 'utf8');
   clearGravCache();
@@ -517,7 +525,7 @@ module.exports = {
   makeAccountSuper,
   footprintGrep,
   clearGravCache,
-  withBaseFlagOff,
+  withLocalhostFlagOff,
   withoutReachableSupers,
   resetEmailChangeThrottle,
   loginAs,

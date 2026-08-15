@@ -31,7 +31,7 @@ const {
   removeDisposableAccount,
   readAccountYaml,
   setDeletionMarker,
-  withBaseFlagOff,
+  withLocalhostFlagOff,
   loginAs,
   rememberMeFileExists,
 } = require('../helpers/self-service');
@@ -135,7 +135,7 @@ test.describe('account self-service: deletion request + reinstatement', () => {
     // deletes them. A future "cleanup" that adds the flag check must fail
     // here.
     const acct = createDisposableAccount({ tag: 'df' });
-    const restoreFlag = withBaseFlagOff('account_self_service');
+    const restoreFlag = withLocalhostFlagOff('account_self_service');
     try {
       // Marker inside the window (as if requested while the flag was on).
       setDeletionMarker(acct.username, new Date().toISOString().replace(/\.\d+Z$/, 'Z'));

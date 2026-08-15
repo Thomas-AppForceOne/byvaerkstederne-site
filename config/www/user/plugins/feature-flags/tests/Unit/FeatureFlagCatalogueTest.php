@@ -203,6 +203,74 @@ final class FeatureFlagCatalogueTest extends TestCase
     }
 
     /**
+     * The FALLBACK — user/config/features.yaml — must fail closed.
+     *
+     * Grav loads it when the request Host matches no user/env/<host>/
+     * directory: an unknown hostname, a bare apex, a health check, a CLI run
+     * (Grav resolves those to the environment `cli`). It used to hold the
+     * developer's all-on profile, which made every unprofiled entrance an
+     * all-features entrance. On 2026-08-15 production's apex served
+     * /vedtaegter, /privatlivspolitik, /referater and /presse with 200 while
+     * www 404'd all four — same release, same docroot, different Host.
+     *
+     * See decisions/ADR-007-feature-flag-fallback-fails-closed.md.
+     */
+    public function testFallbackProfileFailsClosed(): void
+    {
+        $path = dirname(__DIR__, 4) . '/config/features.yaml';
+        $this->assertFileExists($path, 'The fallback profile must exist — Grav reads it for every unprofiled Host.');
+
+        $parsed = Yaml::parseFile($path);
+        $this->assertIsArray($parsed, 'The fallback profile must parse to an array.');
+        $this->assertSame(['enabled'], array_keys($parsed), 'The fallback must expose exactly one top-level key `enabled`.');
+
+        $enabled = $parsed['enabled'];
+        $this->assertTrue(
+            $enabled === null || $enabled === [],
+            'The fallback must declare an EMPTY enabled map. A flag belongs in the profile of the host that should see it.'
+        );
+
+        $logger = new ArrayLogger();
+        $store = new FlagStore($enabled, $logger, 'unprofiled.example');
+        foreach (self::CATALOGUE as $flagValue) {
+            $this->assertFalse(
+                $store->isEnabled(FeatureFlag::from($flagValue)),
+                "An unprofiled Host must not enable `{$flagValue}`."
+            );
+        }
+        $this->assertSame([], $logger->warnings(), 'An empty fallback must load without warnings.');
+    }
+
+    /**
+     * The localhost profile is where the developer's all-on world lives now.
+     * Grav aliases 127.0.0.1 and ::1 to `localhost` (Setup::$environments), so
+     * this is what `make start`, `make test` and `make test-auth` resolve —
+     * every one of them reaches Grav over 127.0.0.1.
+     *
+     * Same {total}/{total} rule as the dev tier: a new enum case that forgets
+     * its localhost line silently disables itself for every local run and for
+     * the whole browser suite, which would show up as a pile of unrelated
+     * failures rather than as this one.
+     */
+    public function testLocalhostProfileEnablesAllCatalogueFlags(): void
+    {
+        $enabled = self::loadProfileYaml('localhost');
+        $this->assertIsArray($enabled, 'localhost features.yaml must parse to an array.');
+
+        $logger = new ArrayLogger();
+        $store = new FlagStore($enabled, $logger, 'localhost');
+
+        $total = count(self::CATALOGUE);
+        foreach (self::CATALOGUE as $flagValue) {
+            $this->assertTrue(
+                $store->isEnabled(FeatureFlag::from($flagValue)),
+                "Localhost (local dev + both Playwright suites) must enable `{$flagValue}` ({$total}/{$total} rule)."
+            );
+        }
+        $this->assertSame([], $logger->warnings(), 'Localhost profile must load cleanly with zero FlagStore warnings.');
+    }
+
+    /**
      * The all-off FIXTURE profile the browser suites rely on must actually
      * be all-off — this is the only profile with a pinned flag state
      * besides dev, and it is never deployed.

@@ -1,0 +1,51 @@
+# Local / Docker / CI profile — the all-on tier.
+#
+# Active for requests whose Host is `localhost`. Grav aliases `127.0.0.1` and
+# `::1` to `localhost` (Setup::$environments), so `make start`, `make test` and
+# `make test-auth` — all of which reach Grav over 127.0.0.1 — resolve here.
+#
+# This content used to live in user/config/features.yaml, the profile Grav
+# falls back to when a Host matches no env directory. That made the fallback
+# ALL-ON: on 2026-08-15 production's bare apex, which has no env directory,
+# served /vedtaegter, /privatlivspolitik, /referater and /presse with 200 while
+# www 404'd all four. The fallback now fails closed and the developer's all-on
+# world lives here, where only a localhost request can reach it. See
+# decisions/ADR-007-feature-flag-fallback-fails-closed.md.
+#
+# Deliberately NOT deployed: bv_staging_user_excludes drops this directory from
+# the package, so the all-on profile never leaves a developer machine.
+#
+# The local dev machine is the "dev" environment and sees every feature surface
+# so tests, demos and manual walkthroughs keep working — every flag is ON here.
+# Deployed tiers narrow this down via their own host-scoped profiles, and only
+# the dev TIER is all-on:
+#   - user/env/dev.hackersbychoice.dk/config/features.yaml      → all ON
+#   - user/env/test.hackersbychoice.dk/config/features.yaml     → selective
+#   - user/env/staging.hackersbychoice.dk/config/features.yaml  → all OFF
+#   - user/env/www.byvaerkstederne.dk/config/features.yaml      → all OFF
+#
+# Values MUST be the literal quoted strings `"true"` or `"false"`. Any other
+# shape (bare YAML boolean, `TRUE`, integer, null) resolves to `false` and logs
+# a warning per the FlagStore strict-string rule. Secrets, credentials, or API
+# keys must never appear here.
+enabled:
+  roadmap: "true"
+  feature_suggestion: "true"
+  bug_report: "true"
+  community_footer_column: "true"
+  newsletter_signup: "true"
+  event_highlight: "true"
+  press_page: "true"
+  minutes_archive: "true"
+  press_assets_download: "true"
+  press_stats: "true"
+  contact_page: "true"
+  statutes_page: "true"
+  privacy_policy: "true"
+  event_rsvp: "true"
+  workshop_project_blueprints: "true"
+  workshop_workday_signup: "true"
+  gear_donation: "true"
+  social_media_links: "true"
+  makerspace_meeting_link: "true"
+  account_self_service: "true"
