@@ -47,9 +47,6 @@ final class FeatureFlagCatalogueTest extends TestCase
         'event_highlight',
         'press_page',
         'minutes_archive',
-        'workshop_calendar',
-        'workshop_calendar_filters',
-        'workshop_calendar_featured',
         'press_assets_download',
         'press_stats',
         'contact_page',
@@ -58,13 +55,9 @@ final class FeatureFlagCatalogueTest extends TestCase
         'event_rsvp',
         'workshop_project_blueprints',
         'workshop_workday_signup',
-        'kulturhus_program',
-        'kulturhus_volunteer',
-        'donation_mobilepay',
         'gear_donation',
         'social_media_links',
         'makerspace_meeting_link',
-        'event_management',
         'account_self_service',
     ];
 
@@ -114,27 +107,59 @@ final class FeatureFlagCatalogueTest extends TestCase
     }
 
     /**
-     * WI-1 (outstanding-spec-cleanup): the `workshop_detail_pages` flag gated
-     * nothing (the four /vaerksteder/* pages carried no `feature:` key), so it
-     * was retired. This pins it retired: it is neither a valid enum case nor a
-     * catalogue entry, and no per-tier features.yaml still declares it (a
-     * dangling key would warn at runtime as an "unknown feature flag").
+     * Every flag that has been retired, and why. A retired flag must not come
+     * back as an enum case or a catalogue entry, and no per-tier features.yaml
+     * may still declare it — a dangling key warns at runtime as an "unknown
+     * feature flag" on every request.
+     *
+     * Two ways a flag earns retirement:
+     *
+     *   GATED NOTHING — the flag existed but no page, template or handler
+     *   ever consulted it, so the explicit false-list in the prod profile
+     *   advertised a kill switch for a feature that did not exist.
+     *
+     *   GRADUATED — the feature shipped to every tier and the flag stopped
+     *   being a decision. The gate came out of the code with the flag.
+     *
+     * @return array<string,array{0:string,1:string}>
      */
-    public function testRetiredWorkshopDetailPagesFlagStaysRetired(): void
+    public static function retiredFlags(): array
+    {
+        return [
+            // WI-1 (outstanding-spec-cleanup): the four /vaerksteder/* pages
+            // carried no `feature:` key.
+            'workshop_detail_pages'      => ['workshop_detail_pages', 'gated nothing'],
+            // Featured calendar module (_03.featured) was never built.
+            'workshop_calendar_featured' => ['workshop_calendar_featured', 'gated nothing'],
+            // Kulturhus + MobilePay surfaces were never built either.
+            'kulturhus_program'          => ['kulturhus_program', 'gated nothing'],
+            'kulturhus_volunteer'        => ['kulturhus_volunteer', 'gated nothing'],
+            'donation_mobilepay'         => ['donation_mobilepay', 'gated nothing'],
+            // Live on all four tiers since v1.3.0.
+            'workshop_calendar'          => ['workshop_calendar', 'graduated'],
+            'workshop_calendar_filters'  => ['workshop_calendar_filters', 'graduated'],
+            'event_management'           => ['event_management', 'graduated'],
+        ];
+    }
+
+    /**
+     * @dataProvider retiredFlags
+     */
+    public function testRetiredFlagStaysRetired(string $flag, string $reason): void
     {
         $this->assertNull(
-            FeatureFlag::tryFrom('workshop_detail_pages'),
-            '`workshop_detail_pages` was retired — it must not be a valid enum case again.'
+            FeatureFlag::tryFrom($flag),
+            "`{$flag}` was retired ({$reason}) — it must not be a valid enum case again."
         );
-        $this->assertNotContains('workshop_detail_pages', self::CATALOGUE);
+        $this->assertNotContains($flag, self::CATALOGUE);
 
         foreach (['dev.hackersbychoice.dk', 'test.hackersbychoice.dk', 'staging.hackersbychoice.dk', 'www.byvaerkstederne.dk'] as $host) {
             $enabled = self::loadProfileYaml($host);
             if (is_array($enabled)) {
                 $this->assertArrayNotHasKey(
-                    'workshop_detail_pages',
+                    $flag,
                     $enabled,
-                    "{$host} features.yaml must not declare the retired `workshop_detail_pages` flag."
+                    "{$host} features.yaml must not declare the retired `{$flag}` flag."
                 );
             }
         }
@@ -316,7 +341,7 @@ final class FeatureFlagCatalogueTest extends TestCase
             'community_footer_column=int1'    => ['community_footer_column', 1],
             'event_highlight=bool-true'       => ['event_highlight', true],
             'newsletter_signup=yes'           => ['newsletter_signup', 'yes'],
-            'workshop_calendar=null'          => ['workshop_calendar', null],
+            'press_stats=null'                => ['press_stats', null],
             'statutes_page=array'             => ['statutes_page', ['true']],
             'press_assets_download=TRUE'      => ['press_assets_download', 'TRUE'],
         ];

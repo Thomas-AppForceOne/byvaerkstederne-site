@@ -1,7 +1,6 @@
 ---
 title: Rediger begivenhed
 template: event_edit
-feature: event_management
 slug: rediger
 access:
     site.login: true
