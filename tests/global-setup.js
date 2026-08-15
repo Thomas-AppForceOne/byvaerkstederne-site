@@ -30,6 +30,7 @@ const {
   ensureDraftEvent,
   ensureArchivedEvent,
   ensureForeignEvent,
+  ensureLegacyEvent,
   ensureRsvpEvent,
   ensureCapacityEvent,
   ensureInterestEvent,
@@ -104,6 +105,7 @@ module.exports = async function globalSetup() {
     seeded = ensureDraftEvent().seeded || seeded;
     seeded = ensureArchivedEvent().seeded || seeded;
     seeded = ensureForeignEvent().seeded || seeded;
+    seeded = ensureLegacyEvent().seeded || seeded;
     // Event RSVP fixtures back the signup/capacity/interest suites. Start from
     // a clean signup + image state so a prior crashed run can't leave a
     // capacity-1 event already full.

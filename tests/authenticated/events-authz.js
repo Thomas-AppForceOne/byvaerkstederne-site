@@ -11,14 +11,16 @@
  * data store byte-identical.
  *
  * Fixtures (global-setup): ev_fixture_foreign (owner that matches no test
- * account) and ev_fixture_draft/ev_fixture_archived (owner
- * pw-test-org).
+ * account), ev_fixture_draft/ev_fixture_archived (owner pw-test-org) and
+ * ev_fixture_legacy (no owner key at all — the pre-ownership shape, which
+ * EventAuthorizer treats as super-only).
  */
 
 const fs = require('fs');
 const path = require('path');
 const { test, expect } = require('@playwright/test');
 const { login, loginAsOrganizer, hasUserPassword, hasOrganizerPassword } = require('../helpers/auth');
+const { LEGACY_EVENT_ID } = require('../helpers/fixtures');
 
 const EVENTS_YAML = path.resolve(__dirname, '..', '..', 'config', 'www', 'user', 'data', 'flex-objects', 'begivenheder.yaml');
 const AUDIT_LOG = path.resolve(__dirname, '..', '..', 'config', 'www', 'user', 'data', 'flex-objects', 'events-audit.jsonl');
@@ -186,12 +188,16 @@ test.describe('Events — organizer forced browsing (per-object authz)', () => {
   });
 
   test('legacy event with no owner is super-only: organizer update is 403', async ({ page }) => {
+    // ev_fixture_legacy carries no `owner` key. It is seeded by global-setup:
+    // this used to post against `event001` from the sample-content seed
+    // bundle, which `make test-auth` never applies and global teardown wipes,
+    // so the test failed on every second run of the suite.
     await loginAsOrganizer(page);
     const nonce = await organizerNonce(page);
     const before = readEventsFile();
     const response = await page.request.post('/begivenheder/rediger', {
       form: {
-        'data[key]': 'event001',
+        'data[key]': LEGACY_EVENT_ID,
         'data[title]': 'Legacy hijack',
         'data[group]': 'makerspace',
         'data[event_date]': '2030-01-01',
