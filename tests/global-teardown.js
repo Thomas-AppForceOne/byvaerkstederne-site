@@ -29,6 +29,7 @@ const {
   removeDraftEvent,
   removeArchivedEvent,
   removeForeignEvent,
+  removeLegacyEvent,
   removeRsvpEvent,
   removeCapacityEvent,
   removeInterestEvent,
@@ -73,6 +74,7 @@ module.exports = async function globalTeardown() {
   try { removeDraftEvent(); } catch (_) { /* non-fatal */ }
   try { removeArchivedEvent(); } catch (_) { /* non-fatal */ }
   try { removeForeignEvent(); } catch (_) { /* non-fatal */ }
+  try { removeLegacyEvent(); } catch (_) { /* non-fatal */ }
   try { removeRsvpEvent(); } catch (_) { /* non-fatal */ }
   try { removeCapacityEvent(); } catch (_) { /* non-fatal */ }
   try { removeInterestEvent(); } catch (_) { /* non-fatal */ }

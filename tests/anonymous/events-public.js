@@ -180,18 +180,29 @@ test.describe('Events — anonymous management gating (M2 negatives)', () => {
     expect(fs.readFileSync(EVENTS_YAML, 'utf8')).toBe(before);
   });
 
-  test('management routes are 404 when the event_management flag is off (test-tier profile)', async ({ browser }) => {
-    // The test-tier host profile resolves every flag false; Grav picks the
-    // profile from the Host header (same technique as the mobile suite).
+  test('management routes refuse anonymous access under an all-flags-off profile', async ({ browser }) => {
+    // These routes used to 404 here because event_management was off in this
+    // profile. That flag graduated to every tier and was retired, so the
+    // 404 is gone — what must survive is the boundary that was always the
+    // real one: login, then capability. A profile with every flag off must
+    // not turn management surfaces into public pages.
+    //
+    // Grav picks the profile from the Host header (same technique as the
+    // mobile suite).
     const context = await browser.newContext({
       extraHTTPHeaders: { Host: 'flags-off.invalid' },
     });
     try {
       const req = context.request;
-      for (const route of ['/begivenheder/opret', '/begivenheder/arrangoerpanel', '/begivenheder/event001']) {
+      for (const route of ['/begivenheder/opret', '/begivenheder/arrangoerpanel']) {
         const response = await req.get(route, { maxRedirects: 0 });
-        expect(response.status(), `${route} with flag off`).toBe(404);
+        expect([301, 302, 303, 401, 403], `${route} anonymous, flags off`)
+          .toContain(response.status());
       }
+      // A keyed detail URL redirects to the calendar uniformly — published,
+      // unpublished and unknown keys alike, so no event's existence leaks.
+      const detail = await req.get('/begivenheder/event001', { maxRedirects: 0 });
+      expect([301, 302, 303]).toContain(detail.status());
     } finally {
       await context.close();
     }

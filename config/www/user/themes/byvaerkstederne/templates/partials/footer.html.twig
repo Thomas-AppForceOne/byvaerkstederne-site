@@ -64,7 +64,7 @@
                 {# Event management entry point — footer-only, auth-gated per
                    ADR-001; additionally hidden from members without the
                    organizers capability (UX only, never the boundary). #}
-                {% if feature_enabled('event_management') and (grav.user.authorize('admin.events.read') or grav.user.authorize('admin.super')) %}
+                {% if grav.user.authorize('admin.events.read') or grav.user.authorize('admin.super') %}
                 <a href="/begivenheder/arrangoerpanel">Arrangørpanel</a>
                 {% endif %}
             </nav>

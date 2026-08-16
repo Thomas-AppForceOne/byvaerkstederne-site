@@ -1,20 +1,38 @@
-# Default feature-flag profile — the LOCAL / DOCKER / CI profile.
+# LOCAL profile — every flag ON, for every Host.
 #
-# This file is active when no env-specific `user/env/<host>/config/features.yaml`
-# overrides it — i.e., local development, CI containers probed directly by
-# IP/127.0.0.1, and any host without a dedicated env directory. The local dev
-# machine is the "dev" environment, which sees every feature surface so existing
-# tests, demos, and manual walkthroughs keep working — so every flag is ON here.
-# The deployed tiers narrow this down via their own host-scoped profiles, and
-# ONLY the dev tier is all-on (staging and test default to all-off):
-#   - user/env/dev.hackersbychoice.dk/config/features.yaml      → all ON
-#   - user/env/staging.hackersbychoice.dk/config/features.yaml  → all OFF
-#   - user/env/test.hackersbychoice.dk/config/features.yaml     → all OFF
+# This file is the developer's Grav. It is what `make start`, `make test` and
+# `make test-auth` resolve, and — deliberately — what a phone on the LAN, a
+# `0.0.0.0` bind, a container hostname or any other name pointed at the local
+# container resolves too. Grav picks a profile by Host, and only this file is
+# host-agnostic: it is the fallback for every Host that has no
+# user/env/<host>/ directory.
 #
-# Values MUST be the literal quoted strings `"true"` or `"false"`. Any
-# other shape (bare YAML boolean, `TRUE`, integer, null) resolves to
-# `false` and logs a warning per the FlagStore strict-string rule.
-# Secrets, credentials, or API keys must never appear here.
+# That host-agnosticism is the point. A tier must behave the same whichever
+# device or address you reach it from, and the local container is the dev
+# tier's stand-in: dev on a phone has to look like dev on a desktop, so the
+# local profile cannot depend on which name the browser used.
+#
+# ─── Why this is safe in production ───────────────────────────────────
+# It is not deployed. bv_staging_user_excludes drops it from the package, so
+# a tier has NO fallback file at all. Grav then resolves every flag false for
+# any Host without its own profile (FlagStore seeds all-false; proven by
+# FeatureFlagCatalogueTest::testMissingFeaturesYamlDoesNotCrashAndFailsAllClosed).
+# Fail-open locally where it costs nothing, fail-closed on the tiers where it
+# cost us a production incident: on 2026-08-15 this file WAS deployed, and
+# production's bare apex — which has no env directory — served /vedtaegter,
+# /privatlivspolitik, /referater and /presse with 200 while www 404'd all
+# four. See decisions/ADR-007-feature-flag-fallback-fails-closed.md.
+#
+# ─── Per-tier posture ─────────────────────────────────────────────────
+#   user/env/dev.hackersbychoice.dk/      → ALL ON, always (pinned by test)
+#   user/env/test.hackersbychoice.dk/     → all off by default; flags flipped on as needed
+#   user/env/staging.hackersbychoice.dk/  → all off by default; ditto
+#   user/env/www.byvaerkstederne.dk/      → all off by default; ditto
+#
+# Values MUST be the literal quoted strings `"true"` or `"false"`. Any other
+# shape (bare YAML boolean, `TRUE`, integer, null) resolves to `false` and logs
+# a warning per the FlagStore strict-string rule. Secrets, credentials, or API
+# keys must never appear here.
 enabled:
   roadmap: "true"
   feature_suggestion: "true"
@@ -24,9 +42,6 @@ enabled:
   event_highlight: "true"
   press_page: "true"
   minutes_archive: "true"
-  workshop_calendar: "true"
-  workshop_calendar_filters: "true"
-  workshop_calendar_featured: "true"
   press_assets_download: "true"
   press_stats: "true"
   contact_page: "true"
@@ -35,11 +50,7 @@ enabled:
   event_rsvp: "true"
   workshop_project_blueprints: "true"
   workshop_workday_signup: "true"
-  kulturhus_program: "true"
-  kulturhus_volunteer: "true"
-  donation_mobilepay: "true"
   gear_donation: "true"
   social_media_links: "true"
   makerspace_meeting_link: "true"
-  event_management: "true"
   account_self_service: "true"

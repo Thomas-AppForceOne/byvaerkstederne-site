@@ -33,6 +33,7 @@ const PROMOTED_BUG_REPORT_ID = 'br_fixture_promoted';
 const DRAFT_EVENT_ID = 'ev_fixture_draft';
 const ARCHIVED_EVENT_ID = 'ev_fixture_archived';
 const FOREIGN_EVENT_ID = 'ev_fixture_foreign';
+const LEGACY_EVENT_ID = 'ev_fixture_legacy';
 // Event RSVP fixtures (future-dated so the past-event guard never trips).
 const RSVP_EVENT_ID = 'ev_fixture_rsvp';
 const CAPACITY_EVENT_ID = 'ev_fixture_capacity';
@@ -201,6 +202,35 @@ const FOREIGN_EVENT_YAML = `${FOREIGN_EVENT_ID}:
   created_at: '2026-06-01T00:00:00Z'
   updated_by: some-other-organizer
   updated_at: '2026-06-01T00:00:00Z'
+  archived: false
+`;
+
+// A legacy event: no `owner` key at all, the way every event looked before
+// ownership was introduced. EventAuthorizer::ownsOrSuper treats a null/empty
+// owner as super-only (§2), so this is what proves an organizer cannot edit
+// one. The authz suite used to reach for `event001` out of the sample-content
+// seed bundle for this; that bundle is not applied by `make test-auth`, and
+// global teardown empties begivenheder.yaml, so the test failed on the second
+// run of the suite on any machine. Seeding it here makes the suite hermetic —
+// tests must not depend on pre-existing state (CLAUDE.md § Seed bundles).
+const LEGACY_EVENT_YAML = `${LEGACY_EVENT_ID}:
+  published: true
+  title: '[FIXTURE] Legacy ownerless event for Playwright tests'
+  description: 'Seeded by tests/helpers/fixtures.js; do not edit.'
+  group: makerspace
+  badge: 'Makerspace'
+  event_date: '2030-04-20'
+  event_time: '10:00 - 12:00'
+  location: 'Makerspace'
+  capacity: ''
+  event_type: ''
+  button_text: ''
+  button_url: ''
+  button_style: tertiary
+  featured: false
+  featured_tag: ''
+  created_at: '2026-05-01T00:00:00Z'
+  updated_at: '2026-05-01T00:00:00Z'
   archived: false
 `;
 
@@ -462,6 +492,14 @@ function removeForeignEvent() {
   return removeFixture(EVENTS_YAML_PATH, FOREIGN_EVENT_ID);
 }
 
+function ensureLegacyEvent() {
+  return appendIfMissing(EVENTS_YAML_PATH, LEGACY_EVENT_ID, LEGACY_EVENT_YAML);
+}
+
+function removeLegacyEvent() {
+  return removeFixture(EVENTS_YAML_PATH, LEGACY_EVENT_ID);
+}
+
 /**
  * Remove an event created DURING a test run by its server-assigned key.
  * Key shape is strictly validated (`ev_<hex>`) before it reaches sed — the
@@ -585,6 +623,7 @@ module.exports = {
   DRAFT_EVENT_ID,
   ARCHIVED_EVENT_ID,
   FOREIGN_EVENT_ID,
+  LEGACY_EVENT_ID,
   RSVP_EVENT_ID,
   CAPACITY_EVENT_ID,
   INTEREST_EVENT_ID,
@@ -597,6 +636,7 @@ module.exports = {
   ensureDraftEvent,
   ensureArchivedEvent,
   ensureForeignEvent,
+  ensureLegacyEvent,
   ensureRsvpEvent,
   ensureCapacityEvent,
   ensureInterestEvent,
@@ -610,6 +650,7 @@ module.exports = {
   removeDraftEvent,
   removeArchivedEvent,
   removeForeignEvent,
+  removeLegacyEvent,
   removeRsvpEvent,
   removeCapacityEvent,
   removeInterestEvent,

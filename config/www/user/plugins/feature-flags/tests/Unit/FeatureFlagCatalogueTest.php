@@ -47,9 +47,6 @@ final class FeatureFlagCatalogueTest extends TestCase
         'event_highlight',
         'press_page',
         'minutes_archive',
-        'workshop_calendar',
-        'workshop_calendar_filters',
-        'workshop_calendar_featured',
         'press_assets_download',
         'press_stats',
         'contact_page',
@@ -58,13 +55,9 @@ final class FeatureFlagCatalogueTest extends TestCase
         'event_rsvp',
         'workshop_project_blueprints',
         'workshop_workday_signup',
-        'kulturhus_program',
-        'kulturhus_volunteer',
-        'donation_mobilepay',
         'gear_donation',
         'social_media_links',
         'makerspace_meeting_link',
-        'event_management',
         'account_self_service',
     ];
 
@@ -114,27 +107,59 @@ final class FeatureFlagCatalogueTest extends TestCase
     }
 
     /**
-     * WI-1 (outstanding-spec-cleanup): the `workshop_detail_pages` flag gated
-     * nothing (the four /vaerksteder/* pages carried no `feature:` key), so it
-     * was retired. This pins it retired: it is neither a valid enum case nor a
-     * catalogue entry, and no per-tier features.yaml still declares it (a
-     * dangling key would warn at runtime as an "unknown feature flag").
+     * Every flag that has been retired, and why. A retired flag must not come
+     * back as an enum case or a catalogue entry, and no per-tier features.yaml
+     * may still declare it — a dangling key warns at runtime as an "unknown
+     * feature flag" on every request.
+     *
+     * Two ways a flag earns retirement:
+     *
+     *   GATED NOTHING — the flag existed but no page, template or handler
+     *   ever consulted it, so the explicit false-list in the prod profile
+     *   advertised a kill switch for a feature that did not exist.
+     *
+     *   GRADUATED — the feature shipped to every tier and the flag stopped
+     *   being a decision. The gate came out of the code with the flag.
+     *
+     * @return array<string,array{0:string,1:string}>
      */
-    public function testRetiredWorkshopDetailPagesFlagStaysRetired(): void
+    public static function retiredFlags(): array
+    {
+        return [
+            // WI-1 (outstanding-spec-cleanup): the four /vaerksteder/* pages
+            // carried no `feature:` key.
+            'workshop_detail_pages'      => ['workshop_detail_pages', 'gated nothing'],
+            // Featured calendar module (_03.featured) was never built.
+            'workshop_calendar_featured' => ['workshop_calendar_featured', 'gated nothing'],
+            // Kulturhus + MobilePay surfaces were never built either.
+            'kulturhus_program'          => ['kulturhus_program', 'gated nothing'],
+            'kulturhus_volunteer'        => ['kulturhus_volunteer', 'gated nothing'],
+            'donation_mobilepay'         => ['donation_mobilepay', 'gated nothing'],
+            // Live on all four tiers since v1.3.0.
+            'workshop_calendar'          => ['workshop_calendar', 'graduated'],
+            'workshop_calendar_filters'  => ['workshop_calendar_filters', 'graduated'],
+            'event_management'           => ['event_management', 'graduated'],
+        ];
+    }
+
+    /**
+     * @dataProvider retiredFlags
+     */
+    public function testRetiredFlagStaysRetired(string $flag, string $reason): void
     {
         $this->assertNull(
-            FeatureFlag::tryFrom('workshop_detail_pages'),
-            '`workshop_detail_pages` was retired — it must not be a valid enum case again.'
+            FeatureFlag::tryFrom($flag),
+            "`{$flag}` was retired ({$reason}) — it must not be a valid enum case again."
         );
-        $this->assertNotContains('workshop_detail_pages', self::CATALOGUE);
+        $this->assertNotContains($flag, self::CATALOGUE);
 
         foreach (['dev.hackersbychoice.dk', 'test.hackersbychoice.dk', 'staging.hackersbychoice.dk', 'www.byvaerkstederne.dk'] as $host) {
             $enabled = self::loadProfileYaml($host);
             if (is_array($enabled)) {
                 $this->assertArrayNotHasKey(
-                    'workshop_detail_pages',
+                    $flag,
                     $enabled,
-                    "{$host} features.yaml must not declare the retired `workshop_detail_pages` flag."
+                    "{$host} features.yaml must not declare the retired `{$flag}` flag."
                 );
             }
         }
@@ -175,6 +200,51 @@ final class FeatureFlagCatalogueTest extends TestCase
             $logger->warnings(),
             'Dev profile must load cleanly with zero FlagStore warnings.'
         );
+    }
+
+    /**
+     * The LOCAL profile — user/config/features.yaml — must enable everything.
+     *
+     * It is the only host-agnostic profile: Grav falls back to it for every
+     * Host without a user/env/<host>/ directory. That is deliberate, and it is
+     * what makes the local container behave identically however you reach it —
+     * `localhost`, `127.0.0.1`, a LAN address from a phone, a container name.
+     * A tier has to look the same from every device, and locally this file is
+     * the only thing that can promise that.
+     *
+     * Same {total}/{total} rule as the dev tier: a new enum case that forgets
+     * its line here silently disables itself for local development AND for the
+     * whole browser suite, which would surface as a pile of unrelated failures
+     * rather than as this one.
+     *
+     * The production side of the contract is that this file is never deployed
+     * (bv_staging_user_excludes drops it, asserted in
+     * tests/deploy/excludes-preserve-live-state.sh); a tier therefore has no
+     * fallback at all and resolves every flag false for an unknown Host — see
+     * testMissingFeaturesYamlDoesNotCrashAndFailsAllClosed below, and
+     * decisions/ADR-007-feature-flag-fallback-fails-closed.md.
+     */
+    public function testLocalProfileEnablesAllCatalogueFlags(): void
+    {
+        $path = dirname(__DIR__, 4) . '/config/features.yaml';
+        $this->assertFileExists($path, 'The local profile must exist — it is what every local Host resolves.');
+
+        $parsed = Yaml::parseFile($path);
+        $this->assertIsArray($parsed, 'The local profile must parse to an array.');
+        $enabled = $parsed['enabled'] ?? null;
+        $this->assertIsArray($enabled, 'The local profile must declare an `enabled` map.');
+
+        $logger = new ArrayLogger();
+        $store = new FlagStore($enabled, $logger, 'localhost');
+
+        $total = count(self::CATALOGUE);
+        foreach (self::CATALOGUE as $flagValue) {
+            $this->assertTrue(
+                $store->isEnabled(FeatureFlag::from($flagValue)),
+                "The local profile must enable `{$flagValue}` ({$total}/{$total} rule) — local dev and both suites read it."
+            );
+        }
+        $this->assertSame([], $logger->warnings(), 'Local profile must load cleanly with zero FlagStore warnings.');
     }
 
     /**
@@ -234,6 +304,64 @@ final class FeatureFlagCatalogueTest extends TestCase
             'Enabled on prod but not on staging: ' . implode(', ', $behind)
             . ' — flip the same flag on staging.hackersbychoice.dk (staging never lags prod).'
         );
+    }
+
+    /**
+     * Hosts that reach a tier without being its canonical name: production's
+     * bare apex, and the one.com account root under which dev/test/staging
+     * live as folders. Grav resolves its environment from the Host header, so
+     * each of these needs its own profile — a Host with no user/env/<host>/
+     * directory falls back to user/config/features.yaml, the LOCAL profile
+     * where every flag is ON.
+     *
+     * @return array<string,array{0:string}>
+     */
+    public static function nonCanonicalHosts(): array
+    {
+        return [
+            'production apex'            => ['byvaerkstederne.dk'],
+            'one.com account root'       => ['hackersbychoice.dk'],
+            'one.com account root (www)' => ['www.hackersbychoice.dk'],
+        ];
+    }
+
+    /**
+     * These profiles must fail CLOSED. The canonical-host redirect in the
+     * generated .htaccess should mean nobody arrives under these names at
+     * all; this is the second layer, for the day that redirect is lost.
+     *
+     * On 2026-08-15, before these profiles existed, production's apex served
+     * /vedtaegter, /privatlivspolitik, /referater and /presse with 200 while
+     * www 404'd all four — the all-on developer profile, in production.
+     *
+     * @dataProvider nonCanonicalHosts
+     */
+    public function testNonCanonicalHostProfileFailsClosed(string $host): void
+    {
+        // assertFileExists first: loadProfileYaml() returns null for a missing
+        // file, and null resolves every flag false — so without this the test
+        // would pass just as happily if someone deleted the profile.
+        $this->assertFileExists(
+            self::envRoot() . "/{$host}/config/features.yaml",
+            "{$host} reaches a tier but has no profile — it would fall back to the all-on developer defaults."
+        );
+
+        $enabled = self::loadProfileYaml($host);
+        $this->assertTrue(
+            $enabled === null || $enabled === [],
+            "{$host} must declare an empty enabled map — a non-canonical host enables nothing."
+        );
+
+        $logger = new ArrayLogger();
+        $store = new FlagStore($enabled, $logger, $host);
+        foreach (self::CATALOGUE as $flagValue) {
+            $case = FeatureFlag::from($flagValue);
+            $this->assertFalse(
+                $store->isEnabled($case),
+                "{$host} must not enable `{$flagValue}`."
+            );
+        }
+        $this->assertSame([], $logger->warnings(), "{$host} profile must load without warnings.");
     }
 
     public function testTestTierYamlPayloadIsFlagMetadataOnly(): void
@@ -316,7 +444,7 @@ final class FeatureFlagCatalogueTest extends TestCase
             'community_footer_column=int1'    => ['community_footer_column', 1],
             'event_highlight=bool-true'       => ['event_highlight', true],
             'newsletter_signup=yes'           => ['newsletter_signup', 'yes'],
-            'workshop_calendar=null'          => ['workshop_calendar', null],
+            'press_stats=null'                => ['press_stats', null],
             'statutes_page=array'             => ['statutes_page', ['true']],
             'press_assets_download=TRUE'      => ['press_assets_download', 'TRUE'],
         ];

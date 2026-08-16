@@ -501,15 +501,29 @@ Every deploy writes a `version.json` manifest to the tier. Alongside the existin
 
 ## Environments
 
-| Environment | URL | Deploy command | Branch |
-|------------|-----|---------------|--------|
-| **Production** | hackersbychoice.dk | `make deploy tier=prod` | `main` (gated: clean + tagged) |
-| **Test** | hackersbychoice.dk/test | `make deploy tier=test` | `develop` |
-| **Dev** | hackersbychoice.dk/dev | `make deploy tier=dev` | `feature/*` |
-| **Staging** | hackersbychoice.dk/staging | `make deploy tier=staging` | `main` (gated: clean) + prod data |
+| Environment | Canonical URL | Deploy command | Branch |
+|------------|---------------|---------------|--------|
+| **Production** | www.byvaerkstederne.dk | `make deploy tier=prod` | `main` (gated: clean + tagged) |
+| **Test** | test.hackersbychoice.dk | `make deploy tier=test` | `develop` |
+| **Dev** | dev.hackersbychoice.dk | `make deploy tier=dev` | `feature/*` |
+| **Staging** | staging.hackersbychoice.dk | `make deploy tier=staging` | `main` (gated: clean) + prod data |
+| **Landing** | hackersbychoice.dk | `make deploy tier=landing` | any branch |
 | **Local** | localhost:8080 | `make start` | any branch |
 
 Credentials are in `.env.deploy` (git-ignored). Copy `.env.deploy.example` to get started.
+
+### Canonical hosts
+
+**Each tier answers on exactly one name.** Every other name that reaches it 301s to that one, via the redirect in the generated `.htaccess` (`deploy/lib/htaccess.sh`, unit-tested in `tests/deploy/unit-htaccess.sh`).
+
+This matters more than tidiness. Grav resolves its environment from the **Host header**, so per-tier config lives under `user/env/<host>/`. A Host with no such directory loads no profile and falls back to `user/config/features.yaml` — the local developer profile, where every flag is ON. Production's bare apex was in exactly that state on 2026-08-15: `byvaerkstederne.dk/vedtaegter` answered 200 while `www.byvaerkstederne.dk/vedtaegter` 404'd, and the same held for `/privatlivspolitik`, `/referater` and `/presse`. The one.com tiers had the same second entrance via `hackersbychoice.dk/<tier>/`.
+
+Two layers now stand in the way:
+
+1. the canonical-host redirect, so a non-canonical name never reaches PHP;
+2. `user/env/{byvaerkstederne.dk,hackersbychoice.dk,www.hackersbychoice.dk}/config/features.yaml`, each an empty `enabled: {}` map, so that if the redirect is ever lost the fallback is *nothing enabled* rather than *everything enabled*.
+
+When a tier gains a hostname, it needs both: the canonical redirect covers it automatically, but add a fail-closed profile for it too.
 
 ## Backup
 

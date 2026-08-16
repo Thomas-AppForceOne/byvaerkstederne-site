@@ -1,7 +1,6 @@
 ---
 title: Opret begivenhed
 template: event_create
-feature: event_management
 slug: opret
 access:
     site.login: true

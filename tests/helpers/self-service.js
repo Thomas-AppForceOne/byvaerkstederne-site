@@ -312,10 +312,11 @@ function clearGravCache() {
 }
 
 /**
- * Flip a base-profile flag (config/www/user/config/features.yaml — what the
- * 127.0.0.1 test origin resolves) to "false" + clear the cache. Returns a
- * restore function; callers MUST invoke it in finally. Throws if the flag
- * isn't currently "true", so a double flip can never persist.
+ * Flip a base-profile flag (config/www/user/config/features.yaml — the LOCAL
+ * profile, which every Host resolves because it has no per-host override) to
+ * "false" + clear the cache. Returns a restore function; callers MUST invoke
+ * it in finally. Throws if the flag isn't currently "true", so a double flip
+ * can never persist.
  *
  * @param {string} flag
  * @returns {() => void}

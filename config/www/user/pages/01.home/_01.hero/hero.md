@@ -14,5 +14,4 @@ buttons:
     - text: Se Kalender
       url: /vaerkstedskalenderen
       style: outlined
-      feature: workshop_calendar
 ---

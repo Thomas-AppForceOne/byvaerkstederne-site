@@ -1,7 +1,6 @@
 ---
 title: Fjern begivenhed
 template: event_delete
-feature: event_management
 slug: slet
 access:
     site.login: true

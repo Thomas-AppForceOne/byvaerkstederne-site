@@ -1,0 +1,23 @@
+# Non-canonical host — deliberately all-off.
+#
+# This directory exists because Grav resolves its environment from the request
+# Host header, and this is the www variant of the one.com account root — same folders, same problem. A Host with no
+# user/env/<host>/ directory falls back to user/config/features.yaml, which is
+# the LOCAL developer profile where every flag is ON. On 2026-08-15 that is
+# exactly what production's apex was serving: /vedtaegter, /privatlivspolitik,
+# /referater and /presse answered 200 there while www 404'd all four.
+#
+# The canonical-host redirect in the generated .htaccess (deploy/lib/htaccess.sh)
+# means nobody should reach a tier under this name at all. This file is the
+# second layer: if that redirect is ever lost — a hosting migration, a hand-
+# edited .htaccess, a rule that stops matching — the fallback is "nothing
+# enabled" instead of "everything enabled". Fail closed, not open.
+#
+# `enabled: {}` is an EMPTY map, not an explicit false-list. The canonical
+# profiles list every flag explicitly because that list is their audit surface;
+# this one has nothing to audit and nothing to keep in sync, so it can never
+# drift out of date. FlagStore resolves every flag false against it and logs no
+# warning (proven by FeatureFlagCatalogueTest).
+#
+# Canonical host for a tier reached under this name: the tier's own subdomain (dev./test./staging.hackersbychoice.dk)
+enabled: {}

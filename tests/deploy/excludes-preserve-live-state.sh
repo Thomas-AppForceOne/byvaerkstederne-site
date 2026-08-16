@@ -291,7 +291,9 @@ mkdir -p \
   "$USRC/plugins/email/vendor/symfony/polyfill-php80/Resources" \
   "$USRC/plugins/admin/.github" \
   "$USRC/pages/01.home" \
-  "$USRC/config"
+  "$USRC/config" \
+  "$USRC/env/dev.hackersbychoice.dk/config" \
+  "$USRC/env/www.byvaerkstederne.dk/config"
 # Runtime-required (MUST survive)
 echo 'theme'    > "$USRC/themes/byvaerkstederne/byvaerkstederne.yaml"
 echo 'css'      > "$USRC/themes/byvaerkstederne/css/theme.css"
@@ -303,6 +305,9 @@ echo 'runtime'  > "$USRC/plugins/email/vendor/symfony/mailer/Test/Constraint.php
 echo 'poly'     > "$USRC/plugins/email/vendor/symfony/polyfill-php80/Resources/stubs.php"
 echo 'page'     > "$USRC/pages/01.home/default.md"
 echo 'cfg'      > "$USRC/config/system.yaml"
+# Every DEPLOYED tier profile must ship; the LOCAL profile must not (ADR-007).
+echo 'devprof'  > "$USRC/env/dev.hackersbychoice.dk/config/features.yaml"
+echo 'prodprof' > "$USRC/env/www.byvaerkstederne.dk/config/features.yaml"
 # Bloat (MUST be dropped)
 echo 'quark'    > "$USRC/themes/quark/css/quark.css"
 echo 'phpunit'  > "$USRC/plugins/feature-flags/vendor/phpunit/phpunit"
@@ -312,6 +317,12 @@ echo 'ci'       > "$USRC/plugins/admin/.github/ci.yml"
 echo 'map'      > "$USRC/themes/byvaerkstederne/css/theme.css.map"
 echo 'lock'     > "$USRC/plugins/feature-flags/composer.lock"
 echo 'changelog'> "$USRC/plugins/admin/CHANGELOG.md"
+# The developer's ALL-ON profile — and the fallback Grav uses for ANY Host
+# without its own env dir. Deployed, it made every unprofiled entrance an
+# all-features entrance (prod's apex, 2026-08-15). A tier must have no
+# fallback at all, so this one file is load-bearing for behaviour, not just
+# footprint.
+echo 'allon'    > "$USRC/config/features.yaml"
 
 UDST="$WORK/udst"
 mkdir -p "$UDST"
@@ -331,7 +342,9 @@ for keep in \
     "plugins/email/vendor/symfony/mailer/Test/Constraint.php" \
     "plugins/email/vendor/symfony/polyfill-php80/Resources/stubs.php" \
     "pages/01.home/default.md" \
-    "config/system.yaml"
+    "config/system.yaml" \
+    "env/dev.hackersbychoice.dk/config/features.yaml" \
+    "env/www.byvaerkstederne.dk/config/features.yaml"
 do
     if [ -e "$UDST/$keep" ]; then
         check "runtime path kept: $keep" ok
@@ -348,7 +361,8 @@ for drop in \
     "plugins/admin/.github" \
     "themes/byvaerkstederne/css/theme.css.map" \
     "plugins/feature-flags/composer.lock" \
-    "plugins/admin/CHANGELOG.md"
+    "plugins/admin/CHANGELOG.md" \
+    "config/features.yaml"
 do
     if [ -e "$UDST/$drop" ]; then
         check "bloat dropped: $drop" fail
@@ -376,7 +390,9 @@ has_forbidden_exclude() {
         -e '^--exclude=composer\.json$' \
         -e '^--exclude=/system/' \
         -e '^--exclude=/index\.php' \
-        -e '^--exclude=/themes/byvaerkstederne'
+        -e '^--exclude=/themes/byvaerkstederne' \
+        -e '^--exclude=/env/$' \
+        -e '^--exclude=/config/$'
 }
 
 REAL_SET="$(bv_staging_user_excludes)"
