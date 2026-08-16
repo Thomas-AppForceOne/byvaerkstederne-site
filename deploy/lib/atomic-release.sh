@@ -207,11 +207,21 @@ EOF
 #   * no blanket `*.md` — page content is markdown; only specific
 #     CHANGELOG* doc filenames are dropped.
 #   * composer.json is kept (only composer.lock is dropped).
+#   * /config/features.yaml is the developer's ALL-ON profile, and it is the
+#     fallback Grav uses for any Host without its own user/env/<host>/ dir.
+#     Deployed, it turned every unprofiled entrance into an all-features
+#     entrance — production's bare apex served four flag-gated pages with 200
+#     on 2026-08-15. Dropped from the package so a tier has NO fallback and
+#     resolves every flag false for an unknown Host; the tiers' real posture
+#     lives in their own env profiles, which DO ship. This is the one exclude
+#     that is load-bearing for behaviour rather than footprint. See
+#     decisions/ADR-007-feature-flag-fallback-fails-closed.md.
 bv_staging_user_excludes() {
     cat <<'EOF'
 --exclude=.DS_Store
 --exclude=/themes/quark/
 --exclude=/plugins/feature-flags/vendor/
+--exclude=/config/features.yaml
 --exclude=tests/
 --exclude=test/
 --exclude=.github/

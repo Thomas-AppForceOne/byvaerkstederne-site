@@ -203,6 +203,51 @@ final class FeatureFlagCatalogueTest extends TestCase
     }
 
     /**
+     * The LOCAL profile — user/config/features.yaml — must enable everything.
+     *
+     * It is the only host-agnostic profile: Grav falls back to it for every
+     * Host without a user/env/<host>/ directory. That is deliberate, and it is
+     * what makes the local container behave identically however you reach it —
+     * `localhost`, `127.0.0.1`, a LAN address from a phone, a container name.
+     * A tier has to look the same from every device, and locally this file is
+     * the only thing that can promise that.
+     *
+     * Same {total}/{total} rule as the dev tier: a new enum case that forgets
+     * its line here silently disables itself for local development AND for the
+     * whole browser suite, which would surface as a pile of unrelated failures
+     * rather than as this one.
+     *
+     * The production side of the contract is that this file is never deployed
+     * (bv_staging_user_excludes drops it, asserted in
+     * tests/deploy/excludes-preserve-live-state.sh); a tier therefore has no
+     * fallback at all and resolves every flag false for an unknown Host — see
+     * testMissingFeaturesYamlDoesNotCrashAndFailsAllClosed below, and
+     * decisions/ADR-007-feature-flag-fallback-fails-closed.md.
+     */
+    public function testLocalProfileEnablesAllCatalogueFlags(): void
+    {
+        $path = dirname(__DIR__, 4) . '/config/features.yaml';
+        $this->assertFileExists($path, 'The local profile must exist — it is what every local Host resolves.');
+
+        $parsed = Yaml::parseFile($path);
+        $this->assertIsArray($parsed, 'The local profile must parse to an array.');
+        $enabled = $parsed['enabled'] ?? null;
+        $this->assertIsArray($enabled, 'The local profile must declare an `enabled` map.');
+
+        $logger = new ArrayLogger();
+        $store = new FlagStore($enabled, $logger, 'localhost');
+
+        $total = count(self::CATALOGUE);
+        foreach (self::CATALOGUE as $flagValue) {
+            $this->assertTrue(
+                $store->isEnabled(FeatureFlag::from($flagValue)),
+                "The local profile must enable `{$flagValue}` ({$total}/{$total} rule) — local dev and both suites read it."
+            );
+        }
+        $this->assertSame([], $logger->warnings(), 'Local profile must load cleanly with zero FlagStore warnings.');
+    }
+
+    /**
      * The all-off FIXTURE profile the browser suites rely on must actually
      * be all-off — this is the only profile with a pinned flag state
      * besides dev, and it is never deployed.
