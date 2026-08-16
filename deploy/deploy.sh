@@ -71,6 +71,9 @@ GRAV_URL="https://github.com/getgrav/grav/releases/download/${GRAV_VERSION}/grav
 # metadata is captured.
 . "$SCRIPT_DIR/lib/release-gate.sh"
 
+# shellcheck source=deploy/lib/htaccess.sh
+. "$SCRIPT_DIR/lib/htaccess.sh"
+
 # shellcheck source=deploy/lib/build-id.sh
 # Provides bv_compute_git_describe / bv_compute_semver — the additive
 # git_describe + semver fields emitted into version.json. BUILD itself
@@ -425,67 +428,13 @@ if [ "$ENV_KIND" = "grav" ]; then
         "$STAGING_DIR/user/"
     unset _ex_line
 
-    cat > "$STAGING_DIR/.htaccess" << 'HTACCESS'
-# Grav CMS .htaccess for one.com shared hosting (Varnish → Apache).
-
-SetEnvIf X-Forwarded-Proto https HTTPS=on
-
-<IfModule mod_rewrite.c>
-    RewriteEngine On
-
-    RewriteCond %{HTTP:X-Forwarded-Proto} !=https
-    RewriteCond %{HTTPS} !=on
-    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
-
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule ^(.*)$ index.php [QSA,L]
-</IfModule>
-
-<IfModule mod_headers.c>
-    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
-    Header always set X-Content-Type-Options "nosniff"
-    Header always set X-Frame-Options "SAMEORIGIN"
-    Header always set X-XSS-Protection "1; mode=block"
-HTACCESS
-
-    if [ "$ENV" != "prod" ]; then
-        cat >> "$STAGING_DIR/.htaccess" << 'NOINDEX'
-    Header always set X-Robots-Tag "noindex, nofollow, noarchive"
-NOINDEX
-    fi
-
-    cat >> "$STAGING_DIR/.htaccess" << 'HTACCESS_REST'
-</IfModule>
-
-<FilesMatch "(^\.git|\.yaml$|\.md$|\.twig$)">
-    <IfModule mod_authz_core.c>
-        Require all denied
-    </IfModule>
-</FilesMatch>
-
-<IfModule mod_expires.c>
-    ExpiresActive On
-    ExpiresByType image/jpeg "access plus 1 month"
-    ExpiresByType image/png "access plus 1 month"
-    ExpiresByType image/svg+xml "access plus 1 month"
-    ExpiresByType image/webp "access plus 1 month"
-    ExpiresByType text/css "access plus 1 week"
-    ExpiresByType application/javascript "access plus 1 week"
-    ExpiresByType font/woff2 "access plus 1 month"
-</IfModule>
-
-<IfModule mod_deflate.c>
-    AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml
-</IfModule>
-
-<Files "version.json">
-    <IfModule mod_authz_core.c>
-        Require all denied
-    </IfModule>
-</Files>
-
-HTACCESS_REST
+    # The tier's .htaccess — content lives in deploy/lib/htaccess.sh so a
+    # unit test can assert it without a dry-run deploy (CI checks out
+    # shallow, and a dry-run aborts at the full-history guard before it
+    # would ever write this file). A non-zero return means the canonical
+    # host was unusable; `set -e` aborts rather than shipping an .htaccess
+    # that redirects into the void.
+    bv_render_htaccess "$ENV_HOST" "$ENV" > "$STAGING_DIR/.htaccess"
 
 else
     # ── Landing (apex selector) — no Grav, just the apex/ folder ────
