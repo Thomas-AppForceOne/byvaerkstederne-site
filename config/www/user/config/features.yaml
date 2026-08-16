@@ -1,28 +1,56 @@
-# Feature-flag FALLBACK — deliberately empty, so it fails closed.
+# LOCAL profile — every flag ON, for every Host.
 #
-# Grav resolves its environment from the request Host header and loads
-# user/env/<host>/config/features.yaml. THIS file is what it falls back to when
-# the Host matches no env directory — an unknown hostname, a bare apex, a
-# health check, a CLI run (Grav resolves those to the environment `cli`).
+# This file is the developer's Grav. It is what `make start`, `make test` and
+# `make test-auth` resolve, and — deliberately — what a phone on the LAN, a
+# `0.0.0.0` bind, a container hostname or any other name pointed at the local
+# container resolves too. Grav picks a profile by Host, and only this file is
+# host-agnostic: it is the fallback for every Host that has no
+# user/env/<host>/ directory.
 #
-# It used to hold the developer's all-on profile. That made every unprofiled
-# entrance an all-features entrance, in production. Measured on 2026-08-15:
+# That host-agnosticism is the point. A tier must behave the same whichever
+# device or address you reach it from, and the local container is the dev
+# tier's stand-in: dev on a phone has to look like dev on a desktop, so the
+# local profile cannot depend on which name the browser used.
 #
-#   www.byvaerkstederne.dk/vedtaegter   404   (prod profile — flag off)
-#   byvaerkstederne.dk/vedtaegter       200   (this file — flag on)
+# ─── Why this is safe in production ───────────────────────────────────
+# It is not deployed. bv_staging_user_excludes drops it from the package, so
+# a tier has NO fallback file at all. Grav then resolves every flag false for
+# any Host without its own profile (FlagStore seeds all-false; proven by
+# FeatureFlagCatalogueTest::testMissingFeaturesYamlDoesNotCrashAndFailsAllClosed).
+# Fail-open locally where it costs nothing, fail-closed on the tiers where it
+# cost us a production incident: on 2026-08-15 this file WAS deployed, and
+# production's bare apex — which has no env directory — served /vedtaegter,
+# /privatlivspolitik, /referater and /presse with 200 while www 404'd all
+# four. See decisions/ADR-007-feature-flag-fallback-fails-closed.md.
 #
-# The same held for /privatlivspolitik, /referater and /presse, and for the
-# one.com tiers reached as hackersbychoice.dk/<tier>/. Same release, same
-# docroot, different Host.
+# ─── Per-tier posture ─────────────────────────────────────────────────
+#   user/env/dev.hackersbychoice.dk/      → ALL ON, always (pinned by test)
+#   user/env/test.hackersbychoice.dk/     → all off by default; flags flipped on as needed
+#   user/env/staging.hackersbychoice.dk/  → all off by default; ditto
+#   user/env/www.byvaerkstederne.dk/      → all off by default; ditto
 #
-# An empty `enabled` map resolves every catalogue flag to false and logs no
-# warning. A host that was never given a profile now shows the site's
-# unflagged core and nothing else — the safe direction to be wrong in.
-#
-# The developer's all-on world moved to user/env/localhost/config/features.yaml
-# (Grav aliases 127.0.0.1 and ::1 to localhost, so local dev and both Playwright
-# suites resolve it), and that directory is excluded from the deploy package.
-#
-# Do NOT put flags back in here. A flag belongs in the profile of the host that
-# should see it. See decisions/ADR-007-feature-flag-fallback-fails-closed.md.
-enabled: {}
+# Values MUST be the literal quoted strings `"true"` or `"false"`. Any other
+# shape (bare YAML boolean, `TRUE`, integer, null) resolves to `false` and logs
+# a warning per the FlagStore strict-string rule. Secrets, credentials, or API
+# keys must never appear here.
+enabled:
+  roadmap: "true"
+  feature_suggestion: "true"
+  bug_report: "true"
+  community_footer_column: "true"
+  newsletter_signup: "true"
+  event_highlight: "true"
+  press_page: "true"
+  minutes_archive: "true"
+  press_assets_download: "true"
+  press_stats: "true"
+  contact_page: "true"
+  statutes_page: "true"
+  privacy_policy: "true"
+  event_rsvp: "true"
+  workshop_project_blueprints: "true"
+  workshop_workday_signup: "true"
+  gear_donation: "true"
+  social_media_links: "true"
+  makerspace_meeting_link: "true"
+  account_self_service: "true"

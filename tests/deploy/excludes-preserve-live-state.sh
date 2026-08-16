@@ -292,7 +292,6 @@ mkdir -p \
   "$USRC/plugins/admin/.github" \
   "$USRC/pages/01.home" \
   "$USRC/config" \
-  "$USRC/env/localhost/config" \
   "$USRC/env/dev.hackersbychoice.dk/config" \
   "$USRC/env/www.byvaerkstederne.dk/config"
 # Runtime-required (MUST survive)
@@ -306,8 +305,7 @@ echo 'runtime'  > "$USRC/plugins/email/vendor/symfony/mailer/Test/Constraint.php
 echo 'poly'     > "$USRC/plugins/email/vendor/symfony/polyfill-php80/Resources/stubs.php"
 echo 'page'     > "$USRC/pages/01.home/default.md"
 echo 'cfg'      > "$USRC/config/system.yaml"
-# The fail-closed fallback and every DEPLOYED tier profile must ship (ADR-007).
-echo 'fallback' > "$USRC/config/features.yaml"
+# Every DEPLOYED tier profile must ship; the LOCAL profile must not (ADR-007).
 echo 'devprof'  > "$USRC/env/dev.hackersbychoice.dk/config/features.yaml"
 echo 'prodprof' > "$USRC/env/www.byvaerkstederne.dk/config/features.yaml"
 # Bloat (MUST be dropped)
@@ -319,10 +317,12 @@ echo 'ci'       > "$USRC/plugins/admin/.github/ci.yml"
 echo 'map'      > "$USRC/themes/byvaerkstederne/css/theme.css.map"
 echo 'lock'     > "$USRC/plugins/feature-flags/composer.lock"
 echo 'changelog'> "$USRC/plugins/admin/CHANGELOG.md"
-# The developer's ALL-ON profile. Inert on a tier (nothing reaches a server
-# with Host: localhost), but an all-on profile has no business in a production
-# package — one refactor away from being dangerous.
-echo 'allon'    > "$USRC/env/localhost/config/features.yaml"
+# The developer's ALL-ON profile — and the fallback Grav uses for ANY Host
+# without its own env dir. Deployed, it made every unprofiled entrance an
+# all-features entrance (prod's apex, 2026-08-15). A tier must have no
+# fallback at all, so this one file is load-bearing for behaviour, not just
+# footprint.
+echo 'allon'    > "$USRC/config/features.yaml"
 
 UDST="$WORK/udst"
 mkdir -p "$UDST"
@@ -343,7 +343,6 @@ for keep in \
     "plugins/email/vendor/symfony/polyfill-php80/Resources/stubs.php" \
     "pages/01.home/default.md" \
     "config/system.yaml" \
-    "config/features.yaml" \
     "env/dev.hackersbychoice.dk/config/features.yaml" \
     "env/www.byvaerkstederne.dk/config/features.yaml"
 do
@@ -363,7 +362,7 @@ for drop in \
     "themes/byvaerkstederne/css/theme.css.map" \
     "plugins/feature-flags/composer.lock" \
     "plugins/admin/CHANGELOG.md" \
-    "env/localhost"
+    "config/features.yaml"
 do
     if [ -e "$UDST/$drop" ]; then
         check "bloat dropped: $drop" fail
@@ -393,7 +392,7 @@ has_forbidden_exclude() {
         -e '^--exclude=/index\.php' \
         -e '^--exclude=/themes/byvaerkstederne' \
         -e '^--exclude=/env/$' \
-        -e '^--exclude=/config/features\.yaml$'
+        -e '^--exclude=/config/$'
 }
 
 REAL_SET="$(bv_staging_user_excludes)"
