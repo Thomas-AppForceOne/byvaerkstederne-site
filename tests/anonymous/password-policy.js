@@ -4,11 +4,17 @@
 /**
  * WI-5 — password/username policy parity.
  *
- * The repo pins the policy in three places that must agree:
+ * The repo pins the policy in four places that must agree:
  *   - system.yaml: pwd_regex / username_regex (server-side, Grav core)
  *   - register.md: the username field's validate.pattern (forms plugin)
  *   - register.html.twig: the client-side username regex literal and the
  *     imperative password .length check.
+ *   - partials/register_overlay.html.twig: the SAME registration form rendered
+ *     as a site-wide modal (included from base.html.twig), with its own copy of
+ *     the client-side chain. It was missing from this file's coverage, and it
+ *     drifted: it kept Grav's retired default (>=8 plus upper/lower/digit) while
+ *     the form's help text already advertised the 12-char length-only rule, so a
+ *     valid passphrase was rejected in the browser and never reached the server.
  *
  * The policy is LENGTH ONLY (>=12, no character classes) — see the rationale
  * in system.yaml. The guessable-word rule lives in a blocklist that a regex
@@ -32,6 +38,16 @@ const REGISTER_TWIG = path.join(
   REPO_ROOT,
   'config/www/user/themes/byvaerkstederne/templates/register.html.twig',
 );
+const REGISTER_OVERLAY_TWIG = path.join(
+  REPO_ROOT,
+  'config/www/user/themes/byvaerkstederne/templates/partials/register_overlay.html.twig',
+);
+
+/** Every template carrying a client-side copy of the registration policy. */
+const CLIENT_SURFACES = {
+  'register.html.twig': REGISTER_TWIG,
+  'register_overlay.html.twig': REGISTER_OVERLAY_TWIG,
+};
 
 const EXPECTED_USERNAME_REGEX = '^[a-z0-9_-]{3,16}$';
 const EXPECTED_PWD_REGEX = '.{12,}';
@@ -117,25 +133,67 @@ test.describe('Password & username policy parity (WI-5)', () => {
   });
 
   test('the client blocklist is rendered from config, not duplicated as a literal', () => {
-    const twig = read(REGISTER_TWIG);
     // Structural parity: one source of truth. A hand-copied array here would
     // silently drift from what the server enforces — the exact failure this
     // whole file exists to prevent for the length rule.
-    expect(
-      twig.includes("config.plugins['account-manager'].password.blocklist"),
-      'register.html.twig must render the blocklist from plugin config',
-    ).toBe(true);
-    expect(
-      /var BLOCKED = \[/.test(twig),
-      'the blocklist must not be a hardcoded array literal in the template',
-    ).toBe(false);
+    for (const [label, file] of Object.entries(CLIENT_SURFACES)) {
+      const twig = read(file);
+      expect(
+        twig.includes("config.plugins['account-manager'].password.blocklist"),
+        `${label} must render the blocklist from plugin config`,
+      ).toBe(true);
+      expect(
+        /var BLOCKED = \[/.test(twig),
+        `${label} must not hardcode the blocklist as an array literal`,
+      ).toBe(false);
+    }
+  });
+
+  test('no client surface enforces character classes the server does not', () => {
+    // The regression this pins: the overlay kept Grav's retired default
+    // (>=8 plus upper/lower/digit) after the policy moved to length-only.
+    // The server accepted "en helt almindelig sætning"; the browser refused
+    // to submit it, quoting a rule the form's own help text denied.
+    for (const [label, file] of Object.entries(CLIENT_SURFACES)) {
+      const twig = read(file);
+
+      expect(
+        /val(?:ue)?\.length\s*<\s*12|\.length\s*<\s*12/.test(twig),
+        `${label} must enforce the 12-character minimum client-side`,
+      ).toBe(true);
+
+      // The retired character-class chain, in the shapes it was written in.
+      expect(twig, `${label} must not require an uppercase letter`).not.toMatch(
+        /\/\[A-Z\]\/\.test/,
+      );
+      expect(twig, `${label} must not require a digit`).not.toMatch(/\/\[0-9\]\/\.test/);
+      expect(twig, `${label} must not require a lowercase letter`).not.toMatch(
+        /\/\[a-z\]\/\.test/,
+      );
+      expect(twig, `${label} must not carry the retired 8-character minimum`).not.toMatch(
+        /\.length\s*<\s*8\b/,
+      );
+    }
+  });
+
+  test('the username regex literal is identical across both client surfaces', () => {
+    // The overlay renders the same form; a divergent username rule here would
+    // reject in the modal what the page accepts.
+    for (const [label, file] of Object.entries(CLIENT_SURFACES)) {
+      const twig = read(file);
+      expect(
+        /\/\^\[a-z0-9_-\]\{3,16\}\$\//.test(twig),
+        `${label} must contain the canonical username regex literal`,
+      ).toBe(true);
+    }
   });
 
   /**
    * Shared accept/reject truth table. Each row is fed to BOTH:
    *   - the server-side pwd_regex (as pinned in system.yaml), and
    *   - a faithful re-implementation of the client-side JS chain
-   *     (.length>=8 && /[a-z]/ && /[A-Z]/ && /[0-9]/).
+   *     (.length>=12 — length only, no character classes), which both
+   *     register.html.twig and register_overlay.html.twig must implement.
    * Both must produce the row's verdict. Divergence fails the test.
    */
   const TRUTH_TABLE = [

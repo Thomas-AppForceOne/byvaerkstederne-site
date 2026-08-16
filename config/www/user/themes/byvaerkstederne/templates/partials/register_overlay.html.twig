@@ -61,8 +61,12 @@
                     el.removeAttribute('data-tooltip');
                 });
 
-                // Client-side validation mirroring the server-side policy
-                // (same checks as the /opret-medlemskab route).
+                // Client-side validation mirroring the server-side policy —
+                // the same checks register.html.twig runs on the
+                // /opret-medlemskab route. This overlay renders the SAME
+                // registration form, so the two must agree; when they drifted,
+                // the form's own help text advertised one rule and this script
+                // enforced another.
                 form.addEventListener('submit', function (e) {
                     root.querySelectorAll('.bv-field-error').forEach(function (el) { el.remove(); });
                     var hasError = false;
@@ -78,14 +82,29 @@
                     if (username && !/^[a-z0-9_-]{3,16}$/.test(username.value)) {
                         showError(username, 'Brugernavn skal være 3-16 tegn med kun små bogstaver, tal, bindestreg eller understregning.');
                     }
+                    // Password policy (WI-5/WI-7): LENGTH ONLY, >=12, no
+                    // character classes — the client-side equivalent of
+                    // system.pwd_regex pinned by the shared truth-table test.
+                    //
+                    // The blocklist is RENDERED FROM THE SAME CONFIG the server
+                    // reads (plugins.account-manager.password.blocklist), so the
+                    // two checks cannot drift apart. Courtesy only: the server
+                    // re-checks every submission.
+                    var BLOCKED = {{ config.plugins['account-manager'].password.blocklist|default([])|json_encode|raw }};
                     var pwd = form.querySelector('input[name="data[password1]"]') || form.querySelector('input[type="password"]');
                     if (pwd) {
-                        var v = pwd.value, errs = [];
-                        if (v.length < 8) errs.push('mindst 8 tegn');
-                        if (!/[a-z]/.test(v)) errs.push('mindst ét lille bogstav');
-                        if (!/[A-Z]/.test(v)) errs.push('mindst ét stort bogstav');
-                        if (!/[0-9]/.test(v)) errs.push('mindst ét tal');
-                        if (errs.length) showError(pwd, 'Adgangskoden mangler: ' + errs.join(', ') + '.');
+                        var val = pwd.value;
+                        if (val.length < 12) {
+                            showError(pwd, 'Adgangskoden skal være mindst 12 tegn.');
+                        } else {
+                            var lower = val.toLowerCase();
+                            for (var bi = 0; bi < BLOCKED.length; bi++) {
+                                if (String(BLOCKED[bi]) && lower.indexOf(String(BLOCKED[bi])) !== -1) {
+                                    showError(pwd, 'Adgangskoden indeholder et ord, der er for nemt at gætte. Vælg noget andet — gerne en sætning, du kan huske.');
+                                    break;
+                                }
+                            }
+                        }
                     }
                     var pwd2 = form.querySelector('input[name="data[password2]"]');
                     if (pwd && pwd2 && pwd.value !== pwd2.value) {
