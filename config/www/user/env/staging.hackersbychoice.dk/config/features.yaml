@@ -42,4 +42,4 @@ enabled:
   gear_donation: "false"
   social_media_links: "false"
   makerspace_meeting_link: "false"
-  account_self_service: "false"
+  account_self_service: "true"
