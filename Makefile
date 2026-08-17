@@ -610,6 +610,7 @@ test-deploy: ## Run deploy-script regression tests (lint + unit + atomic-layout 
 	@bash tests/deploy/unit-reset-users.sh
 	@bash tests/deploy/unit-reset-data.sh
 	@bash tests/deploy/unit-delete-user.sh
+	@bash tests/deploy/unit-list-users.sh
 	@bash tests/deploy/unit-sample-content-seed.sh
 	@bash tests/deploy/unit-push-data-guard.sh
 

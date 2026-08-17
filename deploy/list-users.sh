@@ -7,11 +7,17 @@
 # accounts are flat YAML at user/accounts/<username>.yaml. While testing
 # registration you want to see what accounts exist (and their state — to spot
 # disabled/un-activated ones) so you know what to delete. This lists them, with
-# username / state / email, through the same SSH machinery as the other deploy
-# scripts. Read-only: it never writes or deletes.
+# username / type / state / email / groups, through the same SSH machinery as
+# the other deploy scripts. Read-only: it never writes or deletes.
+#
+# GROUPS answers "who is an organizer here?" without opening each account YAML
+# or reaching for manage-groups.sh one user at a time. The column reads the
+# same top-level `groups:` key manage-groups.sh writes, in both the block form
+# Symfony's dumper produces and the flow form (`groups: [a, b]`) a hand edit
+# may leave. An account with no groups shows `-`.
 #
 # Passwords are stored hashed in the account YAML and are never read or shown —
-# only username, state, and email.
+# only username, type, state, email, and groups.
 #
 # USAGE
 #   ./deploy/list-users.sh <tier>
@@ -76,7 +82,8 @@ fi
 
 ACCOUNTS_DIR="$(bv_tier_root "$PATH_SSH" "$TIER")/user/accounts"
 
-# ── 3. List on the remote (tab-separated: username, state, email) ────
+# ── 3. List on the remote (tab-separated: username, type, state, email,
+#       groups) ────────────────────────────────────────────────────────
 out="$(bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" "
     d=\"$ACCOUNTS_DIR\"
     [ -d \"\$d\" ] || { echo __NODIR__; exit 0; }
@@ -91,7 +98,18 @@ out="$(bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" "
         elif grep -qE '^[[:space:]]*admin:[[:space:]]*\$' \"\$f\"; then ty=admin
         elif grep -qE '^[[:space:]]*site:[[:space:]]*\$' \"\$f\"; then ty=member
         else ty='?'; fi
-        printf '%s\t%s\t%s\t%s\n' \"\$u\" \"\$ty\" \"\${st:-?}\" \"\$em\"
+        # Groups, flow form first (\`groups: [a, b]\`), then the block form
+        # Symfony's dumper writes. The tr -cd keeps only the characters a
+        # group name may contain (manage-groups.sh pins them to
+        # ^[a-z0-9_-]+\$), so brackets, quotes and stray spaces fall away
+        # without any quoting gymnastics across the SSH boundary.
+        gr=\$(sed -n 's/^groups:[[:space:]]*\[\(.*\)\][[:space:]]*\$/\\1/p' \"\$f\" | head -1)
+        if [ -z \"\$gr\" ]; then
+            gr=\$(sed -n '/^groups:[[:space:]]*\$/,/^[^[:space:]#-]/{ s/^[[:space:]]*-[[:space:]]*//p; }' \"\$f\" | tr '\n' ',')
+        fi
+        gr=\$(printf '%s' \"\$gr\" | tr -cd 'a-z0-9_,-' | sed 's/,,*/,/g; s/^,//; s/,\$//')
+        if [ -z \"\$gr\" ]; then gr='-'; fi
+        printf '%s\t%s\t%s\t%s\t%s\n' \"\$u\" \"\$ty\" \"\${st:-?}\" \"\${em:--}\" \"\$gr\"
     done
     if [ \"\$n\" = 0 ]; then echo __EMPTY__; fi
     exit 0
@@ -115,5 +133,5 @@ fi
 count="$(printf '%s\n' "$out" | grep -c .)"
 echo "Member accounts on $TIER:"
 [ "$TIER" = "prod" ] && echo "(real member data)"
-{ printf 'USERNAME\tTYPE\tSTATE\tEMAIL\n'; printf '%s\n' "$out"; } | column -t -s "$(printf '\t')"
+{ printf 'USERNAME\tTYPE\tSTATE\tEMAIL\tGROUPS\n'; printf '%s\n' "$out"; } | column -t -s "$(printf '\t')"
 echo "($count account(s))"
