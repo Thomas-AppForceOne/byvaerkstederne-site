@@ -279,3 +279,173 @@ test.describe('Welcome email (post-activation)', () => {
     ).toBe(true);
   });
 });
+
+/**
+ * Single source of truth for the welcome copy.
+ *
+ * The rule, in one sentence: editing
+ * themes/byvaerkstederne/templates/emails/login/welcome.html.twig must be
+ * enough to change what EVERY tier sends. dev, test, staging and prod all
+ * deploy that one file; no tier gets its own wording, and nothing else in the
+ * repo may carry a welcome-mail body.
+ *
+ * This is not hypothetical. `scripts/send-test-welcome-emails.sh` used to send
+ * the test tier a second, entirely different welcome mail — its own hardcoded
+ * Danish body, its own subject ("Velkommen til Byværkstedernes website test"),
+ * driven by a LaunchAgent on one operator's Mac. Two copies meant a correction
+ * to the template silently missed the tier most likely to be read by someone
+ * reviewing the copy. The script is gone; these assertions keep it gone.
+ *
+ * Pure-source checks — no container, no mail sink, no credentials — so they
+ * run on every invocation rather than skipping with the delivery tests above.
+ */
+test.describe('Welcome email — single source of truth', () => {
+  const REPO = path.resolve(__dirname, '..', '..');
+  const TEMPLATE_REL =
+    'config/www/user/themes/byvaerkstederne/templates/emails/login/welcome.html.twig';
+
+  // A phrase from the mail's own body. Deliberately longer than it looks like
+  // it needs to be: `Din konto er nu aktiv` alone is a PREFIX of the web flash
+  // string USER_ACTIVATED_SUCCESSFULLY ("Din konto er nu aktiveret. Du kan
+  // logge ind.") in user/languages/en.yaml, which is not mail copy at all.
+  const COPY_MARKER = 'Din konto er nu aktiv, og du';
+
+  /** Directories that are not sources: vendored code, build scratch, history. */
+  const SKIP_DIRS = new Set([
+    'node_modules',
+    '.git',
+    'vendor',
+    'archive',
+    'logs',
+    // deploy/staging is gitignored deploy scratch — a generated mirror of
+    // config/, so a hit there is the same file, not a second one.
+    'staging',
+    // The login plugin's stock template is the file our theme override
+    // deliberately shadows. It must stay untouched and updatable.
+    'plugins',
+  ]);
+
+  /** @param {string} dir @param {string[]} acc */
+  function walk(dir, acc = []) {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return acc;
+    }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (SKIP_DIRS.has(e.name)) continue;
+        walk(full, acc);
+      } else if (e.isFile()) {
+        acc.push(full);
+      }
+    }
+    return acc;
+  }
+
+  test('the welcome copy lives in exactly one file', () => {
+    const searched = [
+      path.join(REPO, 'config/www/user'),
+      path.join(REPO, 'scripts'),
+      path.join(REPO, 'deploy'),
+    ];
+
+    const carriers = [];
+    for (const root of searched) {
+      for (const file of walk(root)) {
+        let text;
+        try {
+          text = fs.readFileSync(file, 'utf8');
+        } catch {
+          continue; // binary or unreadable — cannot be mail copy
+        }
+        if (text.includes(COPY_MARKER)) carriers.push(path.relative(REPO, file));
+      }
+    }
+
+    expect(
+      carriers,
+      'the welcome copy must exist in exactly one file — a second copy is how a tier ' +
+        'starts sending stale wording after the template is corrected',
+    ).toEqual([TEMPLATE_REL]);
+  });
+
+  test('only one welcome template exists outside the vendored plugin', () => {
+    // Structural companion to the prose check above: a duplicate written from
+    // scratch shares no phrasing, but it still has to live somewhere Twig can
+    // resolve. The login plugin's own copy is excluded by SKIP_DIRS — that one
+    // is the file our override deliberately shadows.
+    const templates = walk(path.join(REPO, 'config/www/user'))
+      .filter((f) => /emails[/\\]login[/\\]welcome\./.test(f))
+      .map((f) => path.relative(REPO, f));
+
+    expect(
+      templates,
+      'a second welcome template means the resolved one depends on load order',
+    ).toEqual([TEMPLATE_REL]);
+  });
+
+  test('no script carries member-facing mail copy of its own', () => {
+    // scripts/ is operator tooling. Danish prose addressed to a member means
+    // someone is composing mail outside the template again — the exact shape
+    // the retired welcome agent had.
+    const offenders = walk(path.join(REPO, 'scripts'))
+      .filter((file) => {
+        let text;
+        try {
+          text = fs.readFileSync(file, 'utf8');
+        } catch {
+          return false;
+        }
+        return /Velkommen til/i.test(text);
+      })
+      .map((f) => path.relative(REPO, f));
+
+    expect(
+      offenders,
+      'a script composing its own welcome mail bypasses the template every tier deploys',
+    ).toEqual([]);
+  });
+
+  test('the template pins its own subject, so no English fallback can render', () => {
+    const twig = fs.readFileSync(path.join(REPO, TEMPLATE_REL), 'utf8');
+    // The login plugin's language file carries WELCOME_EMAIL_SUBJECT
+    // ("Welcome to %s"). It is deliberately not overridden in the repo's
+    // en.yaml, so the ONLY thing keeping the subject Danish is the template
+    // setting it itself. Lose this line and every tier mails an English
+    // subject with a Danish body.
+    expect(twig, 'the template must set the subject itself').toMatch(/setSubject/);
+    expect(twig, 'the subject must be the Danish one').toMatch(/Velkommen til/);
+  });
+
+  test('no tier overrides any member-facing mail text', () => {
+    // Grav resolves per-tier config from user/env/<host>/. A mail template or
+    // a *_EMAIL_* language override placed there would give one tier its own
+    // wording — silently, and only for that tier's members.
+    //
+    // Scope is every member-facing mail, not just the welcome one. Registering
+    // produces TWO mails: the activation mail, whose copy lives as
+    // ACTIVATION_EMAIL_* language strings in user/languages/en.yaml, and the
+    // welcome mail from the Twig template. Both must stay single-sourced, or
+    // "edit once, every tier corrected" holds for one mail and not the other.
+    const MAIL_KEY = /^\s*[A-Z_]*EMAIL[A-Z_]*\s*:/m;
+    const envRoot = path.join(REPO, 'config/www/user/env');
+    const offenders = walk(envRoot)
+      .filter((file) => {
+        if (/welcome/i.test(path.basename(file))) return true;
+        let text;
+        try {
+          text = fs.readFileSync(file, 'utf8');
+        } catch {
+          return false;
+        }
+        // A comment mentioning a mail is fine; an actual override is not.
+        return MAIL_KEY.test(text);
+      })
+      .map((f) => path.relative(REPO, f));
+
+    expect(offenders, 'a per-tier mail override defeats the single source').toEqual([]);
+  });
+});
