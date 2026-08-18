@@ -420,10 +420,17 @@ test.describe('Welcome email — single source of truth', () => {
     expect(twig, 'the subject must be the Danish one').toMatch(/Velkommen til/);
   });
 
-  test('no tier overrides the welcome mail', () => {
-    // Grav resolves per-tier config from user/env/<host>/. A welcome template
-    // or a WELCOME_EMAIL_* language override placed there would give one tier
-    // its own wording — silently, and only for that tier's members.
+  test('no tier overrides any member-facing mail text', () => {
+    // Grav resolves per-tier config from user/env/<host>/. A mail template or
+    // a *_EMAIL_* language override placed there would give one tier its own
+    // wording — silently, and only for that tier's members.
+    //
+    // Scope is every member-facing mail, not just the welcome one. Registering
+    // produces TWO mails: the activation mail, whose copy lives as
+    // ACTIVATION_EMAIL_* language strings in user/languages/en.yaml, and the
+    // welcome mail from the Twig template. Both must stay single-sourced, or
+    // "edit once, every tier corrected" holds for one mail and not the other.
+    const MAIL_KEY = /^\s*[A-Z_]*EMAIL[A-Z_]*\s*:/m;
     const envRoot = path.join(REPO, 'config/www/user/env');
     const offenders = walk(envRoot)
       .filter((file) => {
@@ -434,11 +441,11 @@ test.describe('Welcome email — single source of truth', () => {
         } catch {
           return false;
         }
-        // A comment mentioning the mail is fine; an actual override is not.
-        return /^\s*WELCOME_EMAIL_[A-Z_]*\s*:/m.test(text);
+        // A comment mentioning a mail is fine; an actual override is not.
+        return MAIL_KEY.test(text);
       })
       .map((f) => path.relative(REPO, f));
 
-    expect(offenders, 'a per-tier welcome override defeats the single source').toEqual([]);
+    expect(offenders, 'a per-tier mail override defeats the single source').toEqual([]);
   });
 });
