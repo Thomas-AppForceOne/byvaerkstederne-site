@@ -37,6 +37,10 @@ require('./anonymous/scheduler-trigger');
 // reason otherwise.
 require('./anonymous/password-policy');
 require('./anonymous/session-cookie');
+// The committed base mailer config must never be the Mailpit test override.
+// Reads via `git show HEAD:` — the working tree legitimately holds the
+// override while a Mailpit-backed run is in flight.
+require('./anonymous/mailer-config');
 require('./anonymous/registration');
 require('./anonymous/registration-honeypot');
 // Welcome mail: sent from the ACTIVATION handler, content from the theme
