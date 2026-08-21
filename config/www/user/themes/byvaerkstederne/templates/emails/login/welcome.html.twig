@@ -113,24 +113,25 @@
 
 <h2>Sådan bruger du websitet</h2>
 
+{# Describe ONLY what the receiving tier actually renders. Tilmelding lives
+   behind the event_rsvp flag, which production has off: this section used to
+   instruct every new member to press "Deltag", press "Interesseret" and use
+   the "Mine aktiviteter" filter, none of which exist there. The hand-kept
+   forbidden list in tests/anonymous/welcome-email.js did not cover that flag,
+   and the test ran against a profile where the buttons DO exist, so it stayed
+   green. It is now derived from the production profile — when event_rsvp
+   ships to production, this copy can describe it again and the test will
+   allow it. #}
 <p>
   <b>Værkstedskalenderen</b> er hjertet i sitet. Her ser du alle kommende
   aktiviteter, kurser og fælles arbejdsdage, og du kan filtrere efter
-  værksted. Klik ind på en aktivitet for at se detaljerne.
+  værksted, så du kun ser det, der foregår dér, hvor du kommer.
 </p>
 
 <p>
-  Er der et begrænset antal pladser, melder du dig til med knappen
-  <b>Deltag</b>. Det er en rigtig plads, du optager — så tryk, når du ved, at
-  du kommer, og tryk igen for at give pladsen fri, hvis noget kommer i vejen.
-  Drop-in-aktiviteter har i stedet knappen <b>Interesseret</b>. De er
-  uforpligtende og uden pladsloft: dér kan du roligt kigge forbi bare for at
-  se, hvad det er for noget, og få en snak.
-</p>
-
-<p>
-  Når du har markeret noget, samler filteret <b>Mine aktiviteter</b> dit eget
-  overblik.
+  Har en aktivitet et begrænset antal pladser, står antallet på kortet. Er du
+  i tvivl, om der er plads, så skriv til os — ellers er du velkommen til bare
+  at kigge forbi.
 </p>
 
 <p>
