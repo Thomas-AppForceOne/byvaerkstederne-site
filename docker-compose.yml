@@ -1,12 +1,17 @@
 services:
   grav:
-    # PINNED BY DIGEST, deliberately — `:latest` let the local PHP version
-    # drift silently, which is half of the divergence .php-version exists to
-    # stop (see deploy/lib/php-parity.sh). This digest carries PHP 8.3, the
-    # version declared in .php-version. Re-pin and update .php-version
-    # together, never one without the other; tests/deploy/unit-php-parity.sh
-    # fails if they disagree.
-    image: lscr.io/linuxserver/grav@sha256:1457ac8fe5ff4fb7f2c7c75821743177a2bdf5c8b1d818174f81321c2bace417
+    # PINNED BY DIGEST, deliberately. `:latest` let BOTH the PHP version and the
+    # Grav CORE drift silently — the Grav core is not in this repo, it comes from
+    # this image locally and from deploy/grav-admin-*.zip on the tiers. Pulling a
+    # fresh `latest` during the 2026-08-21 audit upgraded the local CMS from
+    # 1.7.49.5 to 2.0.20 without a word, which is the exact divergence class
+    # .php-version exists to stop.
+    #
+    # This digest carries PHP 8.5.9 AND Grav 2.0.20 — the image couples them, so
+    # the two versions cannot be chosen independently. Re-pin, .php-version and
+    # the deployed Grav zip move together; unit-php-parity.sh fails if they
+    # disagree.
+    image: lscr.io/linuxserver/grav@sha256:e25293a61163bda5288830b38c99d28d29d206c01e4fea0359970229e6c92caf
     container_name: ${GRAV_CONTAINER:-grav}
     environment:
       - PUID=1000

@@ -165,3 +165,10 @@ config/www/user/data/event-images/
 # state written by the plugin, never committed
 config/www/user/data/account-manager/
 logs/
+
+# Grav 2 auto-generates a private secret per environment for CSRF nonce
+# signing and admin rate-limit hashing. The file says so itself: "Do NOT
+# commit to version control." It is per-installation live state — the next
+# request regenerates it if deleted. Three of these were swept into a commit
+# by a `git add -A` during the 1.7 -> 2.0 migration; this stops a repeat.
+security-private.php

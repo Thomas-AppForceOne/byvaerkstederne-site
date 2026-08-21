@@ -2,6 +2,26 @@ absolute_urls: false
 
 reverse_proxy_setup: true
 
+# Grav 2.0 made every forwarded header OPT-IN, defaulting them all to false
+# "to prevent client-supplied spoofing of client IP, host, port, or protocol"
+# (its own words, system/config/system.yaml). On Grav 1.7, reverse_proxy_setup
+# alone was enough for Uri::scheme() to read X-Forwarded-Proto; on 2.0 it is
+# gated behind system.http_x_forwarded.protocol as well.
+#
+# That is not cosmetic. Grav computes the session cookie's Secure flag as
+#   session.secure OR (session.secure_https AND scheme === 'https')
+# so without this key a proxied tier stops seeing https, and its session
+# cookies silently lose Secure. Caught by tests/anonymous/session-cookie.js
+# during the 1.7 → 2.0 migration; it would otherwise have shipped as a
+# security regression nobody could see in a browser over real TLS.
+#
+# ONLY `protocol` is enabled. Every tier sits behind a proxy that sets and
+# overwrites X-Forwarded-Proto (one.com Varnish; LiteSpeed on prod), so
+# trusting it is sound. host/port/ip stay off: nothing here needs them, and
+# each one trusted without a proxy that overwrites it is a spoofing surface.
+http_x_forwarded:
+  protocol: true
+
 # WI-5: pin the password and username policy in this repo so a Grav-core
 # upgrade or a differently-configured tier cannot silently weaken them. These
 # must agree exactly with the client-side checks (register.html.twig) and the
