@@ -115,3 +115,43 @@ bv_php_parity_check() {
     printf '    Emergency override:  ALLOW_PHP_MISMATCH=1 make deploy tier=%s\n' "$tier" >&2
     return 1
 }
+
+# The PHP binary to invoke on a tier's shell.
+#
+# WHY THIS IS NOT JUST "php": prod is cPanel, where the version a DOMAIN is
+# served with and the version the SHELL gets are two different settings. The
+# domain is on ea-php85; the system default — "set by the system
+# administrator", i.e. the hosting provider, and not changeable from the
+# account — is 8.4, so `php` on the shell is 8.4.24.
+#
+# Everything triggered over HTTP therefore runs 8.5, including Grav's
+# scheduler (prod has an empty crontab; the scheduler-trigger plugin fires it
+# via a token-gated HTTP endpoint, so the purge and cache jobs are web-SAPI).
+# The only 8.4 left is what WE invoke over SSH. This makes those match too.
+#
+# one.com tiers are not cPanel and have a single PHP, so they keep plain
+# `php` and nothing about their behaviour changes.
+#
+# Usage: bv_php_remote_bin <tier> <project_dir>
+bv_php_remote_bin() {
+    local tier="$1" project_dir="${2:-.}"
+    if [ "$tier" != "prod" ]; then
+        printf 'php'
+        return 0
+    fi
+    local target pkg
+    target="$(bv_php_target "$project_dir" 2>/dev/null || true)"
+    pkg="$(printf '%s' "$target" | tr -d '.')"
+    if [ -z "$pkg" ]; then
+        printf 'php'
+        return 0
+    fi
+    # A PLAIN PATH, deliberately — not a shell expression. Callers interpolate
+    # this into remote command strings, and deploy.sh passes it through
+    # bv_remote_run's %q-quoted KEY=VALUE dispatch, which exists to stop
+    # locally-interpolated values reaching the remote shell unquoted. An
+    # expression would defeat that (and tests/deploy/lint-remote-ssh.sh
+    # rightly refuses it). Call sites that want a fallback test -x on the
+    # remote side.
+    printf '/opt/cpanel/ea-php%s/root/usr/bin/php' "$pkg"
+}

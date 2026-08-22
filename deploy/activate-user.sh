@@ -116,6 +116,10 @@ fi
 . "$ENV_FILE"
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$SCRIPT_DIR/lib/ssh-auth.sh"
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_remote_bin — prod's shell PHP is the system default (8.4),
+# not the version its domain is served with (8.5). See that file.
+. "$SCRIPT_DIR/lib/php-parity.sh"
 # shellcheck source=deploy/lib/user-resolve.sh
 . "$SCRIPT_DIR/lib/user-resolve.sh"
 
@@ -139,6 +143,7 @@ if ! DEPLOY_PASS="$(bv_resolve_ssh_password)"; then
     exit 1
 fi
 
+PHP_BIN="$(bv_php_remote_bin "${TIER:-${ENV:-}}" "$PROJECT_DIR")"
 TIER_DIR="$(bv_tier_root "$PATH_SSH" "$TIER")"
 ACCOUNTS_DIR="$TIER_DIR/user/accounts"
 FLEX_INDEX="$TIER_DIR/user/data/flex/indexes/accounts.yaml"
@@ -208,7 +213,7 @@ fi
 # toggle-user is the supported write path (same code the activation link
 # ultimately drives); with both -u and -s given it runs non-interactively.
 result="$(bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-    "cd \"$TIER_DIR\" && php bin/plugin login toggle-user -u \"$USERNAME\" -s \"$STATE\"" \
+    "cd \"$TIER_DIR\" && $PHP_BIN bin/plugin login toggle-user -u \"$USERNAME\" -s \"$STATE\"" \
     < /dev/null 2>&1 || echo __CLIFAIL__)"
 case "$result" in
     *__CLIFAIL__*|*rror*)
@@ -219,9 +224,9 @@ case "$result" in
 esac
 
 if ! bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-        "rm -f \"$FLEX_INDEX\" && cd \"$TIER_DIR\" && php bin/grav clearcache" >/dev/null < /dev/null; then
+        "rm -f \"$FLEX_INDEX\" && cd \"$TIER_DIR\" && $PHP_BIN bin/grav clearcache" >/dev/null < /dev/null; then
     echo "⚠️  State changed, but the cache clear failed — run it manually on the tier:" >&2
-    echo "      cd $TIER_DIR && php bin/grav clearcache" >&2
+    echo "      cd $TIER_DIR && $PHP_BIN bin/grav clearcache" >&2
     exit 1
 fi
 

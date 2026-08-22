@@ -53,6 +53,9 @@ trap 'rm -rf "$SB"' EXIT
 mkdir -p "$SB/proj/deploy/lib" "$SB/bin" "$SB/remote"
 cp "$PROJECT_ROOT/deploy/list-users.sh" "$SB/proj/deploy/"
 cp "$PROJECT_ROOT/deploy/lib/ssh-auth.sh" "$SB/proj/deploy/lib/"
+# php-parity.sh is sourced by the scripts under test (bv_php_remote_bin);
+# without it the sandboxed copy dies at source time.
+cp "$PROJECT_ROOT/deploy/lib/php-parity.sh" "$SB/proj/deploy/lib/"
 
 # Key-auth path (no DEPLOY_PASS) so bv_ssh_cmd uses the `ssh` stub.
 cat > "$SB/proj/.env.deploy" <<EOF

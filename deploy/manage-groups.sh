@@ -194,6 +194,10 @@ fi
 . "$ENV_FILE"
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$SCRIPT_DIR/lib/ssh-auth.sh"
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_remote_bin — prod's shell PHP is the system default (8.4),
+# not the version its domain is served with (8.5). See that file.
+. "$SCRIPT_DIR/lib/php-parity.sh"
 # shellcheck source=deploy/lib/user-resolve.sh
 . "$SCRIPT_DIR/lib/user-resolve.sh"
 
@@ -217,6 +221,7 @@ if ! DEPLOY_PASS="$(bv_resolve_ssh_password)"; then
     exit 1
 fi
 
+PHP_BIN="$(bv_php_remote_bin "${TIER:-${ENV:-}}" "$PROJECT_DIR")"
 TIER_DIR="$(bv_tier_root "$PATH_SSH" "$TIER")"
 ACCOUNTS_DIR="$TIER_DIR/user/accounts"
 TIER_GROUPS_FILE="$TIER_DIR/user/config/groups.yaml"
@@ -314,7 +319,7 @@ fi
 # the tier's own Symfony Yaml — never sed. It prints one status token:
 # changed | already-member | not-a-member.
 result="$(bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-    "cd \"$TIER_DIR\" && php -- \"$ACCT\" \"$GROUP\" \"$ACTION\"" \
+    "cd \"$TIER_DIR\" && $PHP_BIN -- \"$ACCT\" \"$GROUP\" \"$ACTION\"" \
     < "$GROUPS_PHP" 2>&1 || echo __PHPFAIL__)"
 
 case "$result" in
@@ -342,9 +347,9 @@ esac
 # Clear the cache (and drop the flex accounts index — Grav rebuilds it) so
 # the new access tree resolves on the member's next login.
 if ! bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-        "rm -f \"$FLEX_INDEX\" && cd \"$TIER_DIR\" && php bin/grav clearcache" >/dev/null < /dev/null; then
+        "rm -f \"$FLEX_INDEX\" && cd \"$TIER_DIR\" && $PHP_BIN bin/grav clearcache" >/dev/null < /dev/null; then
     echo "⚠️  Group changed, but the cache clear failed — run it manually on the tier:" >&2
-    echo "      cd $TIER_DIR && php bin/grav clearcache" >&2
+    echo "      cd $TIER_DIR && $PHP_BIN bin/grav clearcache" >&2
     exit 1
 fi
 

@@ -104,6 +104,51 @@ check "deploy.sh sources the parity lib" \
 check "deploy.sh actually calls the check" \
     "$(grep -q 'bv_php_parity_check' "$PROJECT_ROOT/deploy/deploy.sh" && echo ok || echo no)"
 
+# ── The remote binary (cPanel's two PHP settings) ────────────────────
+#
+# prod is cPanel, where the version a DOMAIN is served with and the version
+# the SHELL gets are separate settings. The domain runs ea-php85; the system
+# default is 8.4 and is "set by the system administrator" — not changeable
+# from the account. So plain `php` over SSH is 8.4 there while pages render
+# on 8.5.
+#
+# Everything triggered over HTTP already runs 8.5, including Grav's
+# scheduler (prod's crontab is empty; the scheduler-trigger plugin fires it
+# via HTTP). Only what we invoke over SSH was left behind.
+PRODBIN="$(bv_php_remote_bin prod "$PROJECT_ROOT")"
+DEVBIN="$(bv_php_remote_bin dev "$PROJECT_ROOT")"
+
+check "prod resolves a versioned cPanel binary" \
+    "$(printf '%s' "$PRODBIN" | grep -q 'ea-php' && echo ok || echo no)"
+check "the prod binary carries the declared target" \
+    "$(printf '%s' "$PRODBIN" | grep -q "ea-php$(tr -d '.\n' < "$PROJECT_ROOT/.php-version")" && echo ok || echo no)"
+# A plain path, not a shell expression: callers interpolate it into remote
+# commands and deploy.sh passes it through bv_remote_run's %q-quoted
+# dispatch, which an expression would defeat (lint-remote-ssh.sh refuses it).
+check "prod resolves to a plain path, not a shell expression" \
+    "$(printf '%s' "$PRODBIN" | grep -qE '^/[A-Za-z0-9/._-]+$' && echo ok || echo no)"
+check "one.com tiers keep plain php (not cPanel)" \
+    "$([ "$DEVBIN" = "php" ] && echo ok || echo no)"
+check "staging and test keep plain php too" \
+    "$([ "$(bv_php_remote_bin staging "$PROJECT_ROOT")" = "php" ] && [ "$(bv_php_remote_bin test "$PROJECT_ROOT")" = "php" ] && echo ok || echo no)"
+
+# Every remote PHP invocation must go through the resolved binary, or the
+# tier silently runs a different PHP than the one the guard checked.
+BARE=0
+for f in "$PROJECT_ROOT"/deploy/*.sh; do
+    # Skip comments and advice text — an echo suggesting a command a human
+    # might type is not an invocation this tooling makes.
+    # Exclude comments and lines that ARE advice text (starting with echo or
+    # printf). Not lines that merely contain printf — `printf %q` is how these
+    # scripts quote remote arguments, and excluding those hid two real call
+    # sites in the promote scripts.
+    grep -vE '^[[:space:]]*(#|echo|printf)[[:space:]]' "$f" \
+        | grep -qE '[^A-Z_$/-]php (bin/|-- )' \
+        && { echo "     bare php in $(basename "$f")" >&2; BARE=$((BARE+1)); }
+done
+check "no deploy script invokes a bare remote php" \
+    "$([ "$BARE" -eq 0 ] && echo ok || echo no)"
+
 echo "---"
 echo "php parity unit: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

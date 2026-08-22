@@ -62,6 +62,11 @@ ENV_FILE="$PROJECT_DIR/.env.deploy"
 . "$ENV_FILE"
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$SCRIPT_DIR/lib/ssh-auth.sh"
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_remote_bin — prod's shell PHP is the system default
+# (8.4), not the version its domain is served with (8.5).
+. "$SCRIPT_DIR/lib/php-parity.sh"
+PHP_BIN="$(bv_php_remote_bin "${TIER:-${ENV:-}}" "$PROJECT_DIR")"
 
 export TIER
 if [ "$TIER" = "prod" ]; then
@@ -94,7 +99,7 @@ echo "→ throttle $STATE on $TIER ($host)"
 out="$(bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" "
     [ -f \"$FILE\" ] || { echo __NOFILE__; exit 0; }
     sed -i 's/^enabled:.*/enabled: $VAL/' \"$FILE\"
-    cd \"$TIER_DIR\" && php bin/grav clearcache >/dev/null 2>&1 || true
+    cd \"$TIER_DIR\" && $PHP_BIN bin/grav clearcache >/dev/null 2>&1 || true
     grep -E '^enabled:' \"$FILE\"
 " 2>/dev/null || echo __SSHFAIL__)"
 

@@ -39,6 +39,9 @@ trap 'rm -rf "$SB"' EXIT
 mkdir -p "$SB/proj/deploy/lib" "$SB/bin" "$SB/remotebin"
 cp "$PROJECT_ROOT/deploy/reset-users.sh" "$SB/proj/deploy/"
 cp "$PROJECT_ROOT/deploy/lib/ssh-auth.sh" "$SB/proj/deploy/lib/"
+# php-parity.sh is sourced by the scripts under test (bv_php_remote_bin);
+# without it the sandboxed copy dies at source time.
+cp "$PROJECT_ROOT/deploy/lib/php-parity.sh" "$SB/proj/deploy/lib/"
 
 cat > "$SB/proj/.env.deploy" <<EOF
 DEPLOY_HOST=fakehost

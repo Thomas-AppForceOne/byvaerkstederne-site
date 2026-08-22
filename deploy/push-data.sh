@@ -170,6 +170,11 @@ fi
 . "$ENV_FILE"
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$SCRIPT_DIR/lib/ssh-auth.sh"
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_remote_bin — prod's shell PHP is the system default
+# (8.4), not the version its domain is served with (8.5).
+. "$SCRIPT_DIR/lib/php-parity.sh"
+PHP_BIN="$(bv_php_remote_bin "${TIER:-${ENV:-}}" "$PROJECT_DIR")"
 
 # ── 4. Resolve SSH credentials for the tier ──────────────────────────
 # bv_resolve_ssh_password reads $TIER to decide which env-var / Keychain
@@ -293,7 +298,7 @@ done
 echo ""
 echo "→ clearing Grav cache on $TIER"
 if ! bv_ssh_cmd -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
-        "cd \"$REMOTE_TIER_DIR\" && php bin/grav clearcache"; then
+        "cd \"$REMOTE_TIER_DIR\" && $PHP_BIN bin/grav clearcache"; then
     echo "⚠  Cache clear failed — data is pushed but you may see stale renders" >&2
     echo "    until Grav's auto-cache rolls over (a few minutes)." >&2
 fi

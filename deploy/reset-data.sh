@@ -70,6 +70,11 @@ ENV_FILE="$PROJECT_DIR/.env.deploy"
 . "$ENV_FILE"
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$SCRIPT_DIR/lib/ssh-auth.sh"
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_remote_bin — prod's shell PHP is the system default
+# (8.4), not the version its domain is served with (8.5).
+. "$SCRIPT_DIR/lib/php-parity.sh"
+PHP_BIN="$(bv_php_remote_bin "${TIER:-${ENV:-}}" "$PROJECT_DIR")"
 
 export TIER
 if [ "$TIER" = "prod" ]; then
@@ -174,7 +179,7 @@ for f in "${FILES[@]}"; do
     RM_PATHS="$RM_PATHS '$DATA_DIR/$f'"
 done
 if ! bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-        "rm -f $RM_PATHS && cd '$TIER_DIR' && php bin/grav clearcache"; then
+        "rm -f $RM_PATHS && cd '$TIER_DIR' && $PHP_BIN bin/grav clearcache"; then
     echo "✗ reset failed (data may be partly removed — re-run, or check the tier)." >&2
     exit 1
 fi

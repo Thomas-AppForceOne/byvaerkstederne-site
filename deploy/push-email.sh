@@ -215,6 +215,11 @@ fi
 . "$ENV_FILE"
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$SCRIPT_DIR/lib/ssh-auth.sh"
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_remote_bin — prod's shell PHP is the system default
+# (8.4), not the version its domain is served with (8.5).
+. "$SCRIPT_DIR/lib/php-parity.sh"
+PHP_BIN="$(bv_php_remote_bin "${TIER:-${ENV:-}}" "$PROJECT_DIR")"
 
 # ── 5. Per-tier push ─────────────────────────────────────────────────
 FAILED=()
@@ -324,7 +329,7 @@ for tier in "${PUSH_TIERS[@]}"; do
 
     echo "→ clearing Grav cache on $tier"
     if ! bv_ssh_cmd -p "$port_ssh" "$user_ssh@$host_ssh" \
-            "cd \"$tier_dir\" && php bin/grav clearcache" >/dev/null 2>&1; then
+            "cd \"$tier_dir\" && $PHP_BIN bin/grav clearcache" >/dev/null 2>&1; then
         echo "⚠  $tier: cache clear failed — file is pushed; Grav auto-cache rolls over shortly." >&2
     fi
     echo "✓ $tier: email.yaml pushed"
