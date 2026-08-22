@@ -13,8 +13,14 @@ services:
     image: lscr.io/linuxserver/grav@sha256:1457ac8fe5ff4fb7f2c7c75821743177a2bdf5c8b1d818174f81321c2bace417
     container_name: ${GRAV_CONTAINER:-grav}
     environment:
-      - PUID=1000
-      - PGID=1000
+      # The image chowns the bind-mounted ./config to this uid/gid. Hardcoding
+      # 1000 assumes the host user is uid 1000 — true on a typical Mac dev
+      # box, false on a GitHub runner, where it left the repo's own config
+      # unwritable and the suite died in globalSetup trying to write the
+      # Mailpit override. Default to 1000 so nothing changes locally; CI
+      # passes its own.
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
       - TZ=Europe/Copenhagen
     volumes:
       - ${GRAV_ROOT:-./config}:/config
