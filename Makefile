@@ -639,9 +639,21 @@ test-auth: ## Run authenticated tests (auto-sources ~/.gan-secrets/workshop-site
 reset-users: ## Delete all member accounts — local when no tier; on a tier keeps admins + seeds (tier=dev|test|staging, dry_run=1, yes=1; prod refused)
 	@t="$(tier)"; \
 	if [ -z "$$t" ]; then \
-	  echo "Removing local user accounts (keeping thomasadmin)..."; \
-	  find config/www/user/accounts -name "*.yaml" ! -name "thomasadmin.yaml" -delete 2>/dev/null || true; \
-	  echo "  ✓ Users reset (only thomasadmin remains)"; \
+	  echo "Removing local member accounts (keeping super-admins)..."; \
+	  kept=0; removed=0; \
+	  for f in config/www/user/accounts/*.yaml; do \
+	    [ -e "$$f" ] || continue; \
+	    if grep -qE '^[[:space:]]*super:[[:space:]]+true' "$$f" 2>/dev/null; then \
+	      kept=$$((kept+1)); continue; \
+	    fi; \
+	    rm -f "$$f"; removed=$$((removed+1)); \
+	  done; \
+	  if [ "$$kept" -gt 0 ]; then \
+	    echo "  ✓ Removed $$removed account(s); kept $$kept super-admin(s)"; \
+	  else \
+	    echo "  ⚠️  Removed $$removed account(s); NO super-admin remained."; \
+	    echo "     Grav redirects every route to /admin until one exists — run: make create-admin"; \
+	  fi; \
 	else \
 	  args=""; \
 	  if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
