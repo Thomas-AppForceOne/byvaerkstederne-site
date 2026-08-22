@@ -30,9 +30,15 @@
 # will do without asking; a minor or major jump is a migration and must be
 # a decision. 1.7.49.5 vs 1.7.52 therefore passes; 1.7 vs 2.0 does not.
 #
-# OVERRIDE
-# --------
+# OVERRIDE — AND THE UPGRADE PATH
+# -------------------------------
 # ALLOW_GRAV_MISMATCH=1, mirroring ALLOW_PHP_MISMATCH.
+#
+# Note the shape this gives a Grav upgrade: the deploy that CARRIES a new
+# Grav to a tier necessarily disagrees with the Grav that tier is still
+# running, so the guard refuses it. That is deliberate, not an oversight —
+# a CMS major landing on a tier should be a sentence someone typed, not a
+# side effect of an ordinary deploy. The override is the sentence.
 
 # The version this repo deploys, read from deploy.sh's GRAV_VERSION.
 #
@@ -88,9 +94,14 @@ bv_grav_parity_check() {
     printf '    A CMS major or minor apart is a migration, not a detail — the code\n' >&2
     printf '    exercised locally would not be the code the tier runs.\n' >&2
     printf '\n' >&2
-    printf '    Either replace deploy/grav-admin-v*.zip and re-run the suites, or\n' >&2
-    printf '    bring %s back to Grav %s.\n' "$where" "$want" >&2
+    printf '    If this is UNINTENDED drift — the tier moved without a decision, or a\n' >&2
+    printf '    container image was re-pulled — fix the side that is wrong and re-run.\n' >&2
     printf '\n' >&2
-    printf '    Emergency override:  ALLOW_GRAV_MISMATCH=1 <command>\n' >&2
+    printf '    If this IS the intended upgrade, you are seeing the guard work: the\n' >&2
+    printf '    deploy that carries a new Grav to a tier necessarily disagrees with the\n' >&2
+    printf '    Grav that tier is still running. That case is expected to be explicit,\n' >&2
+    printf '    not routine — rehearse it on dev, then test, then staging first:\n' >&2
+    printf '\n' >&2
+    printf '      ALLOW_GRAV_MISMATCH=1 make deploy tier=%s\n' "$where" >&2
     return 1
 }
