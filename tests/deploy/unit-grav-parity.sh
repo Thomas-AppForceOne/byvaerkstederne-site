@@ -69,6 +69,14 @@ check "the refusal calls it a migration, not a detail" \
     "$(printf '%s' "$msg" | grep -qi 'migration' && echo ok || echo no)"
 check "the refusal names the override" \
     "$(printf '%s' "$msg" | grep -q 'ALLOW_GRAV_MISMATCH' && echo ok || echo no)"
+# The refusal must distinguish the two cases it covers, or an operator
+# carrying out a deliberate upgrade reads it as "something is broken".
+check "the refusal separates unintended drift from an intended upgrade" \
+    "$(printf '%s' "$msg" | grep -qi 'UNINTENDED' && printf '%s' "$msg" | grep -qi 'intended upgrade' && echo ok || echo no)"
+check "the refusal spells out the upgrade command" \
+    "$(printf '%s' "$msg" | grep -q 'ALLOW_GRAV_MISMATCH=1 make deploy tier=' && echo ok || echo no)"
+check "the refusal tells you to rehearse on the lower tiers first" \
+    "$(printf '%s' "$msg" | grep -qi 'rehearse' && echo ok || echo no)"
 
 # ── The repo agrees with itself ──────────────────────────────────────
 TARGET="$(bv_grav_target "$PROJECT_ROOT" || true)"
