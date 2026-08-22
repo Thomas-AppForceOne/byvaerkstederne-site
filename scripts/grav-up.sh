@@ -159,3 +159,34 @@ echo "Container: $GRAV_CONTAINER"
 echo "Site:      http://127.0.0.1:$GRAV_PORT"
 echo "Exported:  GRAV_PORT, GRAV_CONTAINER, GRAV_ROOT"
 echo "=========================================="
+
+# ── Grav version parity (see deploy/lib/grav-parity.sh) ───────────────
+#
+# The container's Grav comes from the image; the tiers' comes from
+# deploy/grav-admin-v*.zip. Nothing used to compare them, and a routine
+# `docker pull` once swapped the local CMS to a major version ahead of
+# production without a word. Warn here — at the moment the container is
+# started, which is where the drift happens — rather than let it surface
+# as a mystery test failure days later.
+#
+# A warning, not a refusal: a developer may be deliberately trying a new
+# Grav. The deploy preflight is where it becomes a hard gate.
+if [ -f "$WORKTREE_ABS/deploy/lib/grav-parity.sh" ]; then
+    # shellcheck source=deploy/lib/grav-parity.sh
+    . "$WORKTREE_ABS/deploy/lib/grav-parity.sh"
+    _grav_want="$(bv_grav_target "$WORKTREE_ABS" 2>/dev/null || true)"
+    _grav_got="$(docker exec "$GRAV_CONTAINER" sh -lc \
+        'find / -maxdepth 5 -name defines.php -path "*system*" 2>/dev/null | head -1 | xargs grep -m1 GRAV_VERSION' \
+        2>/dev/null || true)"
+    if [ -n "$_grav_want" ] && [ -n "$_grav_got" ]; then
+        _w="$(bv_grav_major_minor "$_grav_want")"
+        _g="$(bv_grav_major_minor "$_grav_got")"
+        if [ -n "$_w" ] && [ -n "$_g" ] && [ "$_w" != "$_g" ]; then
+            echo ""
+            echo "⚠️   Grav version drift: this container runs $_g, the tiers are deployed $_w."
+            echo "     The image pins the local CMS; deploy/grav-admin-v*.zip pins the tiers'."
+            echo "     Tests passing here say nothing about a tier on a different major."
+            echo "     See deploy/lib/grav-parity.sh."
+        fi
+    fi
+fi
