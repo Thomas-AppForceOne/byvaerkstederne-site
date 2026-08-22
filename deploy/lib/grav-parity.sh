@@ -34,14 +34,21 @@
 # --------
 # ALLOW_GRAV_MISMATCH=1, mirroring ALLOW_PHP_MISMATCH.
 
-# The version this repo deploys, taken from the payload filename — the one
-# artefact that cannot disagree with what actually ships.
+# The version this repo deploys, read from deploy.sh's GRAV_VERSION.
+#
+# NOT from the payload filename: deploy/grav-admin-v*.zip is a local
+# download cache, not tracked in git (deploy.sh fetches it from GRAV_URL on
+# demand). Keying on the file made the guard pass on a developer machine and
+# fail in CI, where the cache does not exist — the very asymmetry this whole
+# effort is about, reproduced inside the guard meant to prevent it.
+# GRAV_VERSION is committed, and it is what deploy.sh actually unpacks.
+#
 # Usage: bv_grav_target <project_dir>
 bv_grav_target() {
-    local zip
-    zip="$(ls "$1"/deploy/grav-admin-v*.zip 2>/dev/null | head -1)"
-    [ -n "$zip" ] || return 1
-    printf '%s' "$zip" | sed -E 's/.*grav-admin-v([0-9.]+)\.zip/\1/'
+    local v
+    v="$(sed -n 's/^GRAV_VERSION="\([0-9.]*\)".*/\1/p' "$1/deploy/deploy.sh" 2>/dev/null | head -1)"
+    [ -n "$v" ] || return 1
+    printf '%s' "$v"
 }
 
 # "1.7.52" -> "1.7";  "define('GRAV_VERSION', '2.0.20');" -> "2.0"

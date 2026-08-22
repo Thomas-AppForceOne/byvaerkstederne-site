@@ -72,8 +72,19 @@ check "the refusal names the override" \
 
 # ── The repo agrees with itself ──────────────────────────────────────
 TARGET="$(bv_grav_target "$PROJECT_ROOT" || true)"
-check "a deploy payload exists and its version parses" \
+# Read from deploy.sh's committed GRAV_VERSION, never from the zip: that
+# file is a local download cache and is absent in CI.
+check "the deployed version is read from committed source, not a cached zip" \
     "$([ -n "$TARGET" ] && printf '%s' "$TARGET" | grep -qE '^[0-9]+\.[0-9.]+$' && echo ok || echo no)"
+# Scoped to bv_grav_target's BODY. The header explains at length why the zip
+# is not the source, and the refusal text rightly tells an operator to replace
+# it — neither is the function reading it.
+check "bv_grav_target does not read the untracked payload zip" \
+    "$(awk '/^bv_grav_target\(\)/,/^}/' "$PROJECT_ROOT/deploy/lib/grav-parity.sh" \
+       | grep -q 'grav-admin' && echo no || echo ok)"
+check "bv_grav_target reads deploy.sh's committed GRAV_VERSION" \
+    "$(awk '/^bv_grav_target\(\)/,/^}/' "$PROJECT_ROOT/deploy/lib/grav-parity.sh" \
+       | grep -q 'GRAV_VERSION' && echo ok || echo no)"
 check "deploy.sh sources the Grav parity lib" \
     "$(grep -q 'lib/grav-parity.sh' "$PROJECT_ROOT/deploy/deploy.sh" && echo ok || echo no)"
 check "deploy.sh actually calls the check" \
