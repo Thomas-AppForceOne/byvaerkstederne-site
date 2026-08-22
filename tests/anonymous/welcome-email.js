@@ -193,10 +193,20 @@ test.describe('Welcome email (post-activation)', () => {
     );
 
     // The surfaces the mail promises, in the words the UI actually uses.
+    //
+    // This block used to REQUIRE the mail to contain 'Deltag', 'Interesseret'
+    // and 'Mine aktiviteter' — "named as the UI names it". That was true of
+    // the UI this suite runs against (all flags on) and false of production,
+    // where event_rsvp is off and none of the three exist. The suite was
+    // therefore enforcing the bug: every new production member was told to
+    // press buttons that were not there. The mail is a single file for every
+    // tier, so it can only describe what the LEAST-enabled tier renders.
+    // See the derived check in "advertises nothing production has switched off".
     expect(body, 'calendar section present').toContain('Værkstedskalenderen');
-    expect(body, 'capacity signup button named as the UI names it').toContain('Deltag');
-    expect(body, 'drop-in button named as the UI names it').toContain('Interesseret');
-    expect(body, 'personal calendar filter named').toContain('Mine aktiviteter');
+    expect(body, 'filtering by workshop is described').toContain('filtrere efter');
+    expect(body, 'capacity is described without promising a signup control').toContain(
+      'antallet på kortet',
+    );
     expect(body, 'account self-service section present').toContain('Min konto');
     expect(body, 'organiser path present').toContain('arrangør');
     for (const slug of [
@@ -447,5 +457,120 @@ test.describe('Welcome email — single source of truth', () => {
       .map((f) => path.relative(REPO, f));
 
     expect(offenders, 'a per-tier mail override defeats the single source').toEqual([]);
+  });
+});
+
+/**
+ * The welcome mail may not advertise a surface production has switched off.
+ *
+ * There is already a content-rule test above, but its forbidden list is
+ * hand-maintained — and it omitted `event_rsvp`. So the mail told every new
+ * production member to press "Deltag", press "Interesseret" and check the
+ * "Mine aktiviteter" filter, none of which exist on a tier with that flag
+ * off. The test stayed green because it never knew to look, and because it
+ * runs against a profile where those affordances DO exist.
+ *
+ * This version derives the list instead: read the PRODUCTION features.yaml,
+ * take every flag it resolves false, and assert the mail names none of that
+ * flag's vocabulary. Turning a flag off in production now automatically
+ * extends the check.
+ *
+ * The flag → vocabulary map is the one hand-written part, and it is
+ * deliberately fail-loud: a flag with no entry fails the test rather than
+ * being silently skipped, so a new flag cannot slip in unmapped — which is
+ * exactly how event_rsvp got missed.
+ */
+test.describe('Welcome email — advertises nothing production has switched off', () => {
+  const REPO_ = path.resolve(__dirname, '..', '..');
+  const PROD_FLAGS = path.join(
+    REPO_,
+    'config/www/user/env/www.byvaerkstederne.dk/config/features.yaml',
+  );
+  const TEMPLATE = path.join(
+    REPO_,
+    'config/www/user/themes/byvaerkstederne/templates/emails/login/welcome.html.twig',
+  );
+
+  /** Words a member would go looking for if the mail named this feature. */
+  const VOCABULARY = {
+    roadmap: [/roadmap/i],
+    feature_suggestion: [/forsl[aå] feature/i],
+    bug_report: [/rapport[eé]r fejl/i],
+    community_footer_column: [],
+    newsletter_signup: [/nyhedsbrev/i],
+    event_highlight: [],
+    press_page: [/\/presse/i],
+    minutes_archive: [/referater/i],
+    press_assets_download: [],
+    press_stats: [],
+    contact_page: [/\/kontakt/i],
+    statutes_page: [/vedt[æa]gter/i],
+    privacy_policy: [/privatlivspolitik/i],
+    // The one that was missing. These are the literal button and filter
+    // labels partials/event_card.html.twig renders only when the flag is on.
+    event_rsvp: [/\bDeltag\b/, /\bInteresseret\b/, /Mine aktiviteter/i],
+    // These three gate page-authored CTAs (h.cta_text / h.donate_cta), so
+    // they have no fixed wording the mail could promise. Empty on purpose —
+    // not "unchecked", but "nothing stable to check".
+    workshop_project_blueprints: [],
+    workshop_workday_signup: [],
+    gear_donation: [],
+    social_media_links: [/facebook/i, /instagram/i],
+    makerspace_meeting_link: [/n[æa]ste [aå]bning/i],
+    account_self_service: [], // ON in production — nothing to forbid
+  };
+
+  /** Flags the production profile resolves false. */
+  function flagsOffInProduction() {
+    const yaml = fs.readFileSync(PROD_FLAGS, 'utf8');
+    /** @type {string[]} */
+    const off = [];
+    for (const m of yaml.matchAll(/^\s{2,}([a-z0-9_]+):\s*"(true|false)"\s*$/gm)) {
+      if (m[2] === 'false') off.push(m[1]);
+    }
+    return off;
+  }
+
+  test('every production flag has declared vocabulary', () => {
+    const yaml = fs.readFileSync(PROD_FLAGS, 'utf8');
+    const declared = [...yaml.matchAll(/^\s{2,}([a-z0-9_]+):\s*"(?:true|false)"\s*$/gm)].map(
+      (m) => m[1],
+    );
+    expect(declared.length, 'the production profile must list its flags').toBeGreaterThan(0);
+
+    const unmapped = declared.filter((f) => !(f in VOCABULARY));
+    expect(
+      unmapped,
+      'a production flag with no vocabulary entry cannot be checked against the welcome mail — ' +
+        'add its user-facing wording to VOCABULARY (an empty array means "names nothing a member ' +
+        'would search for"). This is the gap that let event_rsvp through.',
+    ).toEqual([]);
+  });
+
+  test('the welcome mail names no switched-off surface', () => {
+    // Match the RENDERED copy only. The template's own CONTENT RULE comment
+    // enumerates several forbidden words in order to forbid them; matching
+    // raw source would flag the rule for stating itself.
+    const twig = fs.readFileSync(TEMPLATE, 'utf8').replace(/\{#[\s\S]*?#\}/g, ' ');
+    const off = flagsOffInProduction();
+    expect(off.length, 'production should have flags off — otherwise this test is vacuous')
+      .toBeGreaterThan(0);
+
+    /** @type {string[]} */
+    const offences = [];
+    for (const flag of off) {
+      for (const pattern of VOCABULARY[flag] || []) {
+        if (pattern.test(twig)) {
+          offences.push(`${flag}: mailen nævner ${pattern}`);
+        }
+      }
+    }
+
+    expect(
+      offences,
+      'the welcome mail describes something a production member cannot find. Either ship the ' +
+        'feature to production or take the wording out — a new member following instructions ' +
+        'into a surface that is not there is worse than no instructions.',
+    ).toEqual([]);
   });
 });

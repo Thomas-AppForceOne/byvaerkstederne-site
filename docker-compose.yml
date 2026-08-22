@@ -1,6 +1,16 @@
 services:
   grav:
-    image: lscr.io/linuxserver/grav:latest
+    # PINNED BY DIGEST, deliberately. `:latest` let BOTH the PHP version and the
+    # Grav CORE drift silently — the Grav core is not in this repo; it comes from
+    # this image locally and from deploy/grav-admin-*.zip on the tiers.
+    #
+    # This digest carries PHP 8.3 and Grav 1.7.49.5, matching the Grav the tiers
+    # are served. It deliberately does NOT match .php-version (8.5), which
+    # declares what the TIERS must run: the image couples PHP and Grav, so
+    # raising it to PHP 8.5 also raises Grav to 2.0.x — a CMS major ahead of
+    # every tier. That upgrade is a separate change with its own PR; until it
+    # lands, this gap is known, stated here, and local-only.
+    image: lscr.io/linuxserver/grav@sha256:1457ac8fe5ff4fb7f2c7c75821743177a2bdf5c8b1d818174f81321c2bace417
     container_name: ${GRAV_CONTAINER:-grav}
     environment:
       - PUID=1000

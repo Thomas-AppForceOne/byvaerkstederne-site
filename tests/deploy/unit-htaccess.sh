@@ -108,7 +108,7 @@ has "test carries X-Robots-Tag noindex" 'X-Robots-Tag "noindex, nofollow, noarch
 has "staging carries X-Robots-Tag noindex" 'X-Robots-Tag "noindex, nofollow, noarchive"' "$STAGING"
 
 # ── Everything the file carried before is still there ───────
-has "still gates .yaml/.md/.twig from the web"  'FilesMatch "(^\.git|\.yaml$|\.md$|\.twig$)"' "$PROD"
+has "still gates .yaml/.md/.twig from the web (now .log/.jsonl too)"  'FilesMatch "(^\.git|\.yaml$|\.md$|\.twig$|\.log$|\.jsonl$)"' "$PROD"
 has "still denies version.json"                 '<Files "version.json">' "$PROD"
 has "still sets HSTS"                           'Strict-Transport-Security' "$PROD"
 has "still routes unmatched paths to index.php" 'RewriteRule ^(.*)$ index.php [QSA,L]' "$PROD"
@@ -142,6 +142,27 @@ if grep -q "cat > \"\$STAGING_DIR/.htaccess\" << 'HTACCESS'" "$DEPLOY_SH"; then
 else
     check "deploy.sh keeps no second copy of the .htaccess body" ok
 fi
+
+# ── Exposure + caching (found live on prod, 2026-08-21) ──────────────
+#
+# Two defects the generated .htaccess allowed on every tier:
+#   * https://<host>/logs/grav.log served 81 KB of operational detail (200)
+#   * pages carried Cache-Control: max-age=604800, because `ExpiresActive On`
+#     enabled the HOST's ExpiresDefault for every MIME type not enumerated —
+#     including text/html. A member saw a week-old calendar.
+for tier_pair in "prod:$PROD" "staging:$STAGING" "test:$TEST"; do
+    label="${tier_pair%%:*}"
+    body="${tier_pair#*:}"
+    has "$label: log files are denied by extension" '.log$' "$body"
+    has "$label: the logs directory is denied outright" 'RedirectMatch 404 ^/logs' "$body"
+    has "$label: audit jsonl is denied" '.jsonl$' "$body"
+    has "$label: HTML is pinned to revalidate" \
+        'ExpiresByType text/html "access plus 0 seconds"' "$body"
+    has "$label: unnamed types default to revalidate, not the host's week" \
+        'ExpiresDefault "access plus 0 seconds"' "$body"
+    # Static assets keep their long cache — they are cache-busted by ?v=.
+    has "$label: images keep a long cache" 'ExpiresByType image/png "access plus 1 month"' "$body"
+done
 
 echo "---"
 echo "htaccess: $PASS passed, $FAIL failed"

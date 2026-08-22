@@ -100,14 +100,31 @@ NOINDEX
     cat << 'HTACCESS_REST'
 </IfModule>
 
-<FilesMatch "(^\.git|\.yaml$|\.md$|\.twig$)">
+<FilesMatch "(^\.git|\.yaml$|\.md$|\.twig$|\.log$|\.jsonl$)">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
 </FilesMatch>
 
+# The Grav log directory. `.log$` above covers the files by extension, but the
+# directory is denied outright so a rotated or oddly-named log cannot leak
+# either. Found live on 2026-08-21: https://<host>/logs/grav.log served 81 KB
+# of production operational detail with a 200, on every tier.
+<IfModule mod_alias.c>
+    RedirectMatch 404 ^/logs(/|$)
+</IfModule>
+
 <IfModule mod_expires.c>
     ExpiresActive On
+    # HTML FIRST, and explicitly. `ExpiresActive On` activates the host's own
+    # ExpiresDefault for every MIME type not named here — on both one.com and
+    # chosting that default is a week, so pages were served with
+    # `Cache-Control: max-age=604800`. A member who saw the calendar today
+    # would not see a newly published event for seven days, and nobody
+    # noticed because developers hard-refresh and only production has
+    # returning visitors. Pages must always revalidate.
+    ExpiresByType text/html "access plus 0 seconds"
+    ExpiresDefault "access plus 0 seconds"
     ExpiresByType image/jpeg "access plus 1 month"
     ExpiresByType image/png "access plus 1 month"
     ExpiresByType image/svg+xml "access plus 1 month"

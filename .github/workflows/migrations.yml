@@ -25,13 +25,15 @@ jobs:
   test:
     # PHP version matrix tracks the versions Grav 1.7.x supports. The
     # spec says "the matrix-PHP versions Grav itself supports"; Grav
-    # 1.7 ships under PHP 8.1/8.2/8.3 (composer.json requires PHP >=
+    # 8.5 is the authorised serving version (.php-version) and MUST be in
+    # this matrix — it is what every tier runs. The older entries stay as a
+    # compatibility floor. 1.7 ships under PHP 8.1+ (composer.json requires PHP >=
     # 7.3.6 but 8.x is the modern supported set). When Grav's matrix
     # changes, edit this list.
     strategy:
       fail-fast: false
       matrix:
-        php-version: ['8.1', '8.2', '8.3']
+        php-version: ['8.1', '8.2', '8.3', '8.5']
     runs-on: ubuntu-latest
 
     steps:

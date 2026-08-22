@@ -1,0 +1,28 @@
+# Production system overrides.
+#
+# Production was the ONLY tier without this file. dev, test and staging each
+# pinned custom_base_url and session.path; prod inherited whatever Grav derived
+# from the request. That mostly worked — prod serves from the docroot, so the
+# derived base URL is usually right — but "usually right, derived per request"
+# is not the same guarantee the other three tiers have, and nobody had decided
+# it: the per-tier login.yaml still carries a NOTE asking someone to CONFIRM
+# prod's real canonical before relying on it for activation and reset mail.
+#
+# It also breaks in the one place that matters most for mail: a CLI context
+# (the scheduler, bin/plugin, the purge job) has no request to derive a base
+# URL from, so any absolute URL built there falls back to whatever Grav
+# guesses. Pinning it removes the guess.
+#
+# Verified against the live tier on 2026-08-21: the apex byvaerkstederne.dk
+# 301s to https://www.byvaerkstederne.dk with the path preserved, and the
+# generated .htaccess (deploy/lib/htaccess.sh) enforces that canonical host.
+# This value matches deploy.sh's ENV_URL and the site_host already pinned in
+# this directory's plugins/login.yaml.
+#
+# tests/deploy/unit-tier-config-parity.sh fails if a tier's tracked env config
+# diverges from the others without a declared reason — that guard is why this
+# file exists rather than being noticed years later.
+custom_base_url: 'https://www.byvaerkstederne.dk'
+absolute_urls: false
+session:
+  path: /

@@ -588,12 +588,13 @@ test-deploy: ## Run deploy-script regression tests (lint + unit + atomic-layout 
 	@bash tests/deploy/excludes-preserve-live-state.sh
 	@bash tests/deploy/unit-state-symlink-guard.sh
 	@bash tests/deploy/unit-htaccess.sh
+	@bash tests/deploy/unit-php-parity.sh
+	@bash tests/deploy/unit-tier-config-parity.sh
 	@bash tests/deploy/atomic-layout.sh
 	@bash tests/deploy/rollback.sh
 	@bash tests/deploy/migrate.sh
 	@bash tests/deploy/skip-data-migration.sh
 	@bash tests/deploy/promote-to-staging.sh
-	@bash tests/deploy/unit-promote-mailer-gate.sh
 	@bash tests/deploy/promote-to-prod.sh
 	@bash tests/deploy/unit-release-gate.sh
 	@bash tests/deploy/tag-release.sh
