@@ -106,6 +106,18 @@ export GRAV_PORT="$REQUESTED_PORT"
 export GRAV_CONTAINER="$CONTAINER_NAME"
 export GRAV_ROOT="$WORKTREE_ABS/config"
 
+# The Grav the container is built with, taken from the single place that
+# decides what the tiers get. Reading it here rather than duplicating the
+# number means the local CMS cannot quietly differ from the deployed one —
+# which is exactly what happened when the container came from a prebuilt
+# image that shipped its own Grav.
+GRAV_VERSION="$(sed -n 's/^GRAV_VERSION="\([0-9.]*\)".*/\1/p' "$WORKTREE_ABS/deploy/deploy.sh" 2>/dev/null | head -1)"
+if [ -n "$GRAV_VERSION" ]; then
+    export GRAV_VERSION
+else
+    echo "⚠️   could not read GRAV_VERSION from deploy/deploy.sh — using the Dockerfile default" >&2
+fi
+
 cd "$WORKTREE_ABS"
 echo "Starting Grav on port $REQUESTED_PORT (container: $CONTAINER_NAME)..."
 docker compose -p "$PROJECT_NAME" up -d --remove-orphans

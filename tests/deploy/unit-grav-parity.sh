@@ -100,6 +100,27 @@ check "deploy.sh actually calls the check" \
 check "grav-up.sh warns about drift where it happens" \
     "$(grep -q 'grav-parity.sh' "$PROJECT_ROOT/scripts/grav-up.sh" && echo ok || echo no)"
 
+# ── The container's Grav is the deployed Grav ────────────────────────
+#
+# The local core used to come from a prebuilt image that shipped its own
+# Grav — 1.7.49.5 against 1.7.52 on the tiers, and briefly 2.0.20 after a
+# routine pull. It is now built from GRAV_VERSION, the same value deploy.sh
+# unpacks, so the two cannot drift. The Dockerfile default is a fallback for
+# a direct `docker build`; grav-up.sh reads the real value from deploy.sh.
+DOCKERFILE="$PROJECT_ROOT/Dockerfile"
+DFV="$(sed -n 's/^ARG GRAV_VERSION=\([0-9.]*\).*/\1/p' "$DOCKERFILE" | head -1)"
+
+check "the Dockerfile declares a Grav version" \
+    "$([ -n "$DFV" ] && echo ok || echo no)"
+check "its default matches deploy.sh's GRAV_VERSION" \
+    "$([ "$DFV" = "$TARGET" ] && echo ok || echo no)"
+check "the build fetches that exact version" \
+    "$(grep -q 'grav-admin-v\${GRAV_VERSION}\.zip' "$DOCKERFILE" && echo ok || echo no)"
+check "the build verifies what it unpacked" \
+    "$(grep -q "GRAV_VERSION', '\${GRAV_VERSION}'" "$DOCKERFILE" && echo ok || echo no)"
+check "grav-up.sh reads GRAV_VERSION from deploy.sh, not a second copy" \
+    "$(grep -q 'GRAV_VERSION=.*deploy/deploy.sh' "$PROJECT_ROOT/scripts/grav-up.sh" && echo ok || echo no)"
+
 echo "---"
 echo "grav parity unit: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
