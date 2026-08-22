@@ -77,6 +77,11 @@ GRAV_URL="https://github.com/getgrav/grav/releases/download/${GRAV_VERSION}/grav
 # that produced it.
 . "$SCRIPT_DIR/lib/php-parity.sh"
 
+# shellcheck source=deploy/lib/grav-parity.sh
+# Provides bv_grav_target / bv_grav_parity_check — the SECOND axis. PHP
+# parity alone waved through a local CMS major-version jump; see that file.
+. "$SCRIPT_DIR/lib/grav-parity.sh"
+
 # shellcheck source=deploy/lib/smoke-behaviour.sh
 # Provides bv_post_deploy_smoke — probes the host behaviour no local test
 # can see (see that file for the two defects that motivated it).
@@ -665,6 +670,19 @@ if PHP_TARGET="$(bv_php_target "$PROJECT_DIR")"; then
     fi
 else
     echo "⚠️   .php-version missing — PHP parity not enforced." >&2
+fi
+
+# 3a3. Grav version parity. The tier serves whatever an earlier deploy
+# unpacked from the payload zip; if that no longer matches what this repo
+# ships, the release about to go up is a CMS migration nobody declared.
+if GRAV_TARGET="$(bv_grav_target "$PROJECT_DIR")"; then
+    REMOTE_GRAV="$(bv_remote_run 'grep -m1 GRAV_VERSION "$DOCROOT/system/defines.php" 2>/dev/null' \
+        DOCROOT="$DEPLOY_TARGET" || true)"
+    if ! bv_grav_parity_check "$GRAV_TARGET" "$REMOTE_GRAV" "$ENV" "${ALLOW_GRAV_MISMATCH:-0}"; then
+        exit 1
+    fi
+else
+    echo "⚠️   no deploy/grav-admin-v*.zip — Grav parity not enforced." >&2
 fi
 
 # 3b. parent of <tier>-releases/ is writable.

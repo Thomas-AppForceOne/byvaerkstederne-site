@@ -1,0 +1,94 @@
+name: ci-browser-suite
+
+# Runs the Playwright suite (`make test`) against a real Grav container.
+#
+# WHY THIS EXISTS
+# ---------------
+# Until now CI ran only `make test-deploy` — the hermetic shell suite. The
+# ~258 browser tests, including every guard added to stop "works on dev,
+# broken on prod" bugs, ran ONLY on developer machines. A guard that never
+# executes in the pipeline is a guard nobody is holding: the very class of
+# gap it was written to close.
+#
+# It is not a full substitute for a developer run. Without
+# ~/.gan-secrets/workshop-site.env the authenticated suites skip with a
+# reason, which is the documented anonymous-only mode (CLAUDE.md). What it
+# DOES cover is everything anonymous — routing, flag profiles, the
+# dead-end invariant across both profiles, the welcome-mail content rules,
+# the fixture-not-rotted guard — which is where the production bug lived.
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  browser-suite:
+    name: browser-suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        # LFS objects are images; no test asserts on their bytes, and
+        # pulling them costs minutes. The lfs-pointer guard in the deploy
+        # suite is what protects against pointers reaching a tier.
+        with:
+          lfs: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Start Grav
+        # grav-up.sh validates the port, waits for Grav to answer, and
+        # writes .gan/port-registry.json — the same discovery chain the
+        # Makefile and playwright.config.js use locally, so CI exercises
+        # the real path rather than a CI-only shortcut.
+        run: scripts/grav-up.sh . 8080
+
+      - name: Start Mailpit
+        # Without the sink the mail-bearing specs skip with a reason. They
+        # are the ones that proved the welcome mail's content rules, so it
+        # is worth the container.
+        run: scripts/mailpit-up.sh .
+
+      - name: Seed sample content
+        # Events, roadmap items, team. The dates are @today±N tokens
+        # expanded here — a fixture that cannot rot is the precondition for
+        # every event-card assertion downstream.
+        run: |
+          CONTAINER="$(node -e 'process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container)')"
+          tests/fixtures/grav-seeds/sample-content/apply.sh "$CONTAINER" --force
+
+      - name: Run browser suite
+        run: make test
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+      - name: Stop Grav
+        if: always()
+        run: scripts/grav-down.sh . || true
