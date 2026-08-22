@@ -56,11 +56,16 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Start Grav
+        # PUID/PGID must be the runner's, derived rather than hardcoded: the
+        # image chowns the bind-mounted ./config to them, and with the wrong
+        # ids the repo's own config becomes unwritable — globalSetup then dies
+        # trying to write the Mailpit override. Unset locally, where compose
+        # defaults to 1000.
         # grav-up.sh validates the port, waits for Grav to answer, and
         # writes .gan/port-registry.json — the same discovery chain the
         # Makefile and playwright.config.js use locally, so CI exercises
         # the real path rather than a CI-only shortcut.
-        run: scripts/grav-up.sh . 8080
+        run: PUID="$(id -u)" PGID="$(id -g)" scripts/grav-up.sh . 8080
 
       - name: Start Mailpit
         # Without the sink the mail-bearing specs skip with a reason. They
