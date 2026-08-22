@@ -37,11 +37,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        # LFS objects are images; no test asserts on their bytes, and
-        # pulling them costs minutes. The lfs-pointer guard in the deploy
-        # suite is what protects against pointers reaching a tier.
+        # LFS objects ARE needed. This said `lfs: false` on the assumption
+        # that no test asserts on image bytes — wrong, and the suite said so:
+        # footer.js checks the EU co-funding logo actually loads, and
+        # auth-surface.js checks the brand image renders. Without the real
+        # objects those are LFS pointer files and all three fail. Worth the
+        # extra checkout time; a "broken image" test that cannot see a broken
+        # image is not a test.
         with:
-          lfs: false
+          lfs: true
 
       - name: Set up Node
         uses: actions/setup-node@v4
