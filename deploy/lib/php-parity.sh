@@ -105,7 +105,13 @@ bv_php_parity_check() {
     printf '    Untested-version drift is the failure class this guard exists for —\n' >&2
     printf '    code exercised on %s and served on %s is code nobody has run.\n' "$want" "$got" >&2
     printf '\n' >&2
-    printf '    Fix the tier (operator action):\n' >&2
+    printf '    IF THIS IS A ROLLOUT, this is expected. .php-version moves once, the\n' >&2
+    printf '    tiers move one at a time, so every tier still on the old version\n' >&2
+    printf '    disagrees until you get to it. Take them in order — dev, test,\n' >&2
+    printf '    staging, prod — changing each tier BEFORE its deploy:\n' >&2
+    printf '      ALLOW_PHP_MISMATCH=1 make deploy tier=%s\n' "$tier" >&2
+    printf '\n' >&2
+    printf '    IF IT IS NOT, a tier moved without a decision. Fix it (operator action):\n' >&2
     case "$tier" in
         prod) printf '      chosting cPanel → MultiPHP Manager → set %s for the domain\n' "$want" >&2 ;;
         *)    printf '      one.com control panel → PHP version → set %s\n' "$want" >&2 ;;
@@ -154,4 +160,42 @@ bv_php_remote_bin() {
     # rightly refuses it). Call sites that want a fallback test -x on the
     # remote side.
     printf '/opt/cpanel/ea-php%s/root/usr/bin/php' "$pkg"
+}
+
+# Assert the resolved PHP binary exists on the tier.
+#
+# WHY: bv_php_remote_bin derives a versioned cPanel path from .php-version.
+# Bump the target to a version the host has not installed and every remote
+# command breaks with "no such file or directory" — from sixteen different
+# call sites, none of which explain it. A silent fallback to the system PHP
+# would be worse (that is the drift this whole guard exists to stop), so the
+# answer is to fail once, early, and say what is actually wrong.
+#
+# bv_php_binary_check <reported_probe_output> <binary> <tier>
+# The caller runs the probe remotely; this interprets it.
+# Returns 0 to proceed, 1 to refuse.
+bv_php_binary_check() {
+    local probe="$1" binary="$2" tier="$3"
+
+    # Plain `php` always resolves via PATH; nothing to assert.
+    case "$binary" in
+        php) return 0 ;;
+    esac
+
+    if [ "$probe" = "present" ]; then
+        return 0
+    fi
+
+    printf '❌  Refusing to deploy: %s has no PHP binary at\n' "$tier" >&2
+    printf '      %s\n' "$binary" >&2
+    printf '\n' >&2
+    printf '    That path is derived from .php-version. Either the hosting provider\n' >&2
+    printf '    has not installed that version, or it lives elsewhere on this host.\n' >&2
+    printf '\n' >&2
+    printf '    Deploying anyway would run every remote command on whatever PHP the\n' >&2
+    printf '    shell happens to give — which is the drift this guard exists to stop.\n' >&2
+    printf '\n' >&2
+    printf '    Ask the provider to install it, or change .php-version to a version\n' >&2
+    printf '    the host actually has.\n' >&2
+    return 1
 }

@@ -670,6 +670,18 @@ if ! bv_remote_run 'true'; then
     exit 1
 fi
 
+# 3a1. The resolved PHP binary must exist on this tier. Checked BEFORE the
+# version comparison, because a missing binary makes that comparison
+# meaningless — and before any other remote command, so a bad .php-version
+# fails once with an explanation instead of sixteen times with "no such
+# file".
+PHP_BIN_PROBE="$(bv_remote_run '
+    [ -x "$BIN" ] && printf present || printf absent
+' BIN="$PHP_BIN" 2>/dev/null || true)"
+if ! bv_php_binary_check "$PHP_BIN_PROBE" "$PHP_BIN" "$ENV"; then
+    exit 1
+fi
+
 # 3a2. PHP version parity. The repo declares one target in .php-version;
 # a tier serving a different one is running code nobody has exercised.
 # See deploy/lib/php-parity.sh for why this guard exists and how to fix a

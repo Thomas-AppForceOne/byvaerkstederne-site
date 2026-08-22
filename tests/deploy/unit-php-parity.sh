@@ -149,6 +149,44 @@ done
 check "no deploy script invokes a bare remote php" \
     "$([ "$BARE" -eq 0 ] && echo ok || echo no)"
 
+# ── The binary must exist before we compare versions ─────────────────
+#
+# bv_php_remote_bin derives a versioned cPanel path from .php-version. Bump
+# the target to a version the host has not installed and every remote
+# command breaks with "no such file or directory", from sixteen call sites,
+# none of which explain it. Fail once, early, with the reason.
+bchk() { bv_php_binary_check "$1" "$2" "$3" >/dev/null 2>&1; }
+
+check "a present binary passes" \
+    "$(bchk present /opt/cpanel/ea-php85/root/usr/bin/php prod && echo ok || echo no)"
+check "an ABSENT binary is refused" \
+    "$(bchk absent /opt/cpanel/ea-php99/root/usr/bin/php prod && echo no || echo ok)"
+check "plain php needs no check (resolved via PATH)" \
+    "$(bchk absent php dev && echo ok || echo no)"
+
+bmsg="$(bv_php_binary_check absent /opt/cpanel/ea-php99/root/usr/bin/php prod 2>&1 || true)"
+check "the refusal names the missing path" \
+    "$(printf '%s' "$bmsg" | grep -q 'ea-php99' && echo ok || echo no)"
+check "the refusal says where the path came from" \
+    "$(printf '%s' "$bmsg" | grep -q '.php-version' && echo ok || echo no)"
+check "the refusal explains why it does not fall back" \
+    "$(printf '%s' "$bmsg" | grep -qi 'drift' && echo ok || echo no)"
+
+# ── The version refusal must read correctly during a rollout ─────────
+#
+# .php-version moves once; the tiers move one at a time. Every tier still on
+# the old version disagrees until you reach it, so the refusal has to tell a
+# rollout apart from unintended drift or it reads as "something is broken".
+rmsg="$(bv_php_parity_check '8.6' 'PHP 8.5.9' dev 0 2>&1 || true)"
+check "the refusal recognises a rollout" \
+    "$(printf '%s' "$rmsg" | grep -qi 'IF THIS IS A ROLLOUT' && echo ok || echo no)"
+check "the refusal gives the tier order" \
+    "$(printf '%s' "$rmsg" | grep -q 'dev, test,' && echo ok || echo no)"
+check "the refusal spells out the rollout command" \
+    "$(printf '%s' "$rmsg" | grep -q 'ALLOW_PHP_MISMATCH=1 make deploy tier=' && echo ok || echo no)"
+check "deploy.sh checks the binary before comparing versions" \
+    "$(awk '/bv_php_binary_check/{b=NR} /bv_php_parity_check/{p=NR} END{exit !(b && p && b<p)}' "$PROJECT_ROOT/deploy/deploy.sh" && echo ok || echo no)"
+
 echo "---"
 echo "php parity unit: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
