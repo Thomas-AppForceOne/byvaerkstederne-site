@@ -71,6 +71,17 @@ GRAV_URL="https://github.com/getgrav/grav/releases/download/${GRAV_VERSION}/grav
 # metadata is captured.
 . "$SCRIPT_DIR/lib/release-gate.sh"
 
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_target / bv_php_parity_check — one declared PHP version
+# for every tier, CI and the local container. See that file for the audit
+# that produced it.
+. "$SCRIPT_DIR/lib/php-parity.sh"
+
+# shellcheck source=deploy/lib/smoke-behaviour.sh
+# Provides bv_post_deploy_smoke — probes the host behaviour no local test
+# can see (see that file for the two defects that motivated it).
+. "$SCRIPT_DIR/lib/smoke-behaviour.sh"
+
 # shellcheck source=deploy/lib/htaccess.sh
 . "$SCRIPT_DIR/lib/htaccess.sh"
 
@@ -643,6 +654,19 @@ if ! bv_remote_run 'true'; then
     exit 1
 fi
 
+# 3a2. PHP version parity. The repo declares one target in .php-version;
+# a tier serving a different one is running code nobody has exercised.
+# See deploy/lib/php-parity.sh for why this guard exists and how to fix a
+# drifting tier. Soft-skips when the remote will not report a version.
+if PHP_TARGET="$(bv_php_target "$PROJECT_DIR")"; then
+    REMOTE_PHP="$(bv_remote_run 'php -v 2>/dev/null | head -1' || true)"
+    if ! bv_php_parity_check "$PHP_TARGET" "$REMOTE_PHP" "$ENV" "${ALLOW_PHP_MISMATCH:-0}"; then
+        exit 1
+    fi
+else
+    echo "⚠️   .php-version missing — PHP parity not enforced." >&2
+fi
+
 # 3b. parent of <tier>-releases/ is writable.
 if ! bv_remote_run '
     test -w "$PARENT" || mkdir -p "$RELEASES" "$DATA"
@@ -1166,6 +1190,17 @@ PROBE_EXPECTED="$(bv_compute_expected_version_substring "$STAGING_DIR")"
 echo "→ Smoke probe: GET ${PROBE_URL}  (expecting: ${PROBE_EXPECTED})"
 
 PROBE_RESULT="$(bv_smoke_probe "$PROBE_URL" "$PROBE_EXPECTED" || true)"
+
+# Behavioural probes, same fail-loud/never-auto-rollback contract as the
+# version probe above. These ask the real host questions a container cannot
+# answer: is the log directory actually denied, do pages actually revalidate.
+BEHAVIOUR_OK=1
+if [ -z "${BV_SKIP_BEHAVIOUR_SMOKE:-}" ]; then
+    echo "→ Smoke probe: host behaviour"
+    if ! bv_post_deploy_smoke "${ENV_URL}"; then
+        BEHAVIOUR_OK=0
+    fi
+fi
 PROBE_STATUS="${PROBE_RESULT%%|*}"
 PROBE_MATCHED="${PROBE_RESULT##*|}"
 case "$PROBE_STATUS" in
@@ -1197,6 +1232,19 @@ bv_rsync_via_ssh -a \
     "$META_LOCAL" \
     "${DEPLOY_USER}@${DEPLOY_HOST}:${RELEASE_DIR}/release-meta.yaml"
 unset _rsync_e
+
+# A behavioural probe failure is treated exactly like a version probe
+# failure: the release stays live, the operator is told loudly, and the
+# script exits non-zero. Reporting it as a passing deploy is how the log
+# exposure and the week-long page cache survived unnoticed for months.
+if [ "$BEHAVIOUR_OK" != "1" ]; then
+    echo "" >&2
+    echo "❌  Post-deploy behaviour probes FAILED (see above)." >&2
+    echo "    The new release IS LIVE — there is NO auto-rollback." >&2
+    echo "    rollback command:  make rollback tier=${ENV}" >&2
+    echo "" >&2
+    exit 1
+fi
 
 if [ "$PROBE_MATCHED" != "true" ] || [ "$PROBE_STATUS" != "200" ]; then
     # Re-fetch to capture the redirected URL + body so the diagnostic

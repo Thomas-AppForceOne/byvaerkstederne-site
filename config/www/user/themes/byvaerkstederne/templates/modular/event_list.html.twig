@@ -51,12 +51,27 @@
                 {% if ev.published and not ev.archived and not ev.deleted and not event_is_stale(ev.event_date) %}
                     {% set _accent = ev.button_style|default('primary') %}
                     {% set _filter = filter_map[ev.group]|default(ev.group) %}
-                    {# The card button is a signup affordance: it always
-                       renders (label Tilmeld/Interesseret, default Tilmeld)
-                       and opens the event's own detail page — button_url is
-                       retired. The RSVP feature turns it into the actual
-                       signup action. #}
-                    {% set _cta = { label: ev.button_text|default('Tilmeld'), href: '/begivenheder/' ~ key, variant: _accent } %}
+                    {# The card's signup affordance.
+
+                       With event_rsvp ON, partials/event_card renders a live
+                       RSVP button and never looks at this value.
+
+                       With it OFF there is nothing to link to: this used to
+                       synthesise `href: '/begivenheder/' ~ key` on the claim
+                       that it "opens the event's own detail page", but no such
+                       page exists — pages/begivenheder/ holds only the
+                       organizer CRUD routes, so that URL 302s straight back to
+                       the calendar. Every event on production therefore had
+                       exactly one call to action and it was a link to the page
+                       you were already on. Invisible on dev and test, where the
+                       flag is on and this branch never renders.
+
+                       So: no destination, no button. Same contract the
+                       page-authored branch below already follows (a CTA only
+                       when label AND href both exist). tests/anonymous/
+                       profile-parity.js fails on any link that redirects back
+                       to the page it was rendered on. #}
+                    {% set _cta = null %}
                     {% set events_list = events_list|merge([{
                         day: ev.event_date|date('j'),
                         month: ev.event_date|date('M'),
