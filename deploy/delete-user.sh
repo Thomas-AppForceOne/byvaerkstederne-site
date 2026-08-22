@@ -112,6 +112,10 @@ fi
 . "$ENV_FILE"
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$SCRIPT_DIR/lib/ssh-auth.sh"
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_remote_bin — prod's shell PHP is the system default (8.4),
+# not the version its domain is served with (8.5). See that file.
+. "$SCRIPT_DIR/lib/php-parity.sh"
 
 export TIER
 if [ "$TIER" = "prod" ]; then
@@ -135,6 +139,7 @@ fi
 export DEPLOY_PASS
 DEPLOY_PASS="$(bv_resolve_ssh_password)"
 
+PHP_BIN="$(bv_php_remote_bin "${TIER:-${ENV:-}}" "$PROJECT_DIR")"
 TIER_DIR="$(bv_tier_root "$PATH_SSH" "$TIER")"
 ACCT="$TIER_DIR/user/accounts/$USERNAME.yaml"
 FLEX_INDEX="$TIER_DIR/user/data/flex/indexes/accounts.yaml"
@@ -192,7 +197,7 @@ fi
 # file logs the user out of every remembered browser (their "husk mig"
 # cookie can no longer re-authenticate a deleted account).
 if ! bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-        "rm -f \"$ACCT\" \"$FLEX_INDEX\" \"$RM_TOKENS\" && cd \"$TIER_DIR\" && php bin/grav clearcache"; then
+        "rm -f \"$ACCT\" \"$FLEX_INDEX\" \"$RM_TOKENS\" && cd \"$TIER_DIR\" && $PHP_BIN bin/grav clearcache"; then
     echo "✗ delete failed (the account file may be partly removed — re-run, or check the tier)." >&2
     exit 1
 fi

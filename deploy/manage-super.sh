@@ -143,6 +143,11 @@ fi
 . "$ENV_FILE"
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$SCRIPT_DIR/lib/ssh-auth.sh"
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_remote_bin — prod's shell PHP is the system default (8.4),
+# not the version its domain is served with (8.5).
+. "$SCRIPT_DIR/lib/php-parity.sh"
+PHP_BIN="$(bv_php_remote_bin "${TIER:-${ENV:-}}" "$PROJECT_DIR")"
 # shellcheck source=deploy/lib/user-resolve.sh
 . "$SCRIPT_DIR/lib/user-resolve.sh"
 
@@ -281,7 +286,7 @@ fi
 ACTOR="$(printf '%s@%s' "${USER:-unknown}" "$(hostname -s 2>/dev/null || echo host)" | tr -cd 'A-Za-z0-9._@-' | cut -c1-64)"
 
 result="$(bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-    "cd \"$TIER_DIR\" && php -- \"$ACCT\" \"$ACTION\" \"$ACTOR\"" \
+    "cd \"$TIER_DIR\" && $PHP_BIN -- \"$ACCT\" \"$ACTION\" \"$ACTOR\"" \
     < "$SUPER_PHP" 2>&1 || echo __PHPFAIL__)"
 
 case "$result" in
@@ -309,9 +314,9 @@ esac
 # The Flex accounts index caches the account list; a stale index serves the
 # pre-change access tree until it rebuilds.
 if ! bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-        "rm -f \"$FLEX_INDEX\" && cd \"$TIER_DIR\" && php bin/grav clearcache" >/dev/null < /dev/null; then
+        "rm -f \"$FLEX_INDEX\" && cd \"$TIER_DIR\" && $PHP_BIN bin/grav clearcache" >/dev/null < /dev/null; then
     echo "⚠  Rights changed, but clearing the tier cache failed. Clear it manually:" >&2
-    echo "      cd $TIER_DIR && php bin/grav clearcache" >&2
+    echo "      cd $TIER_DIR && $PHP_BIN bin/grav clearcache" >&2
 fi
 
 # ── Alert the tier's supers that someone was promoted ────────────────
@@ -321,7 +326,7 @@ fi
 if [ "$ACTION" = "grant" ]; then
     ENV_HOST="$(tier_host "$TIER")"
     if alert="$(bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-            "cd \"$TIER_DIR\" && php bin/plugin account-manager notify-super-granted --env \"$ENV_HOST\" --user \"$USERNAME\" --actor \"$ACTOR\" --source deploy/manage-super.sh" \
+            "cd \"$TIER_DIR\" && $PHP_BIN bin/plugin account-manager notify-super-granted --env \"$ENV_HOST\" --user \"$USERNAME\" --actor \"$ACTOR\" --source deploy/manage-super.sh" \
             2>&1 < /dev/null)"; then
         echo "  alerted: every super-admin on $TIER has been mailed about this change"
     else

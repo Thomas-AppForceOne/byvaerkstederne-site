@@ -192,6 +192,11 @@ fi
 # based on which env vars are set for the active tier.
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$REPO_ROOT/deploy/lib/ssh-auth.sh"
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_remote_bin — prod's shell PHP is the system default (8.4),
+# not the version its domain is served with (8.5).
+. "$REPO_ROOT/deploy/lib/php-parity.sh"
+PHP_BIN="$(bv_php_remote_bin "${TIER:-}" "$REPO_ROOT")"
 
 # age-identity helpers — looks up Keychain items bv-age-identity-*
 # at decrypt time. Falls back to AGE_IDENTITY_FILE if no Keychain
@@ -688,7 +693,7 @@ done
 # clearcache` (no hyphen).
 log_op "clearing Grav caches on ${SSH_HOST}"
 bv_ssh_cmd -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" \
-    "cd $(printf %q "$SSH_PATH") && php bin/grav clearcache" \
+    "cd $(printf %q "$SSH_PATH") && $PHP_BIN bin/grav clearcache" \
     >>"$LOG_FILE" 2>&1 \
     || warn "bin/grav clearcache returned non-zero (continuing)"
 

@@ -163,6 +163,11 @@ fi
 . "$ENV_FILE"
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$SCRIPT_DIR/lib/ssh-auth.sh"
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_remote_bin — prod's shell PHP is the system default
+# (8.4), not the version its domain is served with (8.5).
+. "$SCRIPT_DIR/lib/php-parity.sh"
+PHP_BIN="$(bv_php_remote_bin "${TIER:-${ENV:-}}" "$PROJECT_DIR")"
 # shellcheck source=deploy/lib/user-resolve.sh
 . "$SCRIPT_DIR/lib/user-resolve.sh"
 
@@ -259,7 +264,7 @@ php_source="$(cat "$PASSWORD_PHP")"
 php_source="${php_source//__PW_B64__/$PW_B64}"
 
 result="$(printf '%s' "$php_source" | bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-    "cd \"$TIER_DIR\" && php -- \"$ACCT\"" 2>&1 || echo __PHPFAIL__)"
+    "cd \"$TIER_DIR\" && $PHP_BIN -- \"$ACCT\"" 2>&1 || echo __PHPFAIL__)"
 
 case "$result" in
     *__PHPFAIL__*|*error:*)
@@ -276,9 +281,9 @@ case "$result" in
 esac
 
 if ! bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-        "rm -f \"$FLEX_INDEX\" && cd \"$TIER_DIR\" && php bin/grav clearcache" >/dev/null < /dev/null; then
+        "rm -f \"$FLEX_INDEX\" && cd \"$TIER_DIR\" && $PHP_BIN bin/grav clearcache" >/dev/null < /dev/null; then
     echo "⚠️  Password changed, but the cache clear failed — run it manually on the tier:" >&2
-    echo "      cd $TIER_DIR && php bin/grav clearcache" >&2
+    echo "      cd $TIER_DIR && $PHP_BIN bin/grav clearcache" >&2
     exit 1
 fi
 

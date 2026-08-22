@@ -111,6 +111,14 @@ readonly SCRIPT_DIR PROJECT_DIR
 # shellcheck source=deploy/lib/migrate-integration.sh
 . "$SCRIPT_DIR/lib/migrate-integration.sh"
 
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_remote_bin. prod is cPanel: the version its DOMAIN is
+# served with (ea-php85) and the version its SHELL gets (the system
+# default, 8.4) are separate settings, so a bare `php` over SSH is not the
+# PHP this repo targets.
+. "$SCRIPT_DIR/lib/php-parity.sh"
+PHP_BIN="$(bv_php_remote_bin staging "$PROJECT_DIR")"
+
 usage() {
     sed -n '2,/^set -euo pipefail/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'
 }
@@ -692,7 +700,7 @@ if [ "$LOCAL_MODE" = "1" ]; then
         note "no Grav binary at $grav_bin — skipping cache clear"
     fi
 else
-    if ! ssh_run "cd $(printf %q "$STAGING_DOCROOT") && php bin/grav clearcache"; then
+    if ! ssh_run "cd $(printf %q "$STAGING_DOCROOT") && $PHP_BIN bin/grav clearcache"; then
         warn "cache clear failed on staging (continuing; cache refills naturally)"
     else
         note "cache cleared"

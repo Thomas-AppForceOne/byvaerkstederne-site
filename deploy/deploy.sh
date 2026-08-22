@@ -163,6 +163,11 @@ if ! ENV="$(bv_validate_tier_name "$ENV_RAW")"; then
     exit 1
 fi
 
+# The PHP binary to invoke on this tier's shell. On prod the shell PHP is the
+# system default (8.4) while the DOMAIN is served with ea-php85 — two separate
+# cPanel settings. See deploy/lib/php-parity.sh.
+PHP_BIN="$(bv_php_remote_bin "$ENV" "$PROJECT_DIR")"
+
 case "$ENV" in
     prod)
         ENV_LABEL="Production"
@@ -670,7 +675,10 @@ fi
 # See deploy/lib/php-parity.sh for why this guard exists and how to fix a
 # drifting tier. Soft-skips when the remote will not report a version.
 if PHP_TARGET="$(bv_php_target "$PROJECT_DIR")"; then
-    REMOTE_PHP="$(bv_remote_run 'php -v 2>/dev/null | head -1' || true)"
+    REMOTE_PHP="$(bv_remote_run '
+        BIN="$PHP"; [ -x "$BIN" ] || BIN=php
+        "$BIN" -v 2>/dev/null | head -1
+    ' PHP="$PHP_BIN" || true)"
     if ! bv_php_parity_check "$PHP_TARGET" "$REMOTE_PHP" "$ENV" "${ALLOW_PHP_MISMATCH:-0}"; then
         exit 1
     fi
@@ -1145,12 +1153,12 @@ echo "  ✓ release-meta.yaml (pre-swap) written"
 # ── Step 7: Cache clear (fail-loud; aborts BEFORE the swap) ───────────
 echo "→ Step 7/8: Clearing Grav cache in new release..."
 if ! bv_remote_run '
-    cd "$RELEASE_DIR" && php bin/grav clearcache
+    cd "$RELEASE_DIR" && $PHP_BIN bin/grav clearcache
 ' RELEASE_DIR="$RELEASE_DIR"; then
     echo ""
     echo "❌  Cache clear failed in ${RELEASE_DIR}." >&2
     echo "    Aborting BEFORE the docroot swap — the previous release stays live." >&2
-    echo "    Inspect: ssh ${DEPLOY_USER}@${DEPLOY_HOST} 'cd ${RELEASE_DIR} && php bin/grav clearcache'" >&2
+    echo "    Inspect: ssh ${DEPLOY_USER}@${DEPLOY_HOST} 'cd ${RELEASE_DIR} && $PHP_BIN bin/grav clearcache'" >&2
     exit 1
 fi
 echo "  ✓ Cache cleared in new release"
