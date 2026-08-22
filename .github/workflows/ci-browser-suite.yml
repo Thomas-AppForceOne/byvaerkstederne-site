@@ -77,15 +77,13 @@ jobs:
         # is worth the container.
         run: scripts/mailpit-up.sh .
 
-      - name: Seed sample content
-        # Events, roadmap items, team. The dates are @today±N tokens
-        # expanded here — a fixture that cannot rot is the precondition for
-        # every event-card assertion downstream.
-        run: |
-          CONTAINER="$(node -e 'process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container)')"
-          tests/fixtures/grav-seeds/sample-content/apply.sh "$CONTAINER" --force
-
       - name: Create an admin account
+        # MUST run BEFORE the seed. The seed clears the Grav cache, and on
+        # Grav 2 `bin/grav clearcache` aborts outright with
+        # "Grav::close() called in CLI context (redirect to /admin)" when no
+        # account exists — the same no-accounts root cause as below, but
+        # fatal in CLI rather than only over HTTP. On 1.7 the order did not
+        # matter; on 2.0 it does, so the account comes first on both.
         # WITHOUT THIS THE WHOLE SITE IS UNREACHABLE. A fresh checkout has no
         # user accounts — they are live state, never committed — and Grav's
         # admin plugin then 302s EVERY route to /admin to create the first
@@ -105,6 +103,14 @@ jobs:
               -p "$(openssl rand -base64 24)" \
               -N 'CI Admin' -t admin -s enabled -P b -n
           docker exec -u abc -w /app/www/public "$CONTAINER" bin/grav clearcache
+
+      - name: Seed sample content
+        # Events, roadmap items, team. The dates are @today±N tokens
+        # expanded here — a fixture that cannot rot is the precondition for
+        # every event-card assertion downstream.
+        run: |
+          CONTAINER="$(node -e 'process.stdout.write(require("./scripts/discover-grav-port.js").discoverGravEnv(".").container)')"
+          tests/fixtures/grav-seeds/sample-content/apply.sh "$CONTAINER" --force
 
       - name: Run browser suite
         run: make test
