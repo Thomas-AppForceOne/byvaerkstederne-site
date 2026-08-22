@@ -44,14 +44,34 @@ bv_post_deploy_smoke() {
     local failures=0
 
     # 1. The Grav log must not be readable over the web.
-    local log_status
-    log_status="$(bv_probe_status "$base/logs/grav.log")"
-    if [ "$log_status" = "200" ]; then
-        printf '  ✗ /logs/grav.log is publicly readable (HTTP 200)\n' >&2
+    #
+    # TWO measurements, because a tier behind Varnish (one.com fronts dev,
+    # test and staging) can answer differently at the edge and at the origin.
+    # The first deploy of the deny rules to test proved it: the origin
+    # returned 403 while Varnish replayed a cached 200 from before the fix,
+    # age 73s. Probing only the edge reports a failure that is not the
+    # deploy's, and probing only the origin misses that visitors can still
+    # read the file until the entry expires.
+    #
+    # The cache-busted request is the GATE — it asks whether THIS deploy
+    # configured the host correctly, which is what the deploy is responsible
+    # for. The plain request is a WARNING: the config is right, but the edge
+    # is still handing out the old answer and wants a purge.
+    local origin_status edge_status
+    origin_status="$(bv_probe_status "$base/logs/grav.log?cache-bust=$$")"
+    edge_status="$(bv_probe_status "$base/logs/grav.log")"
+
+    if [ "$origin_status" = "200" ]; then
+        printf '  ✗ /logs/grav.log is publicly readable at the origin (HTTP 200)\n' >&2
         printf '      The .htaccess deny rules are not in effect on this host.\n' >&2
         failures=$((failures + 1))
     else
-        printf '  ✓ /logs/grav.log is not readable (HTTP %s)\n' "$log_status"
+        printf '  ✓ /logs/grav.log is not readable (origin HTTP %s)\n' "$origin_status"
+        if [ "$edge_status" = "200" ]; then
+            printf '  ⚠  but an upstream cache is still serving it (edge HTTP 200).\n' >&2
+            printf '      The origin is fixed; visitors keep reading the old answer until\n' >&2
+            printf '      the entry expires. Purge the CDN/Varnish cache for this host.\n' >&2
+        fi
     fi
 
     # 2. Pages must revalidate. Anything beyond a minute means a visitor can
