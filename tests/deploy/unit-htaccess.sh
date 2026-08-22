@@ -164,6 +164,10 @@ for tier_pair in "prod:$PROD" "staging:$STAGING" "test:$TEST"; do
     has "$label: images keep a long cache" 'ExpiresByType image/png "access plus 1 month"' "$body"
 done
 
+# The generated .htaccess deliberately invents NO PHP handler — the hosting
+# panel owns that line and the deploy preserves it. Pinned in
+# tests/deploy/unit-php-handler.sh, together with the reasoning.
+
 echo "---"
 echo "htaccess: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
