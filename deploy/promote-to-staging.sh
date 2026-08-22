@@ -31,7 +31,30 @@
 #                       (This script is already non-interactive; the
 #                       flag is reserved for symmetry with push-data.sh
 #                       and to make scripted invocation explicit.)
+#   --i-mean-it         Promote even though staging's live mailer is a
+#                       DELIVERING transport. See the mailer gate below.
 #   --help              Show this help.
+#
+# THE MAILER GATE
+# ---------------
+# This command copies prod member data to staging UNANONYMISED — real
+# names, real addresses (ADR-002). Staging's mailer is therefore supposed
+# to be a Mailtrap *sandbox*: it accepts the SMTP send, exercising the
+# real path, but captures every message instead of delivering it.
+#
+# email.yaml is live state. It lives in <tier>data/<vdir>/ and is
+# symlinked into each release, deliberately outside the deploy payload,
+# so nothing removes it and no deploy warns about it. A delivering
+# transport put there once survives every subsequent deploy AND every
+# promote — and the promote is what turns fixture rows into real members.
+# Those two facts have never had a gate between them.
+#
+# So before shipping any data, read staging's LIVE mailer and refuse if
+# it is not a Mailtrap host. --i-mean-it overrides, matching the escape
+# hatch push-email.sh already uses to place such a transport in the first
+# place (push-email.sh: "staging: server '<host>' is not a Mailtrap
+# sandbox"). The override is deliberately the same shape: whoever set the
+# delivering transport can promote onto it, but never by accident.
 #
 # DATA MODEL — versioned-data-dir SERVING (ADR-005)
 # -------------------------------------------------
@@ -100,6 +123,7 @@ die()  { printf '❌  %s\n' "$1" >&2; exit "${2:-1}"; }
 # ── 1. Parse args ────────────────────────────────────────────────────
 FROM_BACKUP=""
 YES=0
+I_MEAN_IT=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -111,11 +135,12 @@ while [ $# -gt 0 ]; do
             FROM_BACKUP="${1#--from-backup=}"; shift
             ;;
         --yes|-y) YES=1; shift ;;
+        --i-mean-it) I_MEAN_IT=1; shift ;;
         --help|-h) usage; exit 0 ;;
         *) die "Unknown arg: $(printf %q "$1")" ;;
     esac
 done
-readonly FROM_BACKUP YES
+readonly FROM_BACKUP YES I_MEAN_IT
 
 # ── 2. Determine mode (local vs live) ────────────────────────────────
 LOCAL_MODE=0
@@ -196,6 +221,85 @@ remove_blessing() {
 }
 
 # ──────────────────────────────────────────────────────────────────────
+# Mailer gate (see THE MAILER GATE in the header).
+#
+# Reads staging's LIVE per-tier mailer — live state under
+# <tier>data/, not anything in the release — and returns the configured
+# SMTP server, or the empty string when no mailer is provisioned at all
+# (which is the safe case: no transport, nothing can be delivered).
+#
+# The env dir is named for the canonical host because Grav resolves its
+# environment from the request Host; see deploy/lib/htaccess.sh and the
+# env-dir naming convention.
+# ──────────────────────────────────────────────────────────────────────
+STAGING_ENV_HOST="staging.hackersbychoice.dk"
+MAIL_REL="user/env/$STAGING_ENV_HOST/config/plugins/email.yaml"
+
+staging_live_mail_server() {
+    # `current` is the served data dir; v0 is the pre-versioning layout
+    # a tier may still be on. Try both, first hit wins.
+    local extract='for p in "$1" "$2"; do [ -f "$p" ] || continue;
+        sed -n "s/^[[:space:]]*server:[[:space:]]*//p" "$p" | head -1 |
+        tr -d "\"'"'"'" | tr -d "[:space:]"; break; done'
+    if [ "$LOCAL_MODE" = "1" ]; then
+        sh -c "$extract" _ \
+            "$DATA_ROOT/current/$MAIL_REL" \
+            "$DATA_ROOT/v0/$MAIL_REL" 2>/dev/null || printf ''
+    else
+        ssh_run "$(printf 'sh -c %q _ %q %q' "$extract" \
+            "$DATA_ROOT/current/$MAIL_REL" "$DATA_ROOT/v0/$MAIL_REL")" 2>/dev/null || printf ''
+    fi
+}
+
+assert_staging_mailer_captures() {
+    local server
+    server="$(staging_live_mail_server || true)"
+
+    if [ -z "$server" ]; then
+        # No transport provisioned. Mail cannot leave the tier at all, so
+        # prod member addresses are safe here. This is the fail-closed
+        # case, not a missing check.
+        note "mailer gate: staging has no SMTP transport provisioned — nothing can be delivered"
+        return 0
+    fi
+
+    # Case-insensitive, matching push-email.sh's `grep -qi 'mailtrap'` — the
+    # two must agree on what counts as a sandbox, or a transport push-email
+    # accepts without --i-mean-it could still be refused here (or worse, the
+    # reverse). Compare on a lowercased copy; report the value as written.
+    local server_lc
+    server_lc="$(printf '%s' "$server" | tr '[:upper:]' '[:lower:]')"
+    case "$server_lc" in
+        *mailtrap*)
+            note "mailer gate: staging sends to a Mailtrap sandbox ($server) — captured, not delivered"
+            return 0
+            ;;
+    esac
+
+    if [ "$I_MEAN_IT" = "1" ]; then
+        warn "mailer gate OVERRIDDEN: staging's mailer '$server' DELIVERS to real inboxes,"
+        warn "and this promote is about to put real prod member addresses on that tier."
+        warn "Proceeding because --i-mean-it was passed."
+        return 0
+    fi
+
+    printf '❌  Refusing to promote: staging delivers real email.\n' >&2
+    printf '    staging mailer server: %s  (not a Mailtrap sandbox)\n' "$server" >&2
+    printf '    This command copies prod member data to staging UNANONYMISED (ADR-002),\n' >&2
+    printf '    so every flow that mails a member — email change, deletion notices, ops\n' >&2
+    printf '    alerts, the purge job — would reach real members from a test environment.\n' >&2
+    printf '\n' >&2
+    printf '    Fix, then re-run:\n' >&2
+    printf '      1. point %s at a Mailtrap sandbox\n' \
+        "config/www/user/env/$STAGING_ENV_HOST/config/plugins/email.yaml" >&2
+    printf '      2. ./deploy/push-email.sh staging\n' >&2
+    printf '\n' >&2
+    printf '    Or, if mailing real members from staging is genuinely intended for this\n' >&2
+    printf '    promotion, re-run with --i-mean-it.\n' >&2
+    exit 1
+}
+
+# ──────────────────────────────────────────────────────────────────────
 # YAML field extractor (data_version:) — shared by step 4. Mirrors the
 # parser in migrate.sh / migrate-integration.sh.
 # ──────────────────────────────────────────────────────────────────────
@@ -252,6 +356,21 @@ if [ "$LOCAL_MODE" != "1" ]; then
 else
     note "local mode: skipping reachability checks"
 fi
+
+# Before ANY data moves: refuse if staging would deliver real email.
+# Placed here rather than later because step 2 already touches prod (it
+# takes a backup), and a refusal should be as cheap as possible.
+#
+# It is not entirely free: the stale-blessing removal above has already
+# run, so a refused promote leaves staging without a blessing marker even
+# though staging itself is untouched. That fails in the safe direction —
+# promote-to-prod gates ON the blessing, so the worst case is that a prod
+# promotion waits for a successful staging promote. Removing the blessing
+# first is deliberate (see step 1's own comment); the gate is not moved
+# ahead of it because a stale blessing surviving a fresh attempt is the
+# more dangerous of the two.
+log "Step 1/11: checking staging's mailer captures rather than delivers"
+assert_staging_mailer_captures
 echo ""
 
 # ──────────────────────────────────────────────────────────────────────

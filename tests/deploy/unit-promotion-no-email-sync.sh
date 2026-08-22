@@ -50,17 +50,35 @@ for base in promote-to-staging.sh promote-to-prod.sh; do
     fi
     scanned_any=1
 
-    # 1. No non-comment line names email.yaml. (The promotion scripts have no
-    #    legitimate reason to mention it at all; the safest invariant is total
-    #    absence outside comments.)
+    # 1. email.yaml may be READ, never COPIED, MOVED or WRITTEN.
+    #
+    #    This used to be total absence outside comments, on the reasoning that
+    #    the promotion scripts had no legitimate reason to name the file at
+    #    all. Since 2026-08-18 promote-to-staging.sh has one: before shipping
+    #    prod member data it INSPECTS staging's own live mailer and refuses if
+    #    that transport delivers to real inboxes rather than capturing
+    #    (ADR-002; issue #96). That read touches one tier, transfers nothing,
+    #    and writes nothing.
+    #
+    #    So the invariant now names the actual danger instead of proxying for
+    #    it: a non-comment line may mention email.yaml, but not alongside a
+    #    transfer verb, and not as the target of a redirection. Widening a
+    #    sync allow-list to carry SMTP credentials across tiers still trips
+    #    this, which is what the guard was always for.
+    TRANSFER_VERB='rsync|scp|\bcp\b|\bmv\b|\binstall\b|\btee\b'
+    WRITE_TARGET='>[[:space:]]*[^[:space:]&|]*email\.yaml'
+
     hits="$(grep -nE 'email\.yaml' "$script" 2>/dev/null \
             | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' \
             || true)"
-    if [ -z "$hits" ]; then
-        check "$base never references email.yaml in a sync context" ok
+    bad="$(printf '%s\n' "$hits" \
+           | grep -E "$TRANSFER_VERB|$WRITE_TARGET" \
+           || true)"
+    if [ -z "$bad" ]; then
+        check "$base never copies, moves or writes email.yaml" ok
     else
-        check "$base must not reference email.yaml (would risk cross-tier credential copy)" fail
-        printf '%s\n' "$hits" | sed 's/^/      /' >&2
+        check "$base must not copy/move/write email.yaml (cross-tier credential leak)" fail
+        printf '%s\n' "$bad" | sed 's/^/      /' >&2
     fi
 
     # 2. No broadened env/<host>/config/*.yaml glob — only features.yaml is
