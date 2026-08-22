@@ -116,13 +116,13 @@ NOINDEX
 
 <IfModule mod_expires.c>
     ExpiresActive On
-    # HTML FIRST, and explicitly. `ExpiresActive On` activates the host's own
-    # ExpiresDefault for every MIME type not named here — on both one.com and
-    # chosting that default is a week, so pages were served with
-    # `Cache-Control: max-age=604800`. A member who saw the calendar today
-    # would not see a newly published event for seven days, and nobody
-    # noticed because developers hard-refresh and only production has
-    # returning visitors. Pages must always revalidate.
+    # `ExpiresActive On` would otherwise let the host's ExpiresDefault apply
+    # to every MIME type not named here, so both are pinned.
+    #
+    # These do NOT govern Grav's pages: Grav sets Cache-Control for those
+    # itself, from system.pages.expires (which defaulted to seven days —
+    # see user/config/system.yaml). They cover static files and anything
+    # else Apache serves directly. Kept as defence in depth.
     ExpiresByType text/html "access plus 0 seconds"
     ExpiresDefault "access plus 0 seconds"
     ExpiresByType image/jpeg "access plus 1 month"
