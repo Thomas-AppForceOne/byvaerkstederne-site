@@ -52,11 +52,16 @@ site.yaml|dev.hackersbychoice.dk|dev points author.email at the operator test ma
 features.yaml.example|staging.hackersbychoice.dk|staging keeps a worked example of the flag profile beside the live one as operator documentation; a second copy on every tier would just be four things to keep in sync.
 "
 
+# NOTE the `|| true`: these greps legitimately find nothing (that is how an
+# undeclared path is detected), and under `set -e` a bare failing grep in a
+# command substitution aborts the whole script. It did exactly that in CI —
+# green on macOS, dead on Linux, half the loop unprinted — which is its own
+# small instance of "passes where you run it, fails where it matters".
 owner_of() {
-    printf '%s\n' "$ONLY_ON" | grep "^$1|" | head -1 | cut -d'|' -f2
+    printf '%s\n' "$ONLY_ON" | grep "^$1|" | head -1 | cut -d'|' -f2 || true
 }
 reason_for() {
-    printf '%s\n' "$ONLY_ON" | grep "^$1|" | head -1 | cut -d'|' -f3-
+    printf '%s\n' "$ONLY_ON" | grep "^$1|" | head -1 | cut -d'|' -f3- || true
 }
 
 # Union of every tracked config path across the four tiers.
