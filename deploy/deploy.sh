@@ -77,6 +77,12 @@ GRAV_URL="https://github.com/getgrav/grav/releases/download/${GRAV_VERSION}/grav
 # that produced it.
 . "$SCRIPT_DIR/lib/php-parity.sh"
 
+# shellcheck source=deploy/lib/php-handler.sh
+# Provides bv_php_handler_* — reads the hosting panel's PHP handler line,
+# validates it against .php-version, and lets the deploy carry it forward
+# instead of overwriting the operator's choice.
+. "$SCRIPT_DIR/lib/php-handler.sh"
+
 # shellcheck source=deploy/lib/grav-parity.sh
 # Provides bv_grav_target / bv_grav_parity_check — the SECOND axis. PHP
 # parity alone waved through a local CMS major-version jump; see that file.
@@ -683,6 +689,34 @@ if GRAV_TARGET="$(bv_grav_target "$PROJECT_DIR")"; then
     fi
 else
     echo "⚠️   no deploy/grav-admin-v*.zip — Grav parity not enforced." >&2
+fi
+
+# 3a4. PHP handler line. On cPanel the version a DOMAIN is served with is
+# an AddHandler line the panel writes into .htaccess — a file this deploy
+# also generates, so shipping ours would erase the operator's choice. Read
+# it, check it agrees with .php-version, and keep it to re-attach below.
+PRESERVED_PHP_HANDLER="$(bv_remote_run '
+    [ -f "$DOCROOT/.htaccess" ] && cat "$DOCROOT/.htaccess" || true
+' DOCROOT="$DEPLOY_TARGET" 2>/dev/null | bv_php_handler_line || true)"
+
+if PHP_TARGET_H="$(bv_php_target "$PROJECT_DIR")"; then
+    if ! bv_php_handler_check "$PHP_TARGET_H" "$PRESERVED_PHP_HANDLER" "$ENV" "${ALLOW_PHP_MISMATCH:-0}"; then
+        exit 1
+    fi
+fi
+
+# Re-attach the panel's line to the freshly rendered .htaccess, so the
+# upload cannot drop it. Nothing is invented: if the tier had no line, none
+# is added.
+if [ -n "$PRESERVED_PHP_HANDLER" ] && [ -f "$STAGING_DIR/.htaccess" ]; then
+    {
+        printf '\n'
+        printf '# Carried forward from the tier, unchanged. Written by the hosting\n'
+        printf '# panel (cPanel MultiPHP Manager); preserved here so this deploy does\n'
+        printf '# not silently revert the PHP version the domain is served with.\n'
+        printf '%s\n' "$PRESERVED_PHP_HANDLER"
+    } >> "$STAGING_DIR/.htaccess"
+    echo "  ✓ preserved the tier's PHP handler line"
 fi
 
 # 3b. parent of <tier>-releases/ is writable.
