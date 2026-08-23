@@ -184,8 +184,12 @@
                 {# Star budget widget — authenticated only #}
                 {% if is_auth %}
                     {% set bug_bud_raw = roadmap_bug_budget|default(0) %}
-                    {% set bug_bud_clamped = [bug_bud_raw, 3]|min %}
-                    {% set bug_bud_clamped = [bug_bud_clamped, 0]|max %}
+                    {# min()/max() as FUNCTIONS, not filters: Twig in Grav 2 removed the |min
+                       and |max filters and keeps only the function form. The filter form
+                       here made this template fail to compile, so /roadmap returned a
+                       flat HTTP 500. The function form is valid on Twig 1.x too. #}
+                    {% set bug_bud_clamped = min(bug_bud_raw, 3) %}
+                    {% set bug_bud_clamped = max(bug_bud_clamped, 0) %}
                     <div class="bv-rm-star-budget" id="bv-rm-bug-star-budget" aria-live="polite" aria-label="Fejl-stemmer til rådighed: {{ bug_bud_clamped }} af 3">
                         <span class="bv-rm-star-budget__label">Stemmer til rådighed</span>
                         {% for i in 1..3 %}
@@ -201,7 +205,11 @@
 
             <div class="bv-rm-cards" role="list">
                 {# Solved bugs first (80% opacity via CSS) #}
-                {% for item_id, item in roadmap_bugs if item.status|default('') == 'loest' %}
+                {# |filter, not `for ... if`: Twig 3 REMOVED the inline for-if form outright
+                   (verified against the shipped Twig 3.29 — it is a SyntaxError, so the
+                   whole template fails to compile and /roadmap 500s). |filter preserves
+                   keys, so item_id still binds. #}
+                {% for item_id, item in roadmap_bugs|filter(item => item.status|default('') == 'loest') %}
                     {% if feature_enabled('roadmap') %}
                     {% include 'partials/roadmap_card.html.twig' with {
                         item: item,
@@ -216,7 +224,7 @@
                 {% endfor %}
 
                 {# Non-solved bugs #}
-                {% for item_id, item in roadmap_bugs if item.status|default('') != 'loest' %}
+                {% for item_id, item in roadmap_bugs|filter(item => item.status|default('') != 'loest') %}
                     {% if feature_enabled('roadmap') %}
                     {% include 'partials/roadmap_card.html.twig' with {
                         item: item,
@@ -248,8 +256,8 @@
                 {# Star budget widget — authenticated only #}
                 {% if is_auth %}
                     {% set feat_bud_raw = roadmap_feature_budget|default(0) %}
-                    {% set feat_bud_clamped = [feat_bud_raw, 3]|min %}
-                    {% set feat_bud_clamped = [feat_bud_clamped, 0]|max %}
+                    {% set feat_bud_clamped = min(feat_bud_raw, 3) %}
+                    {% set feat_bud_clamped = max(feat_bud_clamped, 0) %}
                     <div class="bv-rm-star-budget" id="bv-rm-feature-star-budget" aria-live="polite" aria-label="Forslags-stemmer til rådighed: {{ feat_bud_clamped }} af 3">
                         <span class="bv-rm-star-budget__label">Stemmer til rådighed</span>
                         {% for i in 1..3 %}
@@ -265,7 +273,7 @@
 
             <div class="bv-rm-cards" role="list">
                 {# Solved features first (80% opacity via CSS) #}
-                {% for item_id, item in roadmap_features if item.status|default('') == 'loest' %}
+                {% for item_id, item in roadmap_features|filter(item => item.status|default('') == 'loest') %}
                     {% if feature_enabled('roadmap') %}
                     {% include 'partials/roadmap_card.html.twig' with {
                         item: item,
@@ -280,7 +288,7 @@
                 {% endfor %}
 
                 {# Non-solved features #}
-                {% for item_id, item in roadmap_features if item.status|default('') != 'loest' %}
+                {% for item_id, item in roadmap_features|filter(item => item.status|default('') != 'loest') %}
                     {% if feature_enabled('roadmap') %}
                     {% include 'partials/roadmap_card.html.twig' with {
                         item: item,

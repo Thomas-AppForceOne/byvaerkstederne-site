@@ -117,7 +117,11 @@ check "its default matches deploy.sh's GRAV_VERSION" \
 check "the build fetches that exact version" \
     "$(grep -q 'grav-admin-v\${GRAV_VERSION}\.zip' "$DOCKERFILE" && echo ok || echo no)"
 check "the build verifies what it unpacked" \
-    "$(grep -q "GRAV_VERSION', '\${GRAV_VERSION}'" "$DOCKERFILE" && echo ok || echo no)"
+    "$(grep -q 'GRAV_VERSION\[' "$DOCKERFILE" && echo ok || echo no)"
+# 1.7 writes single quotes, 2.0 writes double. A guard pinned to one style
+# blocks the other major outright — which it did, on the 2.0.21 build.
+check "the build's version check accepts both quote styles" \
+    "$(grep -qE 'GRAV_VERSION\[.\"' "$DOCKERFILE" && echo ok || echo no)"
 check "grav-up.sh reads GRAV_VERSION from deploy.sh, not a second copy" \
     "$(grep -q 'GRAV_VERSION=.*deploy/deploy.sh' "$PROJECT_ROOT/scripts/grav-up.sh" && echo ok || echo no)"
 
