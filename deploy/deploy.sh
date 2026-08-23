@@ -715,9 +715,36 @@ fi
 # an AddHandler line the panel writes into .htaccess — a file this deploy
 # also generates, so shipping ours would erase the operator's choice. Read
 # it, check it agrees with .php-version, and keep it to re-attach below.
-PRESERVED_PHP_HANDLER="$(bv_remote_run '
+# Read and parse in TWO steps, and check the read's own status.
+#
+# This was one pipeline ending in `2>/dev/null | bv_php_handler_line ||
+# true`, which made the parser's exit status the whole expression's — so a
+# connection that failed was indistinguishable from a tier with no handler
+# line. Both produced an empty string, and empty means "no handler line",
+# which passes. The deploy would then skip the re-attach below and ship an
+# .htaccess with no AddHandler at all.
+#
+# On prod that is a silent PHP DOWNGRADE: the domain is served 8.5 only
+# because cPanel wrote that line, and dropping it falls the domain back to
+# the system default (8.4 at the time of writing). A transient SSH failure
+# would have changed production's PHP version and reported a passing check
+# while doing it — the exact "fine everywhere, broken on prod" shape this
+# pre-flight exists to catch.
+#
+# The remote body ends in `|| true`, so a missing docroot or absent
+# .htaccess still exits 0 with empty output. A NON-zero status therefore
+# means the read itself did not happen, and that must never be read as an
+# answer about the tier.
+if ! HTACCESS_RAW="$(bv_remote_run '
     [ -f "$DOCROOT/.htaccess" ] && cat "$DOCROOT/.htaccess" || true
-' DOCROOT="$DEPLOY_TARGET" 2>/dev/null | bv_php_handler_line || true)"
+' DOCROOT="$DEPLOY_TARGET")"; then
+    echo "❌  Could not read ${DEPLOY_TARGET}/.htaccess on ${ENV}." >&2
+    echo "    Refusing to continue: an unreadable .htaccess is not evidence that" >&2
+    echo "    the tier has no PHP handler line. Continuing would deploy without" >&2
+    echo "    one and silently hand the domain back to the system default PHP." >&2
+    exit 1
+fi
+PRESERVED_PHP_HANDLER="$(printf '%s' "$HTACCESS_RAW" | bv_php_handler_line || true)"
 
 if PHP_TARGET_H="$(bv_php_target "$PROJECT_DIR")"; then
     if ! bv_php_handler_check "$PHP_TARGET_H" "$PRESERVED_PHP_HANDLER" "$ENV" "${ALLOW_PHP_MISMATCH:-0}"; then
