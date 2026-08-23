@@ -111,6 +111,33 @@ check "deploy.sh preserves the tier's handler line" \
 check "deploy.sh validates it" \
     "$(grep -q 'bv_php_handler_check' "$PROJECT_ROOT/deploy/deploy.sh" && echo ok || echo no)"
 
+# ── A failed read is not an answer about the tier ────────────────────
+#
+# The handler read used to be one pipeline ending in `2>/dev/null |
+# bv_php_handler_line || true`, so the parser's status masked the SSH
+# status and a connection failure looked exactly like "this tier has no
+# handler line". Empty passes the check, the re-attach is skipped, and the
+# .htaccess ships without an AddHandler — on prod, a silent downgrade to
+# the system default PHP.
+# Comment lines are stripped: the block's own prose names the very
+# patterns it forbids, and a lint that cannot tell code from the
+# explanation of code is worse than none.
+READ_BLOCK="$(awk '/3a4\. PHP handler line/,/^PRESERVED_PHP_HANDLER=/' "$PROJECT_ROOT/deploy/deploy.sh" \
+    | grep -v '^[[:space:]]*#')"
+
+check "the handler read's own exit status is checked" \
+    "$(printf '%s' "$READ_BLOCK" | grep -q 'if ! HTACCESS_RAW=' && echo ok || echo no)"
+check "a failed read aborts instead of continuing" \
+    "$(printf '%s' "$READ_BLOCK" | grep -q 'exit 1' && echo ok || echo no)"
+check "the read does not discard stderr" \
+    "$(printf '%s' "$READ_BLOCK" | grep -q '2>/dev/null' && echo no || echo ok)"
+check "the read is not piped straight into the parser" \
+    "$(printf '%s' "$READ_BLOCK" | grep -qE "bv_remote_run.*\\| *bv_php_handler_line" && echo no || echo ok)"
+# The empty case must still be reachable for a tier that genuinely has no
+# line — the abort is about transport, not about absence.
+check "a successful read of an absent line still yields empty, not an abort" \
+    "$([ -z "$(bv_php_handler_line </dev/null || true)" ] && echo ok || echo no)"
+
 echo "---"
 echo "php handler unit: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

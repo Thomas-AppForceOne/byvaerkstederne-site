@@ -159,6 +159,39 @@ bv_resolve_ssh_password() {
 # (rather than prompting interactively) when key-auth isn't set up.
 #
 # Both paths set ConnectTimeout=10 to match the existing SSH probe.
+# Reuse ONE SSH connection for the whole run.
+#
+# WHY THIS EXISTS
+# ---------------
+# Every bv_remote_run and every rsync opened its own TCP connection and
+# authenticated from scratch. A deploy does that a dozen-plus times in a
+# few seconds, and one.com's shared hosting throttles bursts of
+# authentications: the first several succeed, later ones come back
+# "Permission denied, please try again." with credentials that are
+# perfectly valid — and that are provably valid again a minute later.
+#
+# It surfaced on 2026-08-23 when four new pre-flight checks (PHP binary,
+# PHP parity, Grav parity, handler line) each added a connection ahead of
+# the upload. The deploy reached step 3b and was refused. Nothing was
+# wrong with the password; there were simply too many logins too quickly.
+#
+# With ControlMaster the first connection authenticates and every later
+# one rides the same socket, so a deploy authenticates ONCE no matter how
+# many remote commands it runs. That removes the ceiling rather than
+# raising it: adding a pre-flight check no longer costs a login.
+#
+# ControlPath lives in /tmp, not $TMPDIR: a unix socket path is capped at
+# ~104 bytes and macOS $TMPDIR is already ~50. %C is a hash of
+# (localhost, remotehost, port, user), so distinct tiers never share a
+# socket. ControlPersist outlives the gaps between steps — notably the
+# package upload — without leaving a connection open indefinitely.
+#
+# ControlMaster=auto degrades safely: if the socket is missing or the
+# master has gone, ssh just opens a fresh connection.
+bv_ssh_mux_opts() {
+    printf '%s' "-o ControlMaster=auto -o ControlPath=/tmp/bv-ssh-%C -o ControlPersist=180"
+}
+
 bv_ssh_cmd() {
     local pw rc
     pw="$(bv_resolve_ssh_password)"; rc=$?
@@ -174,9 +207,11 @@ bv_ssh_cmd() {
             echo "    Install: brew install esolitos/ipa/sshpass" >&2
             return 1
         fi
+        # shellcheck disable=SC2046  # deliberate word-splitting: option list
         SSHPASS="$pw" sshpass -e ssh \
             -o ConnectTimeout=10 \
             -o StrictHostKeyChecking=no \
+            $(bv_ssh_mux_opts) \
             "$@"
     else
         # Key-auth path. StrictHostKeyChecking=accept-new lets first
@@ -186,8 +221,10 @@ bv_ssh_cmd() {
         # StrictHostKeyChecking=yes after the first connection. The
         # sshpass path above uses =no because one.com's shared-hosting
         # fingerprints have rotated more than once historically.
+        # shellcheck disable=SC2046  # deliberate word-splitting: option list
         ssh -o BatchMode=yes -o ConnectTimeout=10 \
             -o StrictHostKeyChecking=accept-new \
+            $(bv_ssh_mux_opts) \
             "$@"
     fi
 }
@@ -218,12 +255,14 @@ bv_rsync_ssh_e() {
             echo "    Install: brew install esolitos/ipa/sshpass" >&2
             return 1
         fi
-        printf 'sshpass -e ssh -p %s -o ConnectTimeout=10 -o StrictHostKeyChecking=no' "$port"
+        printf 'sshpass -e ssh -p %s -o ConnectTimeout=10 -o StrictHostKeyChecking=no %s' \
+            "$port" "$(bv_ssh_mux_opts)"
     else
         # Key-auth path — same StrictHostKeyChecking=accept-new
         # rationale as bv_ssh_cmd above. First connection to chosting
         # records the fingerprint; subsequent runs verify it.
-        printf 'ssh -p %s -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new' "$port"
+        printf 'ssh -p %s -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new %s' \
+            "$port" "$(bv_ssh_mux_opts)"
     fi
 }
 
