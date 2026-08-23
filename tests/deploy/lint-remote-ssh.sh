@@ -567,6 +567,45 @@ else
 fi
 rm -f "$FIXTURE"
 
+# 18. The swap must be followed by an opcode-cache flush, before the probe.
+#
+#     The docroot is a symlink; PHP-FPM keys opcache by the path it resolved
+#     when it first compiled, and opcache.revalidate_path is Off on the
+#     one.com tiers. A warm worker therefore keeps running the PREVIOUS
+#     release through the unchanged /<tier>/... paths, and does not recover
+#     on any useful timescale — test served the old core for 35 minutes.
+#     Normally invisible; fatal across the Grav 1.7 → 2.0 boundary, where a
+#     new bundled plugin called a Grav 2 class into the old core.
+DEPLOY_SH="$DEPLOY_DIR/deploy.sh"
+if grep -q 'opcache_reset' "$DEPLOY_SH"; then
+    check "deploy.sh flushes the opcode cache after the swap" ok
+else
+    check "deploy.sh must flush the opcode cache after the swap" fail
+fi
+# The flush is useless if it runs before the symlink moves, and dangerous if
+# the endpoint is left behind. Both are checked by position, not by wording.
+_swap_line="$(grep -n 'Step 8/8' "$DEPLOY_SH" | head -1 | cut -d: -f1)"
+_flush_line="$(grep -n 'opcache_reset' "$DEPLOY_SH" | head -1 | cut -d: -f1)"
+_probe_line="$(grep -n 'Smoke probe: GET' "$DEPLOY_SH" | head -1 | cut -d: -f1)"
+if [ -n "$_swap_line" ] && [ -n "$_flush_line" ] && [ -n "$_probe_line" ] \
+   && [ "$_flush_line" -gt "$_swap_line" ] && [ "$_flush_line" -lt "$_probe_line" ]; then
+    check "the flush runs after the swap and before the smoke probe" ok
+else
+    check "the flush must run after the swap and before the smoke probe" fail
+fi
+if grep -qE 'rm -f "\$T/\$N"' "$DEPLOY_SH"; then
+    check "the flush endpoint is deleted again" ok
+else
+    check "the flush endpoint must be deleted again" fail
+fi
+# A fixed filename would be a permanently guessable remote-reset endpoint in
+# every release directory.
+if grep -q 'opcache-flush-\$(od -An' "$DEPLOY_SH"; then
+    check "the flush endpoint name is randomised per deploy" ok
+else
+    check "the flush endpoint name must be randomised per deploy" fail
+fi
+
 echo ""
 echo "─────────────────────────────────────"
 echo "  Pass: $PASS    Fail: $FAIL"
