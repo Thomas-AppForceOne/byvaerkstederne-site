@@ -118,9 +118,9 @@ fi
 
 out="$(run prod anders --yes --generate)" || true
 if printf '%s' "$out" | grep -q -- '--i-mean-it'; then
-    check "prod without --i-mean-it is refused" ok
+    check "prod is not gated behind an --i-mean-it ceremony" bad
 else
-    check "prod without --i-mean-it is refused" bad
+    check "prod is not gated behind an --i-mean-it ceremony" ok
 fi
 
 out="$(run dev pw-test-user --yes --generate)" || true

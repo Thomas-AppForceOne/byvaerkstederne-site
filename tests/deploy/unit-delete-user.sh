@@ -116,18 +116,25 @@ else
     check "invalid tier is refused" bad
 fi
 
-out="$(run prod anders --yes)" || true
+# --dry-run, deliberately: with the prod ceremony gone this call no longer
+# stops early, and a real run here would delete the fixture and clear the
+# sandbox cache out from under the later assertions.
+out="$(run prod anders --yes --dry-run)" || true
 if printf '%s' "$out" | grep -q -- '--i-mean-it'; then
-    check "prod without --i-mean-it is refused" ok
+    check "prod is not gated behind an --i-mean-it ceremony" bad
 else
-    check "prod without --i-mean-it is refused" bad
+    check "prod is not gated behind an --i-mean-it ceremony" ok
 fi
 
-out="$(run dev pw-test-user --yes)" || true
-if printf '%s' "$out" | grep -q 'protected Playwright seed'; then
-    check "protected seed account is refused without --i-mean-it" ok
+# --dry-run for the same reason as the prod case above: the seed guard warns
+# now instead of refusing, so a plain run would really delete pw-test-user
+# and clear the sandbox cache before the assertions below look at it.
+out="$(run dev pw-test-user --yes --dry-run)" || true
+if printf '%s' "$out" | grep -q 'protected Playwright seed' \
+   && printf '%s' "$out" | grep -q 'Re-seed afterwards'; then
+    check "protected seed account warns and continues (no longer refused)" ok
 else
-    check "protected seed account is refused without --i-mean-it" bad
+    check "protected seed account warns and continues (no longer refused)" bad
 fi
 
 out="$(run dev '../evil' --yes)" || true

@@ -37,7 +37,6 @@
 # Options:
 #   --yes, -y       Skip the confirmation prompt.
 #   --dry-run, -n   Resolve and validate everything; change nothing.
-#   --i-mean-it     Required for tier=prod and for the protected
 #                   Playwright seed accounts (pw-test-*).
 #   --help, -h      Show this help.
 
@@ -88,13 +87,11 @@ esac
 POSITIONAL=()
 YES=0
 DRY_RUN=0
-I_MEAN_IT=0
 
 for arg in "$@"; do
     case "$arg" in
         --yes|-y) YES=1 ;;
         --dry-run|-n) DRY_RUN=1 ;;
-        --i-mean-it) I_MEAN_IT=1 ;;
         --help|-h) usage; exit 0 ;;
         --*) echo "❌  Unknown option: $arg" >&2; usage >&2; exit 1 ;;
         *) POSITIONAL+=("$arg") ;;
@@ -138,7 +135,7 @@ if [ "$ACTION" != "list" ]; then
         echo "❌  $ACTION: missing group name" >&2; err=1
     fi
     if [ "$err" = "1" ]; then
-        echo "    Usage:   $0 $ACTION <dev|test|staging|prod> <username|email> <group> [--yes] [--dry-run] [--i-mean-it]" >&2
+        echo "    Usage:   $0 $ACTION <dev|test|staging|prod> <username|email> <group> [--yes] [--dry-run]" >&2
         echo "    Example: $0 grant dev anders@example.dk organizers" >&2
         exit 1
     fi
@@ -173,10 +170,6 @@ if [ "$ACTION" != "list" ]; then
             ;;
     esac
 
-    if [ "$TIER" = "prod" ] && [ "$I_MEAN_IT" != "1" ]; then
-        echo "❌  Refusing to change group membership on prod without --i-mean-it (this changes a REAL member's rights)." >&2
-        exit 1
-    fi
 
     if [ ! -f "$GROUPS_PHP" ]; then
         echo "❌  Missing $GROUPS_PHP (repo checkout incomplete?)." >&2
@@ -254,11 +247,8 @@ fi
 
 case "$USERNAME" in
     "$PROTECTED_USER_PREFIX"*)
-        if [ "$I_MEAN_IT" != "1" ]; then
-            echo "❌  '$USERNAME' is a protected Playwright seed account." >&2
-            echo "    Changing its groups breaks the auth/event suites. Re-run with --i-mean-it if you mean it." >&2
-            exit 1
-        fi
+        echo "⚠️   '$USERNAME' is a protected Playwright seed account." >&2
+        echo "    Changing its groups breaks the auth/event suites." >&2
         ;;
 esac
 

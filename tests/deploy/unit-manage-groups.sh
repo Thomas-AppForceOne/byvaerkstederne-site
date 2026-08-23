@@ -199,16 +199,16 @@ fi
 
 out="$(run grant prod anders organizers --yes)" || true
 if printf '%s' "$out" | grep -q -- '--i-mean-it'; then
-    check "prod without --i-mean-it is refused" ok
+    check "prod is not gated behind an --i-mean-it ceremony" bad
 else
-    check "prod without --i-mean-it is refused" bad
+    check "prod is not gated behind an --i-mean-it ceremony" ok
 fi
 
 out="$(run revoke dev pw-test-org organizers --yes)" || true
 if printf '%s' "$out" | grep -q 'protected Playwright seed'; then
-    check "protected pw-test-* account is refused without --i-mean-it" ok
+    check "protected pw-test-* account warns and continues (no longer refused)" ok
 else
-    check "protected pw-test-* account is refused without --i-mean-it" bad
+    check "protected pw-test-* account warns and continues (no longer refused)" bad
 fi
 
 # ─────────────────────────────────────────────────────────────────────

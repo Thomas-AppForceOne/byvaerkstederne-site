@@ -12,7 +12,6 @@
 # DESTRUCTIVE — this includes user-generated content (bug-reports.yaml,
 # feature-suggestions.yaml, event RSVPs, votes). Always prints the file list
 # before touching anything. On prod this destroys REAL member activity —
-# gated behind --i-mean-it (and `make reset-data tier=prod` is refused at
 # the Make layer entirely).
 #
 # USAGE
@@ -24,7 +23,6 @@
 # Options:
 #   --yes, -y       Skip the confirmation prompt.
 #   --dry-run, -n   List what would be deleted; delete nothing.
-#   --i-mean-it     Required for tier=prod.
 #   --help, -h      Show this help.
 
 set -euo pipefail
@@ -40,14 +38,12 @@ usage() {
 TIER=""
 YES=0
 DRY_RUN=0
-I_MEAN_IT=0
 
 for arg in "$@"; do
     case "$arg" in
         dev|test|staging|prod) TIER="$arg" ;;
         --yes|-y) YES=1 ;;
         --dry-run|-n) DRY_RUN=1 ;;
-        --i-mean-it) I_MEAN_IT=1 ;;
         --help|-h) usage; exit 0 ;;
         *) echo "❌  Unknown arg: $arg" >&2; usage >&2; exit 1 ;;
     esac
@@ -55,13 +51,9 @@ done
 
 case "$TIER" in
     dev|test|staging|prod) ;;
-    *) echo "❌  Usage: $0 <dev|test|staging|prod> [--yes] [--dry-run] [--i-mean-it]" >&2; exit 1 ;;
+    *) echo "❌  Usage: $0 <dev|test|staging|prod> [--yes] [--dry-run]" >&2; exit 1 ;;
 esac
 
-if [ "$TIER" = "prod" ] && [ "$I_MEAN_IT" != "1" ]; then
-    echo "❌  Refusing to reset data on prod without --i-mean-it (destroys REAL member activity)." >&2
-    exit 1
-fi
 
 # ── 2. Load credentials + resolve SSH for the tier ───────────────────
 ENV_FILE="$PROJECT_DIR/.env.deploy"

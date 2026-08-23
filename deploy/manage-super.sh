@@ -38,13 +38,11 @@
 # Options:
 #   --yes, -y       Skip the confirmation prompt.
 #   --dry-run, -n   Resolve and validate everything; change nothing.
-#   --i-mean-it     Required for tier=prod and for the protected Playwright
 #                   seed accounts (pw-test-*).
 #   --help, -h      Show this help.
 #
 # REVOKE REFUSES THE LAST SUPER. A tier with zero supers cannot notify anyone
 # about access requests and cannot be administered from the panel; pass
-# --i-mean-it if that is genuinely what you want.
 
 set -euo pipefail
 
@@ -77,7 +75,6 @@ tier_host() {
 
 YES=0
 DRY_RUN=0
-I_MEAN_IT=0
 ACTION=""
 POSITIONAL=()
 
@@ -85,7 +82,6 @@ for arg in "$@"; do
     case "$arg" in
         --yes|-y) YES=1 ;;
         --dry-run|-n) DRY_RUN=1 ;;
-        --i-mean-it) I_MEAN_IT=1 ;;
         --help|-h) usage; exit 0 ;;
         list|grant|revoke)
             if [ -z "$ACTION" ]; then ACTION="$arg"; else POSITIONAL+=("$arg"); fi
@@ -111,7 +107,7 @@ if [ "$ACTION" != "list" ]; then
     USERID="${POSITIONAL[1]:-}"
     if [ -z "$USERID" ]; then
         echo "❌  $ACTION: missing user (a username, or an email to resolve)" >&2
-        echo "    Usage:   $0 $ACTION <dev|test|staging|prod> <username|email> [--yes] [--dry-run] [--i-mean-it]" >&2
+        echo "    Usage:   $0 $ACTION <dev|test|staging|prod> <username|email> [--yes] [--dry-run]" >&2
         echo "    Example: $0 grant dev test+admin@hackersbychoice.dk" >&2
         exit 1
     fi
@@ -123,10 +119,6 @@ if [ "$ACTION" != "list" ]; then
             exit 1
             ;;
     esac
-    if [ "$TIER" = "prod" ] && [ "$I_MEAN_IT" != "1" ]; then
-        echo "❌  Refusing to change super-admin rights on prod without --i-mean-it." >&2
-        exit 1
-    fi
     if [ ! -f "$SUPER_PHP" ]; then
         echo "❌  Missing $SUPER_PHP (repo checkout incomplete?)." >&2
         exit 1
@@ -213,11 +205,8 @@ fi
 
 case "$USERNAME" in
     "$PROTECTED_USER_PREFIX"*)
-        if [ "$I_MEAN_IT" != "1" ]; then
-            echo "❌  '$USERNAME' is a protected Playwright seed account." >&2
-            echo "    Changing its rights breaks the auth suites. Re-run with --i-mean-it if you mean it." >&2
-            exit 1
-        fi
+        echo "⚠️   '$USERNAME' is a protected Playwright seed account." >&2
+        echo "    Changing its rights breaks the auth suites. Re-seed afterwards with tests/fixtures/grav-seeds/playwright/apply.sh." >&2
         ;;
 esac
 
@@ -252,13 +241,13 @@ if [ "$ACTION" = "revoke" ]; then
     fi
     # `grep -v` exits 1 when it filters everything away — which is exactly the
     # case this guard exists for. Without the `|| true` the whole script would
-    # die under `set -e` right here and the refusal would never print.
+    # die under `set -e` right here and the warning would never print.
     remaining="$(printf '%s\n' "$supers" | sed '/^$/d' | { grep -vxF "$USERNAME" || true; } | wc -l | tr -d ' ')"
-    if [ "$remaining" = "0" ] && [ "$I_MEAN_IT" != "1" ]; then
-        echo "❌  '$USERNAME' is the LAST super-admin on $TIER." >&2
+    if [ "$remaining" = "0" ]; then
+        echo "⚠️   '$USERNAME' is the LAST super-admin on $TIER." >&2
         echo "    Revoking leaves the tier with nobody to notify about access requests" >&2
-        echo "    and nobody who can administer it. Re-run with --i-mean-it if you mean it." >&2
-        exit 1
+        echo "    and nobody who can administer it. Restore with:" >&2
+        echo "        make grant-super tier=$TIER user=<username>" >&2
     fi
 fi
 

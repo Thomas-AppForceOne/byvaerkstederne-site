@@ -24,16 +24,13 @@
 # real registration time regardless of file mtime.
 #
 # DRY-RUN BY DEFAULT. Pass --apply to actually delete. prod additionally
-# requires --i-mean-it. Intended to run on a schedule (cron / CI) per tier.
 #
 # USAGE
-#   ./deploy/cleanup-unverified-users.sh <tier> [--max-age=MIN] [--apply] [--i-mean-it]
 #
 # Tiers: dev | test | staging | prod
 # Options:
 #   --max-age=MIN   Delete unconfirmed accounts older than MIN minutes (default 10).
 #   --apply         Actually delete (default: dry-run — only report).
-#   --i-mean-it     Required for tier=prod.
 #   --help, -h
 #
 # NOTE: 10 minutes is aggressive for real email + a human clicking a link. Use a
@@ -55,14 +52,12 @@ TOKEN_LIFETIME=604800
 TIER=""
 MAX_AGE_MIN=10
 APPLY=0
-I_MEAN_IT=0
 
 for arg in "$@"; do
     case "$arg" in
         dev|test|staging|prod) TIER="$arg" ;;
         --max-age=*) MAX_AGE_MIN="${arg#--max-age=}" ;;
         --apply) APPLY=1 ;;
-        --i-mean-it) I_MEAN_IT=1 ;;
         --help|-h) usage; exit 0 ;;
         *) echo "❌  Unknown arg: $arg" >&2; usage >&2; exit 1 ;;
     esac
@@ -70,15 +65,11 @@ done
 
 case "$TIER" in
     dev|test|staging|prod) ;;
-    *) echo "❌  Usage: $0 <dev|test|staging|prod> [--max-age=MIN] [--apply] [--i-mean-it]" >&2; exit 1 ;;
+    *) echo "❌  Usage: $0 <dev|test|staging|prod> [--max-age=MIN] [--apply]" >&2; exit 1 ;;
 esac
 case "$MAX_AGE_MIN" in
     ''|*[!0-9]*) echo "❌  --max-age must be a whole number of minutes (got '$MAX_AGE_MIN')." >&2; exit 1 ;;
 esac
-if [ "$TIER" = "prod" ] && [ "$APPLY" = "1" ] && [ "$I_MEAN_IT" != "1" ]; then
-    echo "❌  Refusing to --apply on prod without --i-mean-it (this deletes real member registrations)." >&2
-    exit 1
-fi
 MAX_AGE_SEC=$((MAX_AGE_MIN * 60))
 
 # ── 2. Load credentials + resolve SSH ────────────────────────────────

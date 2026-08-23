@@ -17,7 +17,6 @@
 # <DEPLOY_PATH>/<tier>data/v0/user/data/flex-objects/ and clears Grav's
 # cache so the new data is picked up.
 #
-# Prod is refused without --i-mean-it. Prod's flex-objects are the
 # canonical source of truth (admin-UI managed); pushing local YAML to
 # prod overwrites every admin edit since the last push. If you need to
 # do it, you mean it explicitly.
@@ -43,7 +42,6 @@
 #                    tests/fixtures/grav-seeds/sample-content/.
 #   --yes            Skip the confirmation prompt.
 #   --dry-run        Show the diff and exit; do not push.
-#   --i-mean-it      Required for tier=prod.
 #   --help           Show this help.
 
 set -euo pipefail
@@ -60,7 +58,6 @@ TIER=""
 FILES_RAW=""
 YES=0
 DRY_RUN=0
-I_MEAN_IT=0
 
 for arg in "$@"; do
     case "$arg" in
@@ -68,7 +65,6 @@ for arg in "$@"; do
         --files=*) FILES_RAW="${arg#--files=}" ;;
         --yes|-y) YES=1 ;;
         --dry-run|-n) DRY_RUN=1 ;;
-        --i-mean-it) I_MEAN_IT=1 ;;
         --help|-h) usage; exit 0 ;;
         *)
             echo "❌  Unknown arg: $arg" >&2
@@ -99,17 +95,6 @@ EOF
     exit 1
 fi
 
-if [ "$TIER" = "prod" ] && [ "$I_MEAN_IT" != "1" ]; then
-    cat >&2 <<'EOF'
-❌  Refusing to push to prod without --i-mean-it.
-
-    Prod's flex-objects are managed via the admin UI on byvaerkstederne.dk.
-    Pushing local YAML overwrites every admin edit since the last push.
-
-    Re-run with --i-mean-it if you genuinely want to do this.
-EOF
-    exit 1
-fi
 
 # ── 2. Validate the file list ────────────────────────────────────────
 # Files that carry user-generated content or auth/submission tokens —
