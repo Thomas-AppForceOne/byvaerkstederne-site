@@ -84,10 +84,19 @@ check ".php-version is a bare MAJOR.MINOR" \
     "$(printf '%s' "$TARGET" | grep -qE '^[0-9]+\.[0-9]+$' && echo ok || echo no)"
 
 COMPOSE="$PROJECT_ROOT/docker-compose.yml"
-check "the Grav image is pinned by digest, not a floating tag" \
-    "$(grep -qE 'image:\s*lscr\.io/linuxserver/grav@sha256:[0-9a-f]{64}' "$COMPOSE" && echo ok || echo no)"
-check "the Grav image is NOT :latest" \
-    "$(grep -qE 'image:\s*lscr\.io/linuxserver/grav:latest' "$COMPOSE" && echo no || echo ok)"
+DOCKERFILE="$PROJECT_ROOT/Dockerfile"
+
+# The container is BUILT, not pulled, so PHP and Grav can be pinned
+# separately. A single prebuilt image welded them: pulling a newer one to
+# get a newer PHP dragged the local CMS a major version ahead of every tier.
+check "the container is built from a Dockerfile, not a prebuilt image" \
+    "$(grep -qE '^\s*build:' "$COMPOSE" && echo ok || echo no)"
+check "the PHP base is pinned by digest, not a floating tag" \
+    "$(grep -qE '^ARG PHP_BASE=.*@sha256:[0-9a-f]{64}' "$DOCKERFILE" && echo ok || echo no)"
+check "the PHP base is NOT :latest" \
+    "$(grep -qE '^ARG PHP_BASE=.*:latest' "$DOCKERFILE" && echo no || echo ok)"
+check "the image carries a Grav version argument" \
+    "$(grep -qE '^ARG GRAV_VERSION=' "$DOCKERFILE" && echo ok || echo no)"
 
 # The declared target must be one CI actually exercises, or the guard
 # points every tier at a version nothing has tested.
