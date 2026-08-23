@@ -41,9 +41,15 @@ FROM ${PHP_BASE}
 # Must match deploy.sh's GRAV_VERSION, or the container runs a different CMS
 # than the tiers. unit-grav-parity.sh fails the suite when they disagree,
 # and scripts/grav-up.sh warns at the moment the container starts.
-ARG GRAV_VERSION=1.7.52
+ARG GRAV_VERSION=2.0.21
 
 # Replace the baked core with the version this repo deploys.
+#
+# The verification below accepts EITHER quote style: 1.7 writes
+# define('GRAV_VERSION', '1.7.52') and 2.0 writes
+# define("GRAV_VERSION", "2.0.21"). Pinned to single quotes, the guard
+# refused to build 2.0.21 at all — correct behaviour (it would not ship an
+# image it could not verify), but for a cosmetic reason.
 #
 # The `user` entry is deliberately excluded from the wipe: on an already
 # provisioned checkout it is a symlink to /config/www/user, and removing it
@@ -59,4 +65,4 @@ RUN set -eux; \
     cp -a "$tmp/grav-admin/." /app/www/public/; \
     rm -rf "$tmp"; \
     chown -R abc:users /app/www/public; \
-    grep -q "GRAV_VERSION', '${GRAV_VERSION}'" /app/www/public/system/defines.php
+    grep -qE "GRAV_VERSION[\"'], [\"']${GRAV_VERSION}[\"']" /app/www/public/system/defines.php
