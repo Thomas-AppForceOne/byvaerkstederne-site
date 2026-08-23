@@ -672,15 +672,42 @@ reset-users: ## Delete all member accounts — local when no tier; on a tier kee
 	  esac; \
 	fi
 
-reset-admin: ## Reset the LOCAL admin account (delete and recreate interactively; local-only)
+reset-admin: ## Reset the LOCAL admin account (delete and recreate interactively; local-only). user=<username> picks one when several supers exist.
 	@if [ -n "$(tier)" ]; then \
 	  echo "❌  reset-admin is local-only (got tier='$(tier)')."; \
 	  echo "    For tier accounts use: make reset-password / activate-user / delete-user tier=$(tier) user=..."; \
 	  exit 1; \
 	fi
-	@echo "Removing admin account (thomasadmin)..."
-	@rm -f config/www/user/accounts/thomasadmin.yaml
-	@$(MAKE) create-admin
+	@target="$(user)"; \
+	if [ -n "$$target" ]; then \
+	  if [ ! -f "config/www/user/accounts/$$target.yaml" ]; then \
+	    echo "❌  No local account 'config/www/user/accounts/$$target.yaml'."; \
+	    exit 1; \
+	  fi; \
+	else \
+	  supers=""; n=0; \
+	  for f in config/www/user/accounts/*.yaml; do \
+	    [ -e "$$f" ] || continue; \
+	    if grep -qE '^[[:space:]]*super:[[:space:]]+true' "$$f" 2>/dev/null; then \
+	      supers="$$supers $$(basename "$$f" .yaml)"; n=$$((n+1)); \
+	    fi; \
+	  done; \
+	  if [ "$$n" -eq 0 ]; then \
+	    echo "No local super-admin found — creating one."; \
+	  elif [ "$$n" -eq 1 ]; then \
+	    target="$$(echo $$supers | tr -d ' ')"; \
+	  else \
+	    echo "❌  $$n local super-admins:$$supers"; \
+	    echo "    Refusing to guess which one to reset. Name it:"; \
+	    echo "        make reset-admin user=<username>"; \
+	    exit 1; \
+	  fi; \
+	fi; \
+	if [ -n "$$target" ]; then \
+	  echo "Removing admin account ($$target)..."; \
+	  rm -f "config/www/user/accounts/$$target.yaml"; \
+	fi; \
+	$(MAKE) create-admin
 
 reset-data: ## Delete all Flex Objects data — local when no tier (tier=dev|test|staging, dry_run=1, yes=1; prod refused)
 	@t="$(tier)"; \
