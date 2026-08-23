@@ -1164,9 +1164,15 @@ echo "  ✓ release-meta.yaml (pre-swap) written"
 
 # ── Step 7: Cache clear (fail-loud; aborts BEFORE the swap) ───────────
 echo "→ Step 7/8: Clearing Grav cache in new release..."
+# PHP is dispatched, not interpolated: this body is SINGLE-quoted, so a
+# local $PHP_BIN would reach the remote shell as literal text, expand to
+# nothing there, and run `bin/grav clearcache` with no interpreter. That is
+# exactly what happened on the first deploy after the binary was made
+# version-specific — the cache clear failed and, correctly, aborted before
+# the swap.
 if ! bv_remote_run '
-    cd "$RELEASE_DIR" && $PHP_BIN bin/grav clearcache
-' RELEASE_DIR="$RELEASE_DIR"; then
+    cd "$RELEASE_DIR" && "$PHP" bin/grav clearcache
+' RELEASE_DIR="$RELEASE_DIR" PHP="$PHP_BIN"; then
     echo ""
     echo "❌  Cache clear failed in ${RELEASE_DIR}." >&2
     echo "    Aborting BEFORE the docroot swap — the previous release stays live." >&2
