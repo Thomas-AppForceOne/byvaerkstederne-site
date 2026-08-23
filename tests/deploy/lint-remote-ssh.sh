@@ -530,6 +530,41 @@ else
     printf '%s\n' "$hard" | sed 's/^/      /' >&2
 fi
 
+# 17. Single-quoting a body is only half the contract — every variable it
+#     names must also be DISPATCHED. Check 2 proves the quoting; nothing
+#     proved the dispatch, and on 2026-08-23 a correctly-quoted body
+#     referenced an undispatched $PHP_BIN, so the remote ran `bin/grav
+#     clearcache` with no interpreter. See the awk file's header.
+AWKCHK="$(dirname "$0")/undispatched-remote-vars.awk"
+UNDISPATCHED="$(awk -f "$AWKCHK" "$DEPLOY_DIR"/*.sh "$DEPLOY_DIR"/lib/*.sh 2>/dev/null || true)"
+if [ -z "$UNDISPATCHED" ]; then
+    check "every variable in a bv_remote_run body is dispatched to the remote" ok
+else
+    check "bv_remote_run bodies reference variables that are never dispatched" fail
+    printf '%s\n' "$UNDISPATCHED" >&2
+fi
+
+# 17b. And the checker must still be able to see the failure. A static
+#      analyser that has quietly stopped matching reports a clean tree
+#      forever; this feeds it the exact 2026-08-23 shape and requires a hit.
+FIXTURE="$(mktemp -t undispatched.XXXXXX)"
+cat > "$FIXTURE" <<'PROBE'
+bv_remote_run '
+    cd "$RELEASE_DIR" && $PHP_BIN bin/grav clearcache
+' RELEASE_DIR="$RELEASE_DIR"
+PROBE
+# Read the OUTPUT, not the exit status: the checker exits non-zero when it
+# finds something, and under `set -o pipefail` that turns the whole pipeline
+# non-zero even though grep matched — the if would take the else branch on
+# success. Same family of quiet shell semantics as the bug being pinned.
+PROBE_OUT="$(awk -f "$AWKCHK" "$FIXTURE" 2>/dev/null || true)"
+if printf '%s' "$PROBE_OUT" | grep -q 'PHP_BIN'; then
+    check "the undispatched-variable checker still detects the shape it was written for" ok
+else
+    check "the undispatched-variable checker no longer detects its own regression case" fail
+fi
+rm -f "$FIXTURE"
+
 echo ""
 echo "─────────────────────────────────────"
 echo "  Pass: $PASS    Fail: $FAIL"
