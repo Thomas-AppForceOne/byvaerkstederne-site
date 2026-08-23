@@ -8,10 +8,8 @@
 # throttle on dev/test (which ship disabled) without a full deploy cycle.
 #
 # USAGE
-#   ./deploy/throttle.sh <tier> <on|off> [--i-mean-it]
 #
 # Tiers: dev | test | staging | prod
-#   prod requires --i-mean-it (toggling prod changes live abuse protection).
 #   --help, -h   Show this help.
 
 set -euo pipefail
@@ -33,24 +31,18 @@ tier_host() {
 }
 
 # ── 1. Parse args ────────────────────────────────────────────────────
-TIER=""; STATE=""; I_MEAN_IT=0
+TIER=""; STATE=""
 for arg in "$@"; do
     case "$arg" in
         dev|test|staging|prod) TIER="$arg" ;;
         on|off) STATE="$arg" ;;
-        --i-mean-it) I_MEAN_IT=1 ;;
         --help|-h) usage; exit 0 ;;
         *) echo "❌  Unknown arg: $arg" >&2; usage >&2; exit 1 ;;
     esac
 done
 
 if [ -z "$TIER" ] || [ -z "$STATE" ]; then
-    echo "❌  Usage: $0 <dev|test|staging|prod> <on|off> [--i-mean-it]" >&2
-    exit 1
-fi
-if [ "$TIER" = "prod" ] && [ "$I_MEAN_IT" != "1" ]; then
-    echo "❌  Toggling prod's registration throttle changes live abuse protection." >&2
-    echo "    Re-run with --i-mean-it if you mean it." >&2
+    echo "❌  Usage: $0 <dev|test|staging|prod> <on|off>" >&2
     exit 1
 fi
 VAL="$([ "$STATE" = "on" ] && echo true || echo false)"

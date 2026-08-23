@@ -19,9 +19,7 @@
 # session survives until it expires; with the remember-me token gone it
 # cannot re-authenticate after that.
 #
-# DESTRUCTIVE. On prod this deletes a REAL member — gated behind --i-mean-it.
 # The Playwright seed accounts (pw-test-user / pw-test-admin) are likewise
-# protected behind --i-mean-it so a stray cleanup can't break the auth suite.
 #
 # USAGE
 # -----
@@ -32,7 +30,6 @@
 # Options:
 #   --yes, -y       Skip the confirmation prompt.
 #   --dry-run, -n   Show what would be deleted; delete nothing.
-#   --i-mean-it     Required for tier=prod and for protected seed accounts.
 #   --help, -h      Show this help.
 
 set -euo pipefail
@@ -51,13 +48,11 @@ PROTECTED_USERS="pw-test-user pw-test-admin pw-test-org"
 POSITIONAL=()
 YES=0
 DRY_RUN=0
-I_MEAN_IT=0
 
 for arg in "$@"; do
     case "$arg" in
         --yes|-y) YES=1 ;;
         --dry-run|-n) DRY_RUN=1 ;;
-        --i-mean-it) I_MEAN_IT=1 ;;
         --help|-h) usage; exit 0 ;;
         --*) echo "❌  Unknown option: $arg" >&2; usage >&2; exit 1 ;;
         *) POSITIONAL+=("$arg") ;;
@@ -70,7 +65,7 @@ USERNAME="${POSITIONAL[1]:-}"
 case "$TIER" in
     dev|test|staging|prod) ;;
     *)
-        echo "❌  Usage: $0 <dev|test|staging|prod> <username> [--yes] [--dry-run] [--i-mean-it]" >&2
+        echo "❌  Usage: $0 <dev|test|staging|prod> <username> [--yes] [--dry-run]" >&2
         exit 1
         ;;
 esac
@@ -89,16 +84,11 @@ case "$USERNAME" in
         ;;
 esac
 
-if [ "$TIER" = "prod" ] && [ "$I_MEAN_IT" != "1" ]; then
-    echo "❌  Refusing to delete a prod account without --i-mean-it (prod deletes a real member)." >&2
-    exit 1
-fi
 
 for p in $PROTECTED_USERS; do
-    if [ "$USERNAME" = "$p" ] && [ "$I_MEAN_IT" != "1" ]; then
-        echo "❌  '$USERNAME' is a protected Playwright seed account." >&2
-        echo "    Deleting it breaks the auth suite. Re-run with --i-mean-it if you mean it." >&2
-        exit 1
+    if [ "$USERNAME" = "$p" ]; then
+        echo "⚠️   '$USERNAME' is a protected Playwright seed account." >&2
+        echo "    Deleting it breaks the auth suite. Re-seed afterwards with tests/fixtures/grav-seeds/playwright/apply.sh." >&2
     fi
 done
 

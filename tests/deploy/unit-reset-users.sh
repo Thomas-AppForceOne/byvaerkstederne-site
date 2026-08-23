@@ -136,9 +136,9 @@ fi
 
 out="$(run prod --yes)" || true
 if printf '%s' "$out" | grep -q -- '--i-mean-it'; then
-    check "prod without --i-mean-it is refused" ok
+    check "prod is not gated behind an --i-mean-it ceremony" bad
 else
-    check "prod without --i-mean-it is refused" bad
+    check "prod is not gated behind an --i-mean-it ceremony" ok
 fi
 
 out="$(run dev --bogus-flag)" || true
@@ -220,7 +220,7 @@ access:
     login: true
 EOF
 
-out="$(run prod --dry-run --i-mean-it)" || true
+out="$(run prod --dry-run)" || true
 if printf '%s' "$out" | grep -q "remote-prod/user/accounts" \
    && ! printf '%s' "$out" | grep -q "remote-prod/prod" \
    && printf '%s' "$out" | grep -q 'Would delete 1 member account(s) on prod'; then
@@ -230,7 +230,7 @@ else
 fi
 
 rm -f "$SB/cache-cleared"
-out="$(run prod --yes --i-mean-it)" || true
+out="$(run prod --yes)" || true
 if printf '%s' "$out" | grep -q 'Deleted 1 member account(s) from prod' \
    && [ ! -f "$PACC/carla.yaml" ] && [ -f "$PACC/bob.yaml" ] \
    && [ -f "$SB/cache-cleared" ]; then

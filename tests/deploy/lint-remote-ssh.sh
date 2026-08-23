@@ -378,10 +378,10 @@ if [ -f "$DELETE_USER" ]; then
     else
         check "delete-user.sh must use the ssh-auth helpers" fail
     fi
-    if grep -q 'Refusing to delete a prod account without --i-mean-it' "$DELETE_USER"; then
-        check "delete-user.sh gates prod behind --i-mean-it" ok
+    if grep -q -- '--i-mean-it' "$DELETE_USER"; then
+        check "delete-user.sh must not reintroduce the --i-mean-it ceremony flag" fail
     else
-        check "delete-user.sh must gate prod behind --i-mean-it" fail
+        check "delete-user.sh carries no --i-mean-it ceremony flag" ok
     fi
     # username becomes a remote path component — must reject traversal.
     if grep -q 'Refusing unsafe username' "$DELETE_USER"; then
@@ -424,10 +424,10 @@ if [ -f "$CLEANUP" ]; then
     else
         check "cleanup-unverified-users.sh must default to dry-run" fail
     fi
-    if grep -q 'Refusing to --apply on prod without --i-mean-it' "$CLEANUP"; then
-        check "cleanup-unverified-users.sh gates prod --apply behind --i-mean-it" ok
+    if grep -q -- '--i-mean-it' "$CLEANUP"; then
+        check "cleanup-unverified-users.sh must not reintroduce the --i-mean-it ceremony flag" fail
     else
-        check "cleanup-unverified-users.sh must gate prod --apply behind --i-mean-it" fail
+        check "cleanup-unverified-users.sh carries no --i-mean-it ceremony flag" ok
     fi
     # Must only ever target unconfirmed accounts: state:disabled AND a token.
     if grep -q 'activation_token' "$CLEANUP" && grep -qE '= disabled|disabled ' "$CLEANUP"; then
@@ -438,7 +438,8 @@ if [ -f "$CLEANUP" ]; then
 fi
 
 # 14. throttle.sh — live on/off toggle for the registration throttle. Goes
-#     through the ssh-auth helpers and gates prod behind --i-mean-it.
+#     through the ssh-auth helpers. The prod ceremony flag was removed —
+#     see 'no ceremony flag' below.
 THROTTLE="$DEPLOY_DIR/throttle.sh"
 if [ -f "$THROTTLE" ]; then
     if grep -q 'lib/ssh-auth.sh' "$THROTTLE" && grep -q 'bv_ssh_cmd' "$THROTTLE"; then
@@ -446,16 +447,17 @@ if [ -f "$THROTTLE" ]; then
     else
         check "throttle.sh must use the ssh-auth helpers" fail
     fi
-    if grep -q "Toggling prod's registration throttle" "$THROTTLE"; then
-        check "throttle.sh gates prod behind --i-mean-it" ok
+    if grep -q -- '--i-mean-it' "$THROTTLE"; then
+        check "throttle.sh must not reintroduce the --i-mean-it ceremony flag" fail
     else
-        check "throttle.sh must gate prod behind --i-mean-it" fail
+        check "throttle.sh carries no --i-mean-it ceremony flag" ok
     fi
 fi
 
 # 15. reset-users.sh / reset-data.sh — bulk-destructive tier resets. Lock in:
-#     ssh-auth helpers, the prod --i-mean-it gate, and the Make-layer prod
-#     refusal (bulk prod wipes are operator-supervised, script-direct only).
+#     ssh-auth helpers and the Make-layer prod refusal. That refusal is the
+#     real guard for bulk prod wipes and is NOT the removed ceremony flag:
+#     `make reset-users tier=prod` is refused outright, script-direct only.
 for base in reset-users.sh reset-data.sh; do
     script="$DEPLOY_DIR/$base"
     [ -f "$script" ] || { check "$base exists" fail; continue; }
@@ -464,10 +466,10 @@ for base in reset-users.sh reset-data.sh; do
     else
         check "$base must use the ssh-auth helpers" fail
     fi
-    if grep -qE 'Refusing to reset (users|data) on prod without --i-mean-it' "$script"; then
-        check "$base gates prod behind --i-mean-it" ok
+    if grep -q -- '--i-mean-it' "$script"; then
+        check "$base must not reintroduce the --i-mean-it ceremony flag" fail
     else
-        check "$base must gate prod behind --i-mean-it" fail
+        check "$base carries no --i-mean-it ceremony flag" ok
     fi
     target="${base%.sh}"
     if grep -qF "'make $target tier=prod' is intentionally refused" "$PROJECT_ROOT/Makefile"; then

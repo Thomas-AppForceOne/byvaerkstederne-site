@@ -172,30 +172,28 @@ rollback: ## Roll back a tier to its previous release (tier=dev|test|staging|pro
 	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
-push-data: ## Push local flex-objects YAML to a tier (tier=dev|test|staging|prod, files=<comma-list>, dry_run=1, yes=1, i_mean_it=1)
+push-data: ## Push local flex-objects YAML to a tier (tier=dev|test|staging|prod, files=<comma-list>, dry_run=1, yes=1)
 	@t="$(tier)"; \
 	args=""; \
 	if [ -n "$(files)" ]; then args="$$args --files=$(files)"; fi; \
 	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
 	if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
-	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
 	case "$$t" in \
 	  dev|test|staging|prod) ./deploy/push-data.sh "$$t" $$args ;; \
 	  "") echo "❌  Usage: make push-data tier=<dev|test|staging|prod> [files=<a.yaml,b.yaml>] [dry_run=1] [yes=1]"; exit 1 ;; \
 	  *) echo "❌  Invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
-delete-user: ## Delete a member account from a tier (tier=dev|test|staging|prod user=<username>, dry_run=1, yes=1, i_mean_it=1)
+delete-user: ## Delete a member account from a tier (tier=dev|test|staging|prod user=<username>, dry_run=1, yes=1)
 	@t="$(tier)"; u="$(user)"; \
 	args=""; \
 	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
 	if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
-	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
 	if [ -z "$$t" ] || [ -z "$$u" ]; then \
 	  echo "❌  delete-user: missing required argument(s).  Got: tier='$$t' user='$$u'"; \
 	  [ -z "$$t" ] && echo "    → 'tier' is empty (required: dev|test|staging|prod)"; \
 	  [ -z "$$u" ] && echo "    → 'user' is empty (the account username to delete)"; \
-	  echo "    Usage:   make delete-user tier=<dev|test|staging|prod> user=<username> [dry_run=1] [yes=1] [i_mean_it=1]"; \
+	  echo "    Usage:   make delete-user tier=<dev|test|staging|prod> user=<username> [dry_run=1] [yes=1]"; \
 	  echo "    Example: make delete-user tier=dev user=thomas"; \
 	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
 	  exit 1; \
@@ -219,18 +217,17 @@ list-users: ## List member accounts on a tier (tier=dev|test|staging|prod)
 	  *) echo "❌  list-users: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
-activate-user: ## Activate a member whose confirmation email never arrived (tier=... user=<username|email>, state=enabled|disabled, dry_run=1, yes=1, i_mean_it=1)
+activate-user: ## Activate a member whose confirmation email never arrived (tier=... user=<username|email>, state=enabled|disabled, dry_run=1, yes=1)
 	@t="$(tier)"; u="$(user)"; \
 	args=""; \
 	if [ -n "$(state)" ]; then args="$$args --state=$(state)"; fi; \
 	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
 	if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
-	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
 	if [ -z "$$t" ] || [ -z "$$u" ]; then \
 	  echo "❌  activate-user: missing required argument(s).  Got: tier='$$t' user='$$u'"; \
 	  [ -z "$$t" ] && echo "    → 'tier' is empty (required: dev|test|staging|prod)"; \
 	  [ -z "$$u" ] && echo "    → 'user' is empty (a username, or an email to resolve)"; \
-	  echo "    Usage:   make activate-user tier=<dev|test|staging|prod> user=<username|email> [state=enabled|disabled] [dry_run=1] [yes=1] [i_mean_it=1]"; \
+	  echo "    Usage:   make activate-user tier=<dev|test|staging|prod> user=<username|email> [state=enabled|disabled] [dry_run=1] [yes=1]"; \
 	  echo "    Example: make activate-user tier=dev user=anders@example.dk"; \
 	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
 	  exit 1; \
@@ -240,18 +237,17 @@ activate-user: ## Activate a member whose confirmation email never arrived (tier
 	  *) echo "❌  activate-user: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
-reset-password: ## Reset a member's password on a tier (tier=... user=<username|email>, generate=1 to auto-generate+print, dry_run=1, yes=1, i_mean_it=1). Never pass the password as an argument — you are prompted, or use generate=1.
+reset-password: ## Reset a member's password on a tier (tier=... user=<username|email>, generate=1 to auto-generate+print, dry_run=1, yes=1). Never pass the password as an argument — you are prompted, or use generate=1.
 	@t="$(tier)"; u="$(user)"; \
 	args=""; \
 	if [ "$(generate)" = "1" ]; then args="$$args --generate"; fi; \
 	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
 	if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
-	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
 	if [ -z "$$t" ] || [ -z "$$u" ]; then \
 	  echo "❌  reset-password: missing required argument(s).  Got: tier='$$t' user='$$u'"; \
 	  [ -z "$$t" ] && echo "    → 'tier' is empty (required: dev|test|staging|prod)"; \
 	  [ -z "$$u" ] && echo "    → 'user' is empty (a username, or an email to resolve)"; \
-	  echo "    Usage:   make reset-password tier=<dev|test|staging|prod> user=<username|email> [generate=1] [dry_run=1] [yes=1] [i_mean_it=1]"; \
+	  echo "    Usage:   make reset-password tier=<dev|test|staging|prod> user=<username|email> [generate=1] [dry_run=1] [yes=1]"; \
 	  echo "    Example: make reset-password tier=dev user=anders@example.dk generate=1"; \
 	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
 	  exit 1; \
@@ -272,18 +268,17 @@ list-groups: ## List available user groups (repo groups.yaml; add tier=dev|test|
 	  esac; \
 	fi
 
-grant-rights: ## Grant a group to a user on a tier (tier=... user=<username|email> group=<name>, dry_run=1, yes=1, i_mean_it=1)
+grant-rights: ## Grant a group to a user on a tier (tier=... user=<username|email> group=<name>, dry_run=1, yes=1)
 	@t="$(tier)"; u="$(user)"; g="$(group)"; \
 	args=""; \
 	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
 	if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
-	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
 	if [ -z "$$t" ] || [ -z "$$u" ] || [ -z "$$g" ]; then \
 	  echo "❌  grant-rights: missing required argument(s).  Got: tier='$$t' user='$$u' group='$$g'"; \
 	  [ -z "$$t" ] && echo "    → 'tier' is empty (required: dev|test|staging|prod)"; \
 	  [ -z "$$u" ] && echo "    → 'user' is empty (a username, or an email to resolve)"; \
 	  [ -z "$$g" ] && echo "    → 'group' is empty (see: make list-groups)"; \
-	  echo "    Usage:   make grant-rights tier=<dev|test|staging|prod> user=<username|email> group=<name> [dry_run=1] [yes=1] [i_mean_it=1]"; \
+	  echo "    Usage:   make grant-rights tier=<dev|test|staging|prod> user=<username|email> group=<name> [dry_run=1] [yes=1]"; \
 	  echo "    Example: make grant-rights tier=dev user=anders@example.dk group=organizers"; \
 	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
 	  exit 1; \
@@ -293,18 +288,17 @@ grant-rights: ## Grant a group to a user on a tier (tier=... user=<username|emai
 	  *) echo "❌  grant-rights: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
-revoke-rights: ## Revoke a group from a user on a tier (tier=... user=<username|email> group=<name>, dry_run=1, yes=1, i_mean_it=1)
+revoke-rights: ## Revoke a group from a user on a tier (tier=... user=<username|email> group=<name>, dry_run=1, yes=1)
 	@t="$(tier)"; u="$(user)"; g="$(group)"; \
 	args=""; \
 	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
 	if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
-	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
 	if [ -z "$$t" ] || [ -z "$$u" ] || [ -z "$$g" ]; then \
 	  echo "❌  revoke-rights: missing required argument(s).  Got: tier='$$t' user='$$u' group='$$g'"; \
 	  [ -z "$$t" ] && echo "    → 'tier' is empty (required: dev|test|staging|prod)"; \
 	  [ -z "$$u" ] && echo "    → 'user' is empty (a username, or an email to resolve)"; \
 	  [ -z "$$g" ] && echo "    → 'group' is empty (see: make list-groups)"; \
-	  echo "    Usage:   make revoke-rights tier=<dev|test|staging|prod> user=<username|email> group=<name> [dry_run=1] [yes=1] [i_mean_it=1]"; \
+	  echo "    Usage:   make revoke-rights tier=<dev|test|staging|prod> user=<username|email> group=<name> [dry_run=1] [yes=1]"; \
 	  echo "    Example: make revoke-rights tier=dev user=anders group=organizers"; \
 	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
 	  exit 1; \
@@ -327,17 +321,16 @@ list-supers: ## List super-admins on a tier (tier=dev|test|staging|prod)
 	  *) echo "❌  list-supers: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
-grant-super: ## Grant super-admin on a tier (tier=... user=<username|email>, dry_run=1, yes=1, i_mean_it=1)
+grant-super: ## Grant super-admin on a tier (tier=... user=<username|email>, dry_run=1, yes=1)
 	@t="$(tier)"; u="$(user)"; \
 	args=""; \
 	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
 	if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
-	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
 	if [ -z "$$t" ] || [ -z "$$u" ]; then \
 	  echo "❌  grant-super: missing required argument(s).  Got: tier='$$t' user='$$u'"; \
 	  [ -z "$$t" ] && echo "    → 'tier' is empty (required: dev|test|staging|prod)"; \
 	  [ -z "$$u" ] && echo "    → 'user' is empty (a username, or an email to resolve)"; \
-	  echo "    Usage:   make grant-super tier=<dev|test|staging|prod> user=<username|email> [dry_run=1] [yes=1] [i_mean_it=1]"; \
+	  echo "    Usage:   make grant-super tier=<dev|test|staging|prod> user=<username|email> [dry_run=1] [yes=1]"; \
 	  echo "    Example: make grant-super tier=dev user=test+admin@hackersbychoice.dk"; \
 	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
 	  exit 1; \
@@ -347,17 +340,16 @@ grant-super: ## Grant super-admin on a tier (tier=... user=<username|email>, dry
 	  *) echo "❌  grant-super: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
-revoke-super: ## Revoke super-admin on a tier (tier=... user=<username|email>, dry_run=1, yes=1, i_mean_it=1). Refuses the last super without i_mean_it=1.
+revoke-super: ## Revoke super-admin on a tier (tier=... user=<username|email>, dry_run=1, yes=1). Warns, but does not refuse, on the last super.
 	@t="$(tier)"; u="$(user)"; \
 	args=""; \
 	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
 	if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
-	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
 	if [ -z "$$t" ] || [ -z "$$u" ]; then \
 	  echo "❌  revoke-super: missing required argument(s).  Got: tier='$$t' user='$$u'"; \
 	  [ -z "$$t" ] && echo "    → 'tier' is empty (required: dev|test|staging|prod)"; \
 	  [ -z "$$u" ] && echo "    → 'user' is empty (a username, or an email to resolve)"; \
-	  echo "    Usage:   make revoke-super tier=<dev|test|staging|prod> user=<username|email> [dry_run=1] [yes=1] [i_mean_it=1]"; \
+	  echo "    Usage:   make revoke-super tier=<dev|test|staging|prod> user=<username|email> [dry_run=1] [yes=1]"; \
 	  echo "    Example: make revoke-super tier=dev user=anders"; \
 	  exit 1; \
 	fi; \
@@ -383,15 +375,14 @@ scheduler-token: ## Provision/rotate a tier's scheduler-trigger token (tier=dev|
 	  *) echo "❌  scheduler-token: invalid tier '$$t'"; exit 1 ;; \
 	esac
 
-cleanup-unverified: ## Remove unconfirmed accounts older than N min (tier=dev|test|staging|prod, max_age=10, apply=1, i_mean_it=1). Dry-run unless apply=1.
+cleanup-unverified: ## Remove unconfirmed accounts older than N min (tier=dev|test|staging|prod, max_age=10, apply=1). Dry-run unless apply=1.
 	@t="$(tier)"; \
 	args=""; \
 	if [ -n "$(max_age)" ]; then args="$$args --max-age=$(max_age)"; fi; \
 	if [ "$(apply)" = "1" ]; then args="$$args --apply"; fi; \
-	if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
 	if [ -z "$$t" ]; then \
 	  echo "❌  cleanup-unverified: missing 'tier'.  Got: tier='$$t'"; \
-	  echo "    Usage:   make cleanup-unverified tier=<dev|test|staging|prod> [max_age=10] [apply=1] [i_mean_it=1]"; \
+	  echo "    Usage:   make cleanup-unverified tier=<dev|test|staging|prod> [max_age=10] [apply=1]"; \
 	  echo "    Dry-run: make cleanup-unverified tier=dev max_age=10"; \
 	  echo "    Delete:  make cleanup-unverified tier=dev max_age=10 apply=1"; \
 	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
@@ -402,13 +393,12 @@ cleanup-unverified: ## Remove unconfirmed accounts older than N min (tier=dev|te
 	  *) echo "❌  cleanup-unverified: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
-registration-throttle: ## Toggle the registration throttle on a tier, live/no-redeploy (tier=dev|test|staging|prod state=on|off [i_mean_it=1])
+registration-throttle: ## Toggle the registration throttle on a tier, live/no-redeploy (tier=dev|test|staging|prod state=on|off)
 	@t="$(tier)"; s="$(state)"; \
 	args=""; \
-	if [ "$(i_mean_it)" = "1" ]; then args="--i-mean-it"; fi; \
 	if [ -z "$$t" ] || [ -z "$$s" ]; then \
 	  echo "❌  registration-throttle: need both tier and state.  Got: tier='$$t' state='$$s'"; \
-	  echo "    Usage:   make registration-throttle tier=<dev|test|staging|prod> state=<on|off> [i_mean_it=1]"; \
+	  echo "    Usage:   make registration-throttle tier=<dev|test|staging|prod> state=<on|off>"; \
 	  echo "    Example: make registration-throttle tier=dev state=on"; \
 	  echo "    Tip: check for a typo in the variable name (e.g. 'tire=' instead of 'tier=')."; \
 	  exit 1; \
@@ -418,7 +408,7 @@ registration-throttle: ## Toggle the registration throttle on a tier, live/no-re
 	  *) echo "❌  registration-throttle: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
-test-registration-throttle: ## Check the throttle's current state on a tier — read-only burst, changes nothing (tier=dev|test|staging|prod [attempts=N] [i_mean_it=1 for prod])
+test-registration-throttle: ## Check the throttle's current state on a tier — read-only burst, changes nothing (tier=dev|test|staging|prod [attempts=N])
 	@t="$(tier)"; a="$(attempts)"; \
 	if [ -z "$$t" ]; then \
 	  echo "❌  test-registration-throttle: need a tier.  Got: tier='$$t'"; \
@@ -431,9 +421,7 @@ test-registration-throttle: ## Check the throttle's current state on a tier — 
 	case "$$t" in \
 	  dev|test|staging) ./scripts/registration-throttle-burst.sh "$$t" $$a ;; \
 	  prod) \
-	    if [ "$(i_mean_it)" != "1" ]; then \
-	      echo "❌  prod check fires real registrations at LIVE prod and will throttle your own IP there for ~1h. Re-run with i_mean_it=1."; exit 1; \
-	    fi; \
+	    echo "⚠️   prod: this fires real registrations at LIVE prod and will throttle your own IP there for ~1h."; \
 	    PROD_OK=1 ./scripts/registration-throttle-burst.sh prod $$a ;; \
 	  *) echo "❌  test-registration-throttle: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
@@ -659,7 +647,6 @@ reset-users: ## Delete all member accounts — local when no tier; on a tier kee
 	  args=""; \
 	  if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
 	  if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
-	  if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
 	  case "$$t" in \
 	    dev|test|staging) ./deploy/reset-users.sh "$$t" $$args ;; \
 	    prod) \
@@ -719,7 +706,6 @@ reset-data: ## Delete all Flex Objects data — local when no tier (tier=dev|tes
 	  args=""; \
 	  if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
 	  if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
-	  if [ "$(i_mean_it)" = "1" ]; then args="$$args --i-mean-it"; fi; \
 	  case "$$t" in \
 	    dev|test|staging) ./deploy/reset-data.sh "$$t" $$args ;; \
 	    prod) \

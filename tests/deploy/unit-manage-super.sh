@@ -166,17 +166,17 @@ else
 fi
 
 out="$(run grant prod anders --yes || true)"
-if printf '%s' "$out" | grep -q 'without --i-mean-it'; then
-    check "grant on prod requires --i-mean-it" ok
+if printf '%s' "$out" | grep -q -- '--i-mean-it'; then
+    check "grant on prod is not gated behind an --i-mean-it ceremony" bad
 else
-    check "grant on prod requires --i-mean-it" bad
+    check "grant on prod is not gated behind an --i-mean-it ceremony" ok
 fi
 
 out="$(run grant dev pw-test-admin --yes || true)"
 if printf '%s' "$out" | grep -q 'protected Playwright seed account'; then
-    check "grant refuses a protected seed account without --i-mean-it" ok
+    check "grant warns on a protected seed account (no longer refused)" ok
 else
-    check "grant refuses a protected seed account without --i-mean-it" bad
+    check "grant warns on a protected seed account (no longer refused)" bad
 fi
 
 out="$(run grant dev nosuchuser --yes || true)"
@@ -208,11 +208,14 @@ fi
 
 # Now make pw-test-admin the only super and try to remove it.
 rm -f "$SB/remote/dev/user/accounts/root-admin.yaml"
-out="$(run revoke dev pw-test-admin --yes --i-mean-it || true)"
-if printf '%s' "$out" | grep -q 'LAST super-admin'; then
-    check "revoke refuses the last super even with --i-mean-it for the seed guard" bad
+out="$(run revoke dev pw-test-admin --yes || true)"
+# Both guards apply here — protected seed AND last super. Neither blocks any
+# more, so both must be SAID.
+if printf '%s' "$out" | grep -q 'LAST super-admin' \
+   && printf '%s' "$out" | grep -q 'protected Playwright seed account'; then
+    check "revoking the last super, which is also a seed account, warns about both" ok
 else
-    check "revoke of the last super is allowed only with --i-mean-it" ok
+    check "revoking the last super, which is also a seed account, warns about both" bad
 fi
 
 cat > "$SB/remote/dev/user/accounts/solo.yaml" <<'EOF'
@@ -224,10 +227,12 @@ access:
 EOF
 rm -f "$SB/remote/dev/user/accounts/pw-test-admin.yaml"
 out="$(run revoke dev solo --yes || true)"
-if printf '%s' "$out" | grep -q 'LAST super-admin'; then
-    check "revoke refuses the last super without --i-mean-it" ok
+# The lockout warning must still name the way back, since nothing stops you.
+if printf '%s' "$out" | grep -q 'LAST super-admin' \
+   && printf '%s' "$out" | grep -q 'make grant-super'; then
+    check "revoking the last super warns and names the way back" ok
 else
-    check "revoke refuses the last super without --i-mean-it" bad
+    check "revoking the last super warns and names the way back" bad
 fi
 
 # ─────────────────────────────────────────────────────────────────────
