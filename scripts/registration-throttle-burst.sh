@@ -42,6 +42,72 @@ ATTEMPTS="${2:-6}"
 USERNAME="${3:-throttletest}"
 THROTTLE_MATCH="${THROTTLE_MATCH:-For mange medlemskaber}"
 
+# The signup password, and the check that keeps it honest.
+#
+# WHY THE CHECK EXISTS
+# --------------------
+# This was `Abcdefg1` — 8 characters with an upper and a digit, a minimal fit
+# for the policy of the day (>=8, >=1 upper, >=1 lower, >=1 digit) when this
+# script was written on 2026-06-17. Commit 1aa5e0d then moved the policy to
+# `.{12,}` — 12 characters, no character-class rules — and this line was not
+# moved with it.
+#
+# From then on every submission failed FIELD validation, and the throttle
+# never saw it: the plugin hooks onFormValidationProcessed, which Form.php
+# fires at line 946, while $this->data->validate() throws at line 913. Same
+# try-block, so line 946 is never reached. The counter stayed at zero and the
+# burst reported "THROTTLE INACTIVE" on every tier, whatever the setting.
+#
+# So the password is no longer allowed to drift silently. It is validated
+# against the repo's own pwd_regex, and a mismatch aborts loudly instead of
+# producing a confident, meaningless result.
+PASSWORD="${THROTTLE_PASSWORD:-tretten-graeskar-paa-hylden}"
+
+_repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+_sysyaml="$_repo_root/config/www/user/config/system.yaml"
+_amyaml="$_repo_root/config/www/user/config/plugins/account-manager.yaml"
+
+# There are TWO password policies, and a password has to clear both. Checking
+# only the regex is how the second one bit us: `en-...-adgangskode` is 34
+# characters and sails through pwd_regex, then the guessable-word blocklist
+# rejects it for containing "adgangskode" — and the burst reported INACTIVE
+# again, for a completely different reason than the first time.
+if [ -f "$_amyaml" ]; then
+    _lower="$(printf '%s' "$PASSWORD" | tr '[:upper:]' '[:lower:]')"
+    _hit="$(sed -n '/^  blocklist:/,/^  [a-z_]*:/p' "$_amyaml" \
+            | sed -n 's/^[[:space:]]*-[[:space:]]*//p' \
+            | while IFS= read -r w; do
+                  [ -n "$w" ] || continue
+                  case "$_lower" in *"$w"*) printf '%s' "$w"; break ;; esac
+              done)"
+    if [ -n "$_hit" ]; then
+        echo "❌  The burst password contains a blocklisted word: '$_hit'" >&2
+        echo "    (account-manager.yaml blocklist — the guessable-word policy)" >&2
+        echo "" >&2
+        echo "    Registration would be refused before the throttle is reached, so the" >&2
+        echo "    burst would report THROTTLE INACTIVE whatever the tier is set to." >&2
+        echo "    Pick a password with no blocklisted substring, or pass THROTTLE_PASSWORD=..." >&2
+        exit 1
+    fi
+fi
+
+if [ -f "$_sysyaml" ]; then
+    _pwd_regex="$(sed -n "s/^pwd_regex:[[:space:]]*'\(.*\)'[[:space:]]*$/\1/p" "$_sysyaml" | head -1)"
+    if [ -n "$_pwd_regex" ]; then
+        if ! printf '%s' "$PASSWORD" | grep -qE "^${_pwd_regex}$"; then
+            echo "❌  The burst password does not satisfy this repo's password policy." >&2
+            echo "    policy (system.yaml pwd_regex): ${_pwd_regex}" >&2
+            echo "    password length: $(printf '%s' "$PASSWORD" | wc -c | tr -d ' ')" >&2
+            echo "" >&2
+            echo "    Every submission would fail field validation, and the throttle would" >&2
+            echo "    never be reached — the burst would report THROTTLE INACTIVE on every" >&2
+            echo "    tier regardless of configuration. Fix PASSWORD (or pass" >&2
+            echo "    THROTTLE_PASSWORD=...) so it matches the policy." >&2
+            exit 1
+        fi
+    fi
+fi
+
 usage() { sed -n '2,/^set -euo pipefail/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; }
 
 if [ -z "$ARG_URL" ] || [ "$ARG_URL" = "--help" ] || [ "$ARG_URL" = "-h" ]; then
@@ -107,8 +173,8 @@ for i in $(seq 1 "$ATTEMPTS"); do
         --data-urlencode "data[fullname]=Throttle Test" \
         --data-urlencode "data[email]=$EMAIL" \
         --data-urlencode "data[username]=$USERNAME" \
-        --data-urlencode "data[password1]=Abcdefg1" \
-        --data-urlencode "data[password2]=Abcdefg1" \
+        --data-urlencode "data[password1]=$PASSWORD" \
+        --data-urlencode "data[password2]=$PASSWORD" \
         --data-urlencode "data[website]=" \
         "$FORM_URL" || echo "000")"
 
