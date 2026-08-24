@@ -580,6 +580,7 @@ test-deploy: ## Run deploy-script regression tests (lint + unit + atomic-layout 
 	@bash tests/deploy/unit-php-handler.sh
 	@bash tests/deploy/unit-grav-parity.sh
 	@bash tests/deploy/unit-throttle-burst.sh
+	@bash tests/deploy/unit-cleanup-unverified.sh
 	@bash tests/deploy/unit-tier-config-parity.sh
 	@bash tests/deploy/atomic-layout.sh
 	@bash tests/deploy/rollback.sh
