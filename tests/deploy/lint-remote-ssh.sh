@@ -632,6 +632,48 @@ else
     check "the helper must no-op in local/sandbox mode" fail
 fi
 
+# 19. The payload's user/ tree must be discarded wholesale, and the bundle's
+#     plugin set asserted against the repo's.
+#
+#     The zip bundles plugins of its own and the overlay rsync does not
+#     --delete, so whatever it carried used to survive into the release. The
+#     local container never had them (the Dockerfile lets this repo's user/
+#     shadow the payload's), so tiers ran plugins no test had loaded. On
+#     2026-08-24 github-markdown-alerts, bundled with 2.0.21, 500'd every
+#     markdown-rendered page on test while 258 local tests stayed green.
+DEPLOY_SH="$DEPLOY_DIR/deploy.sh"
+if grep -qE 'rm -rf "\$STAGING_DIR/user"' "$DEPLOY_SH"; then
+    check "the payload's user/ tree is discarded wholesale" ok
+else
+    check "the payload's user/ tree must be discarded wholesale" fail
+fi
+# A named list rots: the previous one still said themes/quark long after 2.0
+# began shipping quark2, so it silently stopped matching.
+if grep -qE 'rm -rf "\$STAGING_DIR/user/(pages|themes)' "$DEPLOY_SH"; then
+    check "no per-path payload exclusions remain (they rot)" fail
+else
+    check "no per-path payload exclusions remain (they rot)" ok
+fi
+if grep -q '_bundle_plugins' "$DEPLOY_SH" && grep -q '_repo_plugins' "$DEPLOY_SH"; then
+    check "the bundle's plugin set is compared with the repo's" ok
+else
+    check "the bundle's plugin set must be compared with the repo's" fail
+fi
+# The comparison is worthless if it only warns.
+if awk '/_repo_plugins" != "\$_bundle_plugins/,/^fi$/' "$DEPLOY_SH" | grep -q 'exit 1'; then
+    check "a plugin-set mismatch aborts the deploy" ok
+else
+    check "a plugin-set mismatch must abort the deploy" fail
+fi
+# And it must run BEFORE the upload, or the tier gets it anyway.
+_chk="$(grep -n '_bundle_plugins=' "$DEPLOY_SH" | head -1 | cut -d: -f1)"
+_up="$(grep -n 'Step 4/8: Uploading' "$DEPLOY_SH" | head -1 | cut -d: -f1)"
+if [ -n "$_chk" ] && [ -n "$_up" ] && [ "$_chk" -lt "$_up" ]; then
+    check "the plugin-set check runs before the upload" ok
+else
+    check "the plugin-set check must run before the upload" fail
+fi
+
 echo ""
 echo "─────────────────────────────────────"
 echo "  Pass: $PASS    Fail: $FAIL"
