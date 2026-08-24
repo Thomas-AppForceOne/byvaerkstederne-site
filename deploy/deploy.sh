@@ -1283,56 +1283,12 @@ echo "  ✓ ${DEPLOY_TARGET} → ${LAYOUT_NAME}-releases/${RELEASE_ID}  (${SWAP_
 
 # ── Step 8.5: flush the opcode cache the swap just invalidated ────────
 #
-# WHY THIS EXISTS
-# ---------------
-# The docroot is a symlink and the swap repoints it. PHP-FPM does not
-# follow: opcache keys compiled scripts by the path it resolved when it
-# first compiled them, and `opcache.revalidate_path` is Off on the one.com
-# tiers, so a warm worker keeps executing the PREVIOUS release's files
-# through the unchanged `/<tier>/...` paths. It does not self-heal on any
-# useful timescale — test sat on the old core for 35 minutes.
-#
-# The mixed state is normally invisible: old core plus new code of the same
-# Grav version mostly behaves, so every deploy before this one may have
-# served stale code for a while and nobody could tell. The Grav 1.7 → 2.0
-# deploy is what made it fatal — the bundled github-markdown-alerts plugin
-# from the new release called a Grav 2 class into the old 1.7 core still
-# resident in the worker, and every page 500'd on
-# "Class Grav\Common\Markdown\Extension\MarkdownExtensionRegistry not found".
-# The stack trace was the giveaway: frame 1 in the new release, frames 2-15
-# in the old one.
-#
-# opcache_reset() has to run inside the web SAPI — a CLI reset is a
-# different process and opcache.enable_cli is Off anyway. So: write a
-# randomly-named one-liner into the live release, request it once, delete
-# it. It is removed whether or not the request succeeded.
-#
-# This warns rather than aborts. The smoke probe below is the real gate:
-# it matches the expected build number, so a tier still serving the old
-# release fails it.
+# PHP-FPM does not follow a repointed docroot symlink; see
+# bv_flush_opcode_cache in lib/atomic-release.sh for the full account.
+# Never fatal — the smoke probe below is the gate, and it compares the
+# expected build, so a tier still serving the old release fails it.
 echo "→ Step 8.5/8: Flushing the tier's opcode cache..."
-OPCACHE_FILE="opcache-flush-$(od -An -N9 -tx1 /dev/urandom | tr -d ' \n').php"
-OPCACHE_PHP_B64="$(printf '%s' '<?php
-clearstatcache(true);
-$r = function_exists("opcache_reset") ? opcache_reset() : null;
-header("Content-Type: text/plain");
-echo var_export($r, true);' | base64 | tr -d '\n')"
-
-if bv_remote_run '
-    printf "%s" "$B64" | base64 -d > "$T/$N"
-' T="$DEPLOY_TARGET" N="$OPCACHE_FILE" B64="$OPCACHE_PHP_B64"; then
-    OPCACHE_RESP="$(curl -fsS -m 30 "${ENV_URL}/${OPCACHE_FILE}" 2>/dev/null || true)"
-    bv_remote_run 'rm -f "$T/$N"' T="$DEPLOY_TARGET" N="$OPCACHE_FILE" >/dev/null 2>&1 || true
-    case "$OPCACHE_RESP" in
-        true)  echo "  ✓ opcode cache flushed" ;;
-        false) echo "  ⚠️   opcache_reset() returned false — the cache may still hold the previous release." >&2 ;;
-        NULL)  echo "  · no opcache on this tier — nothing to flush" ;;
-        *)     echo "  ⚠️   could not reach the flush endpoint — if the smoke probe below reports the" >&2
-               echo "      PREVIOUS build number, this is why." >&2 ;;
-    esac
-else
-    echo "  ⚠️   could not write the flush endpoint into the release; skipping the flush." >&2
-fi
+bv_flush_opcode_cache "$DEPLOY_TARGET" "$ENV_URL"
 
 # ── Step 9 (Sprint 2): Smoke probe — fail-loud, NO auto-rollback ──────
 #

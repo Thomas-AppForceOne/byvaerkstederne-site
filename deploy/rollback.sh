@@ -484,6 +484,15 @@ ROLLED_BACK_AT_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 echo "  ✓ Swapped back (${SWAP_DURATION_MS} ms)"
 
+# A rollback repoints the docroot exactly as a deploy does, so PHP-FPM is
+# left holding the release we just rolled AWAY from — the same stranding, in
+# the other direction. Rolling Grav 2.0 back to 1.7 without this leaves the
+# workers running 2.0 core against 1.7 code, and the operator debugging the
+# rollback instead of whatever they were rolling back from.
+#
+# Never fatal: the smoke probe below is the gate.
+bv_flush_opcode_cache "$DEPLOY_TARGET" "${BV_SMOKE_PROBE_URL_OVERRIDE:-$ENV_URL}" "$LOCAL_MODE"
+
 # =============================================================================
 # Step 4b — Bookkeeping: repoint <tier>data/current at the rolled-back
 # release's data-version dir.
