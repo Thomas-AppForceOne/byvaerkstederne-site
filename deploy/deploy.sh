@@ -1281,6 +1281,15 @@ SWAPPED_AT_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 echo "  ✓ ${DEPLOY_TARGET} → ${LAYOUT_NAME}-releases/${RELEASE_ID}  (${SWAP_DURATION_MS} ms)"
 
+# ── Step 8.5: flush the opcode cache the swap just invalidated ────────
+#
+# PHP-FPM does not follow a repointed docroot symlink; see
+# bv_flush_opcode_cache in lib/atomic-release.sh for the full account.
+# Never fatal — the smoke probe below is the gate, and it compares the
+# expected build, so a tier still serving the old release fails it.
+echo "→ Step 8.5/8: Flushing the tier's opcode cache..."
+bv_flush_opcode_cache "$DEPLOY_TARGET" "$ENV_URL"
+
 # ── Step 9 (Sprint 2): Smoke probe — fail-loud, NO auto-rollback ──────
 #
 # Per the source spec's §Deploy command, step 10:

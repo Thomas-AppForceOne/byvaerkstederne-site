@@ -994,6 +994,12 @@ fi
 # docroot stays portable.
 bv_atomic_swap_symlink "$BOOTSTRAP_DIR" "$DOCROOT"
 
+# The docroot just stopped being a real directory and became a symlink, so
+# every path PHP-FPM had resolved under it is now stale. Same stranding as a
+# deploy or a rollback; see bv_flush_opcode_cache in lib/atomic-release.sh.
+# Never fatal — the probe further down is the gate.
+bv_flush_opcode_cache "$DOCROOT" "${BV_SMOKE_PROBE_URL_OVERRIDE:-${ENV_URL:-}}" "${LOCAL_MODE:-0}"
+
 STEP6_END_MS="$(bv_now_ms)"
 STEP6_DURATION_MS=$(( STEP6_END_MS - STEP6_START_MS ))
 [ "$STEP6_DURATION_MS" -lt 0 ] && STEP6_DURATION_MS=0

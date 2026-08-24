@@ -567,6 +567,71 @@ else
 fi
 rm -f "$FIXTURE"
 
+# 18. EVERY docroot swap must be followed by an opcode-cache flush.
+#
+#     PHP-FPM does not follow a repointed docroot symlink: opcache keys
+#     compiled scripts by the path it resolved first, and
+#     opcache.revalidate_path is Off on the one.com tiers. A warm worker
+#     keeps running the release it was stranded on, and does not recover on
+#     any useful timescale — test served the old core for 35 minutes.
+#
+#     This applies in BOTH directions. A rollback strands the workers on the
+#     release it rolled away from, so rolling 2.0 back to 1.7 breaks exactly
+#     as the forward deploy did. The migration turns the docroot from a real
+#     directory into a symlink, which invalidates every path under it.
+LIB_AR="$DEPLOY_DIR/lib/atomic-release.sh"
+if grep -q '^bv_flush_opcode_cache() {' "$LIB_AR"; then
+    check "the flush helper is defined once, in lib/atomic-release.sh" ok
+else
+    check "the flush helper must be defined in lib/atomic-release.sh" fail
+fi
+if grep -q 'opcache_reset' "$LIB_AR"; then
+    check "the helper actually calls opcache_reset" ok
+else
+    check "the helper must call opcache_reset" fail
+fi
+# Three scripts repoint the docroot. Each must flush; promote-to-*.sh are
+# deliberately absent — they swap <tier>data/current (data, not code) and
+# delegate the code deploy to deploy.sh, which flushes.
+for base in deploy.sh rollback.sh migrate-to-atomic-layout.sh; do
+    if grep -q 'bv_flush_opcode_cache' "$DEPLOY_DIR/$base"; then
+        check "$base flushes the opcode cache after its docroot swap" ok
+    else
+        check "$base must flush the opcode cache after its docroot swap" fail
+    fi
+done
+# Order matters: flushing before the swap is useless, and flushing after the
+# probe means the probe reads the stale release. Checked by line position.
+for base in deploy.sh rollback.sh; do
+    _f="$(grep -n 'bv_flush_opcode_cache "' "$DEPLOY_DIR/$base" | head -1 | cut -d: -f1)"
+    _s="$(grep -nE 'remote_atomic_swap "|ln -sfn "\$TARGET_REL"' "$DEPLOY_DIR/$base" | head -1 | cut -d: -f1)"
+    _p="$(grep -n 'bv_smoke_probe' "$DEPLOY_DIR/$base" | head -1 | cut -d: -f1)"
+    if [ -n "$_f" ] && [ -n "$_s" ] && [ -n "$_p" ] \
+       && [ "$_f" -gt "$_s" ] && [ "$_f" -lt "$_p" ]; then
+        check "$base flushes after the swap and before the smoke probe" ok
+    else
+        check "$base must flush after the swap and before the smoke probe" fail
+    fi
+done
+# The endpoint is written into the live docroot, so it must be cleaned up and
+# unguessable. A fixed name would be a permanent remote-reset endpoint.
+if grep -qE "rm -f \"\\\$T/\\\$N\"" "$LIB_AR"; then
+    check "the flush endpoint is deleted again" ok
+else
+    check "the flush endpoint must be deleted again" fail
+fi
+if grep -q 'opcache-flush-\$(od -An' "$LIB_AR"; then
+    check "the flush endpoint name is randomised per swap" ok
+else
+    check "the flush endpoint name must be randomised per swap" fail
+fi
+# Sandbox runs have no web server; the helper must no-op rather than hang.
+if grep -q 'local_mode' "$LIB_AR"; then
+    check "the helper no-ops in local/sandbox mode" ok
+else
+    check "the helper must no-op in local/sandbox mode" fail
+fi
+
 echo ""
 echo "─────────────────────────────────────"
 echo "  Pass: $PASS    Fail: $FAIL"

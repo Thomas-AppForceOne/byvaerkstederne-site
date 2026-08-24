@@ -163,4 +163,12 @@ fi
 verb="would remove"; [ "$APPLY" = "1" ] && verb="removed"
 echo "$verb $rows unconfirmed account(s) (>${MAX_AGE_MIN} min):"
 { printf 'USERNAME\tAGE(min)\n'; printf '%s\n' "$out"; } | column -t -s "$(printf '\t')"
-[ "$APPLY" != "1" ] && echo "(dry-run — re-run with --apply to delete)"
+# An `if`, not `[ … ] && echo`. As the script's LAST command that idiom
+# leaks its own status: with --apply the test is false, the && chain returns
+# 1, and a successful cleanup exited non-zero. Dry-run exited 0 and apply
+# exited 1 — exactly backwards, and enough to break any caller under `set -e`
+# or a cron wrapper that checks the code. Found by running it for real.
+if [ "$APPLY" != "1" ]; then
+    echo "(dry-run — re-run with --apply to delete)"
+fi
+exit 0

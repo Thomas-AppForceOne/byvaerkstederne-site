@@ -100,5 +100,30 @@ bv_post_deploy_smoke() {
         printf '  ✓ homepage answers 200\n'
     fi
 
+    # 4. A CONTENT page answers too — not just the homepage.
+    #
+    # The homepage is modular and does not run a page body through Grav's
+    # markdown pipeline, so it survives failures that break every ordinary
+    # page. On 2026-08-24 that is exactly what happened: after a Grav
+    # 1.7 → 2.0 deploy `/` answered 200 and this probe passed, while
+    # /login, /vaerksteder and /kontakt were all returning 500 from
+    # onMarkdownInitialized. A green deploy on a broken tier.
+    #
+    # So probe something that renders a real markdown body. The default is
+    # ungated on every tier — verified 200 on dev, test, staging and prod —
+    # which matters because a flag-gated path would 404 on the tiers where
+    # its flag is off and this check would fail for the wrong reason.
+    local content_path content_status
+    content_path="${BV_SMOKE_CONTENT_PATH:-/vaerksteder}"
+    content_status="$(bv_probe_status "$base$content_path")"
+    if [ "$content_status" != "200" ]; then
+        printf '  ✗ content page %s returned HTTP %s\n' "$content_path" "$content_status" >&2
+        printf '    The homepage can answer 200 while every markdown-rendered page is\n' >&2
+        printf '    broken — that is the shape this check exists to catch.\n' >&2
+        failures=$((failures + 1))
+    else
+        printf '  ✓ content page %s answers 200 (markdown renders)\n' "$content_path"
+    fi
+
     [ "$failures" -eq 0 ]
 }

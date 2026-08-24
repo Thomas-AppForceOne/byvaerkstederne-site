@@ -630,6 +630,72 @@ bv_write_release_meta_yaml() {
 # basename (a relative path), so the docroot stays portable across
 # parent renames. We do NOT rm the existing docroot first — that opens
 # a race window. ln -sfn replaces atomically.
+# Flush the opcode cache a docroot swap just invalidated.
+#
+# WHY EVERY SWAP NEEDS THIS
+# -------------------------
+# The docroot is a symlink and a swap repoints it. PHP-FPM does not follow.
+# Opcache keys compiled scripts by the path it resolved when it first
+# compiled them, and `opcache.revalidate_path` is Off on the one.com tiers,
+# so a warm worker keeps executing the PREVIOUS release's files through the
+# unchanged /<tier>/... paths. It does not recover on any useful timescale:
+# on 2026-08-23 test served the old core for 35 minutes, through a cache
+# clear and past the 20-minute realpath TTL, until this was run by hand.
+#
+# Normally invisible — old core plus new code of the same Grav version
+# mostly behaves — which is why it went unnoticed until the Grav 1.7 → 2.0
+# deploy, where a plugin bundled with the new release called a Grav 2 class
+# into the 1.7 core still resident in the worker and every page 500'd.
+#
+# It applies in BOTH directions. A rollback swaps the docroot too, so
+# rolling 2.0 back to 1.7 strands the workers just as badly.
+#
+# opcache_reset() has to run inside the web SAPI: a CLI reset is a different
+# process and opcache.enable_cli is Off regardless. So write a
+# randomly-named one-liner into the live release, request it once, and
+# delete it whether or not the request succeeded. A fixed name would leave a
+# guessable remote-reset endpoint in every release directory.
+#
+# Never fatal. Callers gate on their own smoke probe, which compares the
+# expected build and therefore catches a tier still serving the old release.
+#
+# Usage: bv_flush_opcode_cache <docroot> <base_url> [local_mode]
+bv_flush_opcode_cache() {
+    local docroot="$1" base_url="$2" local_mode="${3:-0}"
+
+    if [ "$local_mode" = "1" ] || [ -z "$base_url" ]; then
+        printf '  · opcode-cache flush skipped (no live URL for this run)\n'
+        return 0
+    fi
+
+    local name b64 resp
+    name="opcache-flush-$(od -An -N9 -tx1 /dev/urandom | tr -d ' \n').php"
+    b64="$(printf '%s' '<?php
+clearstatcache(true);
+$r = function_exists("opcache_reset") ? opcache_reset() : null;
+header("Content-Type: text/plain");
+echo var_export($r, true);' | base64 | tr -d '\n')"
+
+    if ! bv_remote_run '
+        printf "%s" "$B64" | base64 -d > "$T/$N"
+    ' T="$docroot" N="$name" B64="$b64"; then
+        printf '  ⚠️   could not write the flush endpoint into the release; skipping the flush.\n' >&2
+        return 0
+    fi
+
+    resp="$(curl -fsS -m 30 "${base_url%/}/$name" 2>/dev/null || true)"
+    bv_remote_run 'rm -f "$T/$N"' T="$docroot" N="$name" >/dev/null 2>&1 || true
+
+    case "$resp" in
+        true)  printf '  ✓ opcode cache flushed\n' ;;
+        false) printf '  ⚠️   opcache_reset() returned false — the cache may still hold the previous release.\n' >&2 ;;
+        NULL)  printf '  · no opcache on this tier — nothing to flush\n' ;;
+        *)     printf '  ⚠️   could not reach the flush endpoint — if the probe below reports the\n' >&2
+               printf '      PREVIOUS build number, this is why.\n' >&2 ;;
+    esac
+    return 0
+}
+
 bv_atomic_swap_symlink() {
     local release_dir="${1:?release dir required}"
     local docroot="${2:?docroot path required}"
