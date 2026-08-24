@@ -17,7 +17,6 @@
 # <DEPLOY_PATH>/<tier>data/v0/user/data/flex-objects/ and clears Grav's
 # cache so the new data is picked up.
 #
-# Prod is refused without --i-mean-it. Prod's flex-objects are the
 # canonical source of truth (admin-UI managed); pushing local YAML to
 # prod overwrites every admin edit since the last push. If you need to
 # do it, you mean it explicitly.
@@ -43,7 +42,6 @@
 #                    tests/fixtures/grav-seeds/sample-content/.
 #   --yes            Skip the confirmation prompt.
 #   --dry-run        Show the diff and exit; do not push.
-#   --i-mean-it      Required for tier=prod.
 #   --help           Show this help.
 
 set -euo pipefail
@@ -60,7 +58,6 @@ TIER=""
 FILES_RAW=""
 YES=0
 DRY_RUN=0
-I_MEAN_IT=0
 
 for arg in "$@"; do
     case "$arg" in
@@ -68,7 +65,6 @@ for arg in "$@"; do
         --files=*) FILES_RAW="${arg#--files=}" ;;
         --yes|-y) YES=1 ;;
         --dry-run|-n) DRY_RUN=1 ;;
-        --i-mean-it) I_MEAN_IT=1 ;;
         --help|-h) usage; exit 0 ;;
         *)
             echo "❌  Unknown arg: $arg" >&2
@@ -99,17 +95,6 @@ EOF
     exit 1
 fi
 
-if [ "$TIER" = "prod" ] && [ "$I_MEAN_IT" != "1" ]; then
-    cat >&2 <<'EOF'
-❌  Refusing to push to prod without --i-mean-it.
-
-    Prod's flex-objects are managed via the admin UI on byvaerkstederne.dk.
-    Pushing local YAML overwrites every admin edit since the last push.
-
-    Re-run with --i-mean-it if you genuinely want to do this.
-EOF
-    exit 1
-fi
 
 # ── 2. Validate the file list ────────────────────────────────────────
 # Files that carry user-generated content or auth/submission tokens —
@@ -170,6 +155,11 @@ fi
 . "$ENV_FILE"
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$SCRIPT_DIR/lib/ssh-auth.sh"
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_remote_bin — prod's shell PHP is the system default
+# (8.4), not the version its domain is served with (8.5).
+. "$SCRIPT_DIR/lib/php-parity.sh"
+PHP_BIN="$(bv_php_remote_bin "${TIER:-${ENV:-}}" "$PROJECT_DIR")"
 
 # ── 4. Resolve SSH credentials for the tier ──────────────────────────
 # bv_resolve_ssh_password reads $TIER to decide which env-var / Keychain
@@ -293,7 +283,7 @@ done
 echo ""
 echo "→ clearing Grav cache on $TIER"
 if ! bv_ssh_cmd -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
-        "cd \"$REMOTE_TIER_DIR\" && php bin/grav clearcache"; then
+        "cd \"$REMOTE_TIER_DIR\" && $PHP_BIN bin/grav clearcache"; then
     echo "⚠  Cache clear failed — data is pushed but you may see stale renders" >&2
     echo "    until Grav's auto-cache rolls over (a few minutes)." >&2
 fi

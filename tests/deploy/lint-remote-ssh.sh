@@ -378,10 +378,10 @@ if [ -f "$DELETE_USER" ]; then
     else
         check "delete-user.sh must use the ssh-auth helpers" fail
     fi
-    if grep -q 'Refusing to delete a prod account without --i-mean-it' "$DELETE_USER"; then
-        check "delete-user.sh gates prod behind --i-mean-it" ok
+    if grep -q -- '--i-mean-it' "$DELETE_USER"; then
+        check "delete-user.sh must not reintroduce the --i-mean-it ceremony flag" fail
     else
-        check "delete-user.sh must gate prod behind --i-mean-it" fail
+        check "delete-user.sh carries no --i-mean-it ceremony flag" ok
     fi
     # username becomes a remote path component — must reject traversal.
     if grep -q 'Refusing unsafe username' "$DELETE_USER"; then
@@ -424,10 +424,10 @@ if [ -f "$CLEANUP" ]; then
     else
         check "cleanup-unverified-users.sh must default to dry-run" fail
     fi
-    if grep -q 'Refusing to --apply on prod without --i-mean-it' "$CLEANUP"; then
-        check "cleanup-unverified-users.sh gates prod --apply behind --i-mean-it" ok
+    if grep -q -- '--i-mean-it' "$CLEANUP"; then
+        check "cleanup-unverified-users.sh must not reintroduce the --i-mean-it ceremony flag" fail
     else
-        check "cleanup-unverified-users.sh must gate prod --apply behind --i-mean-it" fail
+        check "cleanup-unverified-users.sh carries no --i-mean-it ceremony flag" ok
     fi
     # Must only ever target unconfirmed accounts: state:disabled AND a token.
     if grep -q 'activation_token' "$CLEANUP" && grep -qE '= disabled|disabled ' "$CLEANUP"; then
@@ -438,7 +438,8 @@ if [ -f "$CLEANUP" ]; then
 fi
 
 # 14. throttle.sh — live on/off toggle for the registration throttle. Goes
-#     through the ssh-auth helpers and gates prod behind --i-mean-it.
+#     through the ssh-auth helpers. The prod ceremony flag was removed —
+#     see 'no ceremony flag' below.
 THROTTLE="$DEPLOY_DIR/throttle.sh"
 if [ -f "$THROTTLE" ]; then
     if grep -q 'lib/ssh-auth.sh' "$THROTTLE" && grep -q 'bv_ssh_cmd' "$THROTTLE"; then
@@ -446,16 +447,17 @@ if [ -f "$THROTTLE" ]; then
     else
         check "throttle.sh must use the ssh-auth helpers" fail
     fi
-    if grep -q "Toggling prod's registration throttle" "$THROTTLE"; then
-        check "throttle.sh gates prod behind --i-mean-it" ok
+    if grep -q -- '--i-mean-it' "$THROTTLE"; then
+        check "throttle.sh must not reintroduce the --i-mean-it ceremony flag" fail
     else
-        check "throttle.sh must gate prod behind --i-mean-it" fail
+        check "throttle.sh carries no --i-mean-it ceremony flag" ok
     fi
 fi
 
 # 15. reset-users.sh / reset-data.sh — bulk-destructive tier resets. Lock in:
-#     ssh-auth helpers, the prod --i-mean-it gate, and the Make-layer prod
-#     refusal (bulk prod wipes are operator-supervised, script-direct only).
+#     ssh-auth helpers and the Make-layer prod refusal. That refusal is the
+#     real guard for bulk prod wipes and is NOT the removed ceremony flag:
+#     `make reset-users tier=prod` is refused outright, script-direct only.
 for base in reset-users.sh reset-data.sh; do
     script="$DEPLOY_DIR/$base"
     [ -f "$script" ] || { check "$base exists" fail; continue; }
@@ -464,10 +466,10 @@ for base in reset-users.sh reset-data.sh; do
     else
         check "$base must use the ssh-auth helpers" fail
     fi
-    if grep -qE 'Refusing to reset (users|data) on prod without --i-mean-it' "$script"; then
-        check "$base gates prod behind --i-mean-it" ok
+    if grep -q -- '--i-mean-it' "$script"; then
+        check "$base must not reintroduce the --i-mean-it ceremony flag" fail
     else
-        check "$base must gate prod behind --i-mean-it" fail
+        check "$base carries no --i-mean-it ceremony flag" ok
     fi
     target="${base%.sh}"
     if grep -qF "'make $target tier=prod' is intentionally refused" "$PROJECT_ROOT/Makefile"; then
@@ -528,6 +530,148 @@ if [ -z "$hard" ]; then
 else
     check "deploy scripts must not hardcode \"\$PATH/\$TIER\" (use bv_tier_root)" fail
     printf '%s\n' "$hard" | sed 's/^/      /' >&2
+fi
+
+# 17. Single-quoting a body is only half the contract — every variable it
+#     names must also be DISPATCHED. Check 2 proves the quoting; nothing
+#     proved the dispatch, and on 2026-08-23 a correctly-quoted body
+#     referenced an undispatched $PHP_BIN, so the remote ran `bin/grav
+#     clearcache` with no interpreter. See the awk file's header.
+AWKCHK="$(dirname "$0")/undispatched-remote-vars.awk"
+UNDISPATCHED="$(awk -f "$AWKCHK" "$DEPLOY_DIR"/*.sh "$DEPLOY_DIR"/lib/*.sh 2>/dev/null || true)"
+if [ -z "$UNDISPATCHED" ]; then
+    check "every variable in a bv_remote_run body is dispatched to the remote" ok
+else
+    check "bv_remote_run bodies reference variables that are never dispatched" fail
+    printf '%s\n' "$UNDISPATCHED" >&2
+fi
+
+# 17b. And the checker must still be able to see the failure. A static
+#      analyser that has quietly stopped matching reports a clean tree
+#      forever; this feeds it the exact 2026-08-23 shape and requires a hit.
+FIXTURE="$(mktemp -t undispatched.XXXXXX)"
+cat > "$FIXTURE" <<'PROBE'
+bv_remote_run '
+    cd "$RELEASE_DIR" && $PHP_BIN bin/grav clearcache
+' RELEASE_DIR="$RELEASE_DIR"
+PROBE
+# Read the OUTPUT, not the exit status: the checker exits non-zero when it
+# finds something, and under `set -o pipefail` that turns the whole pipeline
+# non-zero even though grep matched — the if would take the else branch on
+# success. Same family of quiet shell semantics as the bug being pinned.
+PROBE_OUT="$(awk -f "$AWKCHK" "$FIXTURE" 2>/dev/null || true)"
+if printf '%s' "$PROBE_OUT" | grep -q 'PHP_BIN'; then
+    check "the undispatched-variable checker still detects the shape it was written for" ok
+else
+    check "the undispatched-variable checker no longer detects its own regression case" fail
+fi
+rm -f "$FIXTURE"
+
+# 18. EVERY docroot swap must be followed by an opcode-cache flush.
+#
+#     PHP-FPM does not follow a repointed docroot symlink: opcache keys
+#     compiled scripts by the path it resolved first, and
+#     opcache.revalidate_path is Off on the one.com tiers. A warm worker
+#     keeps running the release it was stranded on, and does not recover on
+#     any useful timescale — test served the old core for 35 minutes.
+#
+#     This applies in BOTH directions. A rollback strands the workers on the
+#     release it rolled away from, so rolling 2.0 back to 1.7 breaks exactly
+#     as the forward deploy did. The migration turns the docroot from a real
+#     directory into a symlink, which invalidates every path under it.
+LIB_AR="$DEPLOY_DIR/lib/atomic-release.sh"
+if grep -q '^bv_flush_opcode_cache() {' "$LIB_AR"; then
+    check "the flush helper is defined once, in lib/atomic-release.sh" ok
+else
+    check "the flush helper must be defined in lib/atomic-release.sh" fail
+fi
+if grep -q 'opcache_reset' "$LIB_AR"; then
+    check "the helper actually calls opcache_reset" ok
+else
+    check "the helper must call opcache_reset" fail
+fi
+# Three scripts repoint the docroot. Each must flush; promote-to-*.sh are
+# deliberately absent — they swap <tier>data/current (data, not code) and
+# delegate the code deploy to deploy.sh, which flushes.
+for base in deploy.sh rollback.sh migrate-to-atomic-layout.sh; do
+    if grep -q 'bv_flush_opcode_cache' "$DEPLOY_DIR/$base"; then
+        check "$base flushes the opcode cache after its docroot swap" ok
+    else
+        check "$base must flush the opcode cache after its docroot swap" fail
+    fi
+done
+# Order matters: flushing before the swap is useless, and flushing after the
+# probe means the probe reads the stale release. Checked by line position.
+for base in deploy.sh rollback.sh; do
+    _f="$(grep -n 'bv_flush_opcode_cache "' "$DEPLOY_DIR/$base" | head -1 | cut -d: -f1)"
+    _s="$(grep -nE 'remote_atomic_swap "|ln -sfn "\$TARGET_REL"' "$DEPLOY_DIR/$base" | head -1 | cut -d: -f1)"
+    _p="$(grep -n 'bv_smoke_probe' "$DEPLOY_DIR/$base" | head -1 | cut -d: -f1)"
+    if [ -n "$_f" ] && [ -n "$_s" ] && [ -n "$_p" ] \
+       && [ "$_f" -gt "$_s" ] && [ "$_f" -lt "$_p" ]; then
+        check "$base flushes after the swap and before the smoke probe" ok
+    else
+        check "$base must flush after the swap and before the smoke probe" fail
+    fi
+done
+# The endpoint is written into the live docroot, so it must be cleaned up and
+# unguessable. A fixed name would be a permanent remote-reset endpoint.
+if grep -qE "rm -f \"\\\$T/\\\$N\"" "$LIB_AR"; then
+    check "the flush endpoint is deleted again" ok
+else
+    check "the flush endpoint must be deleted again" fail
+fi
+if grep -q 'opcache-flush-\$(od -An' "$LIB_AR"; then
+    check "the flush endpoint name is randomised per swap" ok
+else
+    check "the flush endpoint name must be randomised per swap" fail
+fi
+# Sandbox runs have no web server; the helper must no-op rather than hang.
+if grep -q 'local_mode' "$LIB_AR"; then
+    check "the helper no-ops in local/sandbox mode" ok
+else
+    check "the helper must no-op in local/sandbox mode" fail
+fi
+
+# 19. The payload's user/ tree must be discarded wholesale, and the bundle's
+#     plugin set asserted against the repo's.
+#
+#     The zip bundles plugins of its own and the overlay rsync does not
+#     --delete, so whatever it carried used to survive into the release. The
+#     local container never had them (the Dockerfile lets this repo's user/
+#     shadow the payload's), so tiers ran plugins no test had loaded. On
+#     2026-08-24 github-markdown-alerts, bundled with 2.0.21, 500'd every
+#     markdown-rendered page on test while 258 local tests stayed green.
+DEPLOY_SH="$DEPLOY_DIR/deploy.sh"
+if grep -qE 'rm -rf "\$STAGING_DIR/user"' "$DEPLOY_SH"; then
+    check "the payload's user/ tree is discarded wholesale" ok
+else
+    check "the payload's user/ tree must be discarded wholesale" fail
+fi
+# A named list rots: the previous one still said themes/quark long after 2.0
+# began shipping quark2, so it silently stopped matching.
+if grep -qE 'rm -rf "\$STAGING_DIR/user/(pages|themes)' "$DEPLOY_SH"; then
+    check "no per-path payload exclusions remain (they rot)" fail
+else
+    check "no per-path payload exclusions remain (they rot)" ok
+fi
+if grep -q '_bundle_plugins' "$DEPLOY_SH" && grep -q '_repo_plugins' "$DEPLOY_SH"; then
+    check "the bundle's plugin set is compared with the repo's" ok
+else
+    check "the bundle's plugin set must be compared with the repo's" fail
+fi
+# The comparison is worthless if it only warns.
+if awk '/_repo_plugins" != "\$_bundle_plugins/,/^fi$/' "$DEPLOY_SH" | grep -q 'exit 1'; then
+    check "a plugin-set mismatch aborts the deploy" ok
+else
+    check "a plugin-set mismatch must abort the deploy" fail
+fi
+# And it must run BEFORE the upload, or the tier gets it anyway.
+_chk="$(grep -n '_bundle_plugins=' "$DEPLOY_SH" | head -1 | cut -d: -f1)"
+_up="$(grep -n 'Step 4/8: Uploading' "$DEPLOY_SH" | head -1 | cut -d: -f1)"
+if [ -n "$_chk" ] && [ -n "$_up" ] && [ "$_chk" -lt "$_up" ]; then
+    check "the plugin-set check runs before the upload" ok
+else
+    check "the plugin-set check must run before the upload" fail
 fi
 
 echo ""

@@ -47,7 +47,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 STAGING_DIR="$PROJECT_DIR/deploy/staging"
-GRAV_VERSION="1.7.52"
+GRAV_VERSION="2.0.21"
 GRAV_ZIP="$PROJECT_DIR/deploy/grav-admin-v${GRAV_VERSION}.zip"
 GRAV_URL="https://github.com/getgrav/grav/releases/download/${GRAV_VERSION}/grav-admin-v${GRAV_VERSION}.zip"
 
@@ -70,6 +70,28 @@ GRAV_URL="https://github.com/getgrav/grav/releases/download/${GRAV_VERSION}/grav
 # v<VERSION> tag). Pure function; invoked once below, after the release
 # metadata is captured.
 . "$SCRIPT_DIR/lib/release-gate.sh"
+
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_target / bv_php_parity_check — one declared PHP version
+# for every tier, CI and the local container. See that file for the audit
+# that produced it.
+. "$SCRIPT_DIR/lib/php-parity.sh"
+
+# shellcheck source=deploy/lib/php-handler.sh
+# Provides bv_php_handler_* — reads the hosting panel's PHP handler line,
+# validates it against .php-version, and lets the deploy carry it forward
+# instead of overwriting the operator's choice.
+. "$SCRIPT_DIR/lib/php-handler.sh"
+
+# shellcheck source=deploy/lib/grav-parity.sh
+# Provides bv_grav_target / bv_grav_parity_check — the SECOND axis. PHP
+# parity alone waved through a local CMS major-version jump; see that file.
+. "$SCRIPT_DIR/lib/grav-parity.sh"
+
+# shellcheck source=deploy/lib/smoke-behaviour.sh
+# Provides bv_post_deploy_smoke — probes the host behaviour no local test
+# can see (see that file for the two defects that motivated it).
+. "$SCRIPT_DIR/lib/smoke-behaviour.sh"
 
 # shellcheck source=deploy/lib/htaccess.sh
 . "$SCRIPT_DIR/lib/htaccess.sh"
@@ -140,6 +162,11 @@ if ! ENV="$(bv_validate_tier_name "$ENV_RAW")"; then
     echo "    Usage: $0 [landing|dev|test|staging|prod] [--dry-run] [--skip-data-migration]" >&2
     exit 1
 fi
+
+# The PHP binary to invoke on this tier's shell. On prod the shell PHP is the
+# system default (8.4) while the DOMAIN is served with ea-php85 — two separate
+# cPanel settings. See deploy/lib/php-parity.sh.
+PHP_BIN="$(bv_php_remote_bin "$ENV" "$PROJECT_DIR")"
 
 case "$ENV" in
     prod)
@@ -409,7 +436,36 @@ if [ "$ENV_KIND" = "grav" ]; then
         rm -rf "$STAGING_DIR/grav-admin"
     fi
 
-    rm -rf "$STAGING_DIR/user/pages" "$STAGING_DIR/user/themes/quark" 2>/dev/null
+    # The payload's user/ tree is DISCARDED WHOLESALE. This repo is the only
+    # source of user/ — plugins, themes, config, pages, the lot.
+    #
+    # WHY WHOLESALE, AND NOT A LIST
+    # -----------------------------
+    # This used to remove two named paths: user/pages and user/themes/quark.
+    # Everything else the zip carried survived the overlay rsync, which does
+    # not --delete. So each tier quietly accumulated whatever plugins the
+    # Grav release happened to bundle, while the local container never had
+    # them: the Dockerfile lets this repo's user/ shadow the payload's, so
+    # locally they simply do not exist.
+    #
+    # That divergence broke test on 2026-08-24. grav-admin-v2.0.21.zip
+    # bundles admin2, api, github-markdown-alerts and shortcode-core; none
+    # are in this repo. github-markdown-alerts hooks onMarkdownInitialized,
+    # so every markdown-rendered page on the tier returned 500 while the
+    # homepage — modular, no markdown body — answered 200. 258 local tests
+    # passed throughout, because locally the plugin is not there to fail.
+    #
+    # The named list had already rotted besides: 2.0 ships themes/quark2,
+    # not themes/quark, so that rule stopped matching the moment the major
+    # changed and nobody noticed.
+    #
+    # Wholesale removal makes the tier's user/ identical to the local
+    # container's by construction, which is the property we actually want —
+    # and it cannot rot when the next Grav release bundles something new.
+    #
+    # Safe because this repo ships every plugin the site needs: the local
+    # container runs Grav 2.0.21 on exactly this set, /admin included.
+    rm -rf "$STAGING_DIR/user" 2>/dev/null
 
     # Staging-assembly rsync — the surface where dependency dev/test/
     # build/doc bloat would enter the bundle. The reduced selection
@@ -472,6 +528,39 @@ cat > "$STAGING_DIR/version.json" << JSON
 JSON
 
 echo "  ✓ Package built ($(du -sh "$STAGING_DIR" | cut -f1))"
+
+# The bundle's plugin set must be EXACTLY this repo's.
+#
+# The payload zip bundles plugins of its own, and the overlay rsync does not
+# --delete, so anything the zip carried used to survive into the release. The
+# local container never had them — the Dockerfile lets this repo's user/
+# shadow the payload's — so a tier ran plugins no test had ever loaded. On
+# 2026-08-24 one of them (github-markdown-alerts, from grav-admin-v2.0.21)
+# hooked onMarkdownInitialized and returned 500 on every markdown-rendered
+# page of the test tier, while 258 local tests stayed green.
+#
+# Discarding the payload's user/ is the fix; this is the assertion that says
+# so out loud, before anything is uploaded. A named-exclusions list rots —
+# the previous one still named themes/quark after 2.0 started shipping
+# quark2 — so compare the SETS instead and let any future divergence fail
+# here rather than on a tier.
+_repo_plugins="$(ls -1 "$PROJECT_DIR/config/www/user/plugins" 2>/dev/null | sort)"
+_bundle_plugins="$(ls -1 "$STAGING_DIR/user/plugins" 2>/dev/null | sort)"
+if [ "$_repo_plugins" != "$_bundle_plugins" ]; then
+    echo "❌  The bundle's plugin set does not match this repo's." >&2
+    echo "" >&2
+    echo "    Only in the bundle (would ship untested to the tier):" >&2
+    comm -13 <(printf '%s\n' "$_repo_plugins") <(printf '%s\n' "$_bundle_plugins") \
+        | sed 's/^/      + /' >&2
+    echo "    Missing from the bundle:" >&2
+    comm -23 <(printf '%s\n' "$_repo_plugins") <(printf '%s\n' "$_bundle_plugins") \
+        | sed 's/^/      - /' >&2
+    echo "" >&2
+    echo "    A plugin the local container does not have is a plugin no test has" >&2
+    echo "    ever loaded. Refusing to deploy it." >&2
+    exit 1
+fi
+echo "  ✓ Plugin set matches the repo ($(printf '%s\n' "$_repo_plugins" | grep -c .) plugins)"
 echo "  ✓ Version: ${VERSION} · build ${BUILD}  (${SEMVER}, ${GIT_DESCRIBE})"
 
 # Refuse to deploy a bundle that still contains git-lfs pointer files —
@@ -641,6 +730,102 @@ echo "→ Step 3/8: Pre-flight checks on ${DEPLOY_HOST}..."
 if ! bv_remote_run 'true'; then
     echo "❌  ssh to ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PORT} failed." >&2
     exit 1
+fi
+
+# 3a1. The resolved PHP binary must exist on this tier. Checked BEFORE the
+# version comparison, because a missing binary makes that comparison
+# meaningless — and before any other remote command, so a bad .php-version
+# fails once with an explanation instead of sixteen times with "no such
+# file".
+PHP_BIN_PROBE="$(bv_remote_run '
+    [ -x "$BIN" ] && printf present || printf absent
+' BIN="$PHP_BIN" 2>/dev/null || true)"
+if ! bv_php_binary_check "$PHP_BIN_PROBE" "$PHP_BIN" "$ENV"; then
+    exit 1
+fi
+
+# 3a2. PHP version parity. The repo declares one target in .php-version;
+# a tier serving a different one is running code nobody has exercised.
+# See deploy/lib/php-parity.sh for why this guard exists and how to fix a
+# drifting tier. Soft-skips when the remote will not report a version.
+if PHP_TARGET="$(bv_php_target "$PROJECT_DIR")"; then
+    REMOTE_PHP="$(bv_remote_run '
+        BIN="$PHP"; [ -x "$BIN" ] || BIN=php
+        "$BIN" -v 2>/dev/null | head -1
+    ' PHP="$PHP_BIN" || true)"
+    if ! bv_php_parity_check "$PHP_TARGET" "$REMOTE_PHP" "$ENV" "${ALLOW_PHP_MISMATCH:-0}"; then
+        exit 1
+    fi
+else
+    echo "⚠️   .php-version missing — PHP parity not enforced." >&2
+fi
+
+# 3a3. Grav version parity. The tier serves whatever an earlier deploy
+# unpacked from the payload zip; if that no longer matches what this repo
+# ships, the release about to go up is a CMS migration nobody declared.
+if GRAV_TARGET="$(bv_grav_target "$PROJECT_DIR")"; then
+    REMOTE_GRAV="$(bv_remote_run 'grep -m1 GRAV_VERSION "$DOCROOT/system/defines.php" 2>/dev/null' \
+        DOCROOT="$DEPLOY_TARGET" || true)"
+    if ! bv_grav_parity_check "$GRAV_TARGET" "$REMOTE_GRAV" "$ENV" "${ALLOW_GRAV_MISMATCH:-0}"; then
+        exit 1
+    fi
+else
+    echo "⚠️   no deploy/grav-admin-v*.zip — Grav parity not enforced." >&2
+fi
+
+# 3a4. PHP handler line. On cPanel the version a DOMAIN is served with is
+# an AddHandler line the panel writes into .htaccess — a file this deploy
+# also generates, so shipping ours would erase the operator's choice. Read
+# it, check it agrees with .php-version, and keep it to re-attach below.
+# Read and parse in TWO steps, and check the read's own status.
+#
+# This was one pipeline ending in `2>/dev/null | bv_php_handler_line ||
+# true`, which made the parser's exit status the whole expression's — so a
+# connection that failed was indistinguishable from a tier with no handler
+# line. Both produced an empty string, and empty means "no handler line",
+# which passes. The deploy would then skip the re-attach below and ship an
+# .htaccess with no AddHandler at all.
+#
+# On prod that is a silent PHP DOWNGRADE: the domain is served 8.5 only
+# because cPanel wrote that line, and dropping it falls the domain back to
+# the system default (8.4 at the time of writing). A transient SSH failure
+# would have changed production's PHP version and reported a passing check
+# while doing it — the exact "fine everywhere, broken on prod" shape this
+# pre-flight exists to catch.
+#
+# The remote body ends in `|| true`, so a missing docroot or absent
+# .htaccess still exits 0 with empty output. A NON-zero status therefore
+# means the read itself did not happen, and that must never be read as an
+# answer about the tier.
+if ! HTACCESS_RAW="$(bv_remote_run '
+    [ -f "$DOCROOT/.htaccess" ] && cat "$DOCROOT/.htaccess" || true
+' DOCROOT="$DEPLOY_TARGET")"; then
+    echo "❌  Could not read ${DEPLOY_TARGET}/.htaccess on ${ENV}." >&2
+    echo "    Refusing to continue: an unreadable .htaccess is not evidence that" >&2
+    echo "    the tier has no PHP handler line. Continuing would deploy without" >&2
+    echo "    one and silently hand the domain back to the system default PHP." >&2
+    exit 1
+fi
+PRESERVED_PHP_HANDLER="$(printf '%s' "$HTACCESS_RAW" | bv_php_handler_line || true)"
+
+if PHP_TARGET_H="$(bv_php_target "$PROJECT_DIR")"; then
+    if ! bv_php_handler_check "$PHP_TARGET_H" "$PRESERVED_PHP_HANDLER" "$ENV" "${ALLOW_PHP_MISMATCH:-0}"; then
+        exit 1
+    fi
+fi
+
+# Re-attach the panel's line to the freshly rendered .htaccess, so the
+# upload cannot drop it. Nothing is invented: if the tier had no line, none
+# is added.
+if [ -n "$PRESERVED_PHP_HANDLER" ] && [ -f "$STAGING_DIR/.htaccess" ]; then
+    {
+        printf '\n'
+        printf '# Carried forward from the tier, unchanged. Written by the hosting\n'
+        printf '# panel (cPanel MultiPHP Manager); preserved here so this deploy does\n'
+        printf '# not silently revert the PHP version the domain is served with.\n'
+        printf '%s\n' "$PRESERVED_PHP_HANDLER"
+    } >> "$STAGING_DIR/.htaccess"
+    echo "  ✓ preserved the tier's PHP handler line"
 fi
 
 # 3b. parent of <tier>-releases/ is writable.
@@ -1068,13 +1253,19 @@ echo "  ✓ release-meta.yaml (pre-swap) written"
 
 # ── Step 7: Cache clear (fail-loud; aborts BEFORE the swap) ───────────
 echo "→ Step 7/8: Clearing Grav cache in new release..."
+# PHP is dispatched, not interpolated: this body is SINGLE-quoted, so a
+# local $PHP_BIN would reach the remote shell as literal text, expand to
+# nothing there, and run `bin/grav clearcache` with no interpreter. That is
+# exactly what happened on the first deploy after the binary was made
+# version-specific — the cache clear failed and, correctly, aborted before
+# the swap.
 if ! bv_remote_run '
-    cd "$RELEASE_DIR" && php bin/grav clearcache
-' RELEASE_DIR="$RELEASE_DIR"; then
+    cd "$RELEASE_DIR" && "$PHP" bin/grav clearcache
+' RELEASE_DIR="$RELEASE_DIR" PHP="$PHP_BIN"; then
     echo ""
     echo "❌  Cache clear failed in ${RELEASE_DIR}." >&2
     echo "    Aborting BEFORE the docroot swap — the previous release stays live." >&2
-    echo "    Inspect: ssh ${DEPLOY_USER}@${DEPLOY_HOST} 'cd ${RELEASE_DIR} && php bin/grav clearcache'" >&2
+    echo "    Inspect: ssh ${DEPLOY_USER}@${DEPLOY_HOST} 'cd ${RELEASE_DIR} && $PHP_BIN bin/grav clearcache'" >&2
     exit 1
 fi
 echo "  ✓ Cache cleared in new release"
@@ -1152,6 +1343,15 @@ SWAPPED_AT_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 echo "  ✓ ${DEPLOY_TARGET} → ${LAYOUT_NAME}-releases/${RELEASE_ID}  (${SWAP_DURATION_MS} ms)"
 
+# ── Step 8.5: flush the opcode cache the swap just invalidated ────────
+#
+# PHP-FPM does not follow a repointed docroot symlink; see
+# bv_flush_opcode_cache in lib/atomic-release.sh for the full account.
+# Never fatal — the smoke probe below is the gate, and it compares the
+# expected build, so a tier still serving the old release fails it.
+echo "→ Step 8.5/8: Flushing the tier's opcode cache..."
+bv_flush_opcode_cache "$DEPLOY_TARGET" "$ENV_URL"
+
 # ── Step 9 (Sprint 2): Smoke probe — fail-loud, NO auto-rollback ──────
 #
 # Per the source spec's §Deploy command, step 10:
@@ -1166,6 +1366,17 @@ PROBE_EXPECTED="$(bv_compute_expected_version_substring "$STAGING_DIR")"
 echo "→ Smoke probe: GET ${PROBE_URL}  (expecting: ${PROBE_EXPECTED})"
 
 PROBE_RESULT="$(bv_smoke_probe "$PROBE_URL" "$PROBE_EXPECTED" || true)"
+
+# Behavioural probes, same fail-loud/never-auto-rollback contract as the
+# version probe above. These ask the real host questions a container cannot
+# answer: is the log directory actually denied, do pages actually revalidate.
+BEHAVIOUR_OK=1
+if [ -z "${BV_SKIP_BEHAVIOUR_SMOKE:-}" ]; then
+    echo "→ Smoke probe: host behaviour"
+    if ! bv_post_deploy_smoke "${ENV_URL}"; then
+        BEHAVIOUR_OK=0
+    fi
+fi
 PROBE_STATUS="${PROBE_RESULT%%|*}"
 PROBE_MATCHED="${PROBE_RESULT##*|}"
 case "$PROBE_STATUS" in
@@ -1197,6 +1408,19 @@ bv_rsync_via_ssh -a \
     "$META_LOCAL" \
     "${DEPLOY_USER}@${DEPLOY_HOST}:${RELEASE_DIR}/release-meta.yaml"
 unset _rsync_e
+
+# A behavioural probe failure is treated exactly like a version probe
+# failure: the release stays live, the operator is told loudly, and the
+# script exits non-zero. Reporting it as a passing deploy is how the log
+# exposure and the week-long page cache survived unnoticed for months.
+if [ "$BEHAVIOUR_OK" != "1" ]; then
+    echo "" >&2
+    echo "❌  Post-deploy behaviour probes FAILED (see above)." >&2
+    echo "    The new release IS LIVE — there is NO auto-rollback." >&2
+    echo "    rollback command:  make rollback tier=${ENV}" >&2
+    echo "" >&2
+    exit 1
+fi
 
 if [ "$PROBE_MATCHED" != "true" ] || [ "$PROBE_STATUS" != "200" ]; then
     # Re-fetch to capture the redirected URL + body so the diagnostic

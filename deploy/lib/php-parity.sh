@@ -1,0 +1,201 @@
+#!/usr/bin/env bash
+#
+# php-parity.sh — one PHP version, everywhere.
+#
+# WHY THIS EXISTS
+# ---------------
+# On 2026-08-21 an audit found FIVE PHP versions in play, none of them
+# overlapping:
+#
+#   local Docker (grav:latest, unpinned) ... 8.3.15
+#   CI migrations matrix ................... 8.1, 8.2, 8.3
+#   dev / test / staging (one.com) ......... 8.5.9
+#   prod (chosting) ........................ 8.4.24
+#
+# So no PHP version that RUNS the code was ever tested, and no tested
+# version ran anywhere. That is the "works on dev, breaks on prod" failure
+# class in its purest form — and it was invisible because nothing compared
+# the numbers.
+#
+# The repo now declares ONE target in `.php-version` at the repo root.
+# Every consumer reads that file:
+#
+#   docker-compose.yml   pinned by digest to an image carrying that version
+#   .github/workflows/*  sets up that version
+#   deploy.sh preflight  refuses a deploy to a tier running anything else
+#
+# WHY 8.3
+# -------
+# Grav 1.7.52 declares `^7.3.6 || ^8.0`, so upstream permits any PHP 8.
+# But 8.4 deprecated implicit nullable parameters, which Grav core uses
+# throughout: production emits ~570 deprecation notices per request cycle
+# and has accumulated a 12.5 MB error_log. 8.3 is the newest version on
+# which this Grav runs clean, and it is what the container and CI already
+# execute. Changing the target is a one-line edit here; the guards then
+# follow automatically.
+#
+# HOW TO CHANGE A TIER'S PHP (operator action, not automatable from here)
+#   one.com (dev/test/staging): control panel → PHP version
+#   chosting (prod):            cPanel → MultiPHP Manager → select for domain
+#
+# OVERRIDE
+# --------
+# `ALLOW_PHP_MISMATCH=1 make deploy tier=<t>` proceeds anyway, matching the
+# ALLOW_STAGING_DEPLOY_OFF_MAIN / ALLOW_STAGING_DEPLOY_DIRTY idiom already
+# used by the release gate. It warns loudly rather than failing.
+
+# Absolute path to the repo's declared PHP target file.
+# Usage: bv_php_target_file <project_dir>
+bv_php_target_file() {
+    printf '%s/.php-version' "$1"
+}
+
+# Read the declared target, trimmed. Empty (and rc 1) when absent/blank.
+# Usage: bv_php_target <project_dir>
+bv_php_target() {
+    local f
+    f="$(bv_php_target_file "$1")"
+    [ -f "$f" ] || return 1
+    local v
+    v="$(tr -d '[:space:]' < "$f")"
+    [ -n "$v" ] || return 1
+    printf '%s' "$v"
+}
+
+# Reduce a full PHP version string to MAJOR.MINOR.
+# "8.3.15" -> "8.3";  "PHP 8.4.24 (cli) ..." -> "8.4"
+bv_php_major_minor() {
+    printf '%s' "$1" | grep -oE '[0-9]+\.[0-9]+' | head -1
+}
+
+# Compare a tier's reported PHP against the declared target.
+#
+# Usage: bv_php_parity_check <target> <reported> <tier> <allow_mismatch>
+# Returns 0 to proceed, 1 to refuse. Diagnostics on stderr.
+bv_php_parity_check() {
+    local target="$1" reported="$2" tier="$3" allow="${4:-0}"
+
+    local want got
+    want="$(bv_php_major_minor "$target")"
+    got="$(bv_php_major_minor "$reported")"
+
+    if [ -z "$want" ]; then
+        printf '⚠️   php-parity: no target declared in .php-version — skipping check.\n' >&2
+        return 0
+    fi
+    if [ -z "$got" ]; then
+        # A tier that will not tell us its version is not a pass; say so, but
+        # do not block a deploy on an unreadable `php -v` (some hosts hide the
+        # CLI). This is the one soft case, and it is reported.
+        printf '⚠️   php-parity: could not read PHP version on %s — check skipped.\n' "$tier" >&2
+        return 0
+    fi
+    if [ "$want" = "$got" ]; then
+        printf '  ✓ PHP %s on %s matches .php-version\n' "$got" "$tier"
+        return 0
+    fi
+
+    if [ "$allow" = "1" ]; then
+        printf '⚠️   php-parity: %s runs PHP %s but .php-version declares %s — ALLOW_PHP_MISMATCH=1 override in effect.\n' \
+            "$tier" "$got" "$want" >&2
+        return 0
+    fi
+
+    printf '❌  Refusing to deploy: %s runs PHP %s, this repo targets PHP %s.\n' "$tier" "$got" "$want" >&2
+    printf '    Untested-version drift is the failure class this guard exists for —\n' >&2
+    printf '    code exercised on %s and served on %s is code nobody has run.\n' "$want" "$got" >&2
+    printf '\n' >&2
+    printf '    IF THIS IS A ROLLOUT, this is expected. .php-version moves once, the\n' >&2
+    printf '    tiers move one at a time, so every tier still on the old version\n' >&2
+    printf '    disagrees until you get to it. Take them in order — dev, test,\n' >&2
+    printf '    staging, prod — changing each tier BEFORE its deploy:\n' >&2
+    printf '      ALLOW_PHP_MISMATCH=1 make deploy tier=%s\n' "$tier" >&2
+    printf '\n' >&2
+    printf '    IF IT IS NOT, a tier moved without a decision. Fix it (operator action):\n' >&2
+    case "$tier" in
+        prod) printf '      chosting cPanel → MultiPHP Manager → set %s for the domain\n' "$want" >&2 ;;
+        *)    printf '      one.com control panel → PHP version → set %s\n' "$want" >&2 ;;
+    esac
+    printf '    Or change the target in .php-version (and re-run CI on it first).\n' >&2
+    printf '\n' >&2
+    printf '    Emergency override:  ALLOW_PHP_MISMATCH=1 make deploy tier=%s\n' "$tier" >&2
+    return 1
+}
+
+# The PHP binary to invoke on a tier's shell.
+#
+# WHY THIS IS NOT JUST "php": prod is cPanel, where the version a DOMAIN is
+# served with and the version the SHELL gets are two different settings. The
+# domain is on ea-php85; the system default — "set by the system
+# administrator", i.e. the hosting provider, and not changeable from the
+# account — is 8.4, so `php` on the shell is 8.4.24.
+#
+# Everything triggered over HTTP therefore runs 8.5, including Grav's
+# scheduler (prod has an empty crontab; the scheduler-trigger plugin fires it
+# via a token-gated HTTP endpoint, so the purge and cache jobs are web-SAPI).
+# The only 8.4 left is what WE invoke over SSH. This makes those match too.
+#
+# one.com tiers are not cPanel and have a single PHP, so they keep plain
+# `php` and nothing about their behaviour changes.
+#
+# Usage: bv_php_remote_bin <tier> <project_dir>
+bv_php_remote_bin() {
+    local tier="$1" project_dir="${2:-.}"
+    if [ "$tier" != "prod" ]; then
+        printf 'php'
+        return 0
+    fi
+    local target pkg
+    target="$(bv_php_target "$project_dir" 2>/dev/null || true)"
+    pkg="$(printf '%s' "$target" | tr -d '.')"
+    if [ -z "$pkg" ]; then
+        printf 'php'
+        return 0
+    fi
+    # A PLAIN PATH, deliberately — not a shell expression. Callers interpolate
+    # this into remote command strings, and deploy.sh passes it through
+    # bv_remote_run's %q-quoted KEY=VALUE dispatch, which exists to stop
+    # locally-interpolated values reaching the remote shell unquoted. An
+    # expression would defeat that (and tests/deploy/lint-remote-ssh.sh
+    # rightly refuses it). Call sites that want a fallback test -x on the
+    # remote side.
+    printf '/opt/cpanel/ea-php%s/root/usr/bin/php' "$pkg"
+}
+
+# Assert the resolved PHP binary exists on the tier.
+#
+# WHY: bv_php_remote_bin derives a versioned cPanel path from .php-version.
+# Bump the target to a version the host has not installed and every remote
+# command breaks with "no such file or directory" — from sixteen different
+# call sites, none of which explain it. A silent fallback to the system PHP
+# would be worse (that is the drift this whole guard exists to stop), so the
+# answer is to fail once, early, and say what is actually wrong.
+#
+# bv_php_binary_check <reported_probe_output> <binary> <tier>
+# The caller runs the probe remotely; this interprets it.
+# Returns 0 to proceed, 1 to refuse.
+bv_php_binary_check() {
+    local probe="$1" binary="$2" tier="$3"
+
+    # Plain `php` always resolves via PATH; nothing to assert.
+    case "$binary" in
+        php) return 0 ;;
+    esac
+
+    if [ "$probe" = "present" ]; then
+        return 0
+    fi
+
+    printf '❌  Refusing to deploy: %s has no PHP binary at\n' "$tier" >&2
+    printf '      %s\n' "$binary" >&2
+    printf '\n' >&2
+    printf '    That path is derived from .php-version. Either the hosting provider\n' >&2
+    printf '    has not installed that version, or it lives elsewhere on this host.\n' >&2
+    printf '\n' >&2
+    printf '    Deploying anyway would run every remote command on whatever PHP the\n' >&2
+    printf '    shell happens to give — which is the drift this guard exists to stop.\n' >&2
+    printf '\n' >&2
+    printf '    Ask the provider to install it, or change .php-version to a version\n' >&2
+    printf '    the host actually has.\n' >&2
+    return 1
+}

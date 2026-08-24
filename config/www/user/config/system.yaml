@@ -2,6 +2,21 @@ absolute_urls: false
 
 reverse_proxy_setup: true
 
+# Grav 2 made every forwarded header opt-in, defaulting to false — its own
+# reasoning: "to prevent client-supplied spoofing of client IP, host, port, or
+# protocol". On 1.7, reverse_proxy_setup alone was enough for Uri::scheme() to
+# read X-Forwarded-Proto; on 2.0 it is ALSO gated behind this key.
+#
+# Without it a tier behind one.com's Varnish stops seeing https, so the session
+# cookie loses its Secure flag and the password-reset flow breaks — and neither
+# is visible in a browser over real TLS, because the page still loads fine. The
+# cookie is simply weaker than it looks.
+#
+# Only `protocol` is enabled. host/port/ip stay off: each one trusted without a
+# proxy that overwrites it is a spoofing surface, and we need none of them.
+http_x_forwarded:
+  protocol: true
+
 # WI-5: pin the password and username policy in this repo so a Grav-core
 # upgrade or a differently-configured tier cannot silently weaken them. These
 # must agree exactly with the client-side checks (register.html.twig) and the
@@ -30,7 +45,8 @@ pwd_regex: '.{12,}'
 #
 # The Secure flag is deliberately NOT hard-forced. Grav's SessionServiceProvider
 # computes it as `session.secure OR (session.secure_https AND scheme == https)`.
-# secure_https defaults to true, and with reverse_proxy_setup (above) Grav reads
+# secure_https defaults to true, and with reverse_proxy_setup AND
+# http_x_forwarded.protocol (both above) Grav reads
 # the scheme from X-Forwarded-Proto — so on a TLS tier behind the proxy the
 # cookie automatically gets Secure, while plain-HTTP localhost (make start /
 # make test-auth, no XFP) correctly does NOT, so local sessions still hold.
@@ -52,6 +68,21 @@ home:
 
 pages:
   theme: byvaerkstederne
+  # HTML pages must revalidate. Grav's own default is `expires: 604800` —
+  # SEVEN DAYS — and this repo never overrode it, so every tier served every
+  # page with Cache-Control: max-age=604800. A member who saw the calendar
+  # today would not see a newly published event for up to a week. Nobody
+  # noticed, because developers hard-refresh and only production has
+  # returning visitors.
+  #
+  # The .htaccess carries an ExpiresByType text/html rule too, but Grav sets
+  # this header itself for pages, so the Apache rule never applied to them.
+  # (It does apply to static files: images come back with the month we asked
+  # for, CSS with the week — which is how we know mod_expires was working and
+  # the page header was coming from somewhere else.)
+  #
+  # etag stays on, so revalidation is a conditional request, not a re-download.
+  expires: 0
   markdown:
     extra: true
   process:

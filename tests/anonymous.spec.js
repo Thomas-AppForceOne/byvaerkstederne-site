@@ -42,6 +42,10 @@ require('./anonymous/registration-honeypot');
 // Welcome mail: sent from the ACTIVATION handler, content from the theme
 // override. vendored-login-patch is a pure source invariant (no browser, no
 // sink) guarding the plugin patches the mail depends on.
+// Production-profile parity: the flag-off rendering path must be usable,
+// not merely hidden. This is the guard for the 'works on dev, broken on
+// prod' class — see the file header for the dead signup link it exists for.
+require('./anonymous/profile-parity');
 require('./anonymous/welcome-email');
 require('./anonymous/vendored-login-patch');
 require('./anonymous/password-reset');

@@ -58,16 +58,27 @@ const APEX_DIR = path.join(WORKTREE_ROOT, 'apex');
 const SITE_DIR = path.join(WORKTREE_ROOT, 'config', 'www');
 
 // Refuse to run if the inferred root looks suspicious — e.g. someone
-// dropped this file into a directory that isn't a workshop-site checkout.
-// The two valid shapes: a main checkout (…/workshop-site/…) or the
-// GAN worktree (…/.gan/worktree).
+// dropped this file into a directory that isn't a checkout of this repo.
+//
+// This used to match on the DIRECTORY NAME (…/workshop-site/… or the GAN
+// worktree). That is a property of one developer's filesystem, not of the
+// repo: on a GitHub runner the checkout lives at …/byvaerkstederne-site/
+// and the guard refused to run at all — the suite could not execute in CI
+// for a reason that had nothing to do with the code under test.
+//
+// Assert what actually matters instead: this is a git checkout and it
+// carries the files these tests read. Name-independent, so it holds on any
+// machine and still refuses a stray directory.
 {
-  const ok =
-    /workshop-site/.test(WORKTREE_ROOT) ||
-    /\.gan[\/\\]worktree$/.test(WORKTREE_ROOT);
-  if (!ok) {
+  const markers = [
+    path.join(WORKTREE_ROOT, '.git'),
+    path.join(WORKTREE_ROOT, 'config', 'www', 'VERSION'),
+  ];
+  const missing = markers.filter((m) => !fs.existsSync(m));
+  if (missing.length) {
     throw new Error(
-      `Refusing to run version-footer tests: WORKTREE_ROOT='${WORKTREE_ROOT}' does not look like a checkout.`,
+      `Refusing to run version-footer tests: WORKTREE_ROOT='${WORKTREE_ROOT}' is not a checkout of this repo ` +
+        `(missing: ${missing.join(', ')}).`,
     );
   }
 }

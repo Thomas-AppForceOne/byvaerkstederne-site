@@ -100,14 +100,31 @@ NOINDEX
     cat << 'HTACCESS_REST'
 </IfModule>
 
-<FilesMatch "(^\.git|\.yaml$|\.md$|\.twig$)">
+<FilesMatch "(^\.git|\.yaml$|\.md$|\.twig$|\.log$|\.jsonl$)">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
 </FilesMatch>
 
+# The Grav log directory. `.log$` above covers the files by extension, but the
+# directory is denied outright so a rotated or oddly-named log cannot leak
+# either. Found live on 2026-08-21: https://<host>/logs/grav.log served 81 KB
+# of production operational detail with a 200, on every tier.
+<IfModule mod_alias.c>
+    RedirectMatch 404 ^/logs(/|$)
+</IfModule>
+
 <IfModule mod_expires.c>
     ExpiresActive On
+    # `ExpiresActive On` would otherwise let the host's ExpiresDefault apply
+    # to every MIME type not named here, so both are pinned.
+    #
+    # These do NOT govern Grav's pages: Grav sets Cache-Control for those
+    # itself, from system.pages.expires (which defaulted to seven days —
+    # see user/config/system.yaml). They cover static files and anything
+    # else Apache serves directly. Kept as defence in depth.
+    ExpiresByType text/html "access plus 0 seconds"
+    ExpiresDefault "access plus 0 seconds"
     ExpiresByType image/jpeg "access plus 1 month"
     ExpiresByType image/png "access plus 1 month"
     ExpiresByType image/svg+xml "access plus 1 month"

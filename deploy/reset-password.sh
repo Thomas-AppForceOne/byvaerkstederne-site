@@ -37,7 +37,6 @@
 #   --generate, -g  Generate and print the new password instead of prompting.
 #   --yes, -y       Skip the confirmation prompt.
 #   --dry-run, -n   Resolve and validate everything; change nothing.
-#   --i-mean-it     Required for tier=prod and for the protected Playwright
 #                   seed accounts (pw-test-*), whose passwords must match
 #                   ~/.gan-secrets/workshop-site.env.
 #   --help, -h      Show this help.
@@ -58,14 +57,12 @@ PROTECTED_USER_PREFIX="pw-test-"
 POSITIONAL=()
 YES=0
 DRY_RUN=0
-I_MEAN_IT=0
 GENERATE=0
 
 for arg in "$@"; do
     case "$arg" in
         --yes|-y) YES=1 ;;
         --dry-run|-n) DRY_RUN=1 ;;
-        --i-mean-it) I_MEAN_IT=1 ;;
         --generate|-g) GENERATE=1 ;;
         --help|-h) usage; exit 0 ;;
         --*) echo "❌  Unknown option: $arg" >&2; usage >&2; exit 1 ;;
@@ -85,7 +82,7 @@ if [ -z "$USERID" ]; then
     echo "❌  reset-password: missing user (a username, or an email to resolve)" >&2; err=1
 fi
 if [ "$err" = "1" ]; then
-    echo "    Usage:   $0 <dev|test|staging|prod> <username|email> [--generate] [--yes] [--dry-run] [--i-mean-it]" >&2
+    echo "    Usage:   $0 <dev|test|staging|prod> <username|email> [--generate] [--yes] [--dry-run]" >&2
     echo "    Example: $0 dev anders@example.dk --generate" >&2
     exit 1
 fi
@@ -97,10 +94,6 @@ case "$USERID" in
         ;;
 esac
 
-if [ "$TIER" = "prod" ] && [ "$I_MEAN_IT" != "1" ]; then
-    echo "❌  Refusing to reset a password on prod without --i-mean-it (this changes a REAL member's credentials)." >&2
-    exit 1
-fi
 
 if [ ! -f "$PASSWORD_PHP" ]; then
     echo "❌  Missing $PASSWORD_PHP (repo checkout incomplete?)." >&2
@@ -163,6 +156,11 @@ fi
 . "$ENV_FILE"
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$SCRIPT_DIR/lib/ssh-auth.sh"
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_remote_bin — prod's shell PHP is the system default
+# (8.4), not the version its domain is served with (8.5).
+. "$SCRIPT_DIR/lib/php-parity.sh"
+PHP_BIN="$(bv_php_remote_bin "${TIER:-${ENV:-}}" "$PROJECT_DIR")"
 # shellcheck source=deploy/lib/user-resolve.sh
 . "$SCRIPT_DIR/lib/user-resolve.sh"
 
@@ -197,12 +195,9 @@ fi
 
 case "$USERNAME" in
     "$PROTECTED_USER_PREFIX"*)
-        if [ "$I_MEAN_IT" != "1" ]; then
-            echo "❌  '$USERNAME' is a protected Playwright seed account." >&2
-            echo "    Its password must match ~/.gan-secrets/workshop-site.env or the auth suites break." >&2
-            echo "    Re-run with --i-mean-it if you mean it." >&2
-            exit 1
-        fi
+        echo "⚠️   '$USERNAME' is a protected Playwright seed account." >&2
+        echo "    Its password must match ~/.gan-secrets/workshop-site.env or the auth suites break." >&2
+        echo "" >&2
         ;;
 esac
 
@@ -259,7 +254,7 @@ php_source="$(cat "$PASSWORD_PHP")"
 php_source="${php_source//__PW_B64__/$PW_B64}"
 
 result="$(printf '%s' "$php_source" | bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-    "cd \"$TIER_DIR\" && php -- \"$ACCT\"" 2>&1 || echo __PHPFAIL__)"
+    "cd \"$TIER_DIR\" && $PHP_BIN -- \"$ACCT\"" 2>&1 || echo __PHPFAIL__)"
 
 case "$result" in
     *__PHPFAIL__*|*error:*)
@@ -276,9 +271,9 @@ case "$result" in
 esac
 
 if ! bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-        "rm -f \"$FLEX_INDEX\" && cd \"$TIER_DIR\" && php bin/grav clearcache" >/dev/null < /dev/null; then
+        "rm -f \"$FLEX_INDEX\" && cd \"$TIER_DIR\" && $PHP_BIN bin/grav clearcache" >/dev/null < /dev/null; then
     echo "⚠️  Password changed, but the cache clear failed — run it manually on the tier:" >&2
-    echo "      cd $TIER_DIR && php bin/grav clearcache" >&2
+    echo "      cd $TIER_DIR && $PHP_BIN bin/grav clearcache" >&2
     exit 1
 fi
 

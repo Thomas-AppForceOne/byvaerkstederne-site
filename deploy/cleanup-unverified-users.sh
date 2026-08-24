@@ -24,16 +24,13 @@
 # real registration time regardless of file mtime.
 #
 # DRY-RUN BY DEFAULT. Pass --apply to actually delete. prod additionally
-# requires --i-mean-it. Intended to run on a schedule (cron / CI) per tier.
 #
 # USAGE
-#   ./deploy/cleanup-unverified-users.sh <tier> [--max-age=MIN] [--apply] [--i-mean-it]
 #
 # Tiers: dev | test | staging | prod
 # Options:
 #   --max-age=MIN   Delete unconfirmed accounts older than MIN minutes (default 10).
 #   --apply         Actually delete (default: dry-run — only report).
-#   --i-mean-it     Required for tier=prod.
 #   --help, -h
 #
 # NOTE: 10 minutes is aggressive for real email + a human clicking a link. Use a
@@ -55,14 +52,12 @@ TOKEN_LIFETIME=604800
 TIER=""
 MAX_AGE_MIN=10
 APPLY=0
-I_MEAN_IT=0
 
 for arg in "$@"; do
     case "$arg" in
         dev|test|staging|prod) TIER="$arg" ;;
         --max-age=*) MAX_AGE_MIN="${arg#--max-age=}" ;;
         --apply) APPLY=1 ;;
-        --i-mean-it) I_MEAN_IT=1 ;;
         --help|-h) usage; exit 0 ;;
         *) echo "❌  Unknown arg: $arg" >&2; usage >&2; exit 1 ;;
     esac
@@ -70,15 +65,11 @@ done
 
 case "$TIER" in
     dev|test|staging|prod) ;;
-    *) echo "❌  Usage: $0 <dev|test|staging|prod> [--max-age=MIN] [--apply] [--i-mean-it]" >&2; exit 1 ;;
+    *) echo "❌  Usage: $0 <dev|test|staging|prod> [--max-age=MIN] [--apply]" >&2; exit 1 ;;
 esac
 case "$MAX_AGE_MIN" in
     ''|*[!0-9]*) echo "❌  --max-age must be a whole number of minutes (got '$MAX_AGE_MIN')." >&2; exit 1 ;;
 esac
-if [ "$TIER" = "prod" ] && [ "$APPLY" = "1" ] && [ "$I_MEAN_IT" != "1" ]; then
-    echo "❌  Refusing to --apply on prod without --i-mean-it (this deletes real member registrations)." >&2
-    exit 1
-fi
 MAX_AGE_SEC=$((MAX_AGE_MIN * 60))
 
 # ── 2. Load credentials + resolve SSH ────────────────────────────────
@@ -88,6 +79,10 @@ ENV_FILE="$PROJECT_DIR/.env.deploy"
 . "$ENV_FILE"
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$SCRIPT_DIR/lib/ssh-auth.sh"
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_remote_bin — prod's shell PHP is the system default (8.4),
+# not the version its domain is served with (8.5). See that file.
+. "$SCRIPT_DIR/lib/php-parity.sh"
 
 export TIER
 if [ "$TIER" = "prod" ]; then
@@ -110,6 +105,7 @@ if ! DEPLOY_PASS="$(bv_resolve_ssh_password)"; then
     exit 1
 fi
 
+PHP_BIN="$(bv_php_remote_bin "${TIER:-${ENV:-}}" "$PROJECT_DIR")"
 TIER_DIR="$(bv_tier_root "$PATH_SSH" "$TIER")"
 ACCOUNTS_DIR="$TIER_DIR/user/accounts"
 FLEX_INDEX="$TIER_DIR/user/data/flex/indexes/accounts.yaml"
@@ -143,7 +139,7 @@ out="$(bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" "
         if [ \"\$apply\" = 1 ]; then rm -f \"\$f\"; deleted=1; fi
     done
     if [ \"\$apply\" = 1 ] && [ \"\$deleted\" = 1 ]; then
-        rm -f \"$FLEX_INDEX\"; cd \"$TIER_DIR\" && php bin/grav clearcache >/dev/null 2>&1 || true
+        rm -f \"$FLEX_INDEX\"; cd \"$TIER_DIR\" && $PHP_BIN bin/grav clearcache >/dev/null 2>&1 || true
     fi
     exit 0
 " 2>/dev/null || echo __SSHFAIL__)"
@@ -167,4 +163,12 @@ fi
 verb="would remove"; [ "$APPLY" = "1" ] && verb="removed"
 echo "$verb $rows unconfirmed account(s) (>${MAX_AGE_MIN} min):"
 { printf 'USERNAME\tAGE(min)\n'; printf '%s\n' "$out"; } | column -t -s "$(printf '\t')"
-[ "$APPLY" != "1" ] && echo "(dry-run — re-run with --apply to delete)"
+# An `if`, not `[ … ] && echo`. As the script's LAST command that idiom
+# leaks its own status: with --apply the test is false, the && chain returns
+# 1, and a successful cleanup exited non-zero. Dry-run exited 0 and apply
+# exited 1 — exactly backwards, and enough to break any caller under `set -e`
+# or a cron wrapper that checks the code. Found by running it for real.
+if [ "$APPLY" != "1" ]; then
+    echo "(dry-run — re-run with --apply to delete)"
+fi
+exit 0

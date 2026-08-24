@@ -1,10 +1,34 @@
 services:
   grav:
-    image: lscr.io/linuxserver/grav:latest
+    # Built from ./Dockerfile so PHP and Grav are pinned SEPARATELY.
+    #
+    # This used to be a single pinned image, which welded the two together:
+    # pulling a newer one to get a newer PHP dragged the local CMS from Grav
+    # 1.7.49.5 to 2.0.20 — a major version ahead of every tier — while
+    # staying put pinned local PHP at 8.3 against tiers serving 8.5. There
+    # was no third option as long as one image decided both.
+    #
+    #   PHP   from the base image digest (see Dockerfile's PHP_BASE)
+    #   GRAV  from GRAV_VERSION, the same zip deploy.sh ships to the tiers
+    #
+    # scripts/grav-up.sh reads GRAV_VERSION out of deploy.sh so the two
+    # cannot drift; the Dockerfile's default is a fallback for a direct
+    # `docker build`, and unit-grav-parity.sh fails if it disagrees.
+    build:
+      context: .
+      args:
+        GRAV_VERSION: ${GRAV_VERSION:-1.7.52}
+    image: byv-grav:${GRAV_VERSION:-1.7.52}
     container_name: ${GRAV_CONTAINER:-grav}
     environment:
-      - PUID=1000
-      - PGID=1000
+      # The image chowns the bind-mounted ./config to this uid/gid. Hardcoding
+      # 1000 assumes the host user is uid 1000 — true on a typical Mac dev
+      # box, false on a GitHub runner, where it left the repo's own config
+      # unwritable and the suite died in globalSetup trying to write the
+      # Mailpit override. Default to 1000 so nothing changes locally; CI
+      # passes its own.
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
       - TZ=Europe/Copenhagen
     volumes:
       - ${GRAV_ROOT:-./config}:/config

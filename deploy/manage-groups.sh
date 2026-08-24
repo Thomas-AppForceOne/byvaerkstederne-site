@@ -37,7 +37,6 @@
 # Options:
 #   --yes, -y       Skip the confirmation prompt.
 #   --dry-run, -n   Resolve and validate everything; change nothing.
-#   --i-mean-it     Required for tier=prod and for the protected
 #                   Playwright seed accounts (pw-test-*).
 #   --help, -h      Show this help.
 
@@ -88,13 +87,11 @@ esac
 POSITIONAL=()
 YES=0
 DRY_RUN=0
-I_MEAN_IT=0
 
 for arg in "$@"; do
     case "$arg" in
         --yes|-y) YES=1 ;;
         --dry-run|-n) DRY_RUN=1 ;;
-        --i-mean-it) I_MEAN_IT=1 ;;
         --help|-h) usage; exit 0 ;;
         --*) echo "❌  Unknown option: $arg" >&2; usage >&2; exit 1 ;;
         *) POSITIONAL+=("$arg") ;;
@@ -138,7 +135,7 @@ if [ "$ACTION" != "list" ]; then
         echo "❌  $ACTION: missing group name" >&2; err=1
     fi
     if [ "$err" = "1" ]; then
-        echo "    Usage:   $0 $ACTION <dev|test|staging|prod> <username|email> <group> [--yes] [--dry-run] [--i-mean-it]" >&2
+        echo "    Usage:   $0 $ACTION <dev|test|staging|prod> <username|email> <group> [--yes] [--dry-run]" >&2
         echo "    Example: $0 grant dev anders@example.dk organizers" >&2
         exit 1
     fi
@@ -173,10 +170,6 @@ if [ "$ACTION" != "list" ]; then
             ;;
     esac
 
-    if [ "$TIER" = "prod" ] && [ "$I_MEAN_IT" != "1" ]; then
-        echo "❌  Refusing to change group membership on prod without --i-mean-it (this changes a REAL member's rights)." >&2
-        exit 1
-    fi
 
     if [ ! -f "$GROUPS_PHP" ]; then
         echo "❌  Missing $GROUPS_PHP (repo checkout incomplete?)." >&2
@@ -194,6 +187,10 @@ fi
 . "$ENV_FILE"
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$SCRIPT_DIR/lib/ssh-auth.sh"
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_remote_bin — prod's shell PHP is the system default (8.4),
+# not the version its domain is served with (8.5). See that file.
+. "$SCRIPT_DIR/lib/php-parity.sh"
 # shellcheck source=deploy/lib/user-resolve.sh
 . "$SCRIPT_DIR/lib/user-resolve.sh"
 
@@ -217,6 +214,7 @@ if ! DEPLOY_PASS="$(bv_resolve_ssh_password)"; then
     exit 1
 fi
 
+PHP_BIN="$(bv_php_remote_bin "${TIER:-${ENV:-}}" "$PROJECT_DIR")"
 TIER_DIR="$(bv_tier_root "$PATH_SSH" "$TIER")"
 ACCOUNTS_DIR="$TIER_DIR/user/accounts"
 TIER_GROUPS_FILE="$TIER_DIR/user/config/groups.yaml"
@@ -249,11 +247,8 @@ fi
 
 case "$USERNAME" in
     "$PROTECTED_USER_PREFIX"*)
-        if [ "$I_MEAN_IT" != "1" ]; then
-            echo "❌  '$USERNAME' is a protected Playwright seed account." >&2
-            echo "    Changing its groups breaks the auth/event suites. Re-run with --i-mean-it if you mean it." >&2
-            exit 1
-        fi
+        echo "⚠️   '$USERNAME' is a protected Playwright seed account." >&2
+        echo "    Changing its groups breaks the auth/event suites." >&2
         ;;
 esac
 
@@ -314,7 +309,7 @@ fi
 # the tier's own Symfony Yaml — never sed. It prints one status token:
 # changed | already-member | not-a-member.
 result="$(bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-    "cd \"$TIER_DIR\" && php -- \"$ACCT\" \"$GROUP\" \"$ACTION\"" \
+    "cd \"$TIER_DIR\" && $PHP_BIN -- \"$ACCT\" \"$GROUP\" \"$ACTION\"" \
     < "$GROUPS_PHP" 2>&1 || echo __PHPFAIL__)"
 
 case "$result" in
@@ -342,9 +337,9 @@ esac
 # Clear the cache (and drop the flex accounts index — Grav rebuilds it) so
 # the new access tree resolves on the member's next login.
 if ! bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-        "rm -f \"$FLEX_INDEX\" && cd \"$TIER_DIR\" && php bin/grav clearcache" >/dev/null < /dev/null; then
+        "rm -f \"$FLEX_INDEX\" && cd \"$TIER_DIR\" && $PHP_BIN bin/grav clearcache" >/dev/null < /dev/null; then
     echo "⚠️  Group changed, but the cache clear failed — run it manually on the tier:" >&2
-    echo "      cd $TIER_DIR && php bin/grav clearcache" >&2
+    echo "      cd $TIER_DIR && $PHP_BIN bin/grav clearcache" >&2
     exit 1
 fi
 

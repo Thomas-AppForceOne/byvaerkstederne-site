@@ -380,6 +380,64 @@ teardown() {
     [[ "$output" == *"Unknown tier"* ]]
 }
 
+# ── `latest` resolution ──────────────────────────────────────────────
+#
+# `latest` used to be `tail -n1` over a lexicographically sorted listing.
+# Within one tier that is right — the timestamps sort lexically. Across
+# tiers it sorts on the TIER NAME first, so "latest" meant "whichever tier
+# name is last in the alphabet": test > staging > prod > dev.
+#
+# Found by running `make restore-scratch from=latest` on 2026-08-23: it
+# decrypted a five-day-old PROD archive while that day's dev archive sat
+# further up the list. Prod member data is unanonymised (ADR-002), so the
+# wrong answer was also the one that exposes real records.
+
+@test "latest picks the newest by date, not the last tier alphabetically" {
+    # dev is NEWEST but sorts FIRST; test is oldest but sorts LAST.
+    printf 'placeholder' > "$BACKUP_LOCAL_STORE_DIR/dev-2026-08-23T08-54Z-v1.5.1-b525.tar.gz.age"
+    printf 'placeholder' > "$BACKUP_LOCAL_STORE_DIR/test-2026-08-01T09-00Z-v1.5.1-b400.tar.gz.age"
+
+    run "$RESTORE_SH" --to "$BATS_TEST_TMPDIR/latest-newest" --from latest
+    [[ "$output" == *"dev-2026-08-23T08-54Z"* ]]
+    [[ "$output" != *"test-2026-08-01T09-00Z"* ]]
+}
+
+@test "latest refuses to CHOOSE prod when other tiers are available" {
+    printf 'placeholder' > "$BACKUP_LOCAL_STORE_DIR/dev-2026-08-01T09-00Z-v1.5.1-b400.tar.gz.age"
+    printf 'placeholder' > "$BACKUP_LOCAL_STORE_DIR/prod-2026-08-23T20-49Z-v1.5.1-b481.tar.gz.age"
+
+    run "$RESTORE_SH" --to "$BATS_TEST_TMPDIR/latest-prod" --from latest
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Refusing to auto-select the prod backup"* ]]
+    # The refusal must be actionable — it names the id to type instead.
+    [[ "$output" == *"prod-2026-08-23T20-49Z"* ]]
+}
+
+# The counterpart: when prod is the ONLY tier in storage, `latest` is
+# unambiguous and must still work — that is the documented round-trip, and
+# a blanket prod refusal broke it.
+@test "latest still resolves when prod is the only tier present" {
+    # A real archive, not a placeholder — this path actually decrypts.
+    run "$BACKUP_SH" prod
+    [ "$status" -eq 0 ]
+
+    run "$RESTORE_SH" --to "$BATS_TEST_TMPDIR/latest-prod-only" --from latest
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"prod-"* ]]
+    # Silence would be wrong too — unanonymised data deserves a word.
+    [[ "$output" == *"unanonymised"* ]]
+}
+
+@test "latest scoped to a tier still resolves within that tier" {
+    printf 'placeholder' > "$BACKUP_LOCAL_STORE_DIR/dev-2026-08-01T09-00Z-v1.5.1-b400.tar.gz.age"
+    printf 'placeholder' > "$BACKUP_LOCAL_STORE_DIR/dev-2026-08-23T08-54Z-v1.5.1-b525.tar.gz.age"
+    printf 'placeholder' > "$BACKUP_LOCAL_STORE_DIR/prod-2026-08-24T20-49Z-v1.5.1-b481.tar.gz.age"
+
+    # Asking dev for its latest must not stray into prod, newer or not.
+    run "$RESTORE_SH" --to "$BATS_TEST_TMPDIR/latest-dev" --from latest --tier dev
+    [[ "$output" != *"prod-"* ]]
+}
+
 @test "restore.sh refuses cross-tier archive without --allow-cross-tier" {
     # Take a backup so something exists in managed storage, then try
     # to restore it into a different tier than the archive's prefix.

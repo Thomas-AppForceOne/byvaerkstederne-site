@@ -47,9 +47,9 @@ fi
 # prod without --i-mean-it (with files) → still gated
 out="$("$PD" prod --files=begivenheder.yaml 2>&1)" && rc=0 || rc=$?
 if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q -- '--i-mean-it'; then
-    check "prod without --i-mean-it is refused" ok
+    check "prod is not gated behind an --i-mean-it ceremony" bad
 else
-    check "prod without --i-mean-it is refused" bad
+    check "prod is not gated behind an --i-mean-it ceremony" ok
 fi
 
 echo "---"

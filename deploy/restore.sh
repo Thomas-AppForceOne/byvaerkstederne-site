@@ -192,6 +192,11 @@ fi
 # based on which env vars are set for the active tier.
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$REPO_ROOT/deploy/lib/ssh-auth.sh"
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_remote_bin — prod's shell PHP is the system default (8.4),
+# not the version its domain is served with (8.5).
+. "$REPO_ROOT/deploy/lib/php-parity.sh"
+PHP_BIN="$(bv_php_remote_bin "${TIER:-}" "$REPO_ROOT")"
 
 # age-identity helpers — looks up Keychain items bv-age-identity-*
 # at decrypt time. Falls back to AGE_IDENTITY_FILE if no Keychain
@@ -251,9 +256,51 @@ resolve_archive() {
         else
             pattern='.'
         fi
+        # Sort by the embedded TIMESTAMP, not by filename.
+        #
+        # This was `tail -n1` over a lexicographically sorted listing. Within
+        # one tier that is correct — the dates sort lexically. Across tiers it
+        # sorts on the TIER NAME first, so "latest" meant "whichever tier name
+        # comes last in the alphabet": test > staging > prod > dev. Asking for
+        # the latest backup with no tier returned a five-day-old prod archive
+        # while today's dev archive sat further up the list.
+        #
+        # Worse than wrong: prod member data is unanonymised (ADR-002), so the
+        # wrong answer was also the one that decrypts real people's records.
         local match
-        match=$(printf '%s\n' "$listing" | grep -E "$pattern" | tail -n1)
+        match=$(printf '%s\n' "$listing" | grep -E "$pattern" \
+            | awk '/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]-[0-9][0-9]Z/ {
+                       if (match($0, /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]-[0-9][0-9]Z/))
+                           print substr($0, RSTART, RLENGTH) "\t" $0
+                   }' \
+            | sort | tail -n1 | cut -f2-)
         [ -n "$match" ] || die "No backups for tier '${tier_filter:-any}'" 2
+
+        # Do not let `latest` CHOOSE prod over another tier.
+        #
+        # Narrow on purpose. Refusing prod outright broke the documented
+        # `restore.sh --to <dir>` round-trip, where a prod archive is the only
+        # thing in the store and resolving to it is exactly right — the bats
+        # suite caught that immediately. The hazard is not "prod was restored",
+        # it is "prod was PICKED while other tiers were available and the
+        # operator never named it". Prod member data is unanonymised
+        # (ADR-002), so that silent choice hands over real records.
+        if [ -z "$tier_filter" ]; then
+            case "$match" in
+                prod-*)
+                    if printf '%s\n' "$listing" | grep -qvE '^prod-'; then
+                        die "Refusing to auto-select the prod backup '${match}' for 'latest'.
+    Archives from other tiers are present, so 'latest' had to CHOOSE prod —
+    and prod member data is unanonymised (ADR-002). Decrypting it should be
+    something you asked for by name.
+    Name it explicitly (--from ${match%.tar.gz.age}) or pass a tier." 1
+                    fi
+                    printf '⚠️   latest resolved to a PROD archive (%s) — it is the only tier in storage.\n' \
+                        "$match" >&2
+                    printf '    Prod member data is unanonymised (ADR-002); treat the output accordingly.\n' >&2
+                    ;;
+            esac
+        fi
         printf '%s\n' "$match"
         return 0
     fi
@@ -688,7 +735,7 @@ done
 # clearcache` (no hyphen).
 log_op "clearing Grav caches on ${SSH_HOST}"
 bv_ssh_cmd -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" \
-    "cd $(printf %q "$SSH_PATH") && php bin/grav clearcache" \
+    "cd $(printf %q "$SSH_PATH") && $PHP_BIN bin/grav clearcache" \
     >>"$LOG_FILE" 2>&1 \
     || warn "bin/grav clearcache returned non-zero (continuing)"
 

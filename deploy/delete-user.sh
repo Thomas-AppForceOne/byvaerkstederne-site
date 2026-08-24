@@ -19,9 +19,7 @@
 # session survives until it expires; with the remember-me token gone it
 # cannot re-authenticate after that.
 #
-# DESTRUCTIVE. On prod this deletes a REAL member — gated behind --i-mean-it.
 # The Playwright seed accounts (pw-test-user / pw-test-admin) are likewise
-# protected behind --i-mean-it so a stray cleanup can't break the auth suite.
 #
 # USAGE
 # -----
@@ -32,7 +30,6 @@
 # Options:
 #   --yes, -y       Skip the confirmation prompt.
 #   --dry-run, -n   Show what would be deleted; delete nothing.
-#   --i-mean-it     Required for tier=prod and for protected seed accounts.
 #   --help, -h      Show this help.
 
 set -euo pipefail
@@ -51,13 +48,11 @@ PROTECTED_USERS="pw-test-user pw-test-admin pw-test-org"
 POSITIONAL=()
 YES=0
 DRY_RUN=0
-I_MEAN_IT=0
 
 for arg in "$@"; do
     case "$arg" in
         --yes|-y) YES=1 ;;
         --dry-run|-n) DRY_RUN=1 ;;
-        --i-mean-it) I_MEAN_IT=1 ;;
         --help|-h) usage; exit 0 ;;
         --*) echo "❌  Unknown option: $arg" >&2; usage >&2; exit 1 ;;
         *) POSITIONAL+=("$arg") ;;
@@ -70,7 +65,7 @@ USERNAME="${POSITIONAL[1]:-}"
 case "$TIER" in
     dev|test|staging|prod) ;;
     *)
-        echo "❌  Usage: $0 <dev|test|staging|prod> <username> [--yes] [--dry-run] [--i-mean-it]" >&2
+        echo "❌  Usage: $0 <dev|test|staging|prod> <username> [--yes] [--dry-run]" >&2
         exit 1
         ;;
 esac
@@ -89,16 +84,11 @@ case "$USERNAME" in
         ;;
 esac
 
-if [ "$TIER" = "prod" ] && [ "$I_MEAN_IT" != "1" ]; then
-    echo "❌  Refusing to delete a prod account without --i-mean-it (prod deletes a real member)." >&2
-    exit 1
-fi
 
 for p in $PROTECTED_USERS; do
-    if [ "$USERNAME" = "$p" ] && [ "$I_MEAN_IT" != "1" ]; then
-        echo "❌  '$USERNAME' is a protected Playwright seed account." >&2
-        echo "    Deleting it breaks the auth suite. Re-run with --i-mean-it if you mean it." >&2
-        exit 1
+    if [ "$USERNAME" = "$p" ]; then
+        echo "⚠️   '$USERNAME' is a protected Playwright seed account." >&2
+        echo "    Deleting it breaks the auth suite. Re-seed afterwards with tests/fixtures/grav-seeds/playwright/apply.sh." >&2
     fi
 done
 
@@ -112,6 +102,10 @@ fi
 . "$ENV_FILE"
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$SCRIPT_DIR/lib/ssh-auth.sh"
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_remote_bin — prod's shell PHP is the system default (8.4),
+# not the version its domain is served with (8.5). See that file.
+. "$SCRIPT_DIR/lib/php-parity.sh"
 
 export TIER
 if [ "$TIER" = "prod" ]; then
@@ -135,6 +129,7 @@ fi
 export DEPLOY_PASS
 DEPLOY_PASS="$(bv_resolve_ssh_password)"
 
+PHP_BIN="$(bv_php_remote_bin "${TIER:-${ENV:-}}" "$PROJECT_DIR")"
 TIER_DIR="$(bv_tier_root "$PATH_SSH" "$TIER")"
 ACCT="$TIER_DIR/user/accounts/$USERNAME.yaml"
 FLEX_INDEX="$TIER_DIR/user/data/flex/indexes/accounts.yaml"
@@ -192,7 +187,7 @@ fi
 # file logs the user out of every remembered browser (their "husk mig"
 # cookie can no longer re-authenticate a deleted account).
 if ! bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-        "rm -f \"$ACCT\" \"$FLEX_INDEX\" \"$RM_TOKENS\" && cd \"$TIER_DIR\" && php bin/grav clearcache"; then
+        "rm -f \"$ACCT\" \"$FLEX_INDEX\" \"$RM_TOKENS\" && cd \"$TIER_DIR\" && $PHP_BIN bin/grav clearcache"; then
     echo "✗ delete failed (the account file may be partly removed — re-run, or check the tier)." >&2
     exit 1
 fi

@@ -40,6 +40,9 @@ trap 'rm -rf "$SB"' EXIT
 mkdir -p "$SB/proj/deploy/lib" "$SB/bin" "$SB/remotebin"
 cp "$PROJECT_ROOT/deploy/reset-data.sh" "$SB/proj/deploy/"
 cp "$PROJECT_ROOT/deploy/lib/ssh-auth.sh" "$SB/proj/deploy/lib/"
+# php-parity.sh is sourced by the scripts under test (bv_php_remote_bin);
+# without it the sandboxed copy dies at source time.
+cp "$PROJECT_ROOT/deploy/lib/php-parity.sh" "$SB/proj/deploy/lib/"
 
 cat > "$SB/proj/.env.deploy" <<EOF
 DEPLOY_HOST=fakehost
@@ -96,9 +99,9 @@ fi
 
 out="$(run prod --yes)" || true
 if printf '%s' "$out" | grep -q -- '--i-mean-it'; then
-    check "prod without --i-mean-it is refused" ok
+    check "prod is not gated behind an --i-mean-it ceremony" bad
 else
-    check "prod without --i-mean-it is refused" bad
+    check "prod is not gated behind an --i-mean-it ceremony" ok
 fi
 
 # ─────────────────────────────────────────────────────────────────────
@@ -171,7 +174,7 @@ mkdir -p "$PDATA" "$SB/remote-prod"
 printf 'x: 1\n' > "$PDATA/events.yaml"
 
 rm -f "$SB/cache-cleared"
-out="$(run prod --yes --i-mean-it)" || true
+out="$(run prod --yes)" || true
 if printf '%s' "$out" | grep -q 'Deleted 1 flex-objects data file(s) from prod' \
    && [ ! -f "$PDATA/events.yaml" ] \
    && [ -f "$SB/cache-cleared" ]; then

@@ -42,6 +42,9 @@ trap 'rm -rf "$SB"' EXIT
 mkdir -p "$SB/proj/deploy/lib" "$SB/bin" "$SB/remotebin"
 cp "$PROJECT_ROOT/deploy/reset-password.sh" "$SB/proj/deploy/"
 cp "$PROJECT_ROOT/deploy/lib/ssh-auth.sh" "$SB/proj/deploy/lib/"
+# php-parity.sh is sourced by the scripts under test (bv_php_remote_bin);
+# without it the sandboxed copy dies at source time.
+cp "$PROJECT_ROOT/deploy/lib/php-parity.sh" "$SB/proj/deploy/lib/"
 cp "$PROJECT_ROOT/deploy/lib/user-resolve.sh" "$SB/proj/deploy/lib/"
 cp "$PROJECT_ROOT/deploy/lib/account-password.php" "$SB/proj/deploy/lib/"
 
@@ -115,9 +118,9 @@ fi
 
 out="$(run prod anders --yes --generate)" || true
 if printf '%s' "$out" | grep -q -- '--i-mean-it'; then
-    check "prod without --i-mean-it is refused" ok
+    check "prod is not gated behind an --i-mean-it ceremony" bad
 else
-    check "prod without --i-mean-it is refused" bad
+    check "prod is not gated behind an --i-mean-it ceremony" ok
 fi
 
 out="$(run dev pw-test-user --yes --generate)" || true

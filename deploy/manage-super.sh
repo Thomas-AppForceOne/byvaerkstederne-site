@@ -38,13 +38,11 @@
 # Options:
 #   --yes, -y       Skip the confirmation prompt.
 #   --dry-run, -n   Resolve and validate everything; change nothing.
-#   --i-mean-it     Required for tier=prod and for the protected Playwright
 #                   seed accounts (pw-test-*).
 #   --help, -h      Show this help.
 #
 # REVOKE REFUSES THE LAST SUPER. A tier with zero supers cannot notify anyone
 # about access requests and cannot be administered from the panel; pass
-# --i-mean-it if that is genuinely what you want.
 
 set -euo pipefail
 
@@ -77,7 +75,6 @@ tier_host() {
 
 YES=0
 DRY_RUN=0
-I_MEAN_IT=0
 ACTION=""
 POSITIONAL=()
 
@@ -85,7 +82,6 @@ for arg in "$@"; do
     case "$arg" in
         --yes|-y) YES=1 ;;
         --dry-run|-n) DRY_RUN=1 ;;
-        --i-mean-it) I_MEAN_IT=1 ;;
         --help|-h) usage; exit 0 ;;
         list|grant|revoke)
             if [ -z "$ACTION" ]; then ACTION="$arg"; else POSITIONAL+=("$arg"); fi
@@ -111,7 +107,7 @@ if [ "$ACTION" != "list" ]; then
     USERID="${POSITIONAL[1]:-}"
     if [ -z "$USERID" ]; then
         echo "❌  $ACTION: missing user (a username, or an email to resolve)" >&2
-        echo "    Usage:   $0 $ACTION <dev|test|staging|prod> <username|email> [--yes] [--dry-run] [--i-mean-it]" >&2
+        echo "    Usage:   $0 $ACTION <dev|test|staging|prod> <username|email> [--yes] [--dry-run]" >&2
         echo "    Example: $0 grant dev test+admin@hackersbychoice.dk" >&2
         exit 1
     fi
@@ -123,10 +119,6 @@ if [ "$ACTION" != "list" ]; then
             exit 1
             ;;
     esac
-    if [ "$TIER" = "prod" ] && [ "$I_MEAN_IT" != "1" ]; then
-        echo "❌  Refusing to change super-admin rights on prod without --i-mean-it." >&2
-        exit 1
-    fi
     if [ ! -f "$SUPER_PHP" ]; then
         echo "❌  Missing $SUPER_PHP (repo checkout incomplete?)." >&2
         exit 1
@@ -143,6 +135,11 @@ fi
 . "$ENV_FILE"
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$SCRIPT_DIR/lib/ssh-auth.sh"
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_remote_bin — prod's shell PHP is the system default (8.4),
+# not the version its domain is served with (8.5).
+. "$SCRIPT_DIR/lib/php-parity.sh"
+PHP_BIN="$(bv_php_remote_bin "${TIER:-${ENV:-}}" "$PROJECT_DIR")"
 # shellcheck source=deploy/lib/user-resolve.sh
 . "$SCRIPT_DIR/lib/user-resolve.sh"
 
@@ -208,11 +205,8 @@ fi
 
 case "$USERNAME" in
     "$PROTECTED_USER_PREFIX"*)
-        if [ "$I_MEAN_IT" != "1" ]; then
-            echo "❌  '$USERNAME' is a protected Playwright seed account." >&2
-            echo "    Changing its rights breaks the auth suites. Re-run with --i-mean-it if you mean it." >&2
-            exit 1
-        fi
+        echo "⚠️   '$USERNAME' is a protected Playwright seed account." >&2
+        echo "    Changing its rights breaks the auth suites. Re-seed afterwards with tests/fixtures/grav-seeds/playwright/apply.sh." >&2
         ;;
 esac
 
@@ -247,13 +241,13 @@ if [ "$ACTION" = "revoke" ]; then
     fi
     # `grep -v` exits 1 when it filters everything away — which is exactly the
     # case this guard exists for. Without the `|| true` the whole script would
-    # die under `set -e` right here and the refusal would never print.
+    # die under `set -e` right here and the warning would never print.
     remaining="$(printf '%s\n' "$supers" | sed '/^$/d' | { grep -vxF "$USERNAME" || true; } | wc -l | tr -d ' ')"
-    if [ "$remaining" = "0" ] && [ "$I_MEAN_IT" != "1" ]; then
-        echo "❌  '$USERNAME' is the LAST super-admin on $TIER." >&2
+    if [ "$remaining" = "0" ]; then
+        echo "⚠️   '$USERNAME' is the LAST super-admin on $TIER." >&2
         echo "    Revoking leaves the tier with nobody to notify about access requests" >&2
-        echo "    and nobody who can administer it. Re-run with --i-mean-it if you mean it." >&2
-        exit 1
+        echo "    and nobody who can administer it. Restore with:" >&2
+        echo "        make grant-super tier=$TIER user=<username>" >&2
     fi
 fi
 
@@ -281,7 +275,7 @@ fi
 ACTOR="$(printf '%s@%s' "${USER:-unknown}" "$(hostname -s 2>/dev/null || echo host)" | tr -cd 'A-Za-z0-9._@-' | cut -c1-64)"
 
 result="$(bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-    "cd \"$TIER_DIR\" && php -- \"$ACCT\" \"$ACTION\" \"$ACTOR\"" \
+    "cd \"$TIER_DIR\" && $PHP_BIN -- \"$ACCT\" \"$ACTION\" \"$ACTOR\"" \
     < "$SUPER_PHP" 2>&1 || echo __PHPFAIL__)"
 
 case "$result" in
@@ -309,9 +303,9 @@ esac
 # The Flex accounts index caches the account list; a stale index serves the
 # pre-change access tree until it rebuilds.
 if ! bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-        "rm -f \"$FLEX_INDEX\" && cd \"$TIER_DIR\" && php bin/grav clearcache" >/dev/null < /dev/null; then
+        "rm -f \"$FLEX_INDEX\" && cd \"$TIER_DIR\" && $PHP_BIN bin/grav clearcache" >/dev/null < /dev/null; then
     echo "⚠  Rights changed, but clearing the tier cache failed. Clear it manually:" >&2
-    echo "      cd $TIER_DIR && php bin/grav clearcache" >&2
+    echo "      cd $TIER_DIR && $PHP_BIN bin/grav clearcache" >&2
 fi
 
 # ── Alert the tier's supers that someone was promoted ────────────────
@@ -321,7 +315,7 @@ fi
 if [ "$ACTION" = "grant" ]; then
     ENV_HOST="$(tier_host "$TIER")"
     if alert="$(bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-            "cd \"$TIER_DIR\" && php bin/plugin account-manager notify-super-granted --env \"$ENV_HOST\" --user \"$USERNAME\" --actor \"$ACTOR\" --source deploy/manage-super.sh" \
+            "cd \"$TIER_DIR\" && $PHP_BIN bin/plugin account-manager notify-super-granted --env \"$ENV_HOST\" --user \"$USERNAME\" --actor \"$ACTOR\" --source deploy/manage-super.sh" \
             2>&1 < /dev/null)"; then
         echo "  alerted: every super-admin on $TIER has been mailed about this change"
     else

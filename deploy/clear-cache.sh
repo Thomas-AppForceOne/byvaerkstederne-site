@@ -48,6 +48,10 @@ ENV_FILE="$PROJECT_DIR/.env.deploy"
 . "$ENV_FILE"
 # shellcheck source=deploy/lib/ssh-auth.sh
 . "$SCRIPT_DIR/lib/ssh-auth.sh"
+# shellcheck source=deploy/lib/php-parity.sh
+# Provides bv_php_remote_bin — prod's shell PHP is the system default (8.4),
+# not the version its domain is served with (8.5). See that file.
+. "$SCRIPT_DIR/lib/php-parity.sh"
 
 export TIER
 if [ "$TIER" = "prod" ]; then
@@ -70,13 +74,14 @@ if ! DEPLOY_PASS="$(bv_resolve_ssh_password)"; then
     exit 1
 fi
 
+PHP_BIN="$(bv_php_remote_bin "${TIER:-${ENV:-}}" "$PROJECT_DIR")"
 TIER_DIR="$(bv_tier_root "$PATH_SSH" "$TIER")"
 
 echo "→ clear-cache: $TIER"
 echo "  target: $USER_SSH@$HOST_SSH:$TIER_DIR"
 
 if ! bv_ssh_cmd -p "$PORT_SSH" "$USER_SSH@$HOST_SSH" \
-        "cd '$TIER_DIR' && php bin/grav clearcache"; then
+        "cd '$TIER_DIR' && $PHP_BIN bin/grav clearcache"; then
     echo "✗ cache clear failed." >&2
     bv_ssh_diagnose "$USER_SSH" "$HOST_SSH" "$PORT_SSH"
     exit 1
