@@ -436,7 +436,36 @@ if [ "$ENV_KIND" = "grav" ]; then
         rm -rf "$STAGING_DIR/grav-admin"
     fi
 
-    rm -rf "$STAGING_DIR/user/pages" "$STAGING_DIR/user/themes/quark" 2>/dev/null
+    # The payload's user/ tree is DISCARDED WHOLESALE. This repo is the only
+    # source of user/ — plugins, themes, config, pages, the lot.
+    #
+    # WHY WHOLESALE, AND NOT A LIST
+    # -----------------------------
+    # This used to remove two named paths: user/pages and user/themes/quark.
+    # Everything else the zip carried survived the overlay rsync, which does
+    # not --delete. So each tier quietly accumulated whatever plugins the
+    # Grav release happened to bundle, while the local container never had
+    # them: the Dockerfile lets this repo's user/ shadow the payload's, so
+    # locally they simply do not exist.
+    #
+    # That divergence broke test on 2026-08-24. grav-admin-v2.0.21.zip
+    # bundles admin2, api, github-markdown-alerts and shortcode-core; none
+    # are in this repo. github-markdown-alerts hooks onMarkdownInitialized,
+    # so every markdown-rendered page on the tier returned 500 while the
+    # homepage — modular, no markdown body — answered 200. 258 local tests
+    # passed throughout, because locally the plugin is not there to fail.
+    #
+    # The named list had already rotted besides: 2.0 ships themes/quark2,
+    # not themes/quark, so that rule stopped matching the moment the major
+    # changed and nobody noticed.
+    #
+    # Wholesale removal makes the tier's user/ identical to the local
+    # container's by construction, which is the property we actually want —
+    # and it cannot rot when the next Grav release bundles something new.
+    #
+    # Safe because this repo ships every plugin the site needs: the local
+    # container runs Grav 2.0.21 on exactly this set, /admin included.
+    rm -rf "$STAGING_DIR/user" 2>/dev/null
 
     # Staging-assembly rsync — the surface where dependency dev/test/
     # build/doc bloat would enter the bundle. The reduced selection
@@ -499,6 +528,39 @@ cat > "$STAGING_DIR/version.json" << JSON
 JSON
 
 echo "  ✓ Package built ($(du -sh "$STAGING_DIR" | cut -f1))"
+
+# The bundle's plugin set must be EXACTLY this repo's.
+#
+# The payload zip bundles plugins of its own, and the overlay rsync does not
+# --delete, so anything the zip carried used to survive into the release. The
+# local container never had them — the Dockerfile lets this repo's user/
+# shadow the payload's — so a tier ran plugins no test had ever loaded. On
+# 2026-08-24 one of them (github-markdown-alerts, from grav-admin-v2.0.21)
+# hooked onMarkdownInitialized and returned 500 on every markdown-rendered
+# page of the test tier, while 258 local tests stayed green.
+#
+# Discarding the payload's user/ is the fix; this is the assertion that says
+# so out loud, before anything is uploaded. A named-exclusions list rots —
+# the previous one still named themes/quark after 2.0 started shipping
+# quark2 — so compare the SETS instead and let any future divergence fail
+# here rather than on a tier.
+_repo_plugins="$(ls -1 "$PROJECT_DIR/config/www/user/plugins" 2>/dev/null | sort)"
+_bundle_plugins="$(ls -1 "$STAGING_DIR/user/plugins" 2>/dev/null | sort)"
+if [ "$_repo_plugins" != "$_bundle_plugins" ]; then
+    echo "❌  The bundle's plugin set does not match this repo's." >&2
+    echo "" >&2
+    echo "    Only in the bundle (would ship untested to the tier):" >&2
+    comm -13 <(printf '%s\n' "$_repo_plugins") <(printf '%s\n' "$_bundle_plugins") \
+        | sed 's/^/      + /' >&2
+    echo "    Missing from the bundle:" >&2
+    comm -23 <(printf '%s\n' "$_repo_plugins") <(printf '%s\n' "$_bundle_plugins") \
+        | sed 's/^/      - /' >&2
+    echo "" >&2
+    echo "    A plugin the local container does not have is a plugin no test has" >&2
+    echo "    ever loaded. Refusing to deploy it." >&2
+    exit 1
+fi
+echo "  ✓ Plugin set matches the repo ($(printf '%s\n' "$_repo_plugins" | grep -c .) plugins)"
 echo "  ✓ Version: ${VERSION} · build ${BUILD}  (${SEMVER}, ${GIT_DESCRIBE})"
 
 # Refuse to deploy a bundle that still contains git-lfs pointer files —
