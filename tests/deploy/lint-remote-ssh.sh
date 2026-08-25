@@ -620,6 +620,13 @@ if grep -qE "rm -f \"\\\$T/\\\$N\"" "$LIB_AR"; then
 else
     check "the flush endpoint must be deleted again" fail
 fi
+# A single fetch attempt turns a transient into a silently skipped flush —
+# which happened on the staging deploy of 2026-08-24.
+if awk '/^bv_flush_opcode_cache\(\)/,/^}/' "$LIB_AR" | grep -q 'for attempt in'; then
+    check "the flush fetch is retried, not attempted once" ok
+else
+    check "the flush fetch must be retried, not attempted once" fail
+fi
 if grep -q 'opcache-flush-\$(od -An' "$LIB_AR"; then
     check "the flush endpoint name is randomised per swap" ok
 else
