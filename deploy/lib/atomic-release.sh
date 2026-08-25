@@ -683,7 +683,19 @@ echo var_export($r, true);' | base64 | tr -d '\n')"
         return 0
     fi
 
-    resp="$(curl -fsS -m 30 "${base_url%/}/$name" 2>/dev/null || true)"
+    # Retry: the file is written and fetched within the same second, right
+    # after the docroot moved. On the staging deploy of 2026-08-24 the fetch
+    # came back empty while the very same write-then-fetch succeeded by hand
+    # moments later — a transient, not a block (the tier serves .php from the
+    # docroot fine). A single attempt turns that into a silently skipped
+    # flush, which is the one thing this function exists to prevent.
+    local attempt
+    resp=""
+    for attempt in 1 2 3; do
+        resp="$(curl -fsS -m 30 "${base_url%/}/$name" 2>/dev/null || true)"
+        [ -n "$resp" ] && break
+        [ "$attempt" -lt 3 ] && sleep 2
+    done
     bv_remote_run 'rm -f "$T/$N"' T="$docroot" N="$name" >/dev/null 2>&1 || true
 
     case "$resp" in
