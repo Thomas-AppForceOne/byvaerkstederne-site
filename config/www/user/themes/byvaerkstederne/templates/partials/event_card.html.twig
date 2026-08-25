@@ -54,7 +54,7 @@
    (page-header events, atelier sessions) get null → today's link behaviour,
    untouched. #}
 {% set _rsvp_key = event.key is defined ? event.key : null %}
-{% set _rsvp_on = feature_enabled('event_rsvp') and _rsvp_key %}
+{% set _rsvp_on = _rsvp_key %}
 {% set _info = _rsvp_on ? event_signup_info(_rsvp_key) : null %}
 
 {# Inline card expansion (§4): clicking anywhere on the card that isn't the

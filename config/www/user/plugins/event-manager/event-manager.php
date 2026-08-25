@@ -49,8 +49,6 @@ use Grav\Plugin\EventManager\EventValidator;
 use Grav\Plugin\EventManager\FormDataProvider;
 use Grav\Plugin\EventManager\ImageStore;
 use Grav\Plugin\EventManager\SignupRepository;
-use Grav\Plugin\FeatureFlags\FeatureFlag;
-use Grav\Plugin\FeatureFlags\FlagStoreInterface;
 
 class EventManagerPlugin extends Plugin
 {
@@ -313,10 +311,6 @@ class EventManagerPlugin extends Plugin
         //    as well; that flag graduated to every tier and was retired, so
         //    they now rest on the authentication and capability checks below
         //    — which were always the real boundary.
-        if (in_array($action, ['rsvp', 'upload'], true) && !$this->rsvpFeatureEnabled()) {
-            $this->sendFlagDisabled404();
-        }
-
         // 2. Method — POST, matched above.
 
         // 3. Authentication. The login plugin's access gate (priority 10)
@@ -849,7 +843,7 @@ class EventManagerPlugin extends Plugin
      */
     private function signupInfo(string $key): ?array
     {
-        if ($key === '' || !$this->rsvpFeatureEnabled()) {
+        if ($key === '') {
             return null;
         }
         $event = $this->repository()->findArray($key);
@@ -896,7 +890,7 @@ class EventManagerPlugin extends Plugin
      */
     private function attendeeList(string $key): ?array
     {
-        if ($key === '' || !$this->rsvpFeatureEnabled()) {
+        if ($key === '') {
             return null;
         }
         $event = $this->repository()->findArray($key);
@@ -1035,24 +1029,6 @@ class EventManagerPlugin extends Plugin
         }
     }
 
-    /**
-     * RSVP gate (§3/§6). Container read of the FlagStore singleton — profile
-     * resolution stays identical to the rest of the app. Fails open only if
-     * the feature-flags plugin is missing/mis-registered (same posture as
-     * roadmap/bug-report).
-     *
-     * Used to require event_management as well; that flag graduated to every
-     * tier and was retired, so event_rsvp is the whole gate now.
-     */
-    private function rsvpFeatureEnabled(): bool
-    {
-        $store = $this->grav['feature_flags'] ?? null;
-        if (!$store instanceof FlagStoreInterface) {
-            return true;
-        }
-        return $store->isEnabled(FeatureFlag::EventRsvp);
-    }
-
     /** The signup store, bound to user/data/flex-objects/event-signups.yaml. */
     private function signupRepository(): SignupRepository
     {
@@ -1099,9 +1075,6 @@ class EventManagerPlugin extends Plugin
      */
     private function serveEventImage(string $key, string $file): void
     {
-        if (!$this->rsvpFeatureEnabled()) {
-            return; // natural themed 404 — no existence leak
-        }
         $store = $this->imageStore();
         $path = $store->resolvePath($key, $file);
         if ($path === null) {

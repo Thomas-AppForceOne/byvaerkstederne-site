@@ -21,8 +21,6 @@
 enabled:
   # Member self-service (/konto) — on for super sign-off before the
   # staging/prod rollout.
-  account_self_service: "true"
   # Event RSVP — newly shipped, testing on test tier. The calendar and
   # organizer event CRUD used to sit alongside it here; both graduated to
   # every tier and their flags were retired, so they are now unconditional.
-  event_rsvp: "true"

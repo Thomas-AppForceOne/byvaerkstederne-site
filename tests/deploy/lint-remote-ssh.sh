@@ -674,6 +674,36 @@ else
     check "the plugin-set check must run before the upload" fail
 fi
 
+# 20. staging and prod must ship no enabled feature flags.
+#
+#     A feature reaches the public by having its flag RETIRED — enum case,
+#     gates and profile lines all removed — not by flipping it to "true" on a
+#     tier. Flipping instead of retiring is how the catalogue grew to 20 flags
+#     with 19 off in production: each one a feature built and invisible, plus
+#     a branch of dead code nobody exercises. It also risks enabling a
+#     dependent whose parent is still off, which ships a feature that is live
+#     and unreachable (FeatureFlagCatalogueTest covers that half).
+DEPLOY_SH="$DEPLOY_DIR/deploy.sh"
+if grep -q 'must not enable any feature flag' "$DEPLOY_SH"; then
+    check "deploy.sh refuses an enabled flag on staging/prod" ok
+else
+    check "deploy.sh must refuse an enabled flag on staging/prod" fail
+fi
+# Scoped to the production-line tiers: dev and test use flags for rollout and
+# must stay free to enable them.
+if awk '/must not enable any feature flag/{found=1} /case "\$ENV" in/{c=NR} END{exit !found}' "$DEPLOY_SH" \
+   && grep -B14 'must not enable any feature flag' "$DEPLOY_SH" | grep -qE '^\s*staging\|prod\)'; then
+    check "the flag refusal is scoped to staging and prod" ok
+else
+    check "the flag refusal must be scoped to staging and prod" fail
+fi
+# No override: the correct action is always to retire the flag.
+if grep -A22 'must not enable any feature flag' "$DEPLOY_SH" | grep -qiE 'ALLOW_.*FLAG|override in effect'; then
+    check "the flag refusal must not offer an override" fail
+else
+    check "the flag refusal offers no override (retire the flag instead)" ok
+fi
+
 echo ""
 echo "─────────────────────────────────────"
 echo "  Pass: $PASS    Fail: $FAIL"

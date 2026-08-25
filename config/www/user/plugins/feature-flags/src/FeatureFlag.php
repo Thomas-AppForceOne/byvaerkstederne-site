@@ -35,19 +35,11 @@ enum FeatureFlag: string
     // These cover CTAs whose destination page/backend has not yet been built
     // (buttons currently pointing at "#"), plus the privacy policy page.
     case PrivacyPolicy = 'privacy_policy';
-    case EventRsvp = 'event_rsvp';
     case WorkshopProjectBlueprints = 'workshop_project_blueprints';
     case WorkshopWorkdaySignup = 'workshop_workday_signup';
     case GearDonation = 'gear_donation';
     case SocialMediaLinks = 'social_media_links';
     case MakerspaceMeetingLink = 'makerspace_meeting_link';
-
-    // --- Account self-service (account_self_service_specification.md) ---
-    // Gates the header account dropdown, the /konto page, and every
-    // mutating endpoint in the account-manager plugin. The reinstatement
-    // login hook and the scheduled purge job deliberately run unflagged
-    // (see the account-manager plugin README).
-    case AccountSelfService = 'account_self_service';
 
     /**
      * All rollout-catalogue flag string values, in declaration order. Used by
@@ -75,13 +67,11 @@ enum FeatureFlag: string
             'contact_page',
             'statutes_page',
             'privacy_policy',
-            'event_rsvp',
             'workshop_project_blueprints',
             'workshop_workday_signup',
             'gear_donation',
             'social_media_links',
             'makerspace_meeting_link',
-            'account_self_service',
         ];
     }
 }
