@@ -55,7 +55,13 @@ const PROFILES = [
     label: 'production-shaped (all flags off)',
     // Prod and staging both resolve an all-off profile. This fixture host
     // is the committed stand-in — see env/flags-off.invalid/.
-    rsvp: false,
+    //
+    // RSVP is true here even though this is the ALL-OFF profile: event_rsvp
+    // was retired once the feature shipped to every tier, so signup is no
+    // longer flag-gated and renders on every profile. The parity this file
+    // exists to protect is unchanged — a card must offer exactly one usable
+    // action, and never a link to /begivenheder/<key>, which has no page.
+    rsvp: true,
   },
   {
     host: 'dev.hackersbychoice.dk',

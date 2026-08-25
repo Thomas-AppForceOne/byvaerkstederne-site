@@ -52,13 +52,42 @@ final class FeatureFlagCatalogueTest extends TestCase
         'contact_page',
         'statutes_page',
         'privacy_policy',
-        'event_rsvp',
         'workshop_project_blueprints',
         'workshop_workday_signup',
         'gear_donation',
         'social_media_links',
         'makerspace_meeting_link',
-        'account_self_service',
+    ];
+
+    /**
+     * Flags whose surface lives INSIDE another flag's gate.
+     *
+     * Turning a dependent on while its parent is off produces the worst kind
+     * of half-release: the feature is live and unreachable. `roadmap` is the
+     * clearest case — /roadmap renders, but ADR-001 makes the footer the only
+     * permitted entry point, and the whole footer column sits behind
+     * `community_footer_column`. Nobody can navigate to it.
+     *
+     * Two mechanisms produce this, and both are represented here:
+     *
+     *   Template nesting — footer.html.twig gates the community column, and
+     *   the three community flags each gate a link inside it.
+     *
+     *   Page hierarchy — pages/08.presse/ carries `feature: press_page`, and
+     *   its modules carry their own flags. With the parent page gated off the
+     *   whole route 404s, so the modules can never render whatever they say.
+     *
+     * Derived by walking the Twig `{% if feature_enabled(...) %}` nesting and
+     * the `feature:` frontmatter tree. Re-derive when either moves.
+     *
+     * @var array<string, string> dependent => parent
+     */
+    private const DEPENDENCIES = [
+        'roadmap'               => 'community_footer_column',
+        'feature_suggestion'    => 'community_footer_column',
+        'bug_report'            => 'community_footer_column',
+        'press_assets_download' => 'press_page',
+        'press_stats'           => 'press_page',
     ];
 
     /** Absolute path to `config/www/user/env/`. */
@@ -499,5 +528,57 @@ final class FeatureFlagCatalogueTest extends TestCase
             $logger->warnings(),
             'Missing features.yaml is not a misconfiguration; no warning.'
         );
+    }
+
+    // -------- Dependency integrity --------
+
+    /**
+     * A dependent flag must never be on while its parent is off — in ANY
+     * profile, including the local all-on file and the fixture hosts.
+     *
+     * This cannot be caught on dev: that profile is all-on by construction,
+     * so every dependency is trivially satisfied there. It only bites on a
+     * PARTIAL profile, which is exactly what test, staging and prod are.
+     */
+    public function testNoProfileEnablesADependentWithoutItsParent(): void
+    {
+        $profiles = [
+            'dev.hackersbychoice.dk',
+            'test.hackersbychoice.dk',
+            'staging.hackersbychoice.dk',
+            'www.byvaerkstederne.dk',
+        ];
+
+        foreach ($profiles as $host) {
+            $enabled = self::loadProfileYaml($host);
+            if (!is_array($enabled)) {
+                continue; // no profile on this host — fail-closed, nothing on
+            }
+            foreach (self::DEPENDENCIES as $dependent => $parent) {
+                if (($enabled[$dependent] ?? 'false') !== 'true') {
+                    continue;
+                }
+                $this->assertSame(
+                    'true',
+                    $enabled[$parent] ?? 'false',
+                    "{$host}: `{$dependent}` is on but its parent `{$parent}` is off. "
+                    . "The feature would be live and unreachable — turn the parent on, "
+                    . "or turn the dependent off."
+                );
+            }
+        }
+    }
+
+    /** Every dependency must name flags that actually exist. */
+    public function testDependencyMapNamesOnlyRealFlags(): void
+    {
+        $declared = array_map(
+            static fn (FeatureFlag $c): string => $c->value,
+            FeatureFlag::cases()
+        );
+        foreach (self::DEPENDENCIES as $dependent => $parent) {
+            $this->assertContains($dependent, $declared, "Dependency map names unknown flag `{$dependent}`.");
+            $this->assertContains($parent, $declared, "Dependency map names unknown parent `{$parent}`.");
+        }
     }
 }

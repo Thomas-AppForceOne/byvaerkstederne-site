@@ -110,7 +110,7 @@
                    Columns: tidspunkt · navn · email — no mode chip (the event's
                    own mode already says whether these are tilmeldte or
                    interesserede). #}
-                {% set _attendees = feature_enabled('event_rsvp') ? event_attendees(ev.key) : null %}
+                {% set _attendees = event_attendees(ev.key) %}
                 {% if _attendees is not null %}
                 {% set _label = ev.button_text == 'Interesseret' ? 'Interesserede' : 'Tilmeldte' %}
                 <details class="bv-event-dashboard__attendees">
