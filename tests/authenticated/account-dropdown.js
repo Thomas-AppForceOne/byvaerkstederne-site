@@ -20,23 +20,12 @@
 
 const { test, expect } = require('@playwright/test');
 const { execSync } = require('child_process');
-const fs = require('fs');
 const path = require('path');
 const { login, hasUserPassword } = require('../helpers/auth');
 const { discoverGravEnv } = require(path.join(__dirname, '..', '..', 'scripts', 'discover-grav-port.js'));
 
 const WORKTREE = path.resolve(__dirname, '..', '..');
-const BASE_FEATURES_YAML = path.join(
-  WORKTREE, 'config', 'www', 'user', 'config', 'features.yaml',
-);
 
-function clearGravCache() {
-  const { container } = discoverGravEnv(WORKTREE);
-  execSync(`docker exec -u abc -w /app/www/public ${container} bin/grav clearcache`, {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: 30_000,
-  });
-}
 
 test.describe('account self-service: header dropdown', () => {
   test.skip(!hasUserPassword, 'TEST_PASSWORD not set — anonymous-only mode');
@@ -140,40 +129,4 @@ test.describe('account self-service: header dropdown', () => {
     expect(await page.locator('#bv-account-menu').count()).toBe(0);
   });
 
-  test.describe('flag off (base-profile cache flip)', () => {
-    let originalYaml = '';
-
-    test.beforeAll(() => {
-      originalYaml = fs.readFileSync(BASE_FEATURES_YAML, 'utf8');
-      expect(originalYaml).toContain('account_self_service: "true"');
-      fs.writeFileSync(
-        BASE_FEATURES_YAML,
-        originalYaml.replace(/(\n\s*account_self_service:\s*)"true"/, '$1"false"'),
-        'utf8',
-      );
-      clearGravCache();
-    });
-
-    test.afterAll(() => {
-      // Belt-and-braces restore — the file must never stay flipped.
-      try {
-        fs.writeFileSync(BASE_FEATURES_YAML, originalYaml, 'utf8');
-        clearGravCache();
-      } catch (_) { /* best-effort */ }
-    });
-
-    test('chip renders as a dead span; no dropdown, no mobile entries; Log ud intact', async ({ page }) => {
-      await login(page);
-      await page.goto('/');
-
-      await expect(page.locator('span.bv-nav__user')).toBeVisible();
-      expect(await page.locator('.bv-nav__user--menu').count()).toBe(0);
-      expect(await page.locator('#bv-account-menu').count()).toBe(0);
-      await expect(page.locator('.bv-nav__links a', { hasText: 'Log ud' })).toBeVisible();
-
-      await page.setViewportSize({ width: 390, height: 844 });
-      await page.locator('.bv-nav__hamburger').click();
-      expect(await page.locator('.bv-mobile-menu__link--account').count()).toBe(0);
-    });
-  });
 });

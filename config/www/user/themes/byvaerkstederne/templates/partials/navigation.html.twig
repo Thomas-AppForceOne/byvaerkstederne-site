@@ -31,7 +31,6 @@
         {% endif %}
 
         {% if grav.user.authenticated and grav.user.authorized %}
-            {% if feature_enabled('account_self_service') %}
                 {# The user chip is an accessible menu button (account_self_service
                    spec §5): opens on click, closes on Escape/outside/focus-out,
                    keyboard-navigable — driven by the bvAccountMenu module in
@@ -54,12 +53,6 @@
                         <li role="none"><a role="menuitem" class="bv-account-menu__item bv-account-menu__item--danger" href="/konto#delete">Slet konto</a></li>
                     </ul>
                 </div>
-            {% else %}
-                <span class="bv-nav__user">
-                    <span class="material-symbols-outlined" style="font-size: 1.25rem; vertical-align: middle;">person</span>
-                    {{ grav.user.fullname|default(grav.user.username) }}
-                </span>
-            {% endif %}
             <a href="{{ logout_url|e }}" class="bv-nav__link">Log ud</a>
         {% else %}
             <a href="#" class="bv-nav__link" onclick="bvOpenOverlay('bv-login-overlay'); return false;">Log ind</a>
@@ -100,7 +93,6 @@
                 <span class="material-symbols-outlined" style="vertical-align: middle; margin-right: 0.5rem;">person</span>
                 {{ grav.user.fullname|default(grav.user.username) }}
             </span>
-            {% if feature_enabled('account_self_service') %}
                 {# Mobile variant of the account menu (spec §5): the overlay is
                    already a full-screen menu, so the entries render inline
                    under the user name — no nested popup. #}
@@ -110,7 +102,6 @@
                 <a href="/konto#name" class="bv-mobile-menu__link bv-mobile-menu__link--account">Ret navn</a>
                 <a href="/konto#roles" class="bv-mobile-menu__link bv-mobile-menu__link--account">Rettigheder</a>
                 <a href="/konto#delete" class="bv-mobile-menu__link bv-mobile-menu__link--account">Slet konto</a>
-            {% endif %}
             <a href="{{ logout_url|e }}" class="bv-mobile-menu__link">Log ud</a>
         {% else %}
             <a href="#" class="bv-mobile-menu__link" onclick="document.body.classList.remove('menu-open'); bvOpenOverlay('bv-login-overlay'); return false;">Log ind</a>

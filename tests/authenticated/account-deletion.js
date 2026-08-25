@@ -31,7 +31,6 @@ const {
   removeDisposableAccount,
   readAccountYaml,
   setDeletionMarker,
-  withBaseFlagOff,
   loginAs,
   rememberMeFileExists,
 } = require('../helpers/self-service');
@@ -129,13 +128,13 @@ test.describe('account self-service: deletion request + reinstatement', () => {
     }
   });
 
-  test('reinstatement still works with the flag OFF (unflagged by design)', async ({ page }) => {
-    // Load-bearing test for the design decision: gating the login hook on
-    // the flag would strand pending-deletion members while the purge still
-    // deletes them. A future "cleanup" that adds the flag check must fail
-    // here.
+  test('logging in during the grace window reinstates the account', async ({ page }) => {
+    // The login hook must clear a pending deletion regardless of anything
+    // else, or a member who changes their mind is deleted anyway while the
+    // purge job keeps running. This used to also assert the behaviour with
+    // account_self_service forced off; that flag was retired once the
+    // feature shipped to every tier, so there is no longer an off state.
     const acct = createDisposableAccount({ tag: 'df' });
-    const restoreFlag = withBaseFlagOff('account_self_service');
     try {
       // Marker inside the window (as if requested while the flag was on).
       setDeletionMarker(acct.username, new Date().toISOString().replace(/\.\d+Z$/, 'Z'));
@@ -146,7 +145,6 @@ test.describe('account self-service: deletion request + reinstatement', () => {
       ).toBeVisible();
       expect(readAccountYaml(acct.username)).not.toContain('deletion_requested_at');
     } finally {
-      restoreFlag();
       removeDisposableAccount(acct.username);
     }
   });

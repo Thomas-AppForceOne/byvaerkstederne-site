@@ -561,6 +561,47 @@ if [ "$_repo_plugins" != "$_bundle_plugins" ]; then
     exit 1
 fi
 echo "  ✓ Plugin set matches the repo ($(printf '%s\n' "$_repo_plugins" | grep -c .) plugins)"
+
+# ── staging and prod ship NO enabled flags ────────────────────────────
+#
+# A feature reaches the public by having its flag RETIRED, not by having it
+# flipped to "true" on a tier. The flag is a rollout tool for dev and test;
+# once a feature is ready for everyone, the flag and its gates come out of
+# the code and the feature is simply on. That is what happened to
+# account_self_service and event_rsvp, and to the seven flags before them.
+#
+# Without this rule the catalogue only grows: 20 flags accumulated, 19 of
+# them off in production, each one a feature built and invisible plus a
+# branch of dead code nobody exercises. Flipping to "true" also carries the
+# half-release hazard the dependency test describes — a dependent switched on
+# while its parent stays off is live and unreachable.
+#
+# So: any "true" in a staging or prod profile is a mistake, and the deploy
+# refuses rather than shipping it. There is deliberately no override; the
+# correct action is always to retire the flag instead.
+case "$ENV" in
+    staging|prod)
+        _flag_profile="$STAGING_DIR/user/env/${ENV_HOST}/config/features.yaml"
+        if [ -f "$_flag_profile" ]; then
+            _enabled_flags="$(grep -nE '^[[:space:]]+[a-z_]+:[[:space:]]*"true"' "$_flag_profile" || true)"
+            if [ -n "$_enabled_flags" ]; then
+                echo "❌  ${ENV} must not enable any feature flag." >&2
+                echo "" >&2
+                printf '%s\n' "$_enabled_flags" | sed 's/^/      /' >&2
+                echo "" >&2
+                echo "    A feature goes live by RETIRING its flag — removing the enum case," >&2
+                echo "    the gates in the templates and plugins, and the line from every" >&2
+                echo "    profile — not by flipping it to \"true\" here." >&2
+                echo "" >&2
+                echo "    Flipping instead of retiring is how the catalogue grew to 20 flags" >&2
+                echo "    with 19 of them off in production, and it risks enabling a dependent" >&2
+                echo "    whose parent is still off (see FeatureFlagCatalogueTest)." >&2
+                exit 1
+            fi
+        fi
+        echo "  ✓ ${ENV} enables no feature flags (features ship by flag retirement)"
+        ;;
+esac
 echo "  ✓ Version: ${VERSION} · build ${BUILD}  (${SEMVER}, ${GIT_DESCRIBE})"
 
 # Refuse to deploy a bundle that still contains git-lfs pointer files —

@@ -9,7 +9,7 @@
                (cards carrying .bv-event-row--attending, rendered per-user and
                toggled live on signup). Placed before "Alle aktiviteter", which
                stays the default active filter. #}
-            {% if grav.user.authenticated and feature_enabled('event_rsvp') %}
+            {% if grav.user.authenticated %}
             <button class="bv-filter-btn bv-filter-btn--mine" data-filter="mine">
                 <span class="material-symbols-outlined bv-filter-btn__icon" aria-hidden="true">star</span>
                 Mine aktiviteter

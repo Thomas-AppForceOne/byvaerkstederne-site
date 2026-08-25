@@ -45,8 +45,6 @@ use Grav\Plugin\AccountManager\AccountEmail;
 use Grav\Plugin\AccountManager\AccountStore;
 use Grav\Plugin\AccountManager\AccountValidator;
 use Grav\Plugin\AccountManager\PasswordPolicy;
-use Grav\Plugin\FeatureFlags\FeatureFlag;
-use Grav\Plugin\FeatureFlags\FlagStoreInterface;
 use RocketTheme\Toolbox\Event\Event;
 
 class AccountManagerPlugin extends Plugin
@@ -250,9 +248,6 @@ class AccountManagerPlugin extends Plugin
         // The email-change confirmation link (§4.3 #2) — the token is the
         // credential; no session is required.
         if ($method === 'GET' && $this->grav['uri']->path() === self::CONFIRM_EMAIL_PATH) {
-            if (!$this->featureEnabled()) {
-                $this->sendFlagDisabled404();
-            }
             $this->handleConfirmEmailChange();
         }
 
@@ -277,13 +272,7 @@ class AccountManagerPlugin extends Plugin
         }
         $spec = self::POST_ACTIONS[$action];
 
-        // 1. Feature-flag gate — before any payload parsing. A disabled
-        //    feature never processes a POST and never reveals it exists.
-        if (!$this->featureEnabled()) {
-            $this->sendFlagDisabled404();
-        }
-
-        // 2. Method — POST, matched above.
+        // 1. Method — POST, matched above.
 
         // 3. Authentication. The /konto/<action> subpaths carry no pages, so
         //    no page-access frontmatter applies — this check IS the boundary.
@@ -1293,9 +1282,6 @@ class AccountManagerPlugin extends Plugin
         if ($page->template() !== 'account') {
             return;
         }
-        if (!$this->featureEnabled()) {
-            return;
-        }
         $user = $this->grav['user'] ?? null;
         if (!$user || !$user->authenticated || !$user->authorized) {
             return;
@@ -1458,34 +1444,6 @@ class AccountManagerPlugin extends Plugin
     private function accountEmail(): AccountEmail
     {
         return new AccountEmail($this->grav);
-    }
-
-    /**
-     * Container read of the FlagStore singleton — profile resolution stays
-     * identical to the rest of the app. Fails open only if the feature-flags
-     * plugin is missing/mis-registered (same posture as event-manager).
-     */
-    private function featureEnabled(): bool
-    {
-        $store = $this->grav['feature_flags'] ?? null;
-        if (!$store instanceof FlagStoreInterface) {
-            return true;
-        }
-        return $store->isEnabled(FeatureFlag::AccountSelfService);
-    }
-
-    /**
-     * Generic 404 leaking no feature name, route, or structure — identical
-     * body to the event-manager/roadmap flag-disabled responses.
-     */
-    private function sendFlagDisabled404(): never
-    {
-        $response = new Response(
-            404,
-            ['Content-Type' => 'text/plain; charset=utf-8'],
-            "Not Found\n"
-        );
-        $this->grav->close($response);
     }
 
     /** Error JSON + terminate — {"status":"error","data":{...}} (house shape). */

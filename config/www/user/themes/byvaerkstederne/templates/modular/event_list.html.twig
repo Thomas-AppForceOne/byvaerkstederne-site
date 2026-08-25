@@ -136,7 +136,7 @@
         {# Shown by the filter JS only when "Mine aktiviteter" is active and the
            viewer is signed up to nothing — otherwise an empty calendar reads as
            broken. #}
-        {% if grav.user.authenticated and feature_enabled('event_rsvp') %}
+        {% if grav.user.authenticated %}
         <p class="bv-event-list__empty-mine" data-empty-mine hidden>Du er endnu ikke tilmeldt nogen aktiviteter. Vælg &laquo;Alle aktiviteter&raquo; for at se, hvad der sker.</p>
         {% endif %}
     </div>

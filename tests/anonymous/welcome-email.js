@@ -506,9 +506,6 @@ test.describe('Welcome email — advertises nothing production has switched off'
     contact_page: [/\/kontakt/i],
     statutes_page: [/vedt[æa]gter/i],
     privacy_policy: [/privatlivspolitik/i],
-    // The one that was missing. These are the literal button and filter
-    // labels partials/event_card.html.twig renders only when the flag is on.
-    event_rsvp: [/\bDeltag\b/, /\bInteresseret\b/, /Mine aktiviteter/i],
     // These three gate page-authored CTAs (h.cta_text / h.donate_cta), so
     // they have no fixed wording the mail could promise. Empty on purpose —
     // not "unchecked", but "nothing stable to check".
@@ -517,7 +514,6 @@ test.describe('Welcome email — advertises nothing production has switched off'
     gear_donation: [],
     social_media_links: [/facebook/i, /instagram/i],
     makerspace_meeting_link: [/n[æa]ste [aå]bning/i],
-    account_self_service: [], // ON in production — nothing to forbid
   };
 
   /** Flags the production profile resolves false. */
