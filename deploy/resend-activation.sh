@@ -131,6 +131,12 @@ fi
 
 PHP_BIN="$(bv_php_remote_bin "$TIER" "$PROJECT_DIR")"
 TIER_DIR="$(bv_tier_root "$PATH_SSH" "$TIER")"
+# bv_resolve_username greps this over SSH to turn an email into a username.
+# Its contract (lib/user-resolve.sh) requires TIER, ACCOUNTS_DIR, PORT_SSH,
+# USER_SSH and HOST_SSH — omitting ACCOUNTS_DIR made every email lookup die
+# on `unbound variable` and then report "no account has that email", which
+# reads like the member does not exist.
+ACCOUNTS_DIR="$TIER_DIR/user/accounts"
 ENV_HOST="$(tier_host "$TIER")"
 
 # ── 3. Resolve the user (email → username, shared lib) ───────────────

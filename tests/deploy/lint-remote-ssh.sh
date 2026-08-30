@@ -639,6 +639,35 @@ else
     check "the helper must no-op in local/sandbox mode" fail
 fi
 
+# 18b. The flush probe must be written into BOTH releases.
+#
+#      Writing it only through the docroot puts it in the INCOMING release —
+#      precisely where a worker that has not re-resolved the docroot cannot
+#      see it. Measured on test 2026-08-30: after a swap to a different
+#      release the probe 404'd 3/3, and 200'd 3/3 once written to both. The
+#      flush clears stale path caching, and stale path caching is what hid
+#      the flush.
+LIB_AR="$DEPLOY_DIR/lib/atomic-release.sh"
+if awk '/^bv_flush_opcode_cache\(\)/,/^}/' "$LIB_AR" | grep -q 'OUT="\$outgoing"'; then
+    check "the flush probe is written into the outgoing release too" ok
+else
+    check "the flush probe must be written into the outgoing release too" fail
+fi
+# Useless if the callers do not supply it.
+for base in deploy.sh rollback.sh; do
+    if grep -A3 'bv_flush_opcode_cache "' "$DEPLOY_DIR/$base" | grep -q 'RELEASES_DIR/'; then
+        check "$base passes the outgoing release to the flush" ok
+    else
+        check "$base must pass the outgoing release to the flush" fail
+    fi
+done
+# A failure that cannot say WHY costs a reproduction to diagnose; it did.
+if awk '/^bv_flush_opcode_cache\(\)/,/^}/' "$LIB_AR" | grep -q 'last HTTP'; then
+    check "the flush failure reports the HTTP status it saw" ok
+else
+    check "the flush failure must report the HTTP status it saw" fail
+fi
+
 # 19. The payload's user/ tree must be discarded wholesale, and the bundle's
 #     plugin set asserted against the repo's.
 #

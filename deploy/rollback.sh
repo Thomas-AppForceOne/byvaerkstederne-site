@@ -491,7 +491,10 @@ echo "  ✓ Swapped back (${SWAP_DURATION_MS} ms)"
 # rollback instead of whatever they were rolling back from.
 #
 # Never fatal: the smoke probe below is the gate.
-bv_flush_opcode_cache "$DEPLOY_TARGET" "${BV_SMOKE_PROBE_URL_OVERRIDE:-$ENV_URL}" "$LOCAL_MODE"
+# The outgoing release here is the one being rolled AWAY from, so the probe
+# reaches workers still resolving to it. See bv_flush_opcode_cache.
+bv_flush_opcode_cache "$DEPLOY_TARGET" "${BV_SMOKE_PROBE_URL_OVERRIDE:-$ENV_URL}" "$LOCAL_MODE" \
+    "${CURRENT_RELEASE_ID:+$RELEASES_DIR/$CURRENT_RELEASE_ID}"
 
 # =============================================================================
 # Step 4b — Bookkeeping: repoint <tier>data/current at the rolled-back
