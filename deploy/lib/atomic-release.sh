@@ -659,9 +659,24 @@ bv_write_release_meta_yaml() {
 # Never fatal. Callers gate on their own smoke probe, which compares the
 # expected build and therefore catches a tier still serving the old release.
 #
-# Usage: bv_flush_opcode_cache <docroot> <base_url> [local_mode]
+# THE PROBE MUST EXIST IN BOTH RELEASES
+# ------------------------------------
+# Writing it only through the docroot lands it in the INCOMING release, and
+# that is exactly where a stale worker cannot see it: it still resolves the
+# docroot to the OUTGOING directory. Measured on test 2026-08-30 — after a
+# swap to a different release the probe 404'd on all three attempts, while
+# the smoke probe seconds later reported the NEW build. Both are true at once
+# because each web process caches its own path resolution: some had already
+# re-resolved, the one answering the probe had not.
+#
+# That is the chicken-and-egg this function exists inside: the flush clears
+# stale path caching, and stale path caching is what hides the flush. So the
+# probe is written to BOTH directories — whichever one a worker believes it
+# is serving, it finds the file and resets. Same test, both written: 3/3.
+#
+# Usage: bv_flush_opcode_cache <docroot> <base_url> [local_mode] [outgoing_dir]
 bv_flush_opcode_cache() {
-    local docroot="$1" base_url="$2" local_mode="${3:-0}"
+    local docroot="$1" base_url="$2" local_mode="${3:-0}" outgoing="${4:-}"
 
     if [ "$local_mode" = "1" ] || [ -z "$base_url" ]; then
         printf '  · opcode-cache flush skipped (no live URL for this run)\n'
@@ -676,9 +691,14 @@ $r = function_exists("opcache_reset") ? opcache_reset() : null;
 header("Content-Type: text/plain");
 echo var_export($r, true);' | base64 | tr -d '\n')"
 
+    # Through the docroot (the incoming release) and, when the caller knows
+    # it, into the outgoing release directory too.
     if ! bv_remote_run '
         printf "%s" "$B64" | base64 -d > "$T/$N"
-    ' T="$docroot" N="$name" B64="$b64"; then
+        if [ -n "$OUT" ] && [ -d "$OUT" ]; then
+            printf "%s" "$B64" | base64 -d > "$OUT/$N"
+        fi
+    ' T="$docroot" N="$name" B64="$b64" OUT="$outgoing"; then
         printf '  ⚠️   could not write the flush endpoint into the release; skipping the flush.\n' >&2
         return 0
     fi
@@ -689,21 +709,32 @@ echo var_export($r, true);' | base64 | tr -d '\n')"
     # moments later — a transient, not a block (the tier serves .php from the
     # docroot fine). A single attempt turns that into a silently skipped
     # flush, which is the one thing this function exists to prevent.
-    local attempt
+    local attempt status
     resp=""
+    status=""
     for attempt in 1 2 3; do
-        resp="$(curl -fsS -m 30 "${base_url%/}/$name" 2>/dev/null || true)"
-        [ -n "$resp" ] && break
+        # Capture the HTTP status separately. `curl -f` collapses every
+        # failure into an empty body, so the old catch-all warning could not
+        # say whether the endpoint 404'd, 500'd or was never reached — which
+        # is why diagnosing this took a reproduction rather than a log line.
+        status="$(curl -s -o /dev/null -w '%{http_code}' -m 30 "${base_url%/}/$name" 2>/dev/null || echo 000)"
+        if [ "$status" = "200" ]; then
+            resp="$(curl -fsS -m 30 "${base_url%/}/$name" 2>/dev/null || true)"
+            [ -n "$resp" ] && break
+        fi
         [ "$attempt" -lt 3 ] && sleep 2
     done
-    bv_remote_run 'rm -f "$T/$N"' T="$docroot" N="$name" >/dev/null 2>&1 || true
+    bv_remote_run '
+        rm -f "$T/$N"
+        [ -n "$OUT" ] && rm -f "$OUT/$N"
+    ' T="$docroot" N="$name" OUT="$outgoing" >/dev/null 2>&1 || true
 
     case "$resp" in
         true)  printf '  ✓ opcode cache flushed\n' ;;
         false) printf '  ⚠️   opcache_reset() returned false — the cache may still hold the previous release.\n' >&2 ;;
         NULL)  printf '  · no opcache on this tier — nothing to flush\n' ;;
-        *)     printf '  ⚠️   could not reach the flush endpoint — if the probe below reports the\n' >&2
-               printf '      PREVIOUS build number, this is why.\n' >&2 ;;
+        *)     printf '  ⚠️   could not reach the flush endpoint (last HTTP %s) — if the probe\n' "${status:-000}" >&2
+               printf '      below reports the PREVIOUS build number, this is why.\n' >&2 ;;
     esac
     return 0
 }

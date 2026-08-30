@@ -186,6 +186,33 @@ function backdatePendingEmail(username) {
  * @param {string} username
  * @param {string} isoTimestamp e.g. '2020-01-01T00:00:00Z'
  */
+/**
+ * Put a disposable account into the "registered but never activated" state:
+ * state:disabled plus a pending activation token. That is what a member looks
+ * like between filling in the registration form and clicking the link, and it
+ * is the only state resend-activation will act on.
+ *
+ * @param {string} username
+ * @param {{expiresInSeconds?: number}} [opts]
+ * @returns {string} the token planted (without the ::expiry suffix)
+ */
+function setPendingActivation(username, { expiresInSeconds = 604800 } = {}) {
+  assertDisposableUsername(username);
+  const token = `pwtest${Math.random().toString(36).slice(2, 12)}`;
+  const expiry = Math.floor(Date.now() / 1000) + expiresInSeconds;
+  const yamlPath = `/config/www/user/accounts/${username}.yaml`;
+  const script = [
+    'set -e',
+    `sed -i 's/^state:.*/state: disabled/' "${yamlPath}"`,
+    `grep -q '^activation_token:' "${yamlPath}" || printf "activation_token: '%s::%s'\\n" "${token}" "${expiry}" >> "${yamlPath}"`,
+  ].join('\n');
+  execFileSync('docker', ['exec', '-u', 'abc', gravContainer(), 'sh', '-c', script], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 10_000,
+  });
+  return token;
+}
+
 function setDeletionMarker(username, isoTimestamp) {
   assertDisposableUsername(username);
   if (!/^[0-9T:Z.-]+$/.test(isoTimestamp)) {
@@ -254,6 +281,24 @@ function runWatchSupersCli({ dryRun = false } = {}) {
   const args = [
     'exec', '-u', 'abc', '-w', '/app/www/public', gravContainer(),
     'bin/plugin', 'account-manager', 'watch-supers',
+  ];
+  if (dryRun) args.push('--dry-run');
+  const res = spawnSync('docker', args, { encoding: 'utf8', timeout: 120_000 });
+  return { status: res.status, stdout: res.stdout || '', stderr: res.stderr || '' };
+}
+
+/**
+ * Re-send a registration activation email:
+ * `bin/plugin account-manager resend-activation <user> [--dry-run]`.
+ * Returns {status, stdout, stderr} instead of throwing, so the refusal
+ * paths are assertable.
+ *
+ * @param {{user: string, dryRun?: boolean}} opts
+ */
+function runResendActivationCli({ user, dryRun = false }) {
+  const args = [
+    'exec', '-u', 'abc', '-w', '/app/www/public', gravContainer(),
+    'bin/plugin', 'account-manager', 'resend-activation', user,
   ];
   if (dryRun) args.push('--dry-run');
   const res = spawnSync('docker', args, { encoding: 'utf8', timeout: 120_000 });
@@ -513,6 +558,8 @@ module.exports = {
   setDeletionMarker,
   runPurgeCli,
   runNotifySuperGrantedCli,
+  runResendActivationCli,
+  setPendingActivation,
   runWatchSupersCli,
   resetSuperBaseline,
   makeAccountSuper,

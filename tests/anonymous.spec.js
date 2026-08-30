@@ -58,6 +58,7 @@ require('./anonymous/events-rsvp-public');
 require('./anonymous/events-card-expand');
 // Account self-service — /konto access control + flag-off endpoint gating.
 require('./anonymous/account-access');
+require('./anonymous/resend-activation');
 
 // Visual-parity tests live at tests/anonymous/event-card-visual-parity.js
 // and are picked up directly by the chromium project's testMatch (see
