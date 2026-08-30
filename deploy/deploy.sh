@@ -1391,7 +1391,11 @@ echo "  ✓ ${DEPLOY_TARGET} → ${LAYOUT_NAME}-releases/${RELEASE_ID}  (${SWAP_
 # Never fatal — the smoke probe below is the gate, and it compares the
 # expected build, so a tier still serving the old release fails it.
 echo "→ Step 8.5/8: Flushing the tier's opcode cache..."
-bv_flush_opcode_cache "$DEPLOY_TARGET" "$ENV_URL"
+# The outgoing release is passed so the probe lands in both directories —
+# a worker that has not re-resolved the docroot yet still finds it. See
+# bv_flush_opcode_cache.
+bv_flush_opcode_cache "$DEPLOY_TARGET" "$ENV_URL" 0 \
+    "${PREV_RELEASE_ID:+$RELEASES_DIR/$PREV_RELEASE_ID}"
 
 # ── Step 9 (Sprint 2): Smoke probe — fail-loud, NO auto-rollback ──────
 #

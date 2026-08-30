@@ -217,6 +217,25 @@ list-users: ## List member accounts on a tier (tier=dev|test|staging|prod)
 	  *) echo "❌  list-users: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
 	esac
 
+resend-activation: ## Re-send the registration activation email to an unactivated member (tier=... user=<username|email>, dry_run=1, yes=1)
+	@t="$(tier)"; u="$(user)"; \
+	args=""; \
+	if [ "$(yes)" = "1" ]; then args="$$args --yes"; fi; \
+	if [ "$(dry_run)" = "1" ]; then args="$$args --dry-run"; fi; \
+	if [ -z "$$t" ] || [ -z "$$u" ]; then \
+	  echo "❌  resend-activation: missing required argument(s).  Got: tier='$$t' user='$$u'"; \
+	  [ -z "$$t" ] && echo "    → 'tier' is empty (required: dev|test|staging|prod)"; \
+	  [ -z "$$u" ] && echo "    → 'user' is empty (a username, or an email to resolve)"; \
+	  echo "    Usage:   make resend-activation tier=<dev|test|staging|prod> user=<username|email> [dry_run=1] [yes=1]"; \
+	  echo "    Example: make resend-activation tier=prod user=anders@example.dk dry_run=1"; \
+	  echo "    Note: a real run mints a NEW token — any link the member already has stops working."; \
+	  exit 1; \
+	fi; \
+	case "$$t" in \
+	  dev|test|staging|prod) ./deploy/resend-activation.sh "$$t" "$$u" $$args ;; \
+	  *) echo "❌  resend-activation: invalid tier '$$t' (allowed: dev|test|staging|prod)"; exit 1 ;; \
+	esac
+
 activate-user: ## Activate a member whose confirmation email never arrived (tier=... user=<username|email>, state=enabled|disabled, dry_run=1, yes=1)
 	@t="$(tier)"; u="$(user)"; \
 	args=""; \
